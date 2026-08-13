@@ -8,9 +8,13 @@ working: live positions, altitude-coded colors, smooth interpolation between
 1s polls, a "NO SIGNAL" banner on connection loss (tested by killing the feed),
 and clean recovery on reconnect.
 
-Covers milestones 3–4 (and part of 7) from `docs/project-spec.md`. Not done yet:
-milestone 6 (Chromium kiosk + systemd on the Pi) and milestone 5 (optional tap
-detail panel).
+It is now **deployed and running on the Pi** (`flightwall`, `<radar>`,
+the login user) as a Chromium kiosk launched by systemd, verified to survive a
+full reboot with no manual intervention.
+
+Covers milestones 3–4, 6, and part of 7 from `docs/project-spec.md`. Not done
+yet: milestone 5 (optional tap detail panel), and physically mounting/connecting
+the round panel (see below).
 
 ## Key facts learned this session
 - Receiver home location comes from `http://<radar>/tar1090/data/receiver.json`
@@ -24,14 +28,50 @@ detail panel).
   must be deployed same-origin (i.e. copied onto the Pi itself, served from the
   same host as `/tar1090/`) — it uses relative fetch paths (`/tar1090/data/...`)
   for exactly this reason.
-- SSH to the Pi (`<radar>`) was attempted but blocked on host key
-  verification / no credentials available in this session — deployment to the
-  Pi has not happened yet.
+- SSH login is `<user>@<radar>` (not `pi` — that user doesn't exist on this
+  image). Passwordless sudo is configured for that user.
+- The Pi runs full Raspberry Pi OS (Debian 13 "trixie") with a Wayland desktop
+  (`labwc` compositor, `rpd-labwc` session), lightdm with autologin already
+  configured for that user. Not a Lite/headless image.
+- The round display was **not physically connected** during this session (both
+  HDMI ports read `disconnected` via `/sys/class/drm/*/status`) — the compositor
+  falls back to a virtual/no-op 1920x1080 output. Everything was verified via
+  `grim` screenshots of that virtual output; the app has not yet been visually
+  confirmed on the real 1080x1080 round panel.
 
-## Open question for the user
-Asked how they want to handle Pi deployment (kiosk mode + systemd boot service):
-SSH in and do it live, hand over files/instructions to do it manually, or hold
-off entirely. Not yet answered — pick this back up before doing milestone 6.
+## Deployment (milestone 6 — done)
+- `index.html` lives at `/var/www/html/index.html` on the Pi (root-owned,
+  lighttpd's docroot), served at `http://localhost/` — same-origin with
+  `/tar1090/`, satisfying the CORS constraint above.
+- Kiosk launcher is a **systemd user service**:
+  `~/.config/systemd/user/flightwall-kiosk.service` (on the Pi, as the login user).
+  - Launches `chromium --kiosk ... http://localhost/index.html`
+  - `ExecStartPre` waits (up to 60s) for a `wayland-*` socket in
+    `$XDG_RUNTIME_DIR` before starting Chromium — needed because the compositor
+    isn't up yet at the instant lightdm opens the session. **Important:** don't
+    wait on the `$WAYLAND_DISPLAY` env var itself (e.g.
+    `-S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"`) — that variable is imported into
+    the systemd user manager *after* labwc starts, so a process forked right at
+    session-open captures it empty and waits forever. Glob for `wayland-*[0-9]`
+    instead.
+  - `Restart=always`, `RestartSec=5` for crash recovery.
+  - Enabled via `systemctl --user enable` (symlinked into
+    `default.target.wants`), plus `sudo loginctl enable-linger <user>` so the
+    user's systemd instance starts at boot even before an interactive login
+    completes.
+- Verified with an actual `sudo reboot`: service came up ~30s after boot with
+  zero restarts, no manual login needed, and was rendering live traffic.
+- To redeploy `index.html` after future edits:
+  `scp index.html <user>@<radar>:/tmp/ && ssh <user>@<radar> 'sudo cp /tmp/index.html /var/www/html/index.html && rm /tmp/index.html'`
+  (Chromium will pick it up on next reload/kiosk restart — no service restart
+  needed unless the launch flags/URL change.)
+
+## Open — not yet done
+- **Milestone 5** (optional): tap-an-aircraft detail panel.
+- **Physical verification on the real panel**: the round 1080x1080 display
+  needs to actually be connected via HDMI to confirm rendering, sizing, and
+  touch input work on real hardware — not yet possible since it isn't wired up
+  in the enclosure yet.
 
 ## Dev-only files
 `dev-server.py` is a local-only static file server + reverse proxy
