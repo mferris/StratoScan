@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FlightWall — Radar Prototype</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0d0f;
+    --ring: #1c3236;
+    --ring-bright: #2a4a4f;
+    --sweep: #ffb020;
+    --sweep-trail: rgba(255, 176, 32, 0.08);
+    --text-dim: #5b7278;
+    --text: #cfe8ea;
+    --low: #ffb020;
+    --mid: #4fd6c8;
+    --high: #a78bfa;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .stage {
+    position: relative;
+    width: min(90vmin, 700px);
+    height: min(90vmin, 700px);
+  }
+
+  canvas {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: var(--bg);
+    box-shadow:
+      0 0 0 2px #14201f,
+      0 0 0 6px #05080a,
+      0 0 40px rgba(0,0,0,0.6),
+      inset 0 0 60px rgba(0,0,0,0.5);
+  }
+
+  .hud {
+    position: absolute;
+    top: 6%;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    pointer-events: none;
+  }
+
+  .hud .loc {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .hud .count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--text);
+    margin-top: 2px;
+    letter-spacing: 0.05em;
+  }
+
+  .tag {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.58rem;
+    line-height: 1.25;
+    padding: 3px 6px;
+    border-radius: 3px;
+    background: rgba(5, 8, 10, 0.75);
+    border: 1px solid rgba(255,255,255,0.06);
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translate(10px, -50%);
+  }
+  .tag .cs { font-weight: 700; letter-spacing: 0.04em; }
+  .tag .alt { color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <canvas id="radar" width="1080" height="1080"></canvas>
+  <div class="hud">
+    <div class="loc">37.4275°N 122.1697°W · 40NM</div>
+    <div class="count" id="count">6 AIRCRAFT</div>
+  </div>
+  <div id="tags"></div>
+</div>
+
+<script>
+// ---- Config ------------------------------------------------------
+const RANGE_NM = 40;           // outer ring range in nautical miles
+const RINGS = 4;                // number of range rings
+const SWEEP_SPEED = 0.008;      // radians per frame
+
+// ---- Simulated aircraft (this is exactly what aircraft.json gives us) ----
+// bearing: degrees from north, range: nm from home, alt: feet
+let planes = [
+  { cs: 'UAL482',  bearing: 32,  range: 28, alt: 34000, hdg: 210, speed: 480 },
+  { cs: 'SWA1190', bearing: 118, range: 14, alt: 9200,  hdg: 95,  speed: 260 },
+  { cs: 'N421TC',  bearing: 200, range: 8,  alt: 3400,  hdg: 340, speed: 140 },
+  { cs: 'DAL55',   bearing: 275, range: 33, alt: 38000, hdg: 60,  speed: 510 },
+  { cs: 'ASA810',  bearing: 340, range: 19, alt: 17500, hdg: 150, speed: 390 },
+  { cs: 'SKW4471', bearing: 65,  range: 24, alt: 22000, hdg: 250, speed: 340 },
+];
+
+// ---- Canvas setup --------------------------------------------------
+const canvas = document.getElementById('radar');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const CX = W / 2, CY = H / 2;
+const R = W * 0.44; // usable radius, leaving margin inside the circle
+
+let sweepAngle = 0;
+const tagsEl = document.getElementById('tags');
+const stage = document.querySelector('.stage');
+
+function altColor(alt) {
+  if (alt < 10000) return getComputedStyle(document.documentElement).getPropertyValue('--low').trim();
+  if (alt < 25000) return getComputedStyle(document.documentElement).getPropertyValue('--mid').trim();
+  return getComputedStyle(document.documentElement).getPropertyValue('--high').trim();
+}
+
+function polarToXY(bearingDeg, rangeNm) {
+  const angle = (bearingDeg - 90) * Math.PI / 180; // 0deg = up (north)
+  const r = (rangeNm / RANGE_NM) * R;
+  return { x: CX + r * Math.cos(angle), y: CY + r * Math.sin(angle) };
+}
+
+function drawRings() {
+  ctx.save();
+  for (let i = 1; i <= RINGS; i++) {
+    const r = (R / RINGS) * i;
+    ctx.beginPath();
+    ctx.arc(CX, CY, r, 0, Math.PI * 2);
+    ctx.strokeStyle = i === RINGS ? '#2a4a4f' : '#1c3236';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // range label
+    const nm = Math.round((RANGE_NM / RINGS) * i);
+    ctx.fillStyle = '#3d5a5f';
+    ctx.font = '15px JetBrains Mono, monospace';
+    ctx.fillText(nm + 'nm', CX + 6, CY - r + 14);
+  }
+
+  // crosshair / cardinal ticks
+  ctx.strokeStyle = '#16282b';
+  ctx.beginPath();
+  ctx.moveTo(CX, CY - R); ctx.lineTo(CX, CY + R);
+  ctx.moveTo(CX - R, CY); ctx.lineTo(CX + R, CY);
+  ctx.stroke();
+
+  ctx.fillStyle = '#4a6b70';
+  ctx.font = '600 20px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('N', CX, CY - R + 26);
+  ctx.fillText('S', CX, CY + R - 12);
+  ctx.fillText('E', CX + R - 16, CY + 7);
+  ctx.fillText('W', CX - R + 16, CY + 7);
+  ctx.textAlign = 'left';
+
+  // center dot (home)
+  ctx.beginPath();
+  ctx.arc(CX, CY, 4, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffb020';
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawSweep() {
+  ctx.save();
+  const grad = ctx.createConicGradient(sweepAngle - Math.PI / 2, CX, CY);
+  grad.addColorStop(0, 'rgba(255,176,32,0.35)');
+  grad.addColorStop(0.06, 'rgba(255,176,32,0.0)');
+  grad.addColorStop(1, 'rgba(255,176,32,0.0)');
+  ctx.beginPath();
+  ctx.arc(CX, CY, R, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // sweep line
+  const lineX = CX + R * Math.cos(sweepAngle);
+  const lineY = CY + R * Math.sin(sweepAngle);
+  ctx.beginPath();
+  ctx.moveTo(CX, CY);
+  ctx.lineTo(lineX, lineY);
+  ctx.strokeStyle = '#ffb020';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = '#ffb020';
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPlanes() {
+  tagsEl.innerHTML = '';
+  const stageRect = stage.getBoundingClientRect();
+  const scale = stageRect.width / W;
+
+  planes.forEach(p => {
+    const { x, y } = polarToXY(p.bearing, p.range);
+    const color = altColor(p.alt);
+
+    // blip
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate((p.hdg) * Math.PI / 180);
+    ctx.beginPath();
+    ctx.moveTo(0, -9);
+    ctx.lineTo(6, 7);
+    ctx.lineTo(0, 3);
+    ctx.lineTo(-6, 7);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+    ctx.fill();
+    ctx.restore();
+
+    // HTML tag (crisp text > canvas text at small sizes)
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.style.left = (x * scale) + 'px';
+    tag.style.top = (y * scale) + 'px';
+    tag.style.borderLeft = `2px solid ${color}`;
+    tag.innerHTML = `<div class="cs" style="color:${color}">${p.cs}</div><div class="alt">FL${Math.round(p.alt/100)} · ${p.speed}kt</div>`;
+    tagsEl.appendChild(tag);
+  });
+
+  document.getElementById('count').textContent = planes.length + ' AIRCRAFT';
+}
+
+function tick() {
+  ctx.clearRect(0, 0, W, H);
+  drawRings();
+  drawSweep();
+  drawPlanes();
+
+  sweepAngle += SWEEP_SPEED;
+  if (sweepAngle > Math.PI * 2) sweepAngle -= Math.PI * 2;
+
+  // gentle simulated drift so it doesn't look static
+  planes.forEach(p => {
+    p.bearing += 0.01 * (p.speed / 400);
+    if (p.bearing > 360) p.bearing -= 360;
+  });
+
+  requestAnimationFrame(tick);
+}
+
+tick();
+</script>
+</body>
+</html>

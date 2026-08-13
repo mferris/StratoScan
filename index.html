@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FlightWall</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0d0f;
+    --ring: #1c3236;
+    --ring-bright: #2a4a4f;
+    --sweep: #ffb020;
+    --text-dim: #5b7278;
+    --text: #cfe8ea;
+    --low: #ffb020;
+    --mid: #4fd6c8;
+    --high: #a78bfa;
+    --ground: #6b8087;
+    --bad: #ff5d5d;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+  }
+
+  .stage {
+    position: relative;
+    width: min(90vmin, 1080px);
+    height: min(90vmin, 1080px);
+  }
+
+  canvas {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: var(--bg);
+    display: block;
+    box-shadow:
+      0 0 0 2px #14201f,
+      0 0 0 6px #05080a,
+      0 0 40px rgba(0,0,0,0.6),
+      inset 0 0 60px rgba(0,0,0,0.5);
+  }
+
+  .hud {
+    position: absolute;
+    top: 6%;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    pointer-events: none;
+  }
+
+  .hud .loc {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .hud .count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--text);
+    margin-top: 2px;
+    letter-spacing: 0.05em;
+  }
+
+  .status {
+    position: absolute;
+    bottom: 8%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    color: var(--bad);
+    text-transform: uppercase;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+  }
+  .status.show { opacity: 1; animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  .tag {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.58rem;
+    line-height: 1.25;
+    padding: 3px 6px;
+    border-radius: 3px;
+    background: rgba(5, 8, 10, 0.75);
+    border: 1px solid rgba(255,255,255,0.06);
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translate(10px, -50%);
+    will-change: left, top;
+  }
+  .tag.flip { transform: translate(calc(-100% - 10px), -50%); }
+  .tag .cs { font-weight: 700; letter-spacing: 0.04em; }
+  .tag .alt { color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <canvas id="radar" width="1080" height="1080"></canvas>
+  <div class="hud">
+    <div class="loc" id="loc">LOCATING…</div>
+    <div class="count" id="count">0 AIRCRAFT</div>
+  </div>
+  <div class="status" id="status">NO SIGNAL — CHECK RECEIVER</div>
+  <div id="tags"></div>
+</div>
+
+<script>
+// ---- Config ------------------------------------------------------
+const DATA_URL = '/tar1090/data/aircraft.json';
+const RECEIVER_URL = '/tar1090/data/receiver.json';
+const RANGE_NM = 40;             // outer ring range in nautical miles
+const RINGS = 4;                 // number of range rings
+const SWEEP_SPEED = 0.008;       // radians per frame
+const FETCH_INTERVAL_MS = 1000;  // how often we poll aircraft.json
+const STALE_MS = 15000;          // no good fetch in this long -> show NO SIGNAL
+const DROP_MS = 45000;           // no good fetch in this long -> clear stale blips
+
+// ---- State -----------------------------------------------------
+let home = null;                 // { lat, lon } of the receiver
+let planes = new Map();          // hex -> plane record
+let lastGoodFetch = 0;
+let connected = false;
+
+// ---- Canvas setup --------------------------------------------------
+const canvas = document.getElementById('radar');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const CX = W / 2, CY = H / 2;
+const R = W * 0.44; // usable radius, leaving margin inside the circle
+
+let sweepAngle = 0;
+const tagsEl = document.getElementById('tags');
+const stage = document.querySelector('.stage');
+const locEl = document.getElementById('loc');
+const countEl = document.getElementById('count');
+const statusEl = document.getElementById('status');
+const tagNodes = new Map(); // hex -> DOM node
+
+const style = getComputedStyle(document.documentElement);
+const COLORS = {
+  low: style.getPropertyValue('--low').trim(),
+  mid: style.getPropertyValue('--mid').trim(),
+  high: style.getPropertyValue('--high').trim(),
+  ground: style.getPropertyValue('--ground').trim(),
+};
+
+function altColor(alt) {
+  if (alt === 'ground' || alt === null) return COLORS.ground;
+  if (alt < 10000) return COLORS.low;
+  if (alt < 25000) return COLORS.mid;
+  return COLORS.high;
+}
+
+function polarToXY(bearingDeg, rangeNm) {
+  const angle = (bearingDeg - 90) * Math.PI / 180; // 0deg = up (north)
+  const r = (rangeNm / RANGE_NM) * R;
+  return { x: CX + r * Math.cos(angle), y: CY + r * Math.sin(angle) };
+}
+
+// shortest signed delta between two bearings, e.g. 359 -> 2 gives +3
+function bearingDelta(from, to) {
+  let d = (to - from) % 360;
+  if (d > 180) d -= 360;
+  if (d < -180) d += 360;
+  return d;
+}
+
+function haversineBearingRange(lat1, lon1, lat2, lon2) {
+  const toRad = d => d * Math.PI / 180;
+  const phi1 = toRad(lat1), phi2 = toRad(lat2);
+  const dLambda = toRad(lon2 - lon1);
+
+  const y = Math.sin(dLambda) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLambda);
+  const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+
+  const R_NM = 3440.065;
+  const dPhi = toRad(lat2 - lat1);
+  const a = Math.sin(dPhi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLambda / 2) ** 2;
+  const range = R_NM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return { bearing, range };
+}
+
+function formatLoc() {
+  if (!home) return 'LOCATING…';
+  const ns = home.lat >= 0 ? 'N' : 'S';
+  const ew = home.lon >= 0 ? 'E' : 'W';
+  return `${Math.abs(home.lat).toFixed(4)}°${ns} ${Math.abs(home.lon).toFixed(4)}°${ew} · ${RANGE_NM}NM`;
+}
+
+// ---- Data loading --------------------------------------------------
+async function loadHome() {
+  try {
+    const res = await fetch(RECEIVER_URL, { cache: 'no-store' });
+    const data = await res.json();
+    if (typeof data.lat === 'number' && typeof data.lon === 'number') {
+      home = { lat: data.lat, lon: data.lon };
+      locEl.textContent = formatLoc();
+    }
+  } catch (e) {
+    // retried by caller
+  }
+}
+
+function normalizeAircraft(a) {
+  // range/bearing: prefer readsb's precomputed r_dst/r_dir, else derive from lat/lon
+  let bearing, range;
+  if (typeof a.r_dst === 'number' && typeof a.r_dir === 'number') {
+    range = a.r_dst;
+    bearing = a.r_dir;
+  } else if (home && typeof a.lat === 'number' && typeof a.lon === 'number') {
+    const hb = haversineBearingRange(home.lat, home.lon, a.lat, a.lon);
+    bearing = hb.bearing;
+    range = hb.range;
+  } else {
+    return null; // no usable position yet
+  }
+
+  const altRaw = a.alt_baro ?? a.alt_geom;
+  const alt = altRaw === 'ground' ? 'ground' : (typeof altRaw === 'number' ? altRaw : null);
+  const hdg = a.track ?? a.true_heading ?? a.mag_heading ?? a.calc_track ?? bearing;
+  const cs = (a.flight ? a.flight.trim() : '') || a.hex.toUpperCase();
+
+  return { hex: a.hex, cs, bearing, range, alt, hdg, speed: a.gs ?? null };
+}
+
+async function fetchAircraft() {
+  try {
+    const res = await fetch(DATA_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    lastGoodFetch = performance.now();
+    connected = true;
+    applyUpdate(data.aircraft || []);
+  } catch (e) {
+    connected = false;
+  }
+}
+
+function applyUpdate(list) {
+  const now = performance.now();
+  const seen = new Set();
+
+  for (const raw of list) {
+    const n = normalizeAircraft(raw);
+    if (!n) continue;
+    seen.add(n.hex);
+
+    const existing = planes.get(n.hex);
+    if (existing) {
+      existing.fromBearing = existing.bearing;
+      existing.fromRange = existing.range;
+      existing.targetBearing = n.bearing;
+      existing.targetRange = n.range;
+      existing.lerpStart = now;
+      existing.cs = n.cs;
+      existing.alt = n.alt;
+      existing.hdg = n.hdg;
+      existing.speed = n.speed;
+      existing.lastSeen = now;
+    } else {
+      planes.set(n.hex, {
+        ...n,
+        fromBearing: n.bearing,
+        fromRange: n.range,
+        targetBearing: n.bearing,
+        targetRange: n.range,
+        lerpStart: now,
+        lastSeen: now,
+      });
+    }
+  }
+
+  // drop aircraft readsb no longer reports
+  for (const hex of [...planes.keys()]) {
+    if (!seen.has(hex)) planes.delete(hex);
+  }
+}
+
+// ---- Drawing ---------------------------------------------------
+function drawRings() {
+  ctx.save();
+  for (let i = 1; i <= RINGS; i++) {
+    const r = (R / RINGS) * i;
+    ctx.beginPath();
+    ctx.arc(CX, CY, r, 0, Math.PI * 2);
+    ctx.strokeStyle = i === RINGS ? '#2a4a4f' : '#1c3236';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    const nm = Math.round((RANGE_NM / RINGS) * i);
+    ctx.fillStyle = '#3d5a5f';
+    ctx.font = '15px JetBrains Mono, monospace';
+    ctx.fillText(nm + 'nm', CX + 6, CY - r + 14);
+  }
+
+  ctx.strokeStyle = '#16282b';
+  ctx.beginPath();
+  ctx.moveTo(CX, CY - R); ctx.lineTo(CX, CY + R);
+  ctx.moveTo(CX - R, CY); ctx.lineTo(CX + R, CY);
+  ctx.stroke();
+
+  ctx.fillStyle = '#4a6b70';
+  ctx.font = '600 20px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('N', CX, CY - R + 26);
+  ctx.fillText('S', CX, CY + R - 12);
+  ctx.fillText('E', CX + R - 16, CY + 7);
+  ctx.fillText('W', CX - R + 16, CY + 7);
+  ctx.textAlign = 'left';
+
+  ctx.beginPath();
+  ctx.arc(CX, CY, 4, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffb020';
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawSweep() {
+  ctx.save();
+  const grad = ctx.createConicGradient(sweepAngle - Math.PI / 2, CX, CY);
+  grad.addColorStop(0, 'rgba(255,176,32,0.35)');
+  grad.addColorStop(0.06, 'rgba(255,176,32,0.0)');
+  grad.addColorStop(1, 'rgba(255,176,32,0.0)');
+  ctx.beginPath();
+  ctx.arc(CX, CY, R, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  const lineX = CX + R * Math.cos(sweepAngle);
+  const lineY = CY + R * Math.sin(sweepAngle);
+  ctx.beginPath();
+  ctx.moveTo(CX, CY);
+  ctx.lineTo(lineX, lineY);
+  ctx.strokeStyle = '#ffb020';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = '#ffb020';
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function altLabel(alt) {
+  if (alt === 'ground') return 'GND';
+  if (alt === null) return '----';
+  return 'FL' + Math.round(alt / 100);
+}
+
+function drawPlanes() {
+  const now = performance.now();
+  const stageRect = stage.getBoundingClientRect();
+  const scale = stageRect.width / W;
+  const inRange = [];
+
+  for (const p of planes.values()) {
+    const t = Math.min(1, (now - p.lerpStart) / FETCH_INTERVAL_MS);
+    p.bearing = p.fromBearing + bearingDelta(p.fromBearing, p.targetBearing) * t;
+    p.range = p.fromRange + (p.targetRange - p.fromRange) * t;
+
+    if (p.range > RANGE_NM) continue;
+    inRange.push(p);
+
+    const { x, y } = polarToXY(p.bearing, p.range);
+    const color = altColor(p.alt);
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate((p.hdg) * Math.PI / 180);
+    ctx.beginPath();
+    ctx.moveTo(0, -9);
+    ctx.lineTo(6, 7);
+    ctx.lineTo(0, 3);
+    ctx.lineTo(-6, 7);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+    ctx.fill();
+    ctx.restore();
+
+    let node = tagNodes.get(p.hex);
+    if (!node) {
+      node = document.createElement('div');
+      node.className = 'tag';
+      node.innerHTML = '<div class="cs"></div><div class="alt"></div>';
+      tagsEl.appendChild(node);
+      tagNodes.set(p.hex, node);
+    }
+    const px = x * scale, py = y * scale;
+    node.classList.toggle('flip', px > stageRect.width * 0.82);
+    node.style.left = px + 'px';
+    node.style.top = py + 'px';
+    node.style.borderLeft = `2px solid ${color}`;
+    node.querySelector('.cs').textContent = p.cs;
+    node.querySelector('.cs').style.color = color;
+    const speedTxt = p.speed === null ? '--' : Math.round(p.speed);
+    node.querySelector('.alt').textContent = `${altLabel(p.alt)} · ${speedTxt}kt`;
+  }
+
+  // remove tag nodes for aircraft no longer tracked or out of range
+  for (const [hex, node] of tagNodes) {
+    if (!planes.has(hex) || planes.get(hex).range > RANGE_NM) {
+      node.remove();
+      tagNodes.delete(hex);
+    }
+  }
+
+  countEl.textContent = inRange.length + (inRange.length === 1 ? ' AIRCRAFT' : ' AIRCRAFT');
+}
+
+function updateStatus() {
+  const now = performance.now();
+  const stale = !connected || (now - lastGoodFetch) > STALE_MS;
+  statusEl.classList.toggle('show', stale);
+
+  if ((now - lastGoodFetch) > DROP_MS && planes.size > 0) {
+    planes.clear();
+    for (const node of tagNodes.values()) node.remove();
+    tagNodes.clear();
+  }
+}
+
+// ---- Main loop -------------------------------------------------
+function tick() {
+  ctx.clearRect(0, 0, W, H);
+  drawRings();
+  drawSweep();
+  drawPlanes();
+  updateStatus();
+
+  sweepAngle += SWEEP_SPEED;
+  if (sweepAngle > Math.PI * 2) sweepAngle -= Math.PI * 2;
+
+  requestAnimationFrame(tick);
+}
+
+async function start() {
+  await loadHome();
+  if (!home) {
+    // keep retrying receiver info in the background until it succeeds
+    const retryHome = setInterval(async () => {
+      if (home) { clearInterval(retryHome); return; }
+      await loadHome();
+    }, FETCH_INTERVAL_MS);
+  }
+  fetchAircraft();
+  setInterval(fetchAircraft, FETCH_INTERVAL_MS);
+  tick();
+}
+
+start();
+</script>
+</body>
+</html>
