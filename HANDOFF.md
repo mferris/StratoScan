@@ -43,8 +43,9 @@ the round panel (see below).
 - `index.html` lives at `/var/www/html/index.html` on the Pi (root-owned,
   lighttpd's docroot), served at `http://localhost/` — same-origin with
   `/tar1090/`, satisfying the CORS constraint above.
-- Kiosk launcher is a **systemd user service**:
-  `~/.config/systemd/user/flightwall-kiosk.service` (on the Pi, as the login user).
+- Kiosk launcher is a **systemd user service**, checked into this repo at
+  `deploy/flightwall-kiosk.service` and deployed to
+  `~/.config/systemd/user/flightwall-kiosk.service` on the Pi (as the login user).
   - Launches `chromium --kiosk ... http://localhost/index.html`
   - `ExecStartPre` waits (up to 60s) for a `wayland-*` socket in
     `$XDG_RUNTIME_DIR` before starting Chromium — needed because the compositor

@@ -1,0 +1,12 @@
+[Unit]
+Description=FlightWall Chromium Kiosk
+After=graphical-session.target
+
+[Service]
+ExecStartPre=/bin/sh -c 'i=0; while [ $i -lt 60 ]; do ls "$XDG_RUNTIME_DIR"/wayland-*[0-9] >/dev/null 2>&1 && exit 0; sleep 1; i=$((i+1)); done; exit 1'
+ExecStart=/usr/bin/chromium --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --disable-restore-session-state --check-for-update-interval=31536000 --overscroll-history-navigation=0 --disable-pinch --password-store=basic --disable-features=TranslateUI http://localhost/index.html
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
