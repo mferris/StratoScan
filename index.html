@@ -360,9 +360,83 @@ function initMap() {
     interactive: false,
     attributionControl: { compact: true },
   });
+  // The vector tileset's own aeroway (runway/taxiway) layers simply carry no
+  // geometry at this low a zoom (confirmed via queryRenderedFeatures — the
+  // tiles are generated without that detail below ~z11, independent of the
+  // style's minzoom setting), so raising the zoom gate there does nothing.
+  // Runway outlines instead come from a one-time OpenStreetMap Overpass
+  // query, added as our own GeoJSON layer — see loadRunways().
+  map.on('load', loadRunways);
 }
 
 window.addEventListener('resize', () => { if (map) map.resize(); });
+
+// ---- Runway outlines --------------------------------------------------
+// One-time fetch (home location never changes at runtime) of real runway/
+// taxiway geometry from OSM's public Overpass API, covering the same
+// RANGE_NM box the radar shows. Purely additive — if this fails (offline,
+// Overpass rate-limited, etc.) the map/radar keep working without it.
+const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+
+function rangeBBox(lat, lon, rangeNm) {
+  const rangeM = rangeNm * 1852;
+  const latDelta = rangeM / 111320;
+  const lonDelta = rangeM / (111320 * Math.cos(lat * Math.PI / 180));
+  return { south: lat - latDelta, west: lon - lonDelta, north: lat + latDelta, east: lon + lonDelta };
+}
+
+function overpassToGeoJSON(elements) {
+  const nodes = new Map();
+  for (const el of elements) {
+    if (el.type === 'node') nodes.set(el.id, [el.lon, el.lat]);
+  }
+  const features = [];
+  for (const el of elements) {
+    if (el.type !== 'way' || !el.tags) continue;
+    const aeroway = el.tags.aeroway;
+    if (aeroway !== 'runway' && aeroway !== 'taxiway') continue;
+    const coords = el.nodes.map(id => nodes.get(id)).filter(Boolean);
+    if (coords.length < 2) continue;
+    features.push({ type: 'Feature', properties: { aeroway, ref: el.tags.ref || '' }, geometry: { type: 'LineString', coordinates: coords } });
+  }
+  return { type: 'FeatureCollection', features };
+}
+
+async function loadRunways() {
+  const bb = rangeBBox(home.lat, home.lon, RANGE_NM);
+  const query = `[out:json][timeout:25];(way["aeroway"="runway"](${bb.south},${bb.west},${bb.north},${bb.east});way["aeroway"="taxiway"](${bb.south},${bb.west},${bb.north},${bb.east}););out body;>;out skel qt;`;
+
+  let geojson;
+  try {
+    const res = await fetch(OVERPASS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(query),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    geojson = overpassToGeoJSON(data.elements || []);
+  } catch (e) {
+    return; // offline or Overpass unavailable — map/radar work fine without runways
+  }
+  if (geojson.features.length === 0) return;
+
+  map.addSource('runways', { type: 'geojson', data: geojson });
+  map.addLayer({
+    id: 'runways-taxiway',
+    type: 'line',
+    source: 'runways',
+    filter: ['==', ['get', 'aeroway'], 'taxiway'],
+    paint: { 'line-color': '#5a6469', 'line-width': 1.2 },
+  });
+  map.addLayer({
+    id: 'runways-runway',
+    type: 'line',
+    source: 'runways',
+    filter: ['==', ['get', 'aeroway'], 'runway'],
+    paint: { 'line-color': '#c7d0d3', 'line-width': 2.5 },
+  });
+}
 
 // ---- Route lookup --------------------------------------------------
 // Batched/cached/throttled the same way tar1090 itself queries this API:
