@@ -130,15 +130,17 @@
     will-change: left, top;
   }
   .tag.flip { transform: translate(calc(-100% - 10px), -50%); }
-  .tag .row1 { display: flex; align-items: center; gap: 4px; }
-  .tag .cs { font-weight: 700; letter-spacing: 0.04em; }
+  .tag .cs { font-weight: 700; letter-spacing: 0.04em; font-size: 0.66rem; }
+  .tag .type { display: none; color: var(--text-dim); margin-top: 1px; }
   .tag .alt { color: var(--text-dim); }
-  .tag .route { color: var(--text-dim); display: none; }
+  .tag .route { color: var(--text-dim); display: none; margin-top: 1px; }
   .tag .badge {
     display: none;
+    margin-top: 2px;
+    margin-bottom: 1px;
     font-size: 0.5rem;
     font-weight: 700;
-    padding: 1px 4px;
+    padding: 1px 5px;
     border-radius: 2px;
     color: #fff;
     letter-spacing: 0.02em;
@@ -183,40 +185,42 @@ const DROP_MS = 45000;           // no good fetch in this long -> clear stale bl
 // Scoped to carriers plausible near a US East Coast receiver; unmapped
 // codes (private GA, unlisted operators) simply get no badge.
 const AIRLINES = {
-  AAL: { name: 'American',        iata: 'AA', color: '#a5342a' },
-  DAL: { name: 'Delta',           iata: 'DL', color: '#9c1238' },
-  UAL: { name: 'United',          iata: 'UA', color: '#1f5fa8' },
-  SWA: { name: 'Southwest',       iata: 'WN', color: '#b5860f' },
-  JBU: { name: 'JetBlue',         iata: 'B6', color: '#146fa0' },
-  ASA: { name: 'Alaska',          iata: 'AS', color: '#0f766e' },
-  NKS: { name: 'Spirit',          iata: 'NK', color: '#a68a00' },
-  FFT: { name: 'Frontier',        iata: 'F9', color: '#1a7a3c' },
-  AAY: { name: 'Allegiant',       iata: 'G4', color: '#1a3a6b' },
-  HAL: { name: 'Hawaiian',        iata: 'HA', color: '#6a1b4d' },
-  SCX: { name: 'Sun Country',     iata: 'SY', color: '#0e5c3a' },
-  SKW: { name: 'SkyWest',         iata: 'OO', color: '#3a4a5a' },
-  ENY: { name: 'Envoy Air',       iata: 'MQ', color: '#3a4a5a' },
-  RPA: { name: 'Republic',        iata: 'YX', color: '#3a4a5a' },
-  PDT: { name: 'Piedmont',        iata: 'PT', color: '#3a4a5a' },
-  JIA: { name: 'PSA Airlines',    iata: 'OH', color: '#3a4a5a' },
-  EDV: { name: 'Endeavor Air',    iata: '9E', color: '#3a4a5a' },
-  ASH: { name: 'Air Wisconsin',   iata: 'ZW', color: '#3a4a5a' },
-  GJS: { name: 'GoJet',           iata: 'G7', color: '#3a4a5a' },
-  FDX: { name: 'FedEx Express',   iata: 'FX', color: '#4b1f7a' },
-  UPS: { name: 'UPS Airlines',    iata: '5X', color: '#4a3510' },
-  GTI: { name: 'Atlas Air',       iata: '5Y', color: '#43494f' },
-  ABX: { name: 'ABX Air',         iata: 'GB', color: '#43494f' },
-  BAW: { name: 'British Airways', iata: 'BA', color: '#1a2a5e' },
-  DLH: { name: 'Lufthansa',       iata: 'LH', color: '#0d3a5c' },
-  ACA: { name: 'Air Canada',      iata: 'AC', color: '#7a1420' },
-  AFR: { name: 'Air France',      iata: 'AF', color: '#1a3a7a' },
-  KLM: { name: 'KLM',             iata: 'KL', color: '#0a5c9e' },
-  VIR: { name: 'Virgin Atlantic', iata: 'VS', color: '#7a1030' },
-  QTR: { name: 'Qatar Airways',   iata: 'QR', color: '#5a1030' },
-  UAE: { name: 'Emirates',        iata: 'EK', color: '#a3151e' },
-  EJA: { name: 'NetJets',         iata: 'EJ', color: '#43494f' },
-  LXJ: { name: 'Flexjet',         iata: 'LX', color: '#43494f' },
+  AAL: { name: 'American Airlines',      iata: 'AA', color: '#a5342a' },
+  DAL: { name: 'Delta Air Lines',        iata: 'DL', color: '#9c1238' },
+  UAL: { name: 'United Airlines',        iata: 'UA', color: '#1f5fa8' },
+  SWA: { name: 'Southwest Airlines',     iata: 'WN', color: '#b5860f' },
+  JBU: { name: 'JetBlue Airways',        iata: 'B6', color: '#146fa0' },
+  ASA: { name: 'Alaska Airlines',        iata: 'AS', color: '#0f766e' },
+  NKS: { name: 'Spirit Airlines',        iata: 'NK', color: '#a68a00' },
+  FFT: { name: 'Frontier Airlines',      iata: 'F9', color: '#1a7a3c' },
+  AAY: { name: 'Allegiant Air',          iata: 'G4', color: '#1a3a6b' },
+  HAL: { name: 'Hawaiian Airlines',      iata: 'HA', color: '#6a1b4d' },
+  SCX: { name: 'Sun Country Airlines',   iata: 'SY', color: '#0e5c3a' },
+  SKW: { name: 'SkyWest Airlines',       iata: 'OO', color: '#3a4a5a' },
+  ENY: { name: 'Envoy Air',              iata: 'MQ', color: '#3a4a5a' },
+  RPA: { name: 'Republic Airways',       iata: 'YX', color: '#3a4a5a' },
+  PDT: { name: 'Piedmont Airlines',      iata: 'PT', color: '#3a4a5a' },
+  JIA: { name: 'PSA Airlines',           iata: 'OH', color: '#3a4a5a' },
+  EDV: { name: 'Endeavor Air',           iata: '9E', color: '#3a4a5a' },
+  ASH: { name: 'Air Wisconsin',          iata: 'ZW', color: '#3a4a5a' },
+  GJS: { name: 'GoJet Airlines',         iata: 'G7', color: '#3a4a5a' },
+  FDX: { name: 'FedEx Express',          iata: 'FX', color: '#4b1f7a' },
+  UPS: { name: 'UPS Airlines',           iata: '5X', color: '#4a3510' },
+  GTI: { name: 'Atlas Air',              iata: '5Y', color: '#43494f' },
+  ABX: { name: 'ABX Air',                iata: 'GB', color: '#43494f' },
+  BAW: { name: 'British Airways',        iata: 'BA', color: '#1a2a5e' },
+  DLH: { name: 'Lufthansa',              iata: 'LH', color: '#0d3a5c' },
+  ACA: { name: 'Air Canada',             iata: 'AC', color: '#7a1420' },
+  AFR: { name: 'Air France',             iata: 'AF', color: '#1a3a7a' },
+  KLM: { name: 'KLM Royal Dutch Airlines', iata: 'KL', color: '#0a5c9e' },
+  VIR: { name: 'Virgin Atlantic',        iata: 'VS', color: '#7a1030' },
+  QTR: { name: 'Qatar Airways',          iata: 'QR', color: '#5a1030' },
+  UAE: { name: 'Emirates',               iata: 'EK', color: '#a3151e' },
+  EJA: { name: 'NetJets',                iata: 'EJ', color: '#43494f' },
+  LXJ: { name: 'Flexjet',                iata: 'LX', color: '#43494f' },
 };
+const PRIVATE_LABEL = 'Private Aircraft';
+const PRIVATE_COLOR = '#44494e';
 
 // ---- State -----------------------------------------------------
 let home = null;                 // { lat, lon } of the receiver
@@ -228,6 +232,12 @@ const routeCache = new Map();    // callsign -> { from, to } or null (looked up,
 const routePending = new Set();  // callsigns currently in-flight
 let routeQueue = [];             // [{ callsign, lat, lng }, ...] awaiting the next batch
 let routeTimer = null;
+
+let databaseFolder = null;       // tar1090's local hex database folder, discovered at startup
+const typeCodeTable = new Map(); // ICAO type code (e.g. "SR22") -> human-readable type string
+const shardCache = new Map();    // db shard key -> parsed contents (or null)
+const hexTypeCache = new Map();  // hex -> human-readable type string or null
+const hexTypePending = new Set();
 
 if (location.protocol === 'http:') {
   // adsb.im asks that http-loaded pages call their API over http too
@@ -353,9 +363,12 @@ async function flushRouteQueue() {
     for (const route of routes) {
       if (!route || !route.callsign) continue;
       found.add(route.callsign);
-      const codes = route._airport_codes_iata || route.airport_codes;
-      const parts = typeof codes === 'string' ? codes.split('-') : null;
-      routeCache.set(route.callsign, (parts && parts.length === 2) ? { from: parts[0], to: parts[1] } : null);
+      // skip routes the API itself flags as implausible for this flight's
+      // current position, rather than showing a possibly-wrong city pair
+      const airports = route.plausible !== false ? route._airports : null;
+      routeCache.set(route.callsign, (airports && airports.length === 2)
+        ? { from: airports[0].location, to: airports[1].location }
+        : null);
     }
     for (const e of batch) {
       if (!found.has(e.callsign)) routeCache.set(e.callsign, null);
@@ -367,6 +380,93 @@ async function flushRouteQueue() {
   }
 
   if (routeQueue.length > 0) routeTimer = setTimeout(flushRouteQueue, ROUTE_BATCH_MS);
+}
+
+// ---- Aircraft type lookup --------------------------------------------------
+// ADS-B carries no aircraft type/model info directly. tar1090 (already
+// installed alongside readsb on this same box) ships its own local hex ->
+// [registration, icaoType, flags, typeLong] database, split into a prefix
+// trie of small same-origin files so the browser only fetches what it needs.
+// We read that same data ourselves (same-origin static files, not tar1090's
+// code) rather than duplicating or fetching a multi-hundred-MB database.
+//
+// "CIRRUS SR-22" -> "Cirrus SR-22": only re-cases words that are ALL CAPS
+// (manufacturer names), leaving model numbers like "SR-22"/"737-800" as-is.
+function humanizeType(s) {
+  return s.split(' ').map(w => /^[A-Z]+$/.test(w) ? w[0] + w.slice(1).toLowerCase() : w).join(' ');
+}
+
+async function discoverDatabaseFolder() {
+  try {
+    const res = await fetch('/tar1090/index.html', { cache: 'force-cache' });
+    const html = await res.text();
+    const m = /databaseFolder\s*=\s*"([^"]+)"/.exec(html);
+    if (m) databaseFolder = m[1];
+  } catch (e) {
+    // type lookups just stay disabled; everything else still works
+  }
+}
+
+async function loadTypeCodeTable() {
+  if (!databaseFolder) return;
+  try {
+    const res = await fetch(`/tar1090/${databaseFolder}/icao_aircraft_types2.js`, { cache: 'force-cache' });
+    const data = await res.json();
+    for (const code in data) {
+      if (data[code] && data[code][0]) typeCodeTable.set(code, humanizeType(data[code][0]));
+    }
+  } catch (e) {
+    // fine — per-hex typeLong (below) still covers most aircraft on its own
+  }
+}
+
+function fetchShard(bkey) {
+  // cache the in-flight promise itself, not just the resolved value — several
+  // aircraft sharing a hex prefix (e.g. all US-registered "A...") otherwise
+  // race and each fire their own duplicate fetch for the same shard
+  if (shardCache.has(bkey)) return shardCache.get(bkey);
+  const promise = (async () => {
+    try {
+      const res = await fetch(`/tar1090/${databaseFolder}/${bkey}.js`, { cache: 'force-cache' });
+      return res.ok ? await res.json() : null;
+    } catch (e) {
+      return null;
+    }
+  })();
+  shardCache.set(bkey, promise);
+  return promise;
+}
+
+// Walks the same prefix-trie structure tar1090 stores its hex database in:
+// each shard either has the remaining hex suffix as a direct key, or a
+// "children" list naming deeper shards to descend into.
+async function lookupType(hex) {
+  if (hexTypeCache.has(hex)) return hexTypeCache.get(hex);
+  if (!databaseFolder || hexTypePending.has(hex)) return null;
+  hexTypePending.add(hex);
+
+  const icao = hex.toUpperCase();
+  let level = 1, entry = null;
+  while (level <= icao.length) {
+    const bkey = icao.substring(0, level);
+    const data = await fetchShard(bkey);
+    if (!data) break;
+    const dkey = icao.substring(level);
+    if (dkey in data) { entry = data[dkey]; break; }
+    if (data.children && data.children.includes(bkey + dkey[0])) { level++; continue; }
+    break;
+  }
+
+  let label = null;
+  if (entry) {
+    const [, typeCode, , typeLong] = entry;
+    if (typeLong) label = humanizeType(typeLong);
+    else if (typeCode) label = typeCodeTable.get(typeCode.toUpperCase()) || null;
+  }
+
+  hexTypeCache.set(hex, label);
+  hexTypePending.delete(hex);
+  return label;
 }
 
 // ---- Data loading --------------------------------------------------
@@ -405,16 +505,18 @@ function normalizeAircraft(a) {
 
   // scheduled/charter flights are 3 letters + a number (e.g. DAL1234); GA tail
   // numbers (N1182D) and hex-fallback callsigns won't match, and correctly
-  // get no airline badge or route lookup
+  // get labeled "Private Aircraft" with no route lookup below
   const airlineMatch = /^([A-Z]{3})\d/.exec(cs);
   const airlineIcao = airlineMatch ? airlineMatch[1] : null;
   const airline = airlineIcao ? (AIRLINES[airlineIcao] || null) : null;
+  const airlineLabel = airline ? airline.name : PRIVATE_LABEL;
+  const badgeColor = airline ? airline.color : PRIVATE_COLOR;
 
   return {
     hex: a.hex, cs, bearing, range, alt, hdg, speed: a.gs ?? null,
     lat: typeof a.lat === 'number' ? a.lat : null,
     lon: typeof a.lon === 'number' ? a.lon : null,
-    airlineIcao, airline,
+    airlineIcao, airlineLabel, badgeColor,
   };
 }
 
@@ -451,14 +553,23 @@ function applyUpdate(list) {
       existing.lat = n.lat;
       existing.lon = n.lon;
       existing.airlineIcao = n.airlineIcao;
-      existing.airline = n.airline;
+      existing.airlineLabel = n.airlineLabel;
+      existing.badgeColor = n.badgeColor;
       existing.lastSeen = now;
     } else {
       planes.set(n.hex, {
         ...n,
         targetBearing: n.bearing,
         targetRange: n.range,
+        typeLabel: null,
         lastSeen: now,
+      });
+    }
+
+    if (!hexTypeCache.has(n.hex)) {
+      lookupType(n.hex).then(label => {
+        const pl = planes.get(n.hex);
+        if (pl) pl.typeLabel = label;
       });
     }
 
@@ -581,7 +692,7 @@ function drawPlanes(dt) {
     if (!node) {
       node = document.createElement('div');
       node.className = 'tag';
-      node.innerHTML = '<div class="row1"><span class="badge"></span><span class="cs"></span></div><div class="alt"></div><div class="route"></div>';
+      node.innerHTML = '<div class="cs"></div><div class="badge"></div><div class="type"></div><div class="alt"></div><div class="route"></div>';
       tagsEl.appendChild(node);
       tagNodes.set(p.hex, node);
     }
@@ -596,13 +707,16 @@ function drawPlanes(dt) {
     node.querySelector('.alt').textContent = `${altLabel(p.alt)} · ${speedTxt}kt`;
 
     const badgeEl = node.querySelector('.badge');
-    if (p.airline) {
-      badgeEl.textContent = p.airline.iata;
-      badgeEl.title = p.airline.name;
-      badgeEl.style.background = p.airline.color;
-      badgeEl.style.display = 'inline-block';
+    badgeEl.textContent = p.airlineLabel;
+    badgeEl.style.background = p.badgeColor;
+    badgeEl.style.display = 'inline-block';
+
+    const typeEl = node.querySelector('.type');
+    if (p.typeLabel) {
+      typeEl.textContent = p.typeLabel;
+      typeEl.style.display = 'block';
     } else {
-      badgeEl.style.display = 'none';
+      typeEl.style.display = 'none';
     }
 
     const routeEl = node.querySelector('.route');
@@ -658,6 +772,7 @@ function tick(ts) {
 }
 
 async function start() {
+  discoverDatabaseFolder().then(loadTypeCodeTable); // non-blocking; type labels fill in once ready
   await loadHome();
   if (!home) {
     // keep retrying receiver info in the background until it succeeds

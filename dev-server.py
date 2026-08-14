@@ -19,6 +19,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 with urllib.request.urlopen(PI_HOST + self.path, timeout=5) as upstream:
                     self.send_response(upstream.status)
                     self.send_header("Content-Type", upstream.headers.get("Content-Type", "application/json"))
+                    # urllib doesn't auto-decompress; some tar1090 assets (db shards) are
+                    # served pre-gzipped, so the Content-Encoding header must be forwarded
+                    # too or the browser has no idea the bytes need decompressing
+                    if upstream.headers.get("Content-Encoding"):
+                        self.send_header("Content-Encoding", upstream.headers["Content-Encoding"])
                     self.send_header("Cache-Control", "no-store")
                     self.end_headers()
                     self.wfile.write(upstream.read())
