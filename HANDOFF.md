@@ -12,6 +12,25 @@ It is now **deployed and running on the Pi** (`flightwall`, `<radar>`,
 the login user) as a Chromium kiosk launched by systemd, verified to survive a
 full reboot with no manual intervention.
 
+## Remote access (Tailscale Funnel)
+The page is also reachable from outside the local network at
+**https://[funnel-hostname-redacted]/** via Tailscale Funnel — publicly
+reachable HTTPS, no login/app required for whoever you send the link to, no
+router port-forwarding involved. `tailscale` is installed on the Pi, signed
+into the maintainer's tailnet, with `tailscale funnel --bg 80` proxying that
+public URL to lighttpd on `127.0.0.1:80` (the same server `index.html` and
+`/tar1090/` are already deployed to, so this is the exact same page, not a
+separate copy). Funnel exposes the **whole** site, not just `index.html` —
+`/tar1090/` itself is also reachable at that URL, fine for this use case
+since it's just flight data, but worth remembering before deploying anything
+more sensitive to this docroot later.
+- Check status: `ssh <user>@<radar> tailscale funnel status`
+- Turn off: `ssh <user>@<radar> sudo tailscale funnel --https=443 off`
+- The Funnel/serve config is stored in tailscaled's persistent state, so it
+  should come back automatically on reboot (not yet verified with an actual
+  reboot test the way the kiosk service was — worth confirming if this
+  matters going forward).
+
 The radar also now has a **dark background map** (MapLibre GL JS, vendored
 under `vendor/` — BSD-3-Clause, v5.24.0, self-hosted so the only runtime
 network dependency is the tile/style fetch itself). Style is OpenFreeMap's
