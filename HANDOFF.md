@@ -81,20 +81,31 @@ Pi. Two things worth knowing:
   for Funnel) would keep working as the way to reach the Pi afterward,
   network-topology-independent.
 
-The radar also now has a **dark background map** (MapLibre GL JS, vendored
-under `vendor/` — BSD-3-Clause, v5.24.0, self-hosted so the only runtime
-network dependency is the tile/style fetch itself). Style is OpenFreeMap's
-free hosted `dark` style (`https://tiles.openfreemap.org/styles/dark`), no
-API key needed. The map is non-interactive (`interactive: false`), centered
-on the receiver's home location, and zoomed so its visible extent matches the
-radar's `RANGE_NM` ring exactly (`zoomForRange()` in `index.html` derives the
-zoom level from the standard Web Mercator meters-per-pixel formula — recomputes
-correctly if `RANGE_NM` or the receiver location ever changes, nothing
-hardcoded). Dimmed via a CSS `filter` on `#mapbg` so it stays a backdrop, not
-competing with the amber blips/rings. Requires the Pi to have internet access
-for tiles (confirmed working); the ADS-B tracking itself has no such
-dependency and keeps working if the map layer fails to load (falls back to
-the original solid dark background via CSS).
+The radar also now has a **background map** (MapLibre GL JS, vendored under
+`vendor/` — BSD-3-Clause, v5.24.0, self-hosted so the only runtime network
+dependency is the tile/style fetch itself). The map is non-interactive
+(`interactive: false`), centered on `home`, and zoomed so its visible extent
+matches the radar's `RANGE_NM` ring exactly (`zoomForRange()` in
+`index.html` derives the zoom level from the standard Web Mercator
+meters-per-pixel formula — recomputes correctly if `RANGE_NM` or the
+receiver location ever changes, nothing hardcoded). Requires the Pi to have
+internet access for tiles (confirmed working); the ADS-B tracking itself has
+no such dependency and keeps working if the map layer fails to load (falls
+back to the original solid dark background via CSS).
+
+**Style is OpenFreeMap's `liberty`**, not their `dark` style — `dark` turned
+out to be near-grayscale by design (checked the actual style JSON: water,
+parks, and woods are all defined at ~0% saturation), so no amount of CSS
+`saturate()` could pull color out of it. `liberty` has real color (blue
+water, green parks, warm orange/yellow road tones) which we darken ourselves
+via `#mapbg`'s CSS `filter: brightness(0.3) saturate(1.5)` — tuned live in a
+few iterations to land on "still reads as a dark backdrop" without going all
+the way back to washed-out or invisible. Since `liberty` is styled for a
+light background (place-name labels are black text with a white halo),
+`recolorLabels()` flips city/town/village/water-name labels to light
+text/dark halo after the style loads, via the same `setPaintProperty`
+pattern already used for the runway layer colors — otherwise the labels
+would darken along with everything else and become illegible.
 
 The map also shows **real runway outlines** at airports in range (e.g. RDU's
 crossing-runway pattern). The OpenFreeMap tileset's own `aeroway-*` layers

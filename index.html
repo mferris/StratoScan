@@ -47,7 +47,7 @@
     border-radius: 50%;
     overflow: hidden;
     background: var(--bg);
-    filter: brightness(0.55) saturate(0.75);
+    filter: brightness(0.3) saturate(1.5);
   }
 
   #mapbg .maplibregl-ctrl-attrib {
@@ -184,7 +184,11 @@ const RECEIVER_URL = '/tar1090/data/receiver.json';
 // haversine from raw lat/lon rather than trusting readsb's r_dst/r_dir,
 // since those are relative to the real antenna, not this override point.
 const HOME_OVERRIDE = { lat: [lat-redacted], lon: [lon-redacted] }; // [address redacted]
-const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
+// "dark" turned out to be near-grayscale by design (water/parks/woods are
+// all ~0% saturation), so no CSS filter could make it colorful. "liberty"
+// has real color (blue water, green parks, warm road tones) — we darken it
+// ourselves via the #mapbg CSS filter instead.
+const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 // same free, no-key route API tar1090 itself uses (adsb.im asks http-loaded
 // pages to call it over http, mirrored below to match their preference)
 let ROUTE_API_URL = 'https://adsb.im/api/0/routeset';
@@ -375,6 +379,23 @@ function initMap() {
   // Runway outlines instead come from a one-time OpenStreetMap Overpass
   // query, added as our own GeoJSON layer — see loadRunways().
   map.on('load', loadRunways);
+  map.on('load', recolorLabels);
+}
+
+// "liberty" is styled for a light background (black text, white halo) —
+// flip place-name labels to the opposite convention so they stay legible
+// once #mapbg's CSS filter darkens everything underneath them.
+function recolorLabels() {
+  const LABEL_LAYERS = ['label_city_capital', 'label_city', 'label_town', 'label_village', 'label_other'];
+  for (const id of LABEL_LAYERS) {
+    if (!map.getLayer(id)) continue;
+    map.setPaintProperty(id, 'text-color', '#e8e2d5');
+    map.setPaintProperty(id, 'text-halo-color', '#05080a');
+  }
+  if (map.getLayer('water_name_point_label')) {
+    map.setPaintProperty('water_name_point_label', 'text-color', '#9fc4e8');
+    map.setPaintProperty('water_name_point_label', 'text-halo-color', '#05080a');
+  }
 }
 
 window.addEventListener('resize', () => { if (map) map.resize(); });
