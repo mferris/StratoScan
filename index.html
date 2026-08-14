@@ -130,8 +130,19 @@
     will-change: left, top;
   }
   .tag.flip { transform: translate(calc(-100% - 10px), -50%); }
+  .tag .row1 { display: flex; align-items: center; gap: 4px; }
   .tag .cs { font-weight: 700; letter-spacing: 0.04em; }
   .tag .alt { color: var(--text-dim); }
+  .tag .route { color: var(--text-dim); display: none; }
+  .tag .badge {
+    display: none;
+    font-size: 0.5rem;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 2px;
+    color: #fff;
+    letter-spacing: 0.02em;
+  }
 </style>
 </head>
 <body>
@@ -153,6 +164,11 @@
 const DATA_URL = '/tar1090/data/aircraft.json';
 const RECEIVER_URL = '/tar1090/data/receiver.json';
 const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
+// same free, no-key route API tar1090 itself uses (adsb.im asks http-loaded
+// pages to call it over http, mirrored below to match their preference)
+let ROUTE_API_URL = 'https://adsb.im/api/0/routeset';
+const ROUTE_BATCH_MS = 4000;      // how often we flush queued route lookups
+const ROUTE_BATCH_MAX = 50;       // callsigns per request
 const RANGE_NM = 40;             // outer ring range in nautical miles
 const RINGS = 4;                 // number of range rings
 const SWEEP_SPEED = 0.008;       // radians per frame
@@ -161,12 +177,62 @@ const FETCH_INTERVAL_MS = 1000;  // how often we poll aircraft.json
 const STALE_MS = 15000;          // no good fetch in this long -> show NO SIGNAL
 const DROP_MS = 45000;           // no good fetch in this long -> clear stale blips
 
+// ICAO airline designators (ICAO Doc 8585, a public standard) mapped to a
+// display name, IATA code, and a badge color loosely associated with the
+// carrier — not an attempt at exact brand colors, just visual distinction.
+// Scoped to carriers plausible near a US East Coast receiver; unmapped
+// codes (private GA, unlisted operators) simply get no badge.
+const AIRLINES = {
+  AAL: { name: 'American',        iata: 'AA', color: '#a5342a' },
+  DAL: { name: 'Delta',           iata: 'DL', color: '#9c1238' },
+  UAL: { name: 'United',          iata: 'UA', color: '#1f5fa8' },
+  SWA: { name: 'Southwest',       iata: 'WN', color: '#b5860f' },
+  JBU: { name: 'JetBlue',         iata: 'B6', color: '#146fa0' },
+  ASA: { name: 'Alaska',          iata: 'AS', color: '#0f766e' },
+  NKS: { name: 'Spirit',          iata: 'NK', color: '#a68a00' },
+  FFT: { name: 'Frontier',        iata: 'F9', color: '#1a7a3c' },
+  AAY: { name: 'Allegiant',       iata: 'G4', color: '#1a3a6b' },
+  HAL: { name: 'Hawaiian',        iata: 'HA', color: '#6a1b4d' },
+  SCX: { name: 'Sun Country',     iata: 'SY', color: '#0e5c3a' },
+  SKW: { name: 'SkyWest',         iata: 'OO', color: '#3a4a5a' },
+  ENY: { name: 'Envoy Air',       iata: 'MQ', color: '#3a4a5a' },
+  RPA: { name: 'Republic',        iata: 'YX', color: '#3a4a5a' },
+  PDT: { name: 'Piedmont',        iata: 'PT', color: '#3a4a5a' },
+  JIA: { name: 'PSA Airlines',    iata: 'OH', color: '#3a4a5a' },
+  EDV: { name: 'Endeavor Air',    iata: '9E', color: '#3a4a5a' },
+  ASH: { name: 'Air Wisconsin',   iata: 'ZW', color: '#3a4a5a' },
+  GJS: { name: 'GoJet',           iata: 'G7', color: '#3a4a5a' },
+  FDX: { name: 'FedEx Express',   iata: 'FX', color: '#4b1f7a' },
+  UPS: { name: 'UPS Airlines',    iata: '5X', color: '#4a3510' },
+  GTI: { name: 'Atlas Air',       iata: '5Y', color: '#43494f' },
+  ABX: { name: 'ABX Air',         iata: 'GB', color: '#43494f' },
+  BAW: { name: 'British Airways', iata: 'BA', color: '#1a2a5e' },
+  DLH: { name: 'Lufthansa',       iata: 'LH', color: '#0d3a5c' },
+  ACA: { name: 'Air Canada',      iata: 'AC', color: '#7a1420' },
+  AFR: { name: 'Air France',      iata: 'AF', color: '#1a3a7a' },
+  KLM: { name: 'KLM',             iata: 'KL', color: '#0a5c9e' },
+  VIR: { name: 'Virgin Atlantic', iata: 'VS', color: '#7a1030' },
+  QTR: { name: 'Qatar Airways',   iata: 'QR', color: '#5a1030' },
+  UAE: { name: 'Emirates',        iata: 'EK', color: '#a3151e' },
+  EJA: { name: 'NetJets',         iata: 'EJ', color: '#43494f' },
+  LXJ: { name: 'Flexjet',         iata: 'LX', color: '#43494f' },
+};
+
 // ---- State -----------------------------------------------------
 let home = null;                 // { lat, lon } of the receiver
 let planes = new Map();          // hex -> plane record
 let lastGoodFetch = 0;
 let connected = false;
 let map = null;                  // MapLibre background map instance
+const routeCache = new Map();    // callsign -> { from, to } or null (looked up, no route)
+const routePending = new Set();  // callsigns currently in-flight
+let routeQueue = [];             // [{ callsign, lat, lng }, ...] awaiting the next batch
+let routeTimer = null;
+
+if (location.protocol === 'http:') {
+  // adsb.im asks that http-loaded pages call their API over http too
+  ROUTE_API_URL = ROUTE_API_URL.replace('https://', 'http://');
+}
 
 // ---- Canvas setup --------------------------------------------------
 const canvas = document.getElementById('radar');
@@ -258,6 +324,51 @@ function initMap() {
 
 window.addEventListener('resize', () => { if (map) map.resize(); });
 
+// ---- Route lookup --------------------------------------------------
+// Batched/cached/throttled the same way tar1090 itself queries this API:
+// collect callsigns as they're seen, flush a batch every ROUTE_BATCH_MS,
+// cache results (including negative ones) for the rest of the session so
+// we never look up the same callsign twice.
+function queueRouteLookup(cs, lat, lng) {
+  if (routeCache.has(cs) || routePending.has(cs)) return;
+  if (routeQueue.some(e => e.callsign === cs)) return;
+  routeQueue.push({ callsign: cs, lat, lng });
+  if (!routeTimer) routeTimer = setTimeout(flushRouteQueue, ROUTE_BATCH_MS);
+}
+
+async function flushRouteQueue() {
+  routeTimer = null;
+  if (routeQueue.length === 0) return;
+  const batch = routeQueue.splice(0, ROUTE_BATCH_MAX);
+  for (const e of batch) routePending.add(e.callsign);
+
+  try {
+    const res = await fetch(ROUTE_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ planes: batch.map(({ callsign, lat, lng }) => ({ callsign, lat, lng })) }),
+    });
+    const routes = res.ok ? await res.json() : [];
+    const found = new Set();
+    for (const route of routes) {
+      if (!route || !route.callsign) continue;
+      found.add(route.callsign);
+      const codes = route._airport_codes_iata || route.airport_codes;
+      const parts = typeof codes === 'string' ? codes.split('-') : null;
+      routeCache.set(route.callsign, (parts && parts.length === 2) ? { from: parts[0], to: parts[1] } : null);
+    }
+    for (const e of batch) {
+      if (!found.has(e.callsign)) routeCache.set(e.callsign, null);
+    }
+  } catch (e) {
+    // network hiccup — don't cache anything, so these get retried later
+  } finally {
+    for (const e of batch) routePending.delete(e.callsign);
+  }
+
+  if (routeQueue.length > 0) routeTimer = setTimeout(flushRouteQueue, ROUTE_BATCH_MS);
+}
+
 // ---- Data loading --------------------------------------------------
 async function loadHome() {
   try {
@@ -292,7 +403,19 @@ function normalizeAircraft(a) {
   const hdg = a.track ?? a.true_heading ?? a.mag_heading ?? a.calc_track ?? bearing;
   const cs = (a.flight ? a.flight.trim() : '') || a.hex.toUpperCase();
 
-  return { hex: a.hex, cs, bearing, range, alt, hdg, speed: a.gs ?? null };
+  // scheduled/charter flights are 3 letters + a number (e.g. DAL1234); GA tail
+  // numbers (N1182D) and hex-fallback callsigns won't match, and correctly
+  // get no airline badge or route lookup
+  const airlineMatch = /^([A-Z]{3})\d/.exec(cs);
+  const airlineIcao = airlineMatch ? airlineMatch[1] : null;
+  const airline = airlineIcao ? (AIRLINES[airlineIcao] || null) : null;
+
+  return {
+    hex: a.hex, cs, bearing, range, alt, hdg, speed: a.gs ?? null,
+    lat: typeof a.lat === 'number' ? a.lat : null,
+    lon: typeof a.lon === 'number' ? a.lon : null,
+    airlineIcao, airline,
+  };
 }
 
 async function fetchAircraft() {
@@ -325,6 +448,10 @@ function applyUpdate(list) {
       existing.alt = n.alt;
       existing.hdg = n.hdg;
       existing.speed = n.speed;
+      existing.lat = n.lat;
+      existing.lon = n.lon;
+      existing.airlineIcao = n.airlineIcao;
+      existing.airline = n.airline;
       existing.lastSeen = now;
     } else {
       planes.set(n.hex, {
@@ -333,6 +460,10 @@ function applyUpdate(list) {
         targetRange: n.range,
         lastSeen: now,
       });
+    }
+
+    if (n.airlineIcao) {
+      queueRouteLookup(n.cs, n.lat ?? home?.lat ?? 0, n.lon ?? home?.lon ?? 0);
     }
   }
 
@@ -450,7 +581,7 @@ function drawPlanes(dt) {
     if (!node) {
       node = document.createElement('div');
       node.className = 'tag';
-      node.innerHTML = '<div class="cs"></div><div class="alt"></div>';
+      node.innerHTML = '<div class="row1"><span class="badge"></span><span class="cs"></span></div><div class="alt"></div><div class="route"></div>';
       tagsEl.appendChild(node);
       tagNodes.set(p.hex, node);
     }
@@ -463,6 +594,25 @@ function drawPlanes(dt) {
     node.querySelector('.cs').style.color = color;
     const speedTxt = p.speed === null ? '--' : Math.round(p.speed);
     node.querySelector('.alt').textContent = `${altLabel(p.alt)} · ${speedTxt}kt`;
+
+    const badgeEl = node.querySelector('.badge');
+    if (p.airline) {
+      badgeEl.textContent = p.airline.iata;
+      badgeEl.title = p.airline.name;
+      badgeEl.style.background = p.airline.color;
+      badgeEl.style.display = 'inline-block';
+    } else {
+      badgeEl.style.display = 'none';
+    }
+
+    const routeEl = node.querySelector('.route');
+    const route = routeCache.get(p.cs);
+    if (route) {
+      routeEl.textContent = `${route.from} → ${route.to}`;
+      routeEl.style.display = 'block';
+    } else {
+      routeEl.style.display = 'none';
+    }
   }
 
   // remove tag nodes for aircraft no longer tracked or out of range
