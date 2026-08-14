@@ -132,6 +132,7 @@ const RECEIVER_URL = '/tar1090/data/receiver.json';
 const RANGE_NM = 40;             // outer ring range in nautical miles
 const RINGS = 4;                 // number of range rings
 const SWEEP_SPEED = 0.008;       // radians per frame
+const SMOOTH_TAU = 0.35;         // seconds; exponential smoothing time constant for plane motion
 const FETCH_INTERVAL_MS = 1000;  // how often we poll aircraft.json
 const STALE_MS = 15000;          // no good fetch in this long -> show NO SIGNAL
 const DROP_MS = 45000;           // no good fetch in this long -> clear stale blips
@@ -270,11 +271,8 @@ function applyUpdate(list) {
 
     const existing = planes.get(n.hex);
     if (existing) {
-      existing.fromBearing = existing.bearing;
-      existing.fromRange = existing.range;
       existing.targetBearing = n.bearing;
       existing.targetRange = n.range;
-      existing.lerpStart = now;
       existing.cs = n.cs;
       existing.alt = n.alt;
       existing.hdg = n.hdg;
@@ -283,11 +281,8 @@ function applyUpdate(list) {
     } else {
       planes.set(n.hex, {
         ...n,
-        fromBearing: n.bearing,
-        fromRange: n.range,
         targetBearing: n.bearing,
         targetRange: n.range,
-        lerpStart: now,
         lastSeen: now,
       });
     }
@@ -369,16 +364,18 @@ function altLabel(alt) {
   return 'FL' + Math.round(alt / 100);
 }
 
-function drawPlanes() {
-  const now = performance.now();
+function drawPlanes(dt) {
   const stageRect = stage.getBoundingClientRect();
   const scale = stageRect.width / W;
   const inRange = [];
 
+  // exponential chase toward the latest fix — never fully "arrives," so motion
+  // stays continuous instead of visibly settling then pausing between polls
+  const alpha = 1 - Math.exp(-dt / SMOOTH_TAU);
+
   for (const p of planes.values()) {
-    const t = Math.min(1, (now - p.lerpStart) / FETCH_INTERVAL_MS);
-    p.bearing = p.fromBearing + bearingDelta(p.fromBearing, p.targetBearing) * t;
-    p.range = p.fromRange + (p.targetRange - p.fromRange) * t;
+    p.bearing += bearingDelta(p.bearing, p.targetBearing) * alpha;
+    p.range += (p.targetRange - p.range) * alpha;
 
     if (p.range > RANGE_NM) continue;
     inRange.push(p);
@@ -444,11 +441,16 @@ function updateStatus() {
 }
 
 // ---- Main loop -------------------------------------------------
-function tick() {
+let lastFrameTs = performance.now();
+
+function tick(ts) {
+  const dt = Math.min(0.25, Math.max(0, (ts - lastFrameTs) / 1000)); // seconds, clamped
+  lastFrameTs = ts;
+
   ctx.clearRect(0, 0, W, H);
   drawRings();
   drawSweep();
-  drawPlanes();
+  drawPlanes(dt);
   updateStatus();
 
   sweepAngle += SWEEP_SPEED;
@@ -468,7 +470,7 @@ async function start() {
   }
   fetchAircraft();
   setInterval(fetchAircraft, FETCH_INTERVAL_MS);
-  tick();
+  requestAnimationFrame(tick);
 }
 
 start();
