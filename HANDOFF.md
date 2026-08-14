@@ -27,6 +27,19 @@ for tiles (confirmed working); the ADS-B tracking itself has no such
 dependency and keeps working if the map layer fails to load (falls back to
 the original solid dark background via CSS).
 
+The map also shows **real runway outlines** at airports in range (e.g. RDU's
+crossing-runway pattern). The OpenFreeMap tileset's own `aeroway-*` layers
+turned out to be a dead end — confirmed via `queryRenderedFeatures()` that the
+vector tiles simply carry no runway/taxiway geometry below zoom ~11, and our
+fixed radar zoom is ~9.7, so raising the style's `minzoom` did nothing (the
+data isn't in the tile, not just hidden). Runways instead come from a
+one-time query to OSM's public Overpass API (`loadRunways()`, fired once from
+`map.on('load', ...)` since the receiver's home location never changes at
+runtime), added as our own GeoJSON source/layers — this bypasses the vector
+tileset's zoom restriction entirely since a GeoJSON source isn't tile-paginated.
+Purely additive: if Overpass is unreachable the map/radar work exactly as
+before, just without runway outlines.
+
 Each tracked aircraft now shows a **color-coded airline badge** (full name,
 e.g. "Piedmont Airlines" — or "Private Aircraft" for GA/unidentified flights),
 a **human-readable aircraft type** (e.g. "Bombardier Regional Jet CRJ-900",
