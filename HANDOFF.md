@@ -12,6 +12,21 @@ It is now **deployed and running on the Pi** (`[hostname-redacted]`, `<radar>`,
 the login user) as a Chromium kiosk launched by systemd, verified to survive a
 full reboot with no manual intervention.
 
+The radar also now has a **dark background map** (MapLibre GL JS, vendored
+under `vendor/` — BSD-3-Clause, v5.24.0, self-hosted so the only runtime
+network dependency is the tile/style fetch itself). Style is OpenFreeMap's
+free hosted `dark` style (`https://tiles.openfreemap.org/styles/dark`), no
+API key needed. The map is non-interactive (`interactive: false`), centered
+on the receiver's home location, and zoomed so its visible extent matches the
+radar's `RANGE_NM` ring exactly (`zoomForRange()` in `index.html` derives the
+zoom level from the standard Web Mercator meters-per-pixel formula — recomputes
+correctly if `RANGE_NM` or the receiver location ever changes, nothing
+hardcoded). Dimmed via a CSS `filter` on `#mapbg` so it stays a backdrop, not
+competing with the amber blips/rings. Requires the Pi to have internet access
+for tiles (confirmed working); the ADS-B tracking itself has no such
+dependency and keeps working if the map layer fails to load (falls back to
+the original solid dark background via CSS).
+
 Covers milestones 3–4, 6, and part of 7 from `docs/project-spec.md`. Not done
 yet: milestone 5 (optional tap detail panel), and physically mounting/connecting
 the round panel (see below).
