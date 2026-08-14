@@ -31,6 +31,33 @@ more sensitive to this docroot later.
   reboot test the way the kiosk service was — worth confirming if this
   matters going forward).
 
+### Hardening done after enabling Funnel
+Turning Funnel on prompted a quick look at what else was reachable on the
+Pi. Two things worth knowing:
+- **readsb's raw/Beast/SBS ports (30001-30005, 30104) are now bound to
+  `127.0.0.1` only** (`--net-bind-address 127.0.0.1` added to `NET_OPTIONS`
+  in `/etc/default/readsb`, original backed up alongside as
+  `readsb.bak`). They used to listen on `0.0.0.0` — reachable from the whole
+  LAN — but nothing on the network was actually connected to them, and
+  FlightWall/tar1090 don't use them at all (they read the JSON files readsb
+  writes to disk, not these TCP ports). If you ever want to feed a live raw
+  feed to another device on your LAN (Virtual Radar Server, a second
+  receiver dashboard, etc.), you'll need to revert this
+  (`sudo cp /etc/default/readsb.bak /etc/default/readsb && sudo systemctl
+  restart readsb`).
+- **Deliberately left the login user's passwordless sudo as-is.** Requiring a
+  password would block the non-interactive SSH commands this whole project's
+  deployment workflow depends on. This is a real trade-off, not an
+  oversight — revisit if that workflow ever changes (e.g. moving deploys to
+  a proper CI pipeline instead of ad-hoc SSH).
+- **Network segmentation (router guest network) was suggested but not done**
+  — the Pi's on `wlan0` (WiFi, not Ethernet), so a guest network
+  feature would apply cleanly, but doing this yourself: it isolates the Pi
+  from the rest of the LAN, which also means your other devices lose
+  ad-hoc local access to `http://<radar>/` — Tailscale (already set up
+  for Funnel) would keep working as the way to reach the Pi afterward,
+  network-topology-independent.
+
 The radar also now has a **dark background map** (MapLibre GL JS, vendored
 under `vendor/` — BSD-3-Clause, v5.24.0, self-hosted so the only runtime
 network dependency is the tile/style fetch itself). Style is OpenFreeMap's
