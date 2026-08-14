@@ -27,6 +27,26 @@ for tiles (confirmed working); the ADS-B tracking itself has no such
 dependency and keeps working if the map layer fails to load (falls back to
 the original solid dark background via CSS).
 
+Each tracked aircraft with a recognizable airline callsign (e.g. `DAL1234`,
+not a GA tail number or hex fallback) now shows a **color-coded airline badge**
+and its **route** (origin → destination) in its tag. Two deliberate legal/data
+choices here, worth preserving if this gets touched again:
+- **No real airline logos.** They're trademarked, and this project is meant
+  to be published under MIT — bundling them would ship trademarked assets in
+  an openly-redistributable repo. The `AIRLINES` table in `index.html` instead
+  has a small hand-picked set of ICAO designators (ICAO Doc 8585, a public
+  standard) mapped to a name/IATA code/loosely-associated color, rendered as a
+  generated text badge. Not exhaustive — unmapped carriers or GA tail numbers
+  just get no badge, by design.
+- **Route data comes from `https://adsb.im/api/0/routeset`** — the same free,
+  no-key API `tar1090` itself already uses on this Pi (confirmed by reading
+  `planeObject_*.js`'s `routeDoLookup()` on the box). ADS-B itself carries no
+  route info at all. Lookups are batched/cached/throttled in `index.html`
+  (`queueRouteLookup`/`flushRouteQueue`) the same way tar1090 does it: one
+  POST per `ROUTE_BATCH_MS` (4s), results cached for the rest of the session
+  (including negative "no route found" results, so unknown callsigns aren't
+  re-queried every cycle).
+
 Covers milestones 3–4, 6, and part of 7 from `docs/project-spec.md`. Not done
 yet: milestone 5 (optional tap detail panel), and physically mounting/connecting
 the round panel (see below).
