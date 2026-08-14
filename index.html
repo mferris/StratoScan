@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>FlightWall</title>
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
 
@@ -38,11 +39,31 @@
     height: min(90vmin, 1080px);
   }
 
-  canvas {
+  #mapbg {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     border-radius: 50%;
+    overflow: hidden;
     background: var(--bg);
+    filter: brightness(0.55) saturate(0.75);
+  }
+
+  #mapbg .maplibregl-ctrl-attrib {
+    background: transparent;
+    font-size: 8px;
+    opacity: 0.5;
+  }
+  #mapbg .maplibregl-ctrl-attrib a { color: var(--text-dim); }
+  #mapbg .maplibregl-ctrl-bottom-right { right: auto; left: 4px; bottom: 2px; }
+
+  canvas {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: transparent;
     display: block;
     box-shadow:
       0 0 0 2px #14201f,
@@ -116,6 +137,7 @@
 <body>
 
 <div class="stage">
+  <div id="mapbg"></div>
   <canvas id="radar" width="1080" height="1080"></canvas>
   <div class="hud">
     <div class="loc" id="loc">LOCATING…</div>
@@ -125,10 +147,12 @@
   <div id="tags"></div>
 </div>
 
+<script src="vendor/maplibre-gl.js"></script>
 <script>
 // ---- Config ------------------------------------------------------
 const DATA_URL = '/tar1090/data/aircraft.json';
 const RECEIVER_URL = '/tar1090/data/receiver.json';
+const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
 const RANGE_NM = 40;             // outer ring range in nautical miles
 const RINGS = 4;                 // number of range rings
 const SWEEP_SPEED = 0.008;       // radians per frame
@@ -142,6 +166,7 @@ let home = null;                 // { lat, lon } of the receiver
 let planes = new Map();          // hex -> plane record
 let lastGoodFetch = 0;
 let connected = false;
+let map = null;                  // MapLibre background map instance
 
 // ---- Canvas setup --------------------------------------------------
 const canvas = document.getElementById('radar');
@@ -211,6 +236,28 @@ function formatLoc() {
   return `${Math.abs(home.lat).toFixed(4)}°${ns} ${Math.abs(home.lon).toFixed(4)}°${ew} · ${RANGE_NM}NM`;
 }
 
+// ---- Background map --------------------------------------------------
+// Zoom level whose ground scale at `lat` matches RANGE_NM across R pixels,
+// so the map's visible extent lines up with the radar's outer ring.
+function zoomForRange(rangeNm, lat) {
+  const metersPerPixel = (rangeNm * 1852) / R;
+  return Math.log2(156543.03392 * Math.cos(lat * Math.PI / 180) / metersPerPixel);
+}
+
+function initMap() {
+  if (!home || map) return;
+  map = new maplibregl.Map({
+    container: 'mapbg',
+    style: MAP_STYLE_URL,
+    center: [home.lon, home.lat],
+    zoom: zoomForRange(RANGE_NM, home.lat),
+    interactive: false,
+    attributionControl: { compact: true },
+  });
+}
+
+window.addEventListener('resize', () => { if (map) map.resize(); });
+
 // ---- Data loading --------------------------------------------------
 async function loadHome() {
   try {
@@ -219,6 +266,7 @@ async function loadHome() {
     if (typeof data.lat === 'number' && typeof data.lon === 'number') {
       home = { lat: data.lat, lon: data.lon };
       locEl.textContent = formatLoc();
+      initMap();
     }
   } catch (e) {
     // retried by caller
