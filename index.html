@@ -115,6 +115,18 @@
   .status.show { opacity: 1; animation: pulse 1.6s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
+  #leaders {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+  #leaders line {
+    stroke-width: 1;
+    opacity: 0.55;
+  }
+
   .tag {
     position: absolute;
     font-family: 'JetBrains Mono', monospace;
@@ -126,10 +138,8 @@
     border: 1px solid rgba(255,255,255,0.06);
     white-space: nowrap;
     pointer-events: none;
-    transform: translate(10px, -50%);
     will-change: left, top;
   }
-  .tag.flip { transform: translate(calc(-100% - 10px), -50%); }
   .tag .cs { font-weight: 700; letter-spacing: 0.04em; font-size: 0.66rem; }
   .tag .type { display: none; color: var(--text-dim); margin-top: 1px; }
   .tag .alt { color: var(--text-dim); }
@@ -152,6 +162,7 @@
 <div class="stage">
   <div id="mapbg"></div>
   <canvas id="radar" width="1080" height="1080"></canvas>
+  <svg id="leaders"></svg>
   <div class="hud">
     <div class="loc" id="loc">LOCATING…</div>
     <div class="count" id="count">0 AIRCRAFT</div>
@@ -253,11 +264,30 @@ const R = W * 0.44; // usable radius, leaving margin inside the circle
 
 let sweepAngle = 0;
 const tagsEl = document.getElementById('tags');
+const leadersEl = document.getElementById('leaders');
 const stage = document.querySelector('.stage');
 const locEl = document.getElementById('loc');
 const countEl = document.getElementById('count');
 const statusEl = document.getElementById('status');
-const tagNodes = new Map(); // hex -> DOM node
+const tagNodes = new Map();    // hex -> tag DOM node
+const leaderNodes = new Map(); // hex -> leader-line SVG node
+
+// Label layout tuning: labels ease back toward their plane (LABEL_SPRING_TAU)
+// but get pushed apart whenever two would overlap (LABEL_SEPARATION_PASSES
+// iterations of hard AABB separation per frame), so they never overlap but
+// still track their aircraft as closely as space allows.
+const LABEL_GAP = 14;
+const LABEL_MARGIN = 5;
+const LABEL_SPRING_TAU = 0.25;
+const LABEL_SEPARATION_PASSES = 4;
+
+// stable per-pair tie-break direction when two labels want the exact same
+// spot (e.g. two aircraft momentarily at ~identical bearing/range)
+function hashHex(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return h;
+}
 
 const style = getComputedStyle(document.documentElement);
 const COLORS = {
@@ -662,7 +692,10 @@ function drawPlanes(dt) {
   // exponential chase toward the latest fix — never fully "arrives," so motion
   // stays continuous instead of visibly settling then pausing between polls
   const alpha = 1 - Math.exp(-dt / SMOOTH_TAU);
+  const springAlpha = 1 - Math.exp(-dt / LABEL_SPRING_TAU);
 
+  // --- pass 1: advance motion, draw blips, update each tag's content -----
+  // (content must be finalized before we measure box sizes in pass 2)
   for (const p of planes.values()) {
     p.bearing += bearingDelta(p.bearing, p.targetBearing) * alpha;
     p.range += (p.targetRange - p.range) * alpha;
@@ -672,6 +705,9 @@ function drawPlanes(dt) {
 
     const { x, y } = polarToXY(p.bearing, p.range);
     const color = altColor(p.alt);
+    p.anchorX = x * scale;
+    p.anchorY = y * scale;
+    p.color = color;
 
     ctx.save();
     ctx.translate(x, y);
@@ -696,10 +732,6 @@ function drawPlanes(dt) {
       tagsEl.appendChild(node);
       tagNodes.set(p.hex, node);
     }
-    const px = x * scale, py = y * scale;
-    node.classList.toggle('flip', px > stageRect.width * 0.82);
-    node.style.left = px + 'px';
-    node.style.top = py + 'px';
     node.style.borderLeft = `2px solid ${color}`;
     node.querySelector('.cs').textContent = p.cs;
     node.querySelector('.cs').style.color = color;
@@ -727,13 +759,88 @@ function drawPlanes(dt) {
     } else {
       routeEl.style.display = 'none';
     }
+
+    p.node = node;
   }
 
-  // remove tag nodes for aircraft no longer tracked or out of range
+  // --- pass 2: measure boxes, ease each toward its plane -------------------
+  for (const p of inRange) {
+    const rect = p.node.getBoundingClientRect();
+    p.labelW = rect.width;
+    p.labelH = rect.height;
+
+    const wantRight = p.anchorX < stageRect.width * 0.78;
+    p.labelSide = wantRight ? 'right' : 'left';
+    const desiredX = wantRight ? p.anchorX + LABEL_GAP : p.anchorX - LABEL_GAP - p.labelW;
+    const desiredY = p.anchorY - p.labelH / 2;
+
+    if (p.labelX === undefined) {
+      p.labelX = desiredX;
+      p.labelY = desiredY;
+    } else {
+      p.labelX += (desiredX - p.labelX) * springAlpha;
+      p.labelY += (desiredY - p.labelY) * springAlpha;
+    }
+  }
+
+  // --- pass 3: push apart any labels that still overlap ---------------------
+  for (let pass = 0; pass < LABEL_SEPARATION_PASSES; pass++) {
+    for (let i = 0; i < inRange.length; i++) {
+      for (let j = i + 1; j < inRange.length; j++) {
+        const a = inRange[i], b = inRange[j];
+        const overlapX = Math.min(a.labelX + a.labelW, b.labelX + b.labelW) - Math.max(a.labelX, b.labelX) + LABEL_MARGIN;
+        const overlapY = Math.min(a.labelY + a.labelH, b.labelY + b.labelH) - Math.max(a.labelY, b.labelY) + LABEL_MARGIN;
+        if (overlapX <= 0 || overlapY <= 0) continue;
+
+        let dx = (b.labelX + b.labelW / 2) - (a.labelX + a.labelW / 2);
+        let dy = (b.labelY + b.labelH / 2) - (a.labelY + a.labelH / 2);
+        if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) {
+          const ang = (hashHex(a.hex + b.hex) % 360) * Math.PI / 180;
+          dx = Math.cos(ang); dy = Math.sin(ang);
+        }
+
+        // separate along whichever axis needs the smaller nudge
+        if (overlapX < overlapY) {
+          const push = overlapX / 2 * Math.sign(dx || 1);
+          a.labelX -= push; b.labelX += push;
+        } else {
+          const push = overlapY / 2 * Math.sign(dy || 1);
+          a.labelY -= push; b.labelY += push;
+        }
+      }
+    }
+  }
+
+  // --- pass 4: place labels, draw a leader line back to each plane ---------
+  for (const p of inRange) {
+    p.labelX = Math.max(2, Math.min(stageRect.width - p.labelW - 2, p.labelX));
+    p.labelY = Math.max(2, Math.min(stageRect.height - p.labelH - 2, p.labelY));
+    p.node.style.left = p.labelX + 'px';
+    p.node.style.top = p.labelY + 'px';
+
+    const attachX = p.labelSide === 'right' ? p.labelX : p.labelX + p.labelW;
+    const attachY = Math.max(p.labelY, Math.min(p.anchorY, p.labelY + p.labelH));
+
+    let line = leaderNodes.get(p.hex);
+    if (!line) {
+      line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      leadersEl.appendChild(line);
+      leaderNodes.set(p.hex, line);
+    }
+    line.setAttribute('x1', p.anchorX);
+    line.setAttribute('y1', p.anchorY);
+    line.setAttribute('x2', attachX);
+    line.setAttribute('y2', attachY);
+    line.setAttribute('stroke', p.color);
+  }
+
+  // remove tag/leader nodes for aircraft no longer tracked or out of range
   for (const [hex, node] of tagNodes) {
     if (!planes.has(hex) || planes.get(hex).range > RANGE_NM) {
       node.remove();
       tagNodes.delete(hex);
+      const line = leaderNodes.get(hex);
+      if (line) { line.remove(); leaderNodes.delete(hex); }
     }
   }
 

@@ -67,6 +67,18 @@ London") when one's known. A few deliberate choices here, worth preserving:
   re-cases ALL-CAPS manufacturer names ("CIRRUS SR-22" -> "Cirrus SR-22")
   without touching model numbers.
 
+Tags are now much taller (badge/type/route rows), so **label overlap is
+solved with real collision avoidance**, not just fixed offsets. Each plane's
+tag eases toward a spot next to it (`LABEL_SPRING_TAU`) but a hard AABB
+separation pass (`LABEL_SEPARATION_PASSES` iterations) pushes any two
+overlapping boxes apart every frame, and a thin color-matched SVG line
+(`#leaders`) always connects each tag back to its actual plane position —
+see the "pass 1-4" comments in `drawPlanes()`. Stress-tested with 14
+synthetic aircraft crammed into a ~4nm cluster (via `applyUpdate()` in the
+browser console) and it cleanly fans them out with zero overlap. This is a
+from-scratch simple physics relaxation (spring + AABB push-apart), not
+copied from anywhere — a generic, well-known technique.
+
 Covers milestones 3–4, 6, and part of 7 from `docs/project-spec.md`. Not done
 yet: milestone 5 (optional tap detail panel), and physically mounting/connecting
 the round panel (see below).
