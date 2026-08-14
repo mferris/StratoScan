@@ -27,17 +27,20 @@ for tiles (confirmed working); the ADS-B tracking itself has no such
 dependency and keeps working if the map layer fails to load (falls back to
 the original solid dark background via CSS).
 
-Each tracked aircraft with a recognizable airline callsign (e.g. `DAL1234`,
-not a GA tail number or hex fallback) now shows a **color-coded airline badge**
-and its **route** (origin → destination) in its tag. Two deliberate legal/data
-choices here, worth preserving if this gets touched again:
+Each tracked aircraft now shows a **color-coded airline badge** (full name,
+e.g. "Piedmont Airlines" — or "Private Aircraft" for GA/unidentified flights),
+a **human-readable aircraft type** (e.g. "Bombardier Regional Jet CRJ-900",
+"Bell 429 GlobalRanger"), and its **route** as city names (e.g. "Tampa →
+London") when one's known. A few deliberate choices here, worth preserving:
 - **No real airline logos.** They're trademarked, and this project is meant
   to be published under MIT — bundling them would ship trademarked assets in
   an openly-redistributable repo. The `AIRLINES` table in `index.html` instead
   has a small hand-picked set of ICAO designators (ICAO Doc 8585, a public
-  standard) mapped to a name/IATA code/loosely-associated color, rendered as a
-  generated text badge. Not exhaustive — unmapped carriers or GA tail numbers
-  just get no badge, by design.
+  standard) mapped to a full name/IATA code/loosely-associated color, rendered
+  as a generated text badge. Not exhaustive — unmapped carriers just fall
+  back to the airline's ICAO code not being in the table (rare); anything
+  whose callsign doesn't match the airline-flight-number pattern at all
+  (`/^[A-Z]{3}\d/`) gets "Private Aircraft" instead.
 - **Route data comes from `https://adsb.im/api/0/routeset`** — the same free,
   no-key API `tar1090` itself already uses on this Pi (confirmed by reading
   `planeObject_*.js`'s `routeDoLookup()` on the box). ADS-B itself carries no
@@ -45,7 +48,24 @@ choices here, worth preserving if this gets touched again:
   (`queueRouteLookup`/`flushRouteQueue`) the same way tar1090 does it: one
   POST per `ROUTE_BATCH_MS` (4s), results cached for the rest of the session
   (including negative "no route found" results, so unknown callsigns aren't
-  re-queried every cycle).
+  re-queried every cycle). Routes the API itself flags `plausible: false` are
+  treated as unknown rather than displayed (tar1090 doesn't bother with this
+  check, but showing a route the API itself doubts felt worse than omitting
+  it). Displays city names (`_airports[].location`) rather than IATA codes.
+- **Aircraft type also has no field in `aircraft.json`** — readsb doesn't
+  populate `t`/`desc` there. tar1090 solves this the same way it solves
+  routes: a local same-origin database, this time already sitting on the Pi
+  as a prefix-trie of small JSON shards under `/tar1090/db-<hash>/` (the hash
+  changes whenever tar1090's assets rebuild, so `index.html` discovers the
+  current folder name at runtime by regexing it out of `/tar1090/index.html`
+  rather than hardcoding it — see `discoverDatabaseFolder()`). `lookupType()`
+  walks that trie itself (own implementation, not copied — tar1090's own code
+  license is unclear ["Other"/NOASSERTION on GitHub], so this reads the same
+  public same-origin data files but isn't a port of their `dbloader.js`).
+  Falls back to `icao_aircraft_types2.js` (ICAO type-code -> description) when
+  a specific tail's entry has no `typeLong` of its own. `humanizeType()` just
+  re-cases ALL-CAPS manufacturer names ("CIRRUS SR-22" -> "Cirrus SR-22")
+  without touching model numbers.
 
 Covers milestones 3–4, 6, and part of 7 from `docs/project-spec.md`. Not done
 yet: milestone 5 (optional tap detail panel), and physically mounting/connecting
