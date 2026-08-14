@@ -12,6 +12,29 @@ It is now **deployed and running on the Pi** (`flightwall`, `<radar>`,
 the login user) as a Chromium kiosk launched by systemd, verified to survive a
 full reboot with no manual intervention.
 
+## Display center override
+`HOME_OVERRIDE` in `index.html` currently centers the radar/map/runway
+lookup on **[address redacted]** ([lat-redacted],
+[lon-redacted]) rather than the receiver's real position — deliberately
+**display-only**. `readsb`'s actual configured position
+(`/etc/default/readsb`, ~[lat-redacted], [lon-redacted]) is untouched, since it needs to
+stay accurate to the real antenna for its own signal-range/MLAT math. Two
+things this override changes under the hood:
+- `loadHome()` skips fetching `receiver.json` entirely and uses the override
+  synchronously instead.
+- `normalizeAircraft()` always computes bearing/range via haversine from raw
+  lat/lon rather than trusting readsb's precomputed `r_dst`/`r_dir` — those
+  are relative to the *real* antenna position, not the override point, and
+  would silently produce a geometrically-inconsistent display if used here.
+  (Verified by hand: an aircraft readsb reported `r_dst: 3.77` for showed up
+  correctly as `14.53` in FlightWall — its true haversine range from Durham.)
+
+Since the override point is ~12mi from the real antenna, the visible 40nm
+disc has shifted — it now only partially overlaps the antenna's actual
+reception area, so aircraft near the real receiver but far from Durham may
+sit near/past the outer ring or not appear at all. Set `HOME_OVERRIDE` to
+`null` to go back to auto-detecting the real receiver position.
+
 ## Remote access (Tailscale Funnel)
 The page is also reachable from outside the local network at
 **https://[funnel-hostname-redacted]/** via Tailscale Funnel — publicly
