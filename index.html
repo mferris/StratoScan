@@ -176,6 +176,14 @@
 // ---- Config ------------------------------------------------------
 const DATA_URL = '/tar1090/data/aircraft.json';
 const RECEIVER_URL = '/tar1090/data/receiver.json';
+// Overrides the receiver's actual configured position for DISPLAY purposes
+// only (readsb keeps using its own real antenna position internally for
+// signal-range/MLAT math — this only changes what FlightWall centers on).
+// Set to null to go back to auto-detecting the receiver's real position
+// from receiver.json. When set, bearing/range are always computed via
+// haversine from raw lat/lon rather than trusting readsb's r_dst/r_dir,
+// since those are relative to the real antenna, not this override point.
+const HOME_OVERRIDE = { lat: [lat-redacted], lon: [lon-redacted] }; // [address redacted]
 const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
 // same free, no-key route API tar1090 itself uses (adsb.im asks http-loaded
 // pages to call it over http, mirrored below to match their preference)
@@ -575,6 +583,12 @@ async function lookupType(hex) {
 
 // ---- Data loading --------------------------------------------------
 async function loadHome() {
+  if (HOME_OVERRIDE) {
+    home = HOME_OVERRIDE;
+    locEl.textContent = formatLoc();
+    initMap();
+    return;
+  }
   try {
     const res = await fetch(RECEIVER_URL, { cache: 'no-store' });
     const data = await res.json();
@@ -589,9 +603,12 @@ async function loadHome() {
 }
 
 function normalizeAircraft(a) {
-  // range/bearing: prefer readsb's precomputed r_dst/r_dir, else derive from lat/lon
+  // range/bearing: prefer readsb's precomputed r_dst/r_dir, else derive from
+  // lat/lon — but never trust r_dst/r_dir when HOME_OVERRIDE is active, since
+  // those are computed by readsb relative to the real antenna position, not
+  // whatever point we're displaying as home
   let bearing, range;
-  if (typeof a.r_dst === 'number' && typeof a.r_dir === 'number') {
+  if (!HOME_OVERRIDE && typeof a.r_dst === 'number' && typeof a.r_dir === 'number') {
     range = a.r_dst;
     bearing = a.r_dir;
   } else if (home && typeof a.lat === 'number' && typeof a.lon === 'number') {
