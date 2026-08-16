@@ -183,7 +183,7 @@ const RECEIVER_URL = '/tar1090/data/receiver.json';
 // from receiver.json. When set, bearing/range are always computed via
 // haversine from raw lat/lon rather than trusting readsb's r_dst/r_dir,
 // since those are relative to the real antenna, not this override point.
-const HOME_OVERRIDE = { lat: [lat-redacted], lon: [lon-redacted] }; // [address redacted]
+const HOME_OVERRIDE = null; // was [address redacted], Durham NC — reverted to auto-detecting the real receiver position ([address redacted])
 // "dark" turned out to be near-grayscale by design (water/parks/woods are
 // all ~0% saturation), so no CSS filter could make it colorful. "liberty"
 // has real color (blue water, green parks, warm road tones) — we darken it

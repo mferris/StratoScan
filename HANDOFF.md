@@ -13,27 +13,29 @@ the login user) as a Chromium kiosk launched by systemd, verified to survive a
 full reboot with no manual intervention.
 
 ## Display center override
-`HOME_OVERRIDE` in `index.html` currently centers the radar/map/runway
-lookup on **[address redacted]** ([lat-redacted],
-[lon-redacted]) rather than the receiver's real position — deliberately
-**display-only**. `readsb`'s actual configured position
-(`/etc/default/readsb`, ~[lat-redacted], [lon-redacted]) is untouched, since it needs to
-stay accurate to the real antenna for its own signal-range/MLAT math. Two
-things this override changes under the hood:
-- `loadHome()` skips fetching `receiver.json` entirely and uses the override
-  synchronously instead.
-- `normalizeAircraft()` always computes bearing/range via haversine from raw
-  lat/lon rather than trusting readsb's precomputed `r_dst`/`r_dir` — those
-  are relative to the *real* antenna position, not the override point, and
-  would silently produce a geometrically-inconsistent display if used here.
-  (Verified by hand: an aircraft readsb reported `r_dst: 3.77` for showed up
-  correctly as `14.53` in FlightWall — its true haversine range from Durham.)
+`index.html` has a `HOME_OVERRIDE` constant that, when set, centers the
+radar/map/runway lookup on a fixed point instead of the receiver's real
+position — deliberately **display-only**, never touching `readsb`'s actual
+configured position (`/etc/default/readsb`, `--lat`/`--lon`), which needs to
+stay accurate to the real antenna for its own signal-range/MLAT math.
 
-Since the override point is ~12mi from the real antenna, the visible 40nm
-disc has shifted — it now only partially overlaps the antenna's actual
-reception area, so aircraft near the real receiver but far from Durham may
-sit near/past the outer ring or not appear at all. Set `HOME_OVERRIDE` to
-`null` to go back to auto-detecting the real receiver position.
+**Currently `null`** — back to auto-detecting the real receiver position
+from `receiver.json` (confirmed to be **[address redacted]** — its
+geocoded coordinates, [lat-redacted]/[lon-redacted], match readsb's configured
+~[lat-redacted]/[lon-redacted] to within normal geocoding precision). It was briefly set to
+[address redacted], Durham NC for a one-off request, then reverted.
+
+If it's ever set again: `loadHome()` skips fetching `receiver.json` and uses
+the override synchronously instead, and `normalizeAircraft()` always
+computes bearing/range via haversine from raw lat/lon rather than trusting
+readsb's precomputed `r_dst`/`r_dir` — those are relative to the *real*
+antenna position, not an override point, and would silently produce a
+geometrically-inconsistent display if trusted while overridden. (Verified by
+hand while it was active: an aircraft readsb reported `r_dst: 3.77` for
+showed up correctly as `14.53` in FlightWall — its true haversine range from
+the override point.) Also worth knowing: a override point far from the real
+antenna shifts the visible 40nm disc so it only partially overlaps the
+antenna's actual reception area.
 
 ## Remote access (Tailscale Funnel)
 The page is also reachable from outside the local network at
