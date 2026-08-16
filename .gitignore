@@ -1,2 +1,7 @@
 *.log
 .DS_Store
+
+# iOS
+ios/build/
+ios/**/xcuserdata/
+ios/**/*.xcuserdatad/
