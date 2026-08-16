@@ -294,9 +294,9 @@ const leaderNodes = new Map(); // hex -> leader-line SVG node
 // crossing chords, so preserving that order is what keeps crossings at
 // zero rather than just "minimized").
 const LABEL_RING_RADIUS = R + 60;
-const LABEL_MARGIN = 5;
-const LABEL_SPRING_TAU = 0.25;
-const LABEL_SEPARATION_PASSES = 6;
+const LABEL_MARGIN = 8;
+const LABEL_SPRING_TAU = 0.4;
+const LABEL_SEPARATION_PASSES = 24; // cheap: adjacent-pair only, O(n) per pass now
 
 function ringPointForAngle(angleDeg) {
   const rad = (angleDeg - 90) * Math.PI / 180;
@@ -307,14 +307,6 @@ function ringPointForAngle(angleDeg) {
 // each leader line to whichever edge of the label box faces its plane
 function closestPointOnRect(px, py, rx, ry, rw, rh) {
   return { x: Math.max(rx, Math.min(px, rx + rw)), y: Math.max(ry, Math.min(py, ry + rh)) };
-}
-
-// stable per-pair tie-break direction when two labels want the exact same
-// spot (e.g. two aircraft momentarily at ~identical bearing/range)
-function hashHex(s) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return h;
 }
 
 const style = getComputedStyle(document.documentElement);
@@ -931,8 +923,12 @@ function drawPlanes(dt) {
       const overlapY = Math.min(aBox.y + aBox.h, bBox.y + bBox.h) - Math.max(aBox.y, bBox.y) + LABEL_MARGIN;
       if (overlapX <= 0 || overlapY <= 0) continue;
 
-      let push = Math.min(overlapX, overlapY) / 2;
-      if (push < 0.01) push = (hashHex(a.hex + b.hex) % 5) + 1; // coincident tie-break
+      // push direction is never ambiguous here (a always precedes b in
+      // sorted bearing order), so unlike a free-floating 2D layout there's
+      // no need for a tie-break — just the measured overlap, which is
+      // always genuinely positive at this point (the guard above already
+      // filtered out non-overlapping pairs)
+      const push = Math.min(overlapX, overlapY) / 2;
       const angleDelta = (push / LABEL_RING_RADIUS) * 180 / Math.PI;
 
       a.labelAngle = ((a.labelAngle - angleDelta) % 360 + 360) % 360;
