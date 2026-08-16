@@ -11,23 +11,38 @@ struct ContentView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                ZStack {
-                    if let home = viewModel.home {
-                        MapBackgroundView(
-                            center: home,
-                            zoom: Geo.zoomForRange(rangeNm: viewModel.rangeNm, lat: home.lat, pixels: side * 0.44),
-                            runwayGeoJSON: viewModel.runwayGeoJSON
-                        )
-                        .clipShape(Circle())
-                    }
-                    RadarView(viewModel: viewModel)
-                        .frame(width: side, height: side)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color(hex: "#14201f"), lineWidth: 2))
-                        .shadow(color: .black.opacity(0.6), radius: 20)
+                // The map is clipped to a circle for the kiosk-bezel look.
+                // RadarView's rings/sweep/blips are already bounded within
+                // that same circle by construction (their polar math never
+                // exceeds radius r), so they need no explicit clip — and
+                // critically, its *labels* must NOT be clipped: they need
+                // the full rectangular frame below to roam in, exactly like
+                // the web version's separate, unclipped #tags layer.
+                if let home = viewModel.home {
+                    MapBackgroundView(
+                        center: home,
+                        zoom: Geo.zoomForRange(rangeNm: viewModel.rangeNm, lat: home.lat, pixels: side * 0.44),
+                        runwayGeoJSON: viewModel.runwayGeoJSON
+                    )
+                    // Web version darkens #mapbg via CSS `filter: brightness(0.36)
+                    // saturate(1.5)`. SwiftUI's own .brightness() is additive, not
+                    // multiplicative, so it doesn't reproduce that look — .colorMultiply
+                    // against a 36%-white gray is the actual multiplicative equivalent
+                    // (mathematically identical to what CSS brightness(0.36) computes).
+                    .saturation(1.5)
+                    .colorMultiply(Color(white: 0.36))
+                    .frame(width: side, height: side)
+                    .clipShape(Circle())
+                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
                 }
-                .frame(width: side, height: side)
-                .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                Circle()
+                    .stroke(Color(hex: "#14201f"), lineWidth: 2)
+                    .frame(width: side, height: side)
+                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                    .shadow(color: .black.opacity(0.6), radius: 20)
+
+                RadarView(viewModel: viewModel, diameter: side)
+                    .frame(width: geo.size.width, height: geo.size.height)
 
                 VStack {
                     hud

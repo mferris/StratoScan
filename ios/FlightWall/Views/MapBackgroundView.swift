@@ -1,14 +1,19 @@
 import SwiftUI
 import MapLibre
 import CoreLocation
-import CoreImage
 
 /// Non-interactive background map, mirroring the web version's #mapbg +
 /// initMap()/recolorLabels()/loadRunways(): "liberty" style (the "dark"
-/// OpenFreeMap style turned out to be near-grayscale by design), darkened
-/// via a CALayer filter instead of MapLibre GL JS's CSS filter equivalent,
-/// place labels flipped to light-text/dark-halo, and a runway GeoJSON
-/// layer sourced from Overpass once `runwayGeoJSON` arrives.
+/// OpenFreeMap style turned out to be near-grayscale by design), place
+/// labels flipped to light-text/dark-halo, and a runway GeoJSON layer
+/// sourced from Overpass once `runwayGeoJSON` arrives.
+///
+/// Darkening (the equivalent of #mapbg's CSS `filter: brightness()
+/// saturate()`) is deliberately NOT done here — MLNMapView is Metal-backed,
+/// and a CALayer.filters approach didn't visibly apply. It's applied where
+/// this view is used instead, via SwiftUI's own .saturation()/.brightness()
+/// modifiers, which work reliably regardless of the wrapped view's
+/// rendering technology.
 struct MapBackgroundView: UIViewRepresentable {
     let center: Coordinate
     let zoom: Double
@@ -24,7 +29,6 @@ struct MapBackgroundView: UIViewRepresentable {
         map.attributionButton.isHidden = false
         map.delegate = context.coordinator
         context.coordinator.map = map
-        applyDarkeningFilter(to: map)
         return map
     }
 
@@ -35,17 +39,6 @@ struct MapBackgroundView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
-
-    /// MapLibre Native (unlike the web SDK) has no CSS filter equivalent,
-    /// so darkening/saturating the whole map happens via a CALayer filter
-    /// on the map's own layer — same net visual effect as #mapbg's
-    /// `filter: brightness(0.36) saturate(1.5)` on the web version.
-    private func applyDarkeningFilter(to map: MLNMapView) {
-        guard let filter = CIFilter(name: "CIColorControls") else { return }
-        filter.setValue(0.36, forKey: kCIInputBrightnessKey) // matches web #mapbg filter value
-        filter.setValue(1.5, forKey: kCIInputSaturationKey)
-        map.layer.filters = [filter]
-    }
 
     final class Coordinator: NSObject, MLNMapViewDelegate {
         weak var map: MLNMapView?

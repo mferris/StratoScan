@@ -8,6 +8,10 @@ import SwiftUI
 /// here — simpler than the two-layer split the browser needed.
 struct RadarView: View {
     @ObservedObject var viewModel: RadarViewModel
+    /// Diameter of the circular rings/sweep/map — smaller than the full
+    /// Canvas frame on purpose, so labels have real margin to roam into
+    /// (unclipped, unlike the circular map/rings) without being cramped.
+    let diameter: CGFloat
 
     private let rangeRings = 4
     private let sweepSpeed: Double = 0.008 * 60 // radians/sec (web version: 0.008/frame @ ~60fps)
@@ -15,7 +19,7 @@ struct RadarView: View {
     private let labelGap: CGFloat = 10
     private let labelMargin: CGFloat = 4
     private let labelSpringTau = 0.22
-    private let labelSeparationPasses = 4
+    private let labelSeparationPasses = 8
 
     private let colorRing = Color(hex: "#1c3236")
     private let colorRingBright = Color(hex: "#2a4a4f")
@@ -35,7 +39,7 @@ struct RadarView: View {
     private func render(context: inout GraphicsContext, canvasSize: CGSize, now: Date) {
         let cx = canvasSize.width / 2
         let cy = canvasSize.height / 2
-        let r = min(canvasSize.width, canvasSize.height) * 0.44
+        let r = diameter * 0.44
 
         let dt: Double
         if let last = viewModel.lastFrameTime {
@@ -243,9 +247,9 @@ struct RadarView: View {
         )
     }
 
-    private let fontCallsign = Font.system(size: 13, weight: .bold, design: .monospaced)
-    private let fontBadge = Font.system(size: 10, weight: .bold, design: .monospaced)
-    private let fontLine = Font.system(size: 11, design: .monospaced)
+    private let fontCallsign = Font.system(size: 11, weight: .bold, design: .monospaced)
+    private let fontBadge = Font.system(size: 8, weight: .bold, design: .monospaced)
+    private let fontLine = Font.system(size: 9, design: .monospaced)
 
     private struct LabelMetrics {
         let size: CGSize
