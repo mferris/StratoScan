@@ -272,7 +272,7 @@ const canvas = document.getElementById('radar');
 const ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
 const CX = W / 2, CY = H / 2;
-const R = W * 0.44; // usable radius, leaving margin inside the circle
+const R = W * 0.38; // usable radius, leaving a wider outer band for the label ring
 
 let sweepAngle = 0;
 const tagsEl = document.getElementById('tags');
@@ -284,14 +284,30 @@ const statusEl = document.getElementById('status');
 const tagNodes = new Map();    // hex -> tag DOM node
 const leaderNodes = new Map(); // hex -> leader-line SVG node
 
-// Label layout tuning: labels ease back toward their plane (LABEL_SPRING_TAU)
-// but get pushed apart whenever two would overlap (LABEL_SEPARATION_PASSES
-// iterations of hard AABB separation per frame), so they never overlap but
-// still track their aircraft as closely as space allows.
-const LABEL_GAP = 14;
+// Label layout: labels sit in a ring around the edge of the dial rather than
+// floating next to their plane. Each label's natural position is its own
+// bearing angle (LABEL_SPRING_TAU eases it there as the plane moves), and
+// labels are only ever pushed apart ALONG the ring, never off it — which,
+// combined with always resolving neighbors in bearing-sorted order, means
+// leader lines are never allowed to cross (connecting points on an inner
+// circle to points on an outer ring in the same cyclic order can't produce
+// crossing chords, so preserving that order is what keeps crossings at
+// zero rather than just "minimized").
+const LABEL_RING_RADIUS = R + 60;
 const LABEL_MARGIN = 5;
 const LABEL_SPRING_TAU = 0.25;
-const LABEL_SEPARATION_PASSES = 4;
+const LABEL_SEPARATION_PASSES = 6;
+
+function ringPointForAngle(angleDeg) {
+  const rad = (angleDeg - 90) * Math.PI / 180;
+  return { x: CX + LABEL_RING_RADIUS * Math.cos(rad), y: CY + LABEL_RING_RADIUS * Math.sin(rad) };
+}
+
+// nearest point on an axis-aligned box to an external point — used to attach
+// each leader line to whichever edge of the label box faces its plane
+function closestPointOnRect(px, py, rx, ry, rw, rh) {
+  return { x: Math.max(rx, Math.min(px, rx + rw)), y: Math.max(ry, Math.min(py, ry + rh)) };
+}
 
 // stable per-pair tie-break direction when two labels want the exact same
 // spot (e.g. two aircraft momentarily at ~identical bearing/range)
@@ -875,63 +891,69 @@ function drawPlanes(dt) {
     p.node = node;
   }
 
-  // --- pass 2: measure boxes, ease each toward its plane -------------------
+  // --- pass 2: measure boxes, ease each toward its natural ring angle ------
   for (const p of inRange) {
     const rect = p.node.getBoundingClientRect();
     p.labelW = rect.width;
     p.labelH = rect.height;
 
-    const wantRight = p.anchorX < stageRect.width * 0.78;
-    p.labelSide = wantRight ? 'right' : 'left';
-    const desiredX = wantRight ? p.anchorX + LABEL_GAP : p.anchorX - LABEL_GAP - p.labelW;
-    const desiredY = p.anchorY - p.labelH / 2;
-
-    if (p.labelX === undefined) {
-      p.labelX = desiredX;
-      p.labelY = desiredY;
+    const desiredAngle = p.bearing; // natural ring position matches bearing exactly
+    if (p.labelAngle === undefined) {
+      p.labelAngle = desiredAngle;
     } else {
-      p.labelX += (desiredX - p.labelX) * springAlpha;
-      p.labelY += (desiredY - p.labelY) * springAlpha;
+      p.labelAngle += bearingDelta(p.labelAngle, desiredAngle) * springAlpha;
+      p.labelAngle = ((p.labelAngle % 360) + 360) % 360;
     }
   }
 
-  // --- pass 3: push apart any labels that still overlap ---------------------
+  // --- pass 3: push apart along the ring, preserving bearing order ---------
+  // Only ever adjusting a label's ANGLE (never pulling it off the ring), and
+  // only ever swapping pushes between bearing-adjacent neighbors, is what
+  // guarantees leader lines never cross — see the comment on LABEL_RING_RADIUS.
+  const sorted = inRange.slice().sort((a, b) => a.bearing - b.bearing);
+  const n = sorted.length;
   for (let pass = 0; pass < LABEL_SEPARATION_PASSES; pass++) {
-    for (let i = 0; i < inRange.length; i++) {
-      for (let j = i + 1; j < inRange.length; j++) {
-        const a = inRange[i], b = inRange[j];
-        const overlapX = Math.min(a.labelX + a.labelW, b.labelX + b.labelW) - Math.max(a.labelX, b.labelX) + LABEL_MARGIN;
-        const overlapY = Math.min(a.labelY + a.labelH, b.labelY + b.labelH) - Math.max(a.labelY, b.labelY) + LABEL_MARGIN;
-        if (overlapX <= 0 || overlapY <= 0) continue;
+    for (let i = 0; i < n; i++) {
+      const a = sorted[i];
+      const b = sorted[(i + 1) % n];
+      if (a === b) continue;
 
-        let dx = (b.labelX + b.labelW / 2) - (a.labelX + a.labelW / 2);
-        let dy = (b.labelY + b.labelH / 2) - (a.labelY + a.labelH / 2);
-        if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) {
-          const ang = (hashHex(a.hex + b.hex) % 360) * Math.PI / 180;
-          dx = Math.cos(ang); dy = Math.sin(ang);
-        }
+      const wrap = i === n - 1;
+      const aAngle = a.labelAngle;
+      const bAngle = wrap ? b.labelAngle + 360 : b.labelAngle;
 
-        // separate along whichever axis needs the smaller nudge
-        if (overlapX < overlapY) {
-          const push = overlapX / 2 * Math.sign(dx || 1);
-          a.labelX -= push; b.labelX += push;
-        } else {
-          const push = overlapY / 2 * Math.sign(dy || 1);
-          a.labelY -= push; b.labelY += push;
-        }
-      }
+      const aPt = ringPointForAngle(aAngle);
+      const bPt = ringPointForAngle(bAngle);
+      const aBox = { x: aPt.x - a.labelW / 2, y: aPt.y - a.labelH / 2, w: a.labelW, h: a.labelH };
+      const bBox = { x: bPt.x - b.labelW / 2, y: bPt.y - b.labelH / 2, w: b.labelW, h: b.labelH };
+
+      const overlapX = Math.min(aBox.x + aBox.w, bBox.x + bBox.w) - Math.max(aBox.x, bBox.x) + LABEL_MARGIN;
+      const overlapY = Math.min(aBox.y + aBox.h, bBox.y + bBox.h) - Math.max(aBox.y, bBox.y) + LABEL_MARGIN;
+      if (overlapX <= 0 || overlapY <= 0) continue;
+
+      let push = Math.min(overlapX, overlapY) / 2;
+      if (push < 0.01) push = (hashHex(a.hex + b.hex) % 5) + 1; // coincident tie-break
+      const angleDelta = (push / LABEL_RING_RADIUS) * 180 / Math.PI;
+
+      a.labelAngle = ((a.labelAngle - angleDelta) % 360 + 360) % 360;
+      b.labelAngle = ((b.labelAngle + angleDelta) % 360 + 360) % 360;
     }
   }
 
   // --- pass 4: place labels, draw a leader line back to each plane ---------
   for (const p of inRange) {
-    p.labelX = Math.max(2, Math.min(stageRect.width - p.labelW - 2, p.labelX));
-    p.labelY = Math.max(2, Math.min(stageRect.height - p.labelH - 2, p.labelY));
-    p.node.style.left = p.labelX + 'px';
-    p.node.style.top = p.labelY + 'px';
+    const ringPt = ringPointForAngle(p.labelAngle);
+    let lx = ringPt.x - p.labelW / 2;
+    let ly = ringPt.y - p.labelH / 2;
+    lx = Math.max(2, Math.min(stageRect.width - p.labelW - 2, lx));
+    ly = Math.max(2, Math.min(stageRect.height - p.labelH - 2, ly));
+    p.labelX = lx;
+    p.labelY = ly;
+    p.node.style.left = lx + 'px';
+    p.node.style.top = ly + 'px';
 
-    const attachX = p.labelSide === 'right' ? p.labelX : p.labelX + p.labelW;
-    const attachY = Math.max(p.labelY, Math.min(p.anchorY, p.labelY + p.labelH));
+    const attach = closestPointOnRect(p.anchorX, p.anchorY, lx, ly, p.labelW, p.labelH);
+    const attachX = attach.x, attachY = attach.y;
 
     let line = leaderNodes.get(p.hex);
     if (!line) {

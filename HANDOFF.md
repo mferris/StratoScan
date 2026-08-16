@@ -162,17 +162,26 @@ London") when one's known. A few deliberate choices here, worth preserving:
   re-cases ALL-CAPS manufacturer names ("CIRRUS SR-22" -> "Cirrus SR-22")
   without touching model numbers.
 
-Tags are now much taller (badge/type/route rows), so **label overlap is
-solved with real collision avoidance**, not just fixed offsets. Each plane's
-tag eases toward a spot next to it (`LABEL_SPRING_TAU`) but a hard AABB
-separation pass (`LABEL_SEPARATION_PASSES` iterations) pushes any two
-overlapping boxes apart every frame, and a thin color-matched SVG line
-(`#leaders`) always connects each tag back to its actual plane position —
-see the "pass 1-4" comments in `drawPlanes()`. Stress-tested with 14
-synthetic aircraft crammed into a ~4nm cluster (via `applyUpdate()` in the
-browser console) and it cleanly fans them out with zero overlap. This is a
-from-scratch simple physics relaxation (spring + AABB push-apart), not
-copied from anywhere — a generic, well-known technique.
+**Labels live in a ring around the edge of the dial**, not floating next to
+their plane — each label's natural position is its own bearing angle
+(`LABEL_RING_RADIUS = R + 60`), eased there via `LABEL_SPRING_TAU` as the
+plane moves, and a color-matched SVG leader line (`#leaders`) always
+connects the label back to its actual plane position (attached to whichever
+edge of the box faces the plane, via `closestPointOnRect()`). Overlap
+resolution (`LABEL_SEPARATION_PASSES` iterations) only ever adjusts a
+label's *angle* along the ring, never pulls it off — and always resolves
+bearing-adjacent neighbors in bearing-sorted cyclic order. That order
+preservation is what guarantees leader lines never cross (a standard
+property: connecting points on an inner circle to points on an outer ring
+in the same cyclic order can't produce crossing chords), not just an
+approximation of "minimized." `R` was shrunk from `0.44*W` to `0.38*W` to
+free up a real outer band for the ring to live in. One known rough edge:
+a label very close to due-north bearing can lightly touch the HUD text at
+the top of the stage — rare, and it's a HUD/label interaction rather than
+label-on-label overlap, but not yet fixed. This replaced an earlier
+version that eased each label toward a fixed offset next to its plane with
+plain 2D AABB separation — that avoided label-on-label overlap fine but had
+no concept of leader-line crossings at all.
 
 Covers milestones 3–4, 6, and part of 7 from `docs/project-spec.md`. Not done
 yet: milestone 5 (optional tap detail panel), and physically mounting/connecting
