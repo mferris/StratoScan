@@ -379,6 +379,7 @@ const ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
 const CX = W / 2, CY = H / 2;
 const R = W * 0.38; // usable radius, leaving a wider outer band for the label ring
+const SWEEP_RADIUS = W / 2; // the sweep wedge/line fills the whole dial, not just the plotted range
 
 let sweepAngle = 0;
 const tagsEl = document.getElementById('tags');
@@ -905,12 +906,12 @@ function drawSweep() {
   grad.addColorStop(0.06, 'rgba(255,176,32,0.0)');
   grad.addColorStop(1, 'rgba(255,176,32,0.0)');
   ctx.beginPath();
-  ctx.arc(CX, CY, R, 0, Math.PI * 2);
+  ctx.arc(CX, CY, SWEEP_RADIUS, 0, Math.PI * 2);
   ctx.fillStyle = grad;
   ctx.fill();
 
-  const lineX = CX + R * Math.cos(sweepAngle);
-  const lineY = CY + R * Math.sin(sweepAngle);
+  const lineX = CX + SWEEP_RADIUS * Math.cos(sweepAngle);
+  const lineY = CY + SWEEP_RADIUS * Math.sin(sweepAngle);
   ctx.beginPath();
   ctx.moveTo(CX, CY);
   ctx.lineTo(lineX, lineY);
