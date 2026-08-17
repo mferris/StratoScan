@@ -183,9 +183,45 @@ version that eased each label toward a fixed offset next to its plane with
 plain 2D AABB separation — that avoided label-on-label overlap fine but had
 no concept of leader-line crossings at all.
 
-Covers milestones 3–4, 6, and part of 7 from `docs/project-spec.md`. Not done
-yet: milestone 5 (optional tap detail panel), and physically mounting/connecting
-the round panel (see below).
+Covers milestones 3–6 and part of 7 from `docs/project-spec.md` — **the round
+panel is physically connected now** (HDMI + USB-C touch + its own 5V power via
+a USB-C PD charger, confirmed working: `xrandr` shows `HDMI-A-1 connected
+1080x1080`, touch enumerates as `Waveshare Waveshare-079-HD` at USB ID
+`0712:000a`), and milestone 5 (tap detail panel) is done too. Backlight
+brightness has a physical button on the driver board (per Waveshare's docs,
+it also supports "HID software dimming" but no public documentation of that
+protocol was findable — button is the practical path for now). Not done:
+physically mounting the finished enclosure (that's fabrication, not
+software).
+
+## Touch interaction (milestone 5)
+Tap a plane's blip or label → detail panel (registration, heading, vertical
+rate, squawk, precise range/bearing, and now a real photo — see below). Tap
+empty space → cycles three display modes (full / map off / map+labels off)
+with a toast confirming the mode. Hit-testing is manual coordinate math on
+one delegated `pointerup` listener on `.stage`, not per-element
+`pointer-events` (the tag divs are `pointer-events:none` by design, and
+label positions move every frame anyway). See `findPlaneAtStagePoint()` —
+worth knowing: it returns the *first* match in `planes` iteration order, not
+the *nearest*, so two blips/labels overlapping within the ~22px hit radius
+could occasionally resolve to the "wrong" one of the two. Not fixed, low
+stakes (tapping again elsewhere and retrying works fine).
+
+**Aircraft photo**: `deploy/photo-proxy.py` is a small local-only (127.0.0.1)
+Python service on the Pi, proxying planespotters.net's photo API — their API
+requires a descriptive custom `User-Agent` naming the app, which browser
+`fetch()` can never set itself (browsers own that header exclusively), so
+this has to happen server-side. `deploy/89-flightwall-photo-proxy.conf`
+(lighttpd, `mod_proxy`) routes `/photo/<hex>` to it so the browser's fetch
+stays same-origin. Runs as `flightwall-photo-proxy.service`
+(`DynamicUser=yes`, no privileges needed), in-memory cache per hex, 24h TTL.
+Attribution (required by planespotters.net's terms — photographer credit +
+naming the source) is shown as **plain non-clickable text**, not a real
+`<a>` link — deliberate, since this same `index.html` also runs unattended
+in the kiosk's own Chromium, and risking a tap navigating the kiosk away
+from the app with no way back wasn't acceptable, even though a real link
+would be fine in a normal browser tab (e.g. via the Funnel URL). Gracefully
+shows nothing if planespotters has no photo for that airframe.
 
 ## Key facts learned this session
 - Receiver home location comes from `http://<radar>/tar1090/data/receiver.json`
