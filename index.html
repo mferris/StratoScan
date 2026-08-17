@@ -245,7 +245,8 @@
     border-radius: 10px 10px 0 0;
     overflow: hidden;
   }
-  #detailPanel .dp-photo img {
+  #detailPanel .dp-photo img,
+  #detailPanel .dp-photo svg {
     display: block;
     width: 100%;
     max-height: 220px;
@@ -468,6 +469,28 @@ function haversineBearingRange(lat1, lon1, lat2, lon2) {
   const range = R_NM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   return { bearing, range };
+}
+
+// Aircraft in the immediate vicinity of RDU's runways, climbing or
+// descending, get called out with a distinct color regardless of their
+// altitude band -- this is deliberately narrow (tight radius + real vertical
+// rate, not just "low altitude") so normal traffic flying low nearby doesn't
+// get flagged.
+const RDU_LAT = 35.8776, RDU_LON = -78.7875;
+const RDU_ELEV_FT = 435;         // airport reference elevation, MSL
+const RDU_PROXIMITY_NM = 0.869;  // 1 statute mile
+const RDU_VERT_FT = 500;         // within this of field elevation
+const RDU_VRATE_MIN = 150;       // ft/min -- filters out level-flight noise near zero
+const COLOR_LANDING = '#ff2d2d';
+const COLOR_TAKEOFF = '#2dff6a';
+
+function flightPhaseColor(p) {
+  if (typeof p.alt !== 'number' || p.lat == null || p.lon == null || p.vrate == null) return null;
+  if (Math.abs(p.alt - RDU_ELEV_FT) > RDU_VERT_FT) return null;
+  if (haversineBearingRange(RDU_LAT, RDU_LON, p.lat, p.lon).range > RDU_PROXIMITY_NM) return null;
+  if (p.vrate <= -RDU_VRATE_MIN) return COLOR_LANDING;
+  if (p.vrate >= RDU_VRATE_MIN) return COLOR_TAKEOFF;
+  return null;
 }
 
 function formatLoc() {
@@ -946,10 +969,11 @@ function drawPlanes(dt) {
     p.range += (p.targetRange - p.range) * alpha;
 
     if (p.range > RANGE_NM) continue;
+    if (!matchesPlaneFilter(p)) continue;
     inRange.push(p);
 
     const { x, y } = polarToXY(p.bearing, p.range);
-    const color = altColor(p.alt);
+    const color = flightPhaseColor(p) || altColor(p.alt);
     p.anchorX = x * scale;
     p.anchorY = y * scale;
     p.color = color;
@@ -1110,9 +1134,11 @@ function drawPlanes(dt) {
     line.setAttribute('stroke', p.color);
   }
 
-  // remove tag/leader nodes for aircraft no longer tracked or out of range
+  // remove tag/leader nodes for aircraft no longer tracked, out of range, or
+  // filtered out by the current plane-category filter
   for (const [hex, node] of tagNodes) {
-    if (!planes.has(hex) || planes.get(hex).range > RANGE_NM) {
+    const pl = planes.get(hex);
+    if (!pl || pl.range > RANGE_NM || !matchesPlaneFilter(pl)) {
       node.remove();
       tagNodes.delete(hex);
       const line = leaderNodes.get(hex);
@@ -1157,17 +1183,15 @@ function tick(ts) {
 // ---- Touch interaction --------------------------------------------------
 // Tap a plane's blip or label -> detail panel with fields the compact tag
 // doesn't show (registration, heading, vertical rate, squawk, precise
-// range/bearing). Tap empty space -> cycle display modes. No photo lookup:
-// planespotters.net's photo API requires a descriptive custom User-Agent
-// header, which browser fetch() can never set (browsers own that header),
-// so it would need a server-side proxy on the Pi — out of scope for now.
+// range/bearing). Tap empty space -> cycle which category of aircraft is
+// shown (all / private only / commercial only).
 const toastEl = document.getElementById('toast');
 const detailPanelEl = document.getElementById('detailPanel');
 const detailBackdropEl = document.getElementById('detailBackdrop');
 let toastTimer = null;
 let detailDismissTimer = null;
-let displayMode = 0; // 0=full, 1=map off, 2=map+labels off
-const DISPLAY_MODES = ['FULL', 'MAP OFF', 'MAP + LABELS OFF'];
+let planeFilter = 0; // 0=all, 1=private only, 2=commercial only
+const PLANE_FILTERS = ['ALL AIRCRAFT', 'PRIVATE ONLY', 'COMMERCIAL ONLY'];
 
 function showToast(text) {
   toastEl.textContent = text;
@@ -1176,16 +1200,18 @@ function showToast(text) {
   toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1400);
 }
 
-function applyDisplayMode() {
-  document.getElementById('mapbg').style.display = displayMode >= 1 ? 'none' : '';
-  tagsEl.style.display = displayMode >= 2 ? 'none' : '';
-  leadersEl.style.display = displayMode >= 2 ? 'none' : '';
+// Same test already used to badge a plane "Private Aircraft" elsewhere
+// (normalizeAircraft) -- airlineIcao alone isn't enough, since a callsign can
+// match the 3-letter+digit pattern without being a *recognized* airline code.
+function matchesPlaneFilter(p) {
+  if (planeFilter === 1) return p.airlineLabel === PRIVATE_LABEL;
+  if (planeFilter === 2) return p.airlineLabel !== PRIVATE_LABEL;
+  return true;
 }
 
-function cycleDisplayMode() {
-  displayMode = (displayMode + 1) % DISPLAY_MODES.length;
-  applyDisplayMode();
-  showToast(DISPLAY_MODES[displayMode]);
+function cyclePlaneFilter() {
+  planeFilter = (planeFilter + 1) % PLANE_FILTERS.length;
+  showToast(PLANE_FILTERS[planeFilter]);
 }
 
 function vrateLabel(vrate) {
@@ -1238,21 +1264,57 @@ function showDetailPanel(p) {
 // though a normal browser tab (e.g. via the Funnel URL) would handle it
 // fine. Per planespotters.net's terms of use, attribution (photographer
 // credit + naming the source) is still given either way.
+// Generic silhouette (Google Material Icons "flight" glyph, Apache-2.0)
+// shown in place of a real photo when planespotters.net has none on file --
+// drawn inline so it needs no network fetch and matches the panel's theme.
+const PLACEHOLDER_PHOTO_SVG = `
+  <svg viewBox="0 0 400 220" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="dpPhBg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#141c1f"/>
+        <stop offset="100%" stop-color="#0a0d0f"/>
+      </linearGradient>
+    </defs>
+    <rect width="400" height="220" fill="url(#dpPhBg)"/>
+    <circle cx="200" cy="104" r="90" fill="none" stroke="var(--ring)" stroke-width="1"/>
+    <circle cx="200" cy="104" r="55" fill="none" stroke="var(--ring)" stroke-width="1"/>
+    <circle cx="200" cy="104" r="20" fill="none" stroke="var(--ring)" stroke-width="1"/>
+    <g transform="translate(170,74) scale(2.5)" fill="var(--text-dim)">
+      <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2.5 1.5V22l4-1 4 1v-1.5L13 19v-5.5l8 2.5z"/>
+    </g>
+  </svg>
+`;
+
+function showPlaceholderPhoto(photoEl) {
+  photoEl.innerHTML = PLACEHOLDER_PHOTO_SVG + '<div class="dp-photo-credit">No photo available</div>';
+  photoEl.style.display = 'block';
+}
+
+// Photo comes from planespotters.net via our own same-origin /photo/<hex>
+// proxy (see deploy/photo-proxy.py) -- their API requires a descriptive
+// custom User-Agent that browser fetch() can never set itself. Shown as
+// plain, non-clickable text credit rather than a real link: this same page
+// also runs unattended in the kiosk's Chromium, and a tap-driven navigation
+// away from the app with no way back isn't an acceptable risk there, even
+// though a normal browser tab (e.g. via the Funnel URL) would handle it
+// fine. Per planespotters.net's terms of use, attribution (photographer
+// credit + naming the source) is still given either way.
 async function loadDetailPhoto(hex) {
+  const photoEl = detailPanelEl.querySelector('.dp-photo');
+  if (!photoEl) return;
   try {
     const res = await fetch(`/photo/${hex}`, { cache: 'no-store' });
     const data = await res.json();
     if (detailPanelHex !== hex || !detailPanelEl.classList.contains('show')) return; // stale by the time this resolved
-    if (!data.found) return;
-    const photoEl = detailPanelEl.querySelector('.dp-photo');
-    if (!photoEl) return;
+    if (!data.found) { showPlaceholderPhoto(photoEl); return; }
     photoEl.innerHTML = `
       <img src="${data.thumbLarge || data.thumb}" alt="${detailPanelEl.querySelector('.dp-cs')?.textContent || 'Aircraft'} photo">
       <div class="dp-photo-credit">© ${data.photographer || 'Unknown'} · planespotters.net</div>
     `;
     photoEl.style.display = 'block';
   } catch (e) {
-    // no photo available — panel just shows the data fields, as before
+    if (detailPanelHex !== hex || !detailPanelEl.classList.contains('show')) return;
+    showPlaceholderPhoto(photoEl);
   }
 }
 
@@ -1285,7 +1347,7 @@ stage.addEventListener('pointerup', (e) => {
   const x = e.clientX - rect.left, y = e.clientY - rect.top;
   const p = findPlaneAtStagePoint(x, y);
   if (p) showDetailPanel(p);
-  else cycleDisplayMode();
+  else cyclePlaneFilter();
 });
 
 async function start() {
