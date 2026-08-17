@@ -18,6 +18,7 @@
     --mid: #4fd6c8;
     --high: #a78bfa;
     --ground: #6b8087;
+    --taxi: #4a90d9;
     --bad: #ff5d5d;
   }
 
@@ -440,10 +441,12 @@ const COLORS = {
   mid: style.getPropertyValue('--mid').trim(),
   high: style.getPropertyValue('--high').trim(),
   ground: style.getPropertyValue('--ground').trim(),
+  taxi: style.getPropertyValue('--taxi').trim(),
 };
 
 function altColor(alt) {
-  if (alt === 'ground' || alt === null) return COLORS.ground;
+  if (alt === 'ground') return COLORS.taxi;   // confirmed on the ground
+  if (alt === null) return COLORS.ground;     // unknown altitude, not the same thing
   if (alt < 10000) return COLORS.low;
   if (alt < 25000) return COLORS.mid;
   return COLORS.high;
