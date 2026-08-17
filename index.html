@@ -404,6 +404,14 @@ const LABEL_MARGIN = 8;
 const LABEL_SPRING_TAU = 0.4;
 const LABEL_SEPARATION_PASSES = 24; // cheap: adjacent-pair only, O(n) per pass now
 
+// The panel is round, not square -- the stage element is a square bounding
+// box, but only the inscribed circle is actual visible glass. A label
+// centered on the ring (radius LABEL_RING_RADIUS) can still have a corner
+// poke past that circle at diagonal angles, since the box's own half-diagonal
+// adds to the ring's radius. Bounding labels to the square stage isn't
+// enough -- they need to stay inside this circle instead.
+const LABEL_BOUND_RADIUS = W / 2 - 6;
+
 function ringPointForAngle(angleDeg) {
   const rad = (angleDeg - 90) * Math.PI / 180;
   return { x: CX + LABEL_RING_RADIUS * Math.cos(rad), y: CY + LABEL_RING_RADIUS * Math.sin(rad) };
@@ -1055,8 +1063,29 @@ function drawPlanes(dt) {
   // --- pass 4: place labels, draw a leader line back to each plane ---------
   for (const p of inRange) {
     const ringPt = ringPointForAngle(p.labelAngle);
-    let lx = ringPt.x - p.labelW / 2;
-    let ly = ringPt.y - p.labelH / 2;
+    let cxBox = ringPt.x, cyBox = ringPt.y; // box center
+    const hw = p.labelW / 2, hh = p.labelH / 2;
+
+    // Pull the box's center radially inward, if needed, so every corner
+    // stays inside the visible circle -- a few iterations converge because
+    // moving the center closer to CX,CY shrinks all four corner distances.
+    for (let iter = 0; iter < 4; iter++) {
+      let maxDist = 0;
+      for (const sx of [-1, 1]) {
+        for (const sy of [-1, 1]) {
+          const d = Math.hypot(cxBox + sx * hw - CX, cyBox + sy * hh - CY);
+          if (d > maxDist) maxDist = d;
+        }
+      }
+      if (maxDist <= LABEL_BOUND_RADIUS) break;
+      const s = LABEL_BOUND_RADIUS / maxDist;
+      cxBox = CX + (cxBox - CX) * s;
+      cyBox = CY + (cyBox - CY) * s;
+    }
+
+    let lx = cxBox - hw;
+    let ly = cyBox - hh;
+    // final defensive clamp against the square stage bounds themselves
     lx = Math.max(2, Math.min(stageRect.width - p.labelW - 2, lx));
     ly = Math.max(2, Math.min(stageRect.height - p.labelH - 2, ly));
     p.labelX = lx;
