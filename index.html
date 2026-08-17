@@ -130,9 +130,9 @@
   .tag {
     position: absolute;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.58rem;
-    line-height: 1.25;
-    padding: 3px 6px;
+    font-size: 0.5rem;
+    line-height: 1.15;
+    padding: 2px 5px;
     border-radius: 3px;
     background: rgba(5, 8, 10, 0.75);
     border: 1px solid rgba(255,255,255,0.06);
@@ -140,20 +140,105 @@
     pointer-events: none;
     will-change: left, top;
   }
-  .tag .cs { font-weight: 700; letter-spacing: 0.04em; font-size: 0.66rem; }
-  .tag .type { display: none; color: var(--text-dim); margin-top: 1px; }
+  .tag .cs { font-weight: 700; letter-spacing: 0.04em; font-size: 0.58rem; }
+  .tag .type { display: none; color: var(--text-dim); margin-top: 0; }
   .tag .alt { color: var(--text-dim); }
-  .tag .route { color: var(--text-dim); display: none; margin-top: 1px; }
+  .tag .route { color: var(--text-dim); display: none; margin-top: 0; }
   .tag .badge {
     display: none;
-    margin-top: 2px;
-    margin-bottom: 1px;
-    font-size: 0.5rem;
+    margin-top: 1px;
+    margin-bottom: 0;
+    font-size: 0.42rem;
     font-weight: 700;
-    padding: 1px 5px;
+    padding: 0px 4px;
     border-radius: 2px;
     color: #fff;
     letter-spacing: 0.02em;
+  }
+
+  #toast {
+    position: absolute;
+    top: 14%;
+    left: 50%;
+    transform: translate(-50%, 0);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    color: var(--text);
+    background: rgba(5, 8, 10, 0.85);
+    border: 1px solid rgba(255,255,255,0.08);
+    padding: 6px 14px;
+    border-radius: 4px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  #toast.show { opacity: 1; }
+
+  #detailBackdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  #detailBackdrop.show { opacity: 1; pointer-events: auto; }
+
+  #detailPanel {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.96);
+    width: min(72%, 480px);
+    background: rgba(8, 12, 14, 0.96);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 18px 20px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  }
+  #detailPanel.show { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+  #detailPanel .dp-cs { font-size: 1.3rem; font-weight: 700; letter-spacing: 0.04em; }
+  #detailPanel .dp-badge {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 3px;
+    color: #fff;
+    letter-spacing: 0.03em;
+  }
+  #detailPanel .dp-type { margin-top: 10px; color: var(--text-dim); font-size: 0.75rem; }
+  #detailPanel .dp-route { margin-top: 2px; color: var(--text-dim); font-size: 0.75rem; }
+  #detailPanel .dp-grid {
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+  }
+  #detailPanel .dp-field .dp-label {
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  #detailPanel .dp-field .dp-value {
+    font-size: 0.95rem;
+    margin-top: 2px;
+  }
+  #detailPanel .dp-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    font-size: 1.1rem;
+    color: var(--text-dim);
+    padding: 4px 8px;
   }
 </style>
 </head>
@@ -169,6 +254,9 @@
   </div>
   <div class="status" id="status">NO SIGNAL — CHECK RECEIVER</div>
   <div id="tags"></div>
+  <div id="toast"></div>
+  <div id="detailBackdrop"></div>
+  <div id="detailPanel"></div>
 </div>
 
 <script src="vendor/maplibre-gl.js"></script>
@@ -293,7 +381,7 @@ const leaderNodes = new Map(); // hex -> leader-line SVG node
 // circle to points on an outer ring in the same cyclic order can't produce
 // crossing chords, so preserving that order is what keeps crossings at
 // zero rather than just "minimized").
-const LABEL_RING_RADIUS = R + 60;
+const LABEL_RING_RADIUS = R + 75;
 const LABEL_MARGIN = 8;
 const LABEL_SPRING_TAU = 0.4;
 const LABEL_SEPARATION_PASSES = 24; // cheap: adjacent-pair only, O(n) per pass now
@@ -582,8 +670,9 @@ function fetchShard(bkey) {
 // each shard either has the remaining hex suffix as a direct key, or a
 // "children" list naming deeper shards to descend into.
 async function lookupType(hex) {
+  const empty = { type: null, reg: null };
   if (hexTypeCache.has(hex)) return hexTypeCache.get(hex);
-  if (!databaseFolder || hexTypePending.has(hex)) return null;
+  if (!databaseFolder || hexTypePending.has(hex)) return empty;
   hexTypePending.add(hex);
 
   const icao = hex.toUpperCase();
@@ -598,16 +687,18 @@ async function lookupType(hex) {
     break;
   }
 
-  let label = null;
+  let result = empty;
   if (entry) {
-    const [, typeCode, , typeLong] = entry;
-    if (typeLong) label = humanizeType(typeLong);
-    else if (typeCode) label = typeCodeTable.get(typeCode.toUpperCase()) || null;
+    const [reg, typeCode, , typeLong] = entry;
+    let type = null;
+    if (typeLong) type = humanizeType(typeLong);
+    else if (typeCode) type = typeCodeTable.get(typeCode.toUpperCase()) || null;
+    result = { type, reg: reg || null };
   }
 
-  hexTypeCache.set(hex, label);
+  hexTypeCache.set(hex, result);
   hexTypePending.delete(hex);
-  return label;
+  return result;
 }
 
 // ---- Data loading --------------------------------------------------
@@ -650,7 +741,8 @@ function normalizeAircraft(a) {
 
   const altRaw = a.alt_baro ?? a.alt_geom;
   const alt = altRaw === 'ground' ? 'ground' : (typeof altRaw === 'number' ? altRaw : null);
-  const hdg = a.track ?? a.true_heading ?? a.mag_heading ?? a.calc_track ?? bearing;
+  const realHdg = a.track ?? a.true_heading ?? a.mag_heading ?? a.calc_track ?? null;
+  const hdg = realHdg ?? bearing; // blip rotation falls back to bearing; detail panel shows realHdg only
   const cs = (a.flight ? a.flight.trim() : '') || a.hex.toUpperCase();
 
   // scheduled/charter flights are 3 letters + a number (e.g. DAL1234); GA tail
@@ -663,9 +755,11 @@ function normalizeAircraft(a) {
   const badgeColor = airline ? airline.color : PRIVATE_COLOR;
 
   return {
-    hex: a.hex, cs, bearing, range, alt, hdg, speed: a.gs ?? null,
+    hex: a.hex, cs, bearing, range, alt, hdg, realHdg, speed: a.gs ?? null,
     lat: typeof a.lat === 'number' ? a.lat : null,
     lon: typeof a.lon === 'number' ? a.lon : null,
+    squawk: a.squawk ?? null,
+    vrate: a.baro_rate ?? a.geom_rate ?? null,
     airlineIcao, airlineLabel, badgeColor,
   };
 }
@@ -705,6 +799,9 @@ function applyUpdate(list) {
       existing.airlineIcao = n.airlineIcao;
       existing.airlineLabel = n.airlineLabel;
       existing.badgeColor = n.badgeColor;
+      existing.realHdg = n.realHdg;
+      existing.squawk = n.squawk;
+      existing.vrate = n.vrate;
       existing.lastSeen = now;
     } else {
       planes.set(n.hex, {
@@ -712,14 +809,15 @@ function applyUpdate(list) {
         targetBearing: n.bearing,
         targetRange: n.range,
         typeLabel: null,
+        registration: null,
         lastSeen: now,
       });
     }
 
     if (!hexTypeCache.has(n.hex)) {
-      lookupType(n.hex).then(label => {
+      lookupType(n.hex).then(info => {
         const pl = planes.get(n.hex);
-        if (pl) pl.typeLabel = label;
+        if (pl) { pl.typeLabel = info.type; pl.registration = info.reg; }
       });
     }
 
@@ -1007,6 +1105,107 @@ function tick(ts) {
 
   requestAnimationFrame(tick);
 }
+
+// ---- Touch interaction --------------------------------------------------
+// Tap a plane's blip or label -> detail panel with fields the compact tag
+// doesn't show (registration, heading, vertical rate, squawk, precise
+// range/bearing). Tap empty space -> cycle display modes. No photo lookup:
+// planespotters.net's photo API requires a descriptive custom User-Agent
+// header, which browser fetch() can never set (browsers own that header),
+// so it would need a server-side proxy on the Pi — out of scope for now.
+const toastEl = document.getElementById('toast');
+const detailPanelEl = document.getElementById('detailPanel');
+const detailBackdropEl = document.getElementById('detailBackdrop');
+let toastTimer = null;
+let detailDismissTimer = null;
+let displayMode = 0; // 0=full, 1=map off, 2=map+labels off
+const DISPLAY_MODES = ['FULL', 'MAP OFF', 'MAP + LABELS OFF'];
+
+function showToast(text) {
+  toastEl.textContent = text;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1400);
+}
+
+function applyDisplayMode() {
+  document.getElementById('mapbg').style.display = displayMode >= 1 ? 'none' : '';
+  tagsEl.style.display = displayMode >= 2 ? 'none' : '';
+  leadersEl.style.display = displayMode >= 2 ? 'none' : '';
+}
+
+function cycleDisplayMode() {
+  displayMode = (displayMode + 1) % DISPLAY_MODES.length;
+  applyDisplayMode();
+  showToast(DISPLAY_MODES[displayMode]);
+}
+
+function vrateLabel(vrate) {
+  if (vrate === null) return '—';
+  if (Math.abs(vrate) < 100) return 'Level';
+  return (vrate > 0 ? '↑ ' : '↓ ') + Math.abs(Math.round(vrate)) + ' ft/min';
+}
+
+function showDetailPanel(p) {
+  const speedTxt = p.speed === null ? '—' : Math.round(p.speed) + ' kt';
+  const altTxt = p.alt === 'ground' ? 'On ground' : (p.alt === null ? '—' : `${p.alt.toLocaleString()} ft`);
+  const hdgTxt = p.realHdg != null ? Math.round(p.realHdg) + '°' : '—';
+  const rangeTxt = `${p.range.toFixed(1)} nm · ${Math.round(p.bearing)}°`;
+  const route = routeCache.get(p.cs);
+  const routeTxt = route ? `${route.from} → ${route.to}` : null;
+  const subtitle = [p.typeLabel || 'Unknown type', p.registration].filter(Boolean).join(' · ');
+
+  detailPanelEl.innerHTML = `
+    <div class="dp-close">&times;</div>
+    <div class="dp-cs" style="color:${p.color}">${p.cs}</div>
+    <div class="dp-badge" style="background:${p.badgeColor}">${p.airlineLabel}</div>
+    <div class="dp-type">${subtitle}</div>
+    ${routeTxt ? `<div class="dp-route">${routeTxt}</div>` : ''}
+    <div class="dp-grid">
+      <div class="dp-field"><div class="dp-label">Altitude</div><div class="dp-value">${altTxt}</div></div>
+      <div class="dp-field"><div class="dp-label">Speed</div><div class="dp-value">${speedTxt}</div></div>
+      <div class="dp-field"><div class="dp-label">Heading</div><div class="dp-value">${hdgTxt}</div></div>
+      <div class="dp-field"><div class="dp-label">Vert. rate</div><div class="dp-value">${vrateLabel(p.vrate)}</div></div>
+      <div class="dp-field"><div class="dp-label">Squawk</div><div class="dp-value">${p.squawk ?? '—'}</div></div>
+      <div class="dp-field"><div class="dp-label">Range / Brg</div><div class="dp-value">${rangeTxt}</div></div>
+    </div>
+  `;
+  detailPanelEl.classList.add('show');
+  detailBackdropEl.classList.add('show');
+  clearTimeout(detailDismissTimer);
+  detailDismissTimer = setTimeout(hideDetailPanel, 18000);
+}
+
+function hideDetailPanel() {
+  detailPanelEl.classList.remove('show');
+  detailBackdropEl.classList.remove('show');
+  clearTimeout(detailDismissTimer);
+}
+
+function findPlaneAtStagePoint(x, y) {
+  const HIT_RADIUS = 22; // px, around the blip anchor
+  for (const p of planes.values()) {
+    if (p.range > RANGE_NM) continue;
+    const dx = x - p.anchorX, dy = y - p.anchorY;
+    if (dx * dx + dy * dy <= HIT_RADIUS * HIT_RADIUS) return p;
+    if (p.labelX !== undefined && x >= p.labelX && x <= p.labelX + p.labelW && y >= p.labelY && y <= p.labelY + p.labelH) return p;
+  }
+  return null;
+}
+
+stage.addEventListener('pointerup', (e) => {
+  if (detailPanelEl.classList.contains('show')) {
+    hideDetailPanel(); // any tap while open just dismisses it
+    return;
+  }
+  const rect = stage.getBoundingClientRect();
+  // p.anchorX/p.labelX etc. are already in screen space (drawPlanes scales
+  // canvas-space by rect.width/W before storing them), so no conversion here
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  const p = findPlaneAtStagePoint(x, y);
+  if (p) showDetailPanel(p);
+  else cycleDisplayMode();
+});
 
 async function start() {
   discoverDatabaseFolder().then(loadTypeCodeTable); // non-blocking; type labels fill in once ready
