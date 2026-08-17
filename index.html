@@ -240,6 +240,24 @@
     color: var(--text-dim);
     padding: 4px 8px;
   }
+  #detailPanel .dp-photo {
+    margin: -18px -20px 14px;
+    border-radius: 10px 10px 0 0;
+    overflow: hidden;
+  }
+  #detailPanel .dp-photo img {
+    display: block;
+    width: 100%;
+    max-height: 220px;
+    object-fit: cover;
+  }
+  #detailPanel .dp-photo-credit {
+    font-size: 0.55rem;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+    background: rgba(5, 8, 10, 0.7);
+    padding: 3px 8px;
+  }
 </style>
 </head>
 <body>
@@ -1146,7 +1164,10 @@ function vrateLabel(vrate) {
   return (vrate > 0 ? '↑ ' : '↓ ') + Math.abs(Math.round(vrate)) + ' ft/min';
 }
 
+let detailPanelHex = null; // guards against a photo fetch resolving after the panel moved on to a different plane (or closed)
+
 function showDetailPanel(p) {
+  detailPanelHex = p.hex;
   const speedTxt = p.speed === null ? '—' : Math.round(p.speed) + ' kt';
   const altTxt = p.alt === 'ground' ? 'On ground' : (p.alt === null ? '—' : `${p.alt.toLocaleString()} ft`);
   const hdgTxt = p.realHdg != null ? Math.round(p.realHdg) + '°' : '—';
@@ -1157,6 +1178,7 @@ function showDetailPanel(p) {
 
   detailPanelEl.innerHTML = `
     <div class="dp-close">&times;</div>
+    <div class="dp-photo" style="display:none"></div>
     <div class="dp-cs" style="color:${p.color}">${p.cs}</div>
     <div class="dp-badge" style="background:${p.badgeColor}">${p.airlineLabel}</div>
     <div class="dp-type">${subtitle}</div>
@@ -1174,9 +1196,38 @@ function showDetailPanel(p) {
   detailBackdropEl.classList.add('show');
   clearTimeout(detailDismissTimer);
   detailDismissTimer = setTimeout(hideDetailPanel, 18000);
+  loadDetailPhoto(p.hex);
+}
+
+// Photo comes from planespotters.net via our own same-origin /photo/<hex>
+// proxy (see deploy/photo-proxy.py) -- their API requires a descriptive
+// custom User-Agent that browser fetch() can never set itself. Shown as
+// plain, non-clickable text credit rather than a real link: this same page
+// also runs unattended in the kiosk's Chromium, and a tap-driven navigation
+// away from the app with no way back isn't an acceptable risk there, even
+// though a normal browser tab (e.g. via the Funnel URL) would handle it
+// fine. Per planespotters.net's terms of use, attribution (photographer
+// credit + naming the source) is still given either way.
+async function loadDetailPhoto(hex) {
+  try {
+    const res = await fetch(`/photo/${hex}`, { cache: 'no-store' });
+    const data = await res.json();
+    if (detailPanelHex !== hex || !detailPanelEl.classList.contains('show')) return; // stale by the time this resolved
+    if (!data.found) return;
+    const photoEl = detailPanelEl.querySelector('.dp-photo');
+    if (!photoEl) return;
+    photoEl.innerHTML = `
+      <img src="${data.thumbLarge || data.thumb}" alt="${detailPanelEl.querySelector('.dp-cs')?.textContent || 'Aircraft'} photo">
+      <div class="dp-photo-credit">© ${data.photographer || 'Unknown'} · planespotters.net</div>
+    `;
+    photoEl.style.display = 'block';
+  } catch (e) {
+    // no photo available — panel just shows the data fields, as before
+  }
 }
 
 function hideDetailPanel() {
+  detailPanelHex = null;
   detailPanelEl.classList.remove('show');
   detailBackdropEl.classList.remove('show');
   clearTimeout(detailDismissTimer);
