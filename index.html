@@ -538,6 +538,7 @@ function initMap() {
   // query, added as our own GeoJSON layer — see loadRunways().
   map.on('load', loadRunways);
   map.on('load', recolorLabels);
+  map.on('load', refreshStorms);
 }
 
 // "liberty" is styled for a light background (black text, white halo) —
@@ -623,6 +624,59 @@ async function loadRunways() {
     filter: ['==', ['get', 'aeroway'], 'runway'],
     paint: { 'line-color': '#c7d0d3', 'line-width': 2.5 },
   });
+}
+
+// ---- Storm radar overlay -----------------------------------------------
+// RainViewer's public discovery API needs no key and is free for hobby use
+// like this. It returns the current radar frame's tile path, which we
+// refresh periodically since RainViewer publishes a new frame roughly every
+// 10 minutes and this kiosk runs for days without a page reload. Tap empty
+// space to toggle it on/off (see the pointerup handler below); off by
+// default so the map isn't cluttered when there's nothing worth showing.
+const RAINVIEWER_API_URL = 'https://api.rainviewer.com/public/weather-maps.json';
+const RAINVIEWER_REFRESH_MS = 5 * 60 * 1000;
+const RAINVIEWER_COLOR = 6;       // NEXRAD Level III palette -- the familiar green/yellow/red/purple intensity scale
+const RAINVIEWER_OPTIONS = '1_1'; // smooth interpolation, snow shown distinctly
+let stormsOn = false;
+
+async function refreshStorms() {
+  if (!map) return;
+  try {
+    const res = await fetch(RAINVIEWER_API_URL, { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    const frames = data.radar && data.radar.past;
+    if (!frames || frames.length === 0) return;
+    const latest = frames[frames.length - 1];
+    const url = `${data.host}${latest.path}/256/{z}/{x}/{y}/${RAINVIEWER_COLOR}/${RAINVIEWER_OPTIONS}.png`;
+
+    if (map.getSource('storms')) {
+      map.getSource('storms').setTiles([url]);
+    } else {
+      // RainViewer's 256px radar tiles top out at z7 -- capping maxzoom here
+      // makes MapLibre overzoom (upsample) that real data at our much closer
+      // zoom instead of requesting tiles that don't exist, which otherwise
+      // come back as a small tiled "Zoom Level Not Supported" placeholder.
+      map.addSource('storms', { type: 'raster', tiles: [url], tileSize: 256, maxzoom: 7 });
+      map.addLayer({
+        id: 'storms',
+        type: 'raster',
+        source: 'storms',
+        paint: { 'raster-opacity': 0.65 },
+        layout: { visibility: stormsOn ? 'visible' : 'none' },
+      });
+    }
+  } catch (e) {
+    // offline or RainViewer unavailable — storms layer just stays as it was
+  }
+}
+
+function toggleStorms() {
+  stormsOn = !stormsOn;
+  showToast(stormsOn ? 'STORMS ON' : 'STORMS OFF');
+  if (map && map.getLayer('storms')) {
+    map.setLayoutProperty('storms', 'visibility', stormsOn ? 'visible' : 'none');
+  }
 }
 
 // ---- Route lookup --------------------------------------------------
@@ -985,7 +1039,6 @@ function drawPlanes(dt) {
     p.range += (p.targetRange - p.range) * alpha;
 
     if (p.range > RANGE_NM) continue;
-    if (!matchesPlaneFilter(p)) continue;
     inRange.push(p);
 
     // signal lost this poll (or several) -> hold position and fade rather
@@ -1158,11 +1211,10 @@ function drawPlanes(dt) {
     line.style.opacity = LEADER_BASE_OPACITY * p.opacity; // preserve the CSS base opacity, just scaled by coast fade
   }
 
-  // remove tag/leader nodes for aircraft no longer tracked, out of range, or
-  // filtered out by the current plane-category filter
+  // remove tag/leader nodes for aircraft no longer tracked or out of range
   for (const [hex, node] of tagNodes) {
     const pl = planes.get(hex);
-    if (!pl || pl.range > RANGE_NM || !matchesPlaneFilter(pl)) {
+    if (!pl || pl.range > RANGE_NM) {
       node.remove();
       tagNodes.delete(hex);
       const line = leaderNodes.get(hex);
@@ -1207,35 +1259,18 @@ function tick(ts) {
 // ---- Touch interaction --------------------------------------------------
 // Tap a plane's blip or label -> detail panel with fields the compact tag
 // doesn't show (registration, heading, vertical rate, squawk, precise
-// range/bearing). Tap empty space -> cycle which category of aircraft is
-// shown (all / private only / commercial only).
+// range/bearing). Tap empty space -> toggle the storm radar overlay.
 const toastEl = document.getElementById('toast');
 const detailPanelEl = document.getElementById('detailPanel');
 const detailBackdropEl = document.getElementById('detailBackdrop');
 let toastTimer = null;
 let detailDismissTimer = null;
-let planeFilter = 0; // 0=all, 1=private only, 2=commercial only
-const PLANE_FILTERS = ['ALL AIRCRAFT', 'PRIVATE ONLY', 'COMMERCIAL ONLY'];
 
 function showToast(text) {
   toastEl.textContent = text;
   toastEl.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1400);
-}
-
-// Same test already used to badge a plane "Private Aircraft" elsewhere
-// (normalizeAircraft) -- airlineIcao alone isn't enough, since a callsign can
-// match the 3-letter+digit pattern without being a *recognized* airline code.
-function matchesPlaneFilter(p) {
-  if (planeFilter === 1) return p.airlineLabel === PRIVATE_LABEL;
-  if (planeFilter === 2) return p.airlineLabel !== PRIVATE_LABEL;
-  return true;
-}
-
-function cyclePlaneFilter() {
-  planeFilter = (planeFilter + 1) % PLANE_FILTERS.length;
-  showToast(PLANE_FILTERS[planeFilter]);
 }
 
 function vrateLabel(vrate) {
@@ -1371,7 +1406,7 @@ stage.addEventListener('pointerup', (e) => {
   const x = e.clientX - rect.left, y = e.clientY - rect.top;
   const p = findPlaneAtStagePoint(x, y);
   if (p) showDetailPanel(p);
-  else cyclePlaneFilter();
+  else toggleStorms();
 });
 
 async function start() {
@@ -1386,6 +1421,7 @@ async function start() {
   }
   fetchAircraft();
   setInterval(fetchAircraft, FETCH_INTERVAL_MS);
+  setInterval(refreshStorms, RAINVIEWER_REFRESH_MS);
   requestAnimationFrame(tick);
 }
 
