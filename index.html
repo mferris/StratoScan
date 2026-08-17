@@ -309,6 +309,15 @@ const FETCH_INTERVAL_MS = 1000;  // how often we poll aircraft.json
 const STALE_MS = 15000;          // no good fetch in this long -> show NO SIGNAL
 const DROP_MS = 45000;           // no good fetch in this long -> clear stale blips
 
+// A plane missing from a poll doesn't necessarily mean it's gone -- at low
+// altitude especially, a bank turn or terrain can mask ADS-B reception for a
+// few seconds. Rather than vanishing instantly, a plane "coasts" at its last
+// known position, fading out, before actually being dropped.
+const COAST_FRESH_MS = 2000;  // no fade within this long of the last confirmed contact (normal poll jitter)
+const COAST_FADE_MS = 6000;   // then fade out over this long
+const COAST_TOTAL_MS = COAST_FRESH_MS + COAST_FADE_MS;
+const LEADER_BASE_OPACITY = 0.55; // matches #leaders line's CSS opacity -- scaled by coast fade, not replaced
+
 // ICAO airline designators (ICAO Doc 8585, a public standard) mapped to a
 // display name, IATA code, and a badge color loosely associated with the
 // carrier — not an attempt at exact brand colors, just visual distinction.
@@ -876,9 +885,12 @@ function applyUpdate(list) {
     }
   }
 
-  // drop aircraft readsb no longer reports
+  // aircraft readsb no longer reports aren't dropped immediately -- they
+  // coast (see COAST_TOTAL_MS) at their last known position/heading, fading
+  // out in drawPlanes, and are only removed once that grace period elapses
   for (const hex of [...planes.keys()]) {
-    if (!seen.has(hex)) planes.delete(hex);
+    if (seen.has(hex)) continue;
+    if (now - planes.get(hex).lastSeen > COAST_TOTAL_MS) planes.delete(hex);
   }
 }
 
@@ -956,6 +968,7 @@ function drawPlanes(dt) {
   const stageRect = stage.getBoundingClientRect();
   const scale = stageRect.width / W;
   const inRange = [];
+  const now = performance.now();
 
   // exponential chase toward the latest fix — never fully "arrives," so motion
   // stays continuous instead of visibly settling then pausing between polls
@@ -972,6 +985,11 @@ function drawPlanes(dt) {
     if (!matchesPlaneFilter(p)) continue;
     inRange.push(p);
 
+    // signal lost this poll (or several) -> hold position and fade rather
+    // than vanishing outright; see COAST_TOTAL_MS
+    const coastAge = now - p.lastSeen;
+    p.opacity = coastAge <= COAST_FRESH_MS ? 1 : Math.max(0, 1 - (coastAge - COAST_FRESH_MS) / COAST_FADE_MS);
+
     const { x, y } = polarToXY(p.bearing, p.range);
     const color = flightPhaseColor(p) || altColor(p.alt);
     p.anchorX = x * scale;
@@ -979,6 +997,7 @@ function drawPlanes(dt) {
     p.color = color;
 
     ctx.save();
+    ctx.globalAlpha = p.opacity;
     ctx.translate(x, y);
     ctx.rotate((p.hdg) * Math.PI / 180);
     ctx.beginPath();
@@ -1117,6 +1136,7 @@ function drawPlanes(dt) {
     p.labelY = ly;
     p.node.style.left = lx + 'px';
     p.node.style.top = ly + 'px';
+    p.node.style.opacity = p.opacity;
 
     const attach = closestPointOnRect(p.anchorX, p.anchorY, lx, ly, p.labelW, p.labelH);
     const attachX = attach.x, attachY = attach.y;
@@ -1132,6 +1152,7 @@ function drawPlanes(dt) {
     line.setAttribute('x2', attachX);
     line.setAttribute('y2', attachY);
     line.setAttribute('stroke', p.color);
+    line.style.opacity = LEADER_BASE_OPACITY * p.opacity; // preserve the CSS base opacity, just scaled by coast fade
   }
 
   // remove tag/leader nodes for aircraft no longer tracked, out of range, or
