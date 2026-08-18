@@ -319,6 +319,17 @@ const COAST_FADE_MS = 6000;   // then fade out over this long
 const COAST_TOTAL_MS = COAST_FRESH_MS + COAST_FADE_MS;
 const LEADER_BASE_OPACITY = 0.55; // matches #leaders line's CSS opacity -- scaled by coast fade, not replaced
 
+// Tapping a plane shows its recent flight path. This receiver has no
+// server-side trace history (readsb's data/traces/*.json isn't populated on
+// this Pi), so the trail is built client-side from each poll's already-
+// computed bearing/range -- it only covers time since this page was last
+// loaded, not real flight history. See HANDOFF.md.
+const TRAIL_MAX_MS = 10 * 60 * 1000; // keep 10 minutes of history per aircraft
+
+function pruneTrail(trail, now) {
+  while (trail.length && now - trail[0].t > TRAIL_MAX_MS) trail.shift();
+}
+
 // ICAO airline designators (ICAO Doc 8585, a public standard) mapped to a
 // display name, IATA code, and a badge color loosely associated with the
 // carrier — not an attempt at exact brand colors, just visual distinction.
@@ -450,6 +461,102 @@ function altColor(alt) {
   if (alt < 10000) return COLORS.low;
   if (alt < 25000) return COLORS.mid;
   return COLORS.high;
+}
+
+// ---- Blip shape classification -----------------------------------------
+// Distinguishes large commercial jets / smaller jets / prop planes / rotor-
+// craft on the radar, the way tar1090's own map does. Rather than porting
+// tar1090's icon set (its own code license is unclear -- "Other"/NOASSERTION
+// on GitHub, see the aircraft-type-lookup note above for the same concern),
+// these are simple shapes drawn to match this app's existing kite-blip style.
+// Classification prefers the specific tail's ICAO type info (from the same
+// type database lookupType() already reads: typeDesc is the ICAO Doc 8643
+// 3-char code, e.g. "L2J" = landplane/2 engines/jet, "H1T" = helicopter/1
+// engine/turbine; wtc is wake-turbulence category L/M/H/J) and falls back to
+// the raw ADS-B "category" field readsb reports per-aircraft (A1 light .. A5
+// heavy, A7 rotorcraft, B2 lighter-than-air) when type info isn't known yet
+// or at all -- common for GA tails with no database entry. Unclassifiable
+// aircraft keep the original kite blip, so most traffic looks unchanged.
+function classifyAircraft(p) {
+  const desc = p.typeDesc, wtc = p.wtc, cat = p.category;
+  if (desc && desc.length === 3) {
+    const kind = desc[0], engine = desc[2];
+    if (kind === 'H' || kind === 'G' || kind === 'T') return 'heli';
+    if (engine === 'J') return (wtc === 'H' || wtc === 'J') ? 'heavy' : 'jet';
+    if (engine === 'P' || engine === 'T' || engine === 'E') return 'prop';
+  }
+  if (cat) {
+    if (cat === 'A7') return 'heli';
+    if (cat === 'B2') return 'lta';
+    if (cat === 'A4' || cat === 'A5') return 'heavy';
+    if (cat === 'A3') return 'jet';
+    if (cat === 'A1' || cat === 'A2') return 'prop';
+  }
+  return 'unknown';
+}
+
+// Each draw*() assumes the canvas is already translated to the blip's
+// position and rotated so "forward" is -Y, with fillStyle/strokeStyle/
+// shadowColor/shadowBlur already set to the plane's color by the caller.
+function drawKite(scale) {
+  ctx.beginPath();
+  ctx.moveTo(0, -9 * scale);
+  ctx.lineTo(6 * scale, 7 * scale);
+  ctx.lineTo(0, 3 * scale);
+  ctx.lineTo(-6 * scale, 7 * scale);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawProp() {
+  ctx.beginPath();
+  ctx.moveTo(-1.5, -9);
+  ctx.lineTo(1.5, -9);
+  ctx.lineTo(1.5, -1.5);
+  ctx.lineTo(9, 1.5);
+  ctx.lineTo(9, 3.5);
+  ctx.lineTo(1.5, 1);
+  ctx.lineTo(1.5, 8);
+  ctx.lineTo(-1.5, 8);
+  ctx.lineTo(-1.5, 1);
+  ctx.lineTo(-9, 3.5);
+  ctx.lineTo(-9, 1.5);
+  ctx.lineTo(-1.5, -1.5);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawHeli() {
+  ctx.beginPath();
+  ctx.arc(0, -2, 7, 0, Math.PI * 2);
+  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-1.3, 4);
+  ctx.lineTo(1.3, 4);
+  ctx.lineTo(0.8, 11);
+  ctx.lineTo(-0.8, 11);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawBlimp() {
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 5, 11, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawBlipShape(kind) {
+  switch (kind) {
+    case 'heavy': drawKite(1.55); break;
+    case 'prop': drawProp(); break;
+    case 'heli': drawHeli(); break;
+    case 'lta': drawBlimp(); break;
+    case 'jet':
+    case 'unknown':
+    default: drawKite(1); break;
+  }
 }
 
 function polarToXY(bearingDeg, rangeNm) {
@@ -752,13 +859,20 @@ async function discoverDatabaseFolder() {
   }
 }
 
+// Each entry is [typeLong, typeDescription, wtc] -- typeDescription is the
+// ICAO Doc 8643 3-char code (e.g. "L2J" = landplane/2 engines/jet, "H1T" =
+// helicopter/1 engine/turbine) and wtc is wake-turbulence category (L/M/H/J).
+// Both are used by classifyAircraft() below to pick a blip shape.
 async function loadTypeCodeTable() {
   if (!databaseFolder) return;
   try {
     const res = await fetch(`/tar1090/${databaseFolder}/icao_aircraft_types2.js`, { cache: 'force-cache' });
     const data = await res.json();
     for (const code in data) {
-      if (data[code] && data[code][0]) typeCodeTable.set(code, humanizeType(data[code][0]));
+      const entry = data[code];
+      if (!entry) continue;
+      const [typeLong, desc, wtc] = entry;
+      typeCodeTable.set(code, { label: typeLong ? humanizeType(typeLong) : null, desc: desc || null, wtc: wtc || null });
     }
   } catch (e) {
     // fine — per-hex typeLong (below) still covers most aircraft on its own
@@ -786,7 +900,7 @@ function fetchShard(bkey) {
 // each shard either has the remaining hex suffix as a direct key, or a
 // "children" list naming deeper shards to descend into.
 async function lookupType(hex) {
-  const empty = { type: null, reg: null };
+  const empty = { type: null, reg: null, desc: null, wtc: null };
   if (hexTypeCache.has(hex)) return hexTypeCache.get(hex);
   if (!databaseFolder || hexTypePending.has(hex)) return empty;
   hexTypePending.add(hex);
@@ -806,10 +920,11 @@ async function lookupType(hex) {
   let result = empty;
   if (entry) {
     const [reg, typeCode, , typeLong] = entry;
+    const meta = typeCode ? typeCodeTable.get(typeCode.toUpperCase()) : null;
     let type = null;
     if (typeLong) type = humanizeType(typeLong);
-    else if (typeCode) type = typeCodeTable.get(typeCode.toUpperCase()) || null;
-    result = { type, reg: reg || null };
+    else if (meta) type = meta.label;
+    result = { type, reg: reg || null, desc: meta ? meta.desc : null, wtc: meta ? meta.wtc : null };
   }
 
   hexTypeCache.set(hex, result);
@@ -876,6 +991,7 @@ function normalizeAircraft(a) {
     lon: typeof a.lon === 'number' ? a.lon : null,
     squawk: a.squawk ?? null,
     vrate: a.baro_rate ?? a.geom_rate ?? null,
+    category: a.category ?? null,
     airlineIcao, airlineLabel, badgeColor,
   };
 }
@@ -918,7 +1034,10 @@ function applyUpdate(list) {
       existing.realHdg = n.realHdg;
       existing.squawk = n.squawk;
       existing.vrate = n.vrate;
+      existing.category = n.category;
       existing.lastSeen = now;
+      existing.trail.push({ bearing: n.bearing, range: n.range, t: now });
+      pruneTrail(existing.trail, now);
     } else {
       planes.set(n.hex, {
         ...n,
@@ -926,14 +1045,17 @@ function applyUpdate(list) {
         targetRange: n.range,
         typeLabel: null,
         registration: null,
+        typeDesc: null,
+        wtc: null,
         lastSeen: now,
+        trail: [{ bearing: n.bearing, range: n.range, t: now }],
       });
     }
 
     if (!hexTypeCache.has(n.hex)) {
       lookupType(n.hex).then(info => {
         const pl = planes.get(n.hex);
-        if (pl) { pl.typeLabel = info.type; pl.registration = info.reg; }
+        if (pl) { pl.typeLabel = info.type; pl.registration = info.reg; pl.typeDesc = info.desc; pl.wtc = info.wtc; }
       });
     }
 
@@ -991,6 +1113,33 @@ function drawRings() {
   ctx.restore();
 }
 
+// Drawn while the detail panel is open for a plane, underneath that frame's
+// fresh blips/labels. Reuses each poll's already-computed bearing/range
+// (pushed onto p.trail in applyUpdate) rather than raw lat/lon, so a replayed
+// point lands exactly where that plane's blip actually was at the time --
+// consistent with HOME_OVERRIDE's effect on live positions too.
+function drawSelectedTrail() {
+  if (!detailPanelHex) return;
+  const p = planes.get(detailPanelHex);
+  if (!p || !p.trail || p.trail.length < 2) return;
+  const now = performance.now();
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  for (let i = 1; i < p.trail.length; i++) {
+    const a = p.trail[i - 1], b = p.trail[i];
+    const pa = polarToXY(a.bearing, a.range);
+    const pb = polarToXY(b.bearing, b.range);
+    ctx.globalAlpha = Math.max(0, 1 - (now - b.t) / TRAIL_MAX_MS) * 0.85;
+    ctx.strokeStyle = p.color || '#cfe8ea';
+    ctx.beginPath();
+    ctx.moveTo(pa.x, pa.y);
+    ctx.lineTo(pb.x, pb.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawSweep() {
   ctx.save();
   const grad = ctx.createConicGradient(sweepAngle - Math.PI / 2, CX, CY);
@@ -1036,6 +1185,7 @@ function drawPlanes(dt) {
   // (content must be finalized before we measure box sizes in pass 2)
   for (const p of planes.values()) {
     p.bearing += bearingDelta(p.bearing, p.targetBearing) * alpha;
+    p.bearing = ((p.bearing % 360) + 360) % 360; // keep in [0,360) -- pure accumulation would otherwise drift arbitrarily far past it over a long-lived contact (e.g. a tight holding pattern), same issue labelAngle already guards against below
     p.range += (p.targetRange - p.range) * alpha;
 
     if (p.range > RANGE_NM) continue;
@@ -1056,16 +1206,10 @@ function drawPlanes(dt) {
     ctx.globalAlpha = p.opacity;
     ctx.translate(x, y);
     ctx.rotate((p.hdg) * Math.PI / 180);
-    ctx.beginPath();
-    ctx.moveTo(0, -9);
-    ctx.lineTo(6, 7);
-    ctx.lineTo(0, 3);
-    ctx.lineTo(-6, 7);
-    ctx.closePath();
     ctx.fillStyle = color;
     ctx.shadowColor = color;
     ctx.shadowBlur = 10;
-    ctx.fill();
+    drawBlipShape(classifyAircraft(p));
     ctx.restore();
 
     let node = tagNodes.get(p.hex);
@@ -1247,6 +1391,7 @@ function tick(ts) {
   ctx.clearRect(0, 0, W, H);
   drawRings();
   drawSweep();
+  drawSelectedTrail();
   drawPlanes(dt);
   updateStatus();
 
