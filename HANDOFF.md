@@ -274,6 +274,38 @@ shows nothing if planespotters has no photo for that airframe.
   (Chromium will pick it up on next reload/kiosk restart — no service restart
   needed unless the launch flags/URL change.)
 
+## Stock photo fallback for tails with no planespotters photo
+Most tracked tails (private/GA especially) have no dedicated planespotters
+photo — noticed by actually clicking around on GA traffic. Rather than
+always falling back to the generic silhouette, `tryStockPhoto()` now tries a
+representative photo of the aircraft *type* instead (any Cessna 172, not
+necessarily this exact tail), via Wikipedia/Wikimedia Commons — same
+free/no-key-required class of source as adsb.im's routes, RainViewer's
+radar, and Overpass's runways elsewhere in this file. `lookupStockPhoto()`
+does an `opensearch` query against the plane's `typeLabel` (the same
+human-readable type string already shown elsewhere in the UI) to find a
+matching Wikipedia page, then the REST `page/summary` endpoint for its
+thumbnail — cached per type string (not per hex), so one lookup covers every
+Cessna 172 this receiver ever sees. Confirmed CORS actually works for a real
+browser `fetch()` against Wikipedia's endpoints (curl doesn't enforce CORS,
+so that alone wouldn't have proven it) before relying on it.
+
+Hit rate is decent but not perfect — simple GA types (Cessna/Cirrus/Piper/
+Beechcraft) matched cleanly in testing, but regional jets did not (the
+`typeLabel` string reads "Bombardier Regional Jet CRJ-900", while Wikipedia's
+actual page title is "Bombardier CRJ900" — no fuzzy retry was built for this,
+since even an imperfect hit rate is a strict improvement over the previous
+always-silhouette fallback, and a failed lookup just falls through to the
+same placeholder as before). Deliberately labeled with a visible **"REPRESENTATIVE
+PHOTO"** badge overlaid on the image itself (not just smaller credit text)
+so it's never mistaken for a real photo of that specific airframe — this is
+a real photo of *some* example of that type, not the tracked tail. Credit
+line is "site name only" (matching the planespotters credit's existing
+non-clickable-text, kiosk-navigation-safety treatment above), a deliberately
+lighter touch than full Commons per-image author/license boilerplate would
+be — proportionate to what the rest of this app already does, not a new
+legal risk tier.
+
 ## Map/radar alignment bug (found via the trail feature)
 Trying out the new trail near RDU surfaced a real bug: the background map's
 zoom was miscalibrated, so real ground features (like RDU's runways) rendered
