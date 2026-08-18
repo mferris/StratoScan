@@ -274,6 +274,29 @@ shows nothing if planespotters has no photo for that airframe.
   (Chromium will pick it up on next reload/kiosk restart — no service restart
   needed unless the launch flags/URL change.)
 
+## Runways silently disappearing for a whole session (found this session)
+Reported as "I can no longer see the RDU runways." Root cause turned out to
+be unrelated to the map alignment fix above — a real, separate,
+pre-existing gap: `loadRunways()` only ever ran **once**, on the map's
+`load` event, with no retry. A single transient failure from Overpass
+(rate-limited, timed out, etc.) at exactly the wrong moment — like right as
+the kiosk boots — silently and *permanently* lost runways for that entire
+session, since nothing else ever re-triggered the fetch and the kiosk can
+run for days before its next reload. Confirmed by hand: called
+`loadRunways()` directly a few times back-to-back while testing (which
+itself hammers the same shared public Overpass instance) and watched it
+return with zero features/an error a couple of times before a retry
+succeeded with real data — the exact failure mode, reproduced live. Likely
+tripped for real this session specifically because the kiosk got restarted
+six separate times deploying today's other changes, each one a fresh
+chance to hit it.
+
+Fixed with a bounded retry: up to `OVERPASS_MAX_ATTEMPTS` (4) tries, 20s
+apart (`OVERPASS_RETRY_MS`) — generous backoff since this is a shared public
+API and only needs to eventually land once per (rare) kiosk reload, not be
+fast. Still purely additive/best-effort after retries are exhausted, same as
+before — the map/radar work fine without runway outlines either way.
+
 ## Trails made always-on for every plane, not just tap-to-show
 Preference change: flight trails (see below) now draw for every in-range
 aircraft every frame (`drawTrails()`), not just the one with an open detail
