@@ -188,8 +188,9 @@
 
   #detailPanel {
     /* Anchored to the bottom edge, not centered -- a centered panel sat
-       right on top of the dial's middle, which is exactly where the
-       tap-to-show flight trail (drawSelectedTrail) is most likely to pass.
+       right on top of the dial's middle, which is exactly where a plane's
+       flight trail (drawTrails) is most likely to pass, now that every
+       in-range aircraft always shows one, not just the tapped plane.
        Bottom-anchoring plus a height cap leaves the upper dial clear so the
        trail stays visible while a plane's panel is open. */
     position: absolute;
@@ -341,12 +342,19 @@ const COAST_FADE_MS = 6000;   // then fade out over this long
 const COAST_TOTAL_MS = COAST_FRESH_MS + COAST_FADE_MS;
 const LEADER_BASE_OPACITY = 0.55; // matches #leaders line's CSS opacity -- scaled by coast fade, not replaced
 
-// Tapping a plane shows its recent flight path. This receiver has no
-// server-side trace history (readsb's data/traces/*.json isn't populated on
-// this Pi), so the trail is built client-side from each poll's already-
-// computed bearing/range -- it only covers time since this page was last
-// loaded, not real flight history. See HANDOFF.md.
-const TRAIL_MAX_MS = 10 * 60 * 1000; // keep 10 minutes of history per aircraft
+// Every tracked aircraft always shows its recent flight path (drawTrails, in
+// the main loop below) -- originally only drawn for the plane with an open
+// detail panel, but always-on for every plane in view was preferred. This
+// receiver has no server-side trace history (readsb's data/traces/*.json
+// isn't populated on this Pi), so the trail is built client-side from each
+// poll's already-computed bearing/range -- it only covers time since this
+// page was last loaded, not real flight history. See HANDOFF.md.
+// 3 minutes, not the original 10: that was sized for one plane at a time on
+// tap; drawn continuously for every in-range plane every frame instead, a
+// shorter window keeps the display legible (a 10-minute trail per plane,
+// all at once, gets visually messy fast) and meaningfully caps the
+// per-frame line-segment count on a Pi running this render loop 24/7.
+const TRAIL_MAX_MS = 3 * 60 * 1000;
 
 function pruneTrail(trail, now) {
   while (trail.length && now - trail[0].t > TRAIL_MAX_MS) trail.shift();
@@ -1158,29 +1166,30 @@ function drawRings() {
   ctx.restore();
 }
 
-// Drawn while the detail panel is open for a plane, underneath that frame's
+// Drawn for every in-range aircraft, every frame, underneath that frame's
 // fresh blips/labels. Reuses each poll's already-computed bearing/range
 // (pushed onto p.trail in applyUpdate) rather than raw lat/lon, so a replayed
 // point lands exactly where that plane's blip actually was at the time --
 // consistent with HOME_OVERRIDE's effect on live positions too.
-function drawSelectedTrail() {
-  if (!detailPanelHex) return;
-  const p = planes.get(detailPanelHex);
-  if (!p || !p.trail || p.trail.length < 2) return;
+function drawTrails() {
   const now = performance.now();
   ctx.save();
   ctx.lineWidth = 2;
   ctx.lineCap = 'round';
-  for (let i = 1; i < p.trail.length; i++) {
-    const a = p.trail[i - 1], b = p.trail[i];
-    const pa = polarToXY(a.bearing, a.range);
-    const pb = polarToXY(b.bearing, b.range);
-    ctx.globalAlpha = Math.max(0, 1 - (now - b.t) / TRAIL_MAX_MS) * 0.85;
+  for (const p of planes.values()) {
+    if (p.range > RANGE_NM) continue; // matches drawPlanes' own in-range filter -- no point trailing a blip that isn't drawn
+    if (!p.trail || p.trail.length < 2) continue;
     ctx.strokeStyle = p.color || '#cfe8ea';
-    ctx.beginPath();
-    ctx.moveTo(pa.x, pa.y);
-    ctx.lineTo(pb.x, pb.y);
-    ctx.stroke();
+    for (let i = 1; i < p.trail.length; i++) {
+      const a = p.trail[i - 1], b = p.trail[i];
+      const pa = polarToXY(a.bearing, a.range);
+      const pb = polarToXY(b.bearing, b.range);
+      ctx.globalAlpha = Math.max(0, 1 - (now - b.t) / TRAIL_MAX_MS) * 0.85;
+      ctx.beginPath();
+      ctx.moveTo(pa.x, pa.y);
+      ctx.lineTo(pb.x, pb.y);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -1436,7 +1445,7 @@ function tick(ts) {
   ctx.clearRect(0, 0, W, H);
   drawRings();
   drawSweep();
-  drawSelectedTrail();
+  drawTrails();
   drawPlanes(dt);
   updateStatus();
 

@@ -274,6 +274,23 @@ shows nothing if planespotters has no photo for that airframe.
   (Chromium will pick it up on next reload/kiosk restart — no service restart
   needed unless the launch flags/URL change.)
 
+## Trails made always-on for every plane, not just tap-to-show
+Preference change: flight trails (see below) now draw for every in-range
+aircraft every frame (`drawTrails()`), not just the one with an open detail
+panel. The trail *data* was already being collected for every plane
+regardless of selection (that was deliberate from the start, so reopening a
+panel would show continuity) — only the drawing itself was gated.
+
+Also shortened `TRAIL_MAX_MS` from 10 minutes to 3. That was sized for "one
+plane, deep history, only while you're looking at it" — rendering it for
+every plane simultaneously, permanently (not just while a panel happens to
+be open), is a meaningfully bigger continuous per-frame cost on a Pi running
+this render loop 24/7 (up to ~600 line segments per aircraft at the old
+window, times however many are in view at once), and a 10-minute trail per
+plane all at once is also visually noisy. 3 minutes still clearly shows an
+approach/departure into RDU. Worth revisiting (either direction) once seen
+running for a while on the real hardware.
+
 ## Stock photo fallback for tails with no planespotters photo
 Most tracked tails (private/GA especially) have no dedicated planespotters
 photo — noticed by actually clicking around on GA traffic. Rather than
