@@ -274,6 +274,65 @@ shows nothing if planespotters has no photo for that airframe.
   (Chromium will pick it up on next reload/kiosk restart — no service restart
   needed unless the launch flags/URL change.)
 
+## Per-type aircraft icons + tap-to-show flight path trail
+Prompted by looking at tar1090's own map (`http://<radar>/tar1090/`), which
+draws distinct shapes for large commercial jets/smaller jets/prop planes and
+shows a flight-path trail when you tap a plane.
+
+**Icons**: didn't port tar1090's actual icon set (`markers.js` on the Pi at
+`/usr/local/share/tar1090/git/html/markers.js`, ~100+ hand-drawn SVG paths) —
+its code license is unclear ("Other"/NOASSERTION on GitHub, same concern
+already noted above for the aircraft-type database), and importing ~100
+detailed bezier paths would also be needlessly heavy for a canvas redrawn
+every frame on a Pi. Instead, `classifyAircraft()` buckets each plane into
+`heavy` / `jet` / `prop` / `heli` / `lta` / `unknown` and `drawBlipShape()`
+draws a small hand-coded canvas path for each — same kite/arrowhead as always
+for `jet`/`unknown` (no visual change for most traffic), just bigger for
+`heavy`, a distinct cross/plus silhouette for `prop`, a rotor-ring-plus-tail
+for `heli`, an ellipse for `lta`. Classification prefers the specific tail's
+ICAO type info when known (`typeDesc`/`wtc`, from the same
+`icao_aircraft_types2.js` database `lookupType()` already reads for the
+aircraft-type-string feature above — just two more fields off the same
+entries, `[typeLong, typeDescription, wtc]`), falling back to the raw ADS-B
+`category` field readsb reports per-aircraft (A1 light .. A5 heavy, A7
+rotorcraft, B2 lighter-than-air) when type info isn't known yet or at all —
+common for GA tails with no database entry.
+
+**Trail**: tar1090's tap-to-show trail comes from readsb's own trace history
+(`data/traces/<hex-suffix>/trace_recent_<hex>.json`), but **this Pi's readsb
+doesn't have that enabled** — confirmed via `curl` (404) and `find` (no
+`trace_*.json` files anywhere on disk). So the trail is built client-side
+instead: each poll's already-computed bearing/range (the same values the live
+blip uses) gets pushed onto that plane's `p.trail` array in `applyUpdate()`,
+pruned to the last 10 minutes (`TRAIL_MAX_MS`). `drawSelectedTrail()` draws it
+as a fading polyline, only while the detail panel is open for that plane.
+Real limitation, not a bug: **this only covers time since the page was last
+loaded** — there's no real flight history before that, unlike tar1090's
+server-backed trail. Worth reconsidering if trace storage is ever enabled on
+this receiver.
+
+**Bug fix along the way**: `p.bearing` (the smoothed/eased live bearing used
+for blip position) was never wrapped back into `[0, 360)` after each frame's
+`+= bearingDelta(...)` — harmless for the actual blip *position* since
+`Math.cos`/`Math.sin` are periodic, but the detail panel's `Range/Brg` display
+could show something like "482°" for a contact that's been tracked long
+enough to accumulate past a full revolution (e.g. a tight holding pattern
+near the receiver). Found via testing with a synthetic aircraft deliberately
+orbiting fast to exercise the new trail code — real traffic would hit this
+rarely, but it's a real latent bug. Fixed by wrapping `p.bearing` the same
+way `p.labelAngle` already was two lines below it.
+
+**Testing note**: this sandbox's browser preview can reach the public
+internet but not the Pi's private LAN address (<radar>) — `dev-server.py`'s
+proxy got `No route to host` even though direct `curl`/`ssh` from a shell
+in the same session worked fine. Verified instead with a small mock server
+(`/tar1090/data/*` stubbed with synthetic aircraft spanning every category)
+so all five shapes and the trail could actually be checked visually and via
+canvas pixel sampling, rather than waiting for real traffic to happen to
+include a helicopter or blimp. Deployed and confirmed byte-identical on the
+Pi, but not yet visually confirmed against live traffic in a real browser —
+worth a look next time the kiosk/Funnel URL is checked.
+
 ## Open — not yet done
 - **Milestone 5** (optional): tap-an-aircraft detail panel.
 - **Physical verification on the real panel**: the round 1080x1080 display
