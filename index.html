@@ -694,8 +694,9 @@ function initMap() {
   // geometry at this low a zoom (confirmed via queryRenderedFeatures — the
   // tiles are generated without that detail below ~z11, independent of the
   // style's minzoom setting), so raising the zoom gate there does nothing.
-  // Runway outlines instead come from a one-time OpenStreetMap Overpass
-  // query, added as our own GeoJSON layer — see loadRunways().
+  // Runway outlines instead come from an OpenStreetMap Overpass query
+  // (retried a few times on failure), added as our own GeoJSON layer — see
+  // loadRunways().
   map.on('load', loadRunways);
   map.on('load', recolorLabels);
   map.on('load', refreshStorms);
@@ -720,11 +721,14 @@ function recolorLabels() {
 window.addEventListener('resize', () => { if (map) map.resize(); });
 
 // ---- Runway outlines --------------------------------------------------
-// One-time fetch (home location never changes at runtime) of real runway/
-// taxiway geometry from OSM's public Overpass API, covering the same
-// RANGE_NM box the radar shows. Purely additive — if this fails (offline,
-// Overpass rate-limited, etc.) the map/radar keep working without it.
+// Fetch (home location never changes at runtime, so this only needs to
+// truly succeed once) of real runway/taxiway geometry from OSM's public
+// Overpass API, covering the same RANGE_NM box the radar shows. Purely
+// additive — if every attempt fails (offline, Overpass rate-limited, etc.)
+// the map/radar keep working without runway outlines.
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+const OVERPASS_MAX_ATTEMPTS = 4;
+const OVERPASS_RETRY_MS = 20000; // generous backoff -- shared public API, and this only needs to eventually land once per (rare) kiosk reload, not be fast
 
 function rangeBBox(lat, lon, rangeNm) {
   const rangeM = rangeNm * 1852;
@@ -750,9 +754,18 @@ function overpassToGeoJSON(elements) {
   return { type: 'FeatureCollection', features };
 }
 
-async function loadRunways() {
+async function loadRunways(attempt = 1) {
   const bb = rangeBBox(home.lat, home.lon, RANGE_NM);
   const query = `[out:json][timeout:25];(way["aeroway"="runway"](${bb.south},${bb.west},${bb.north},${bb.east});way["aeroway"="taxiway"](${bb.south},${bb.west},${bb.north},${bb.east}););out body;>;out skel qt;`;
+
+  // A single failed/empty attempt used to mean no runways for the rest of
+  // the kiosk's uptime (this only ever ran once, on map load, with no
+  // retry) -- a transient Overpass hiccup or rate-limit at exactly the
+  // wrong moment (e.g. right as the kiosk boots) silently lost runways for
+  // a session that can run for days before the next reload. Retrying a
+  // bounded number of times with a generous backoff fixes that without
+  // hammering a shared public API.
+  const retry = () => { if (attempt < OVERPASS_MAX_ATTEMPTS) setTimeout(() => loadRunways(attempt + 1), OVERPASS_RETRY_MS); };
 
   let geojson;
   try {
@@ -761,13 +774,14 @@ async function loadRunways() {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'data=' + encodeURIComponent(query),
     });
-    if (!res.ok) return;
+    if (!res.ok) { retry(); return; }
     const data = await res.json();
     geojson = overpassToGeoJSON(data.elements || []);
   } catch (e) {
-    return; // offline or Overpass unavailable — map/radar work fine without runways
+    retry(); // offline or Overpass unavailable this attempt -- map/radar work fine without runways meanwhile
+    return;
   }
-  if (geojson.features.length === 0) return;
+  if (geojson.features.length === 0) { retry(); return; }
 
   map.addSource('runways', { type: 'geojson', data: geojson });
   map.addLayer({
