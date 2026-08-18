@@ -629,18 +629,39 @@ function formatLoc() {
 // ---- Background map --------------------------------------------------
 // Zoom level whose ground scale at `lat` matches RANGE_NM across R pixels,
 // so the map's visible extent lines up with the radar's outer ring.
-function zoomForRange(rangeNm, lat) {
-  const metersPerPixel = (rangeNm * 1852) / R;
-  return Math.log2(156543.03392 * Math.cos(lat * Math.PI / 180) / metersPerPixel);
+// rPixels must be real CSS/DOM pixels, not canvas-internal units -- MapLibre's
+// zoom is calibrated against the container's actual rendered size, which only
+// equals the canvas's fixed 1080-unit internal resolution (R) when the stage
+// happens to render at exactly 1080 CSS px. True on the physical 1080x1080
+// kiosk panel (which is why this went unnoticed there), but not for anyone
+// viewing the same page at a different size via the Tailscale Funnel URL.
+function zoomForRange(rangeNm, lat, rPixels) {
+  const metersPerPixel = (rangeNm * 1852) / rPixels;
+  // 156543.03392 is meters-per-pixel-at-zoom-0 for the classic 256px slippy-
+  // tile convention (earth circumference / 256). MapLibre/Mapbox GL define
+  // zoom for 512px tiles instead (whole world = 512px at zoom 0), so a zoom
+  // computed straight from the 256px constant renders one level too far in
+  // -- barely visible right at `home` (zero range), but growing fast with
+  // distance, since it's a per-nm scale error not a fixed offset. That's
+  // what made real ground features (e.g. RDU's runways) drift further and
+  // further from where the radar independently plots aircraft at the same
+  // true bearing/range, the farther out you looked -- the "-1" corrects for
+  // the doubled tile size (2x pixels per tile = 1 fewer zoom level needed).
+  return Math.log2(156543.03392 * Math.cos(lat * Math.PI / 180) / metersPerPixel) - 1;
 }
 
 function initMap() {
   if (!home || map) return;
+  // Zoom is calibrated once, at init, against the stage's CSS size at that
+  // moment -- fine for the kiosk (fixed physical resolution, never resized),
+  // but a browser window resized after load (e.g. via the Funnel URL) would
+  // need a reload to recalibrate rather than drifting back out of alignment.
+  const rCss = R * (stage.getBoundingClientRect().width / W);
   map = new maplibregl.Map({
     container: 'mapbg',
     style: MAP_STYLE_URL,
     center: [home.lon, home.lat],
-    zoom: zoomForRange(RANGE_NM, home.lat),
+    zoom: zoomForRange(RANGE_NM, home.lat, rCss),
     interactive: false,
     attributionControl: { compact: true },
   });

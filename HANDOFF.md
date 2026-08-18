@@ -274,6 +274,41 @@ shows nothing if planespotters has no photo for that airframe.
   (Chromium will pick it up on next reload/kiosk restart — no service restart
   needed unless the launch flags/URL change.)
 
+## Map/radar alignment bug (found via the trail feature)
+Trying out the new trail near RDU surfaced a real bug: the background map's
+zoom was miscalibrated, so real ground features (like RDU's runways) rendered
+increasingly far from where the radar independently plots aircraft at the
+same true bearing/range, the farther from `home` you looked — accurate right
+at the center, visibly "shifted" a few nm out. Two compounding causes in
+`zoomForRange()`/`initMap()`:
+1. The 156543.03392 constant is meters-per-pixel-at-zoom-0 for the classic
+   256px slippy-tile convention, but MapLibre/Mapbox GL define zoom for 512px
+   tiles (whole world = 512px at zoom 0) — a well-known porting gotcha
+   ("Mapbox GL zoom = Leaflet zoom - 1" for the same visual scale). Using the
+   256px constant unmodified renders one zoom level too far in, a *scale*
+   error (not a fixed offset), so it's small near `home` and grows with
+   distance. Fixed by subtracting 1 from the computed zoom.
+2. `zoomForRange` was fed `R`, the radar's radius in the canvas's fixed
+   1080-unit *internal* space — but MapLibre's zoom is calibrated against the
+   container's actual rendered *CSS* pixel size, which only equals 1080 when
+   the stage happens to render at exactly 1080px. True on the physical
+   1080x1080 kiosk panel (masking this entirely there, which is why it went
+   unnoticed until now), but not for anyone viewing the same page at a
+   different size via the Funnel URL. `initMap()` now converts `R` to real
+   CSS pixels (`R * stage.getBoundingClientRect().width / W`) before calling
+   `zoomForRange()`.
+Verified by comparing MapLibre's own `map.project([lon,lat])` for RDU's real
+coordinates against the radar's independently-computed `polarToXY()` position
+for the same point (via `haversineBearingRange()`) — before the fix these
+diverged by a factor tied directly to the test viewport's CSS-vs-canvas
+pixel ratio (proving cause #2), after fixing both, they match to ~0.1-0.15%
+(the tiny residual being genuine, unavoidable Mercator scale variation across
+the visible disc, not a bug). Not yet reconciled: zoom is calibrated once at
+`initMap()` time and never recalculated, so a browser window resized *after*
+load (e.g. via Funnel, on a desktop) would need a reload to stay aligned —
+fine for the kiosk itself (fixed physical resolution, never resized), not
+yet handled for the general case.
+
 ## Per-type aircraft icons + tap-to-show flight path trail
 Prompted by looking at tar1090's own map (`http://<radar>/tar1090/`), which
 draws distinct shapes for large commercial jets/smaller jets/prop planes and
