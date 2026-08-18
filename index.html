@@ -249,6 +249,7 @@
     padding: 4px 8px;
   }
   #detailPanel .dp-photo {
+    position: relative;
     margin: -18px -20px 14px;
     border-radius: 10px 10px 0 0;
     overflow: hidden;
@@ -259,6 +260,20 @@
     width: 100%;
     max-height: 220px;
     object-fit: cover;
+  }
+  #detailPanel .dp-photo-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text);
+    background: rgba(5, 8, 10, 0.8);
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 3px 7px;
+    border-radius: 3px;
   }
   #detailPanel .dp-photo-credit {
     font-size: 0.55rem;
@@ -396,6 +411,8 @@ const typeCodeTable = new Map(); // ICAO type code (e.g. "SR22") -> human-readab
 const shardCache = new Map();    // db shard key -> parsed contents (or null)
 const hexTypeCache = new Map();  // hex -> human-readable type string or null
 const hexTypePending = new Set();
+const stockPhotoCache = new Map();   // typeLabel -> { thumb, page } or null -- keyed by type, not hex, since many tails share a type
+const stockPhotoPending = new Set();
 
 if (location.protocol === 'http:') {
   // adsb.im asks that http-loaded pages call their API over http too
@@ -1522,6 +1539,48 @@ function showPlaceholderPhoto(photoEl) {
   photoEl.style.display = 'block';
 }
 
+// Most tracked tails (private/GA especially) have no dedicated planespotters
+// photo -- rather than always falling back to the generic silhouette, try a
+// representative photo of the aircraft *type* instead (e.g. any Cessna 172,
+// not necessarily this exact tail). Wikipedia/Wikimedia Commons, the same
+// free/no-key-required class of source as adsb.im's routes, RainViewer's
+// radar, and Overpass's runways elsewhere in this file. Cached per type
+// string (typeLabel), not per hex, since many tails share a type -- one
+// lookup covers every Cessna 172 this receiver ever sees. Clearly labeled
+// "Representative photo" (a badge on the image itself, not just the credit
+// line) so it's never mistaken for a real photo of that specific airframe --
+// unlike the planespotters credit above, this isn't a specific photographer
+// crediting a specific photo of a specific plane, so a "site name + link"
+// level of attribution (same non-clickable-text treatment as planespotters,
+// same kiosk-navigation-safety reasoning) felt like the right proportional
+// effort here, not full Commons per-image license/author boilerplate.
+async function lookupStockPhoto(typeLabel) {
+  if (stockPhotoCache.has(typeLabel)) return stockPhotoCache.get(typeLabel);
+  if (stockPhotoPending.has(typeLabel)) return null;
+  stockPhotoPending.add(typeLabel);
+  let result = null;
+  try {
+    const searchRes = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(typeLabel)}&limit=1&format=json&origin=*`,
+      { cache: 'force-cache' }
+    );
+    const searchData = await searchRes.json();
+    const title = searchData[1] && searchData[1][0];
+    if (title) {
+      const sumRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`, { cache: 'force-cache' });
+      const sumData = await sumRes.json();
+      const thumb = sumData.thumbnail && sumData.thumbnail.source;
+      const page = sumData.content_urls && sumData.content_urls.desktop && sumData.content_urls.desktop.page;
+      if (thumb) result = { thumb, page: page || null };
+    }
+  } catch (e) {
+    // offline or Wikipedia unavailable -- caller falls back to the placeholder
+  }
+  stockPhotoCache.set(typeLabel, result);
+  stockPhotoPending.delete(typeLabel);
+  return result;
+}
+
 // Photo comes from planespotters.net via our own same-origin /photo/<hex>
 // proxy (see deploy/photo-proxy.py) -- their API requires a descriptive
 // custom User-Agent that browser fetch() can never set itself. Shown as
@@ -1531,6 +1590,20 @@ function showPlaceholderPhoto(photoEl) {
 // though a normal browser tab (e.g. via the Funnel URL) would handle it
 // fine. Per planespotters.net's terms of use, attribution (photographer
 // credit + naming the source) is still given either way.
+async function tryStockPhoto(hex, photoEl) {
+  const typeLabel = planes.get(hex)?.typeLabel;
+  if (!typeLabel) { showPlaceholderPhoto(photoEl); return; }
+  const stock = await lookupStockPhoto(typeLabel);
+  if (detailPanelHex !== hex || !detailPanelEl.classList.contains('show')) return; // stale by the time this resolved
+  if (!stock) { showPlaceholderPhoto(photoEl); return; }
+  photoEl.innerHTML = `
+    <div class="dp-photo-badge">Representative photo</div>
+    <img src="${stock.thumb}" alt="${typeLabel} (representative photo, not this specific aircraft)">
+    <div class="dp-photo-credit">${typeLabel} · Wikipedia</div>
+  `;
+  photoEl.style.display = 'block';
+}
+
 async function loadDetailPhoto(hex) {
   const photoEl = detailPanelEl.querySelector('.dp-photo');
   if (!photoEl) return;
@@ -1538,7 +1611,7 @@ async function loadDetailPhoto(hex) {
     const res = await fetch(`/photo/${hex}`, { cache: 'no-store' });
     const data = await res.json();
     if (detailPanelHex !== hex || !detailPanelEl.classList.contains('show')) return; // stale by the time this resolved
-    if (!data.found) { showPlaceholderPhoto(photoEl); return; }
+    if (!data.found) { await tryStockPhoto(hex, photoEl); return; }
     photoEl.innerHTML = `
       <img src="${data.thumbLarge || data.thumb}" alt="${detailPanelEl.querySelector('.dp-cs')?.textContent || 'Aircraft'} photo">
       <div class="dp-photo-credit">© ${data.photographer || 'Unknown'} · planespotters.net</div>
@@ -1546,7 +1619,7 @@ async function loadDetailPhoto(hex) {
     photoEl.style.display = 'block';
   } catch (e) {
     if (detailPanelHex !== hex || !detailPanelEl.classList.contains('show')) return;
-    showPlaceholderPhoto(photoEl);
+    await tryStockPhoto(hex, photoEl);
   }
 }
 
