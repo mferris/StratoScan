@@ -1583,12 +1583,21 @@ async function lookupStockPhoto(typeLabel) {
   stockPhotoPending.add(typeLabel);
   let result = null;
   try {
+    // action=query&list=search (full-text search over article content) --
+    // NOT action=opensearch, which only prefix-matches page *titles* and
+    // badly undershoots real hit rate: e.g. our own typeLabel string
+    // "Bombardier Regional Jet CRJ-900" doesn't share a common prefix with
+    // Wikipedia's actual title "Bombardier CRJ" (opensearch: no match), but
+    // full-text search finds it fine since the words all appear in the
+    // article regardless of order. Confirmed via a real browser fetch (not
+    // curl) that this endpoint honors CORS and doesn't require special
+    // headers for ordinary, human-paced usage.
     const searchRes = await fetch(
-      `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(typeLabel)}&limit=1&format=json&origin=*`,
+      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(typeLabel)}&srlimit=1&format=json&origin=*`,
       { cache: 'force-cache' }
     );
     const searchData = await searchRes.json();
-    const title = searchData[1] && searchData[1][0];
+    const title = searchData.query && searchData.query.search && searchData.query.search[0] && searchData.query.search[0].title;
     if (title) {
       const sumRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`, { cache: 'force-cache' });
       const sumData = await sumRes.json();
@@ -1597,9 +1606,20 @@ async function lookupStockPhoto(typeLabel) {
       if (thumb) result = { thumb, page: page || null };
     }
   } catch (e) {
-    // offline or Wikipedia unavailable -- caller falls back to the placeholder
+    // offline or Wikipedia unavailable this attempt -- caller falls back to
+    // the placeholder, but see below: not cached, so a later reopen retries
   }
-  stockPhotoCache.set(typeLabel, result);
+  // Only successful lookups are cached, deliberately -- caching a null here
+  // would mean one transient failure (a network hiccup, a momentary
+  // Wikipedia rate-limit) permanently shows the placeholder for that whole
+  // aircraft type for the rest of the session, never retried, the exact
+  // failure mode loadRunways() had before its retry fix. Unlike runways
+  // (fetched once automatically at page load), this only ever runs on a
+  // tap, so an occasional repeat lookup for a type that's genuinely not on
+  // Wikipedia is cheap and bounded by how often someone taps that type,
+  // same tradeoff already made for the specific-tail planespotters photo
+  // lookup above, which also isn't cached and re-fetches every open.
+  if (result) stockPhotoCache.set(typeLabel, result);
   stockPhotoPending.delete(typeLabel);
   return result;
 }
