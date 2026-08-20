@@ -274,6 +274,43 @@ shows nothing if planespotters has no photo for that airframe.
   (Chromium will pick it up on next reload/kiosk restart — no service restart
   needed unless the launch flags/URL change.)
 
+## Stock photo hit rate was much lower than it should've been
+Reported as "a lot of planes, especially private ones, can tell me the type
+but can't find a stock picture." Two real bugs, both in `lookupStockPhoto()`:
+
+1. Was using `action=opensearch`, which only **prefix**-matches Wikipedia
+   page *titles* — a much narrower match than it looks like at a glance.
+   `typeLabel` strings like "Bombardier Regional Jet CRJ-900" don't share a
+   leading prefix with Wikipedia's actual title ("Bombardier CRJ"), so
+   opensearch came back empty even though a perfectly good article and photo
+   exist. Switched to `action=query&list=search` (real full-text search over
+   article content, word order doesn't matter) — confirmed via a real
+   browser `fetch()`, not `curl` (see below for why that distinction
+   mattered), that this resolves cases opensearch couldn't.
+2. **The bigger one**: any failed lookup — including a purely transient one,
+   like a momentary network hiccup or rate-limit — was being cached as a
+   permanent `null`. Once a given aircraft *type* failed once, it would
+   never show a photo again for the rest of the session, no matter how many
+   different tails of that type got tapped afterward. This is the exact same
+   failure shape `loadRunways()` had before its retry fix, just showing up
+   as "this type never gets a photo" instead of "runways never load."
+   Fixed by only caching *successful* lookups — a failed one just retries
+   next time that type's panel is opened, which is cheap and naturally
+   bounded by tap frequency (same tradeoff the specific-tail planespotters
+   photo lookup already makes: it isn't cached at all, and re-fetches every
+   single time a panel opens).
+
+Worth knowing for next time: while testing, `curl`-hammering Wikipedia's API
+rapidly with no descriptive User-Agent tripped an actual 429 ("Please set a
+proper user-agent and respect our robot policy") from their edge cache.
+That's a `curl`-testing artifact, not something the real app should hit —
+browser `fetch()` always sends a real browser UA, and lookups only ever fire
+on a human tap, nowhere near hammering pace — but it's worth remembering if
+Wikipedia lookups ever look flaky again: check whether it's a real app-level
+issue before assuming it's the app doing something wrong, since aggressive
+manual testing against the same API can produce misleading transient
+failures that don't reflect real usage.
+
 ## Runways silently disappearing for a whole session (found this session)
 Reported as "I can no longer see the RDU runways." Root cause turned out to
 be unrelated to the map alignment fix above — a real, separate,
