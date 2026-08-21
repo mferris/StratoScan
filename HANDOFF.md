@@ -274,6 +274,47 @@ shows nothing if planespotters has no photo for that airframe.
   (Chromium will pick it up on next reload/kiosk restart — no service restart
   needed unless the launch flags/URL change.)
 
+## Approach-track store moved from localStorage to a shared server-side service
+The RDU approach-track heatmap (below) originally persisted to
+`localStorage` — turns out that's scoped per-browser/per-device, so the
+kiosk's own accumulated picture was never visible to anyone checking the
+page from a separate browser (laptop, phone, the Funnel URL) — each one
+just sees its own empty history. Moved to a small same-origin service
+instead, same shape as `deploy/photo-proxy.py`:
+
+- **`deploy/approach-store.py`** — a tiny stdlib-only HTTP server on
+  `127.0.0.1:8082`. `GET /approaches` returns the accumulated points (JSON
+  array of `[lon, lat]`); `POST /approaches` appends more, capped at
+  `MAX_POINTS = 6000` (oldest evicted first — the client-side cap in
+  `index.html` is now just a courtesy against pathological cases; the
+  server enforces its own copy of the same limit regardless). No auth, no
+  dedup — multiple viewers open at once could each independently report
+  the same real landing, which just over-represents that landing by a
+  point or two, not a correctness problem worth the complexity of fixing.
+- **`deploy/91-flightwall-approach-store.conf`** (lighttpd, `mod_proxy`)
+  routes `/approaches` to it, keeping the browser's `fetch()` same-origin —
+  same pattern as `89-flightwall-photo-proxy.conf`.
+- **`deploy/flightwall-approach-store.service`** — `DynamicUser=yes`,
+  `NoNewPrivileges=yes`, matching `flightwall-photo-proxy.service`, plus
+  `StateDirectory=flightwall-approaches` so `approaches.json` survives
+  restarts/reboots despite the dynamic user (systemd creates/owns
+  `/var/lib/flightwall-approaches` and hands the path to the service via
+  `$STATE_DIRECTORY`).
+- `index.html`: `loadApproachPoints()` (GET, fired non-blocking at startup
+  alongside the type-database discovery) replaces the old synchronous
+  `localStorage.getItem` read; `commitApproachTrack()` now updates the
+  local in-memory view immediately (so *this* session's map stays
+  responsive) and separately fire-and-forgets a POST so the commit is
+  shared with everyone else, current and future.
+
+Verified the whole chain locally: GET/POST/cap/eviction behavior on the
+service directly, persistence across a service restart, and — the actual
+point of this change — that a second, completely independent browser tab
+loading the page sees the exact points a first tab had just committed,
+proving the "shared across viewers" behavior actually works and isn't just
+each browser talking to itself. Deployed and confirmed no regression to the
+sibling `tar1090`/`photo-proxy` endpoints already served through lighttpd.
+
 ## RDU approach-path visualization (two complementary pieces)
 Requested: faint outlines of RDU's approach paths. No good free dataset of
 *real* approach procedures exists (unlike runways, which OSM/Overpass has

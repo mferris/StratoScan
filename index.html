@@ -667,7 +667,8 @@ function flightPhaseColor(p) {
 // ---- RDU approach-path accumulation -------------------------------------
 // Builds a faint picture of RDU's *real* arrival corridors from actually-
 // observed traffic, growing more defined the more landings it sees --
-// persisted in localStorage so it keeps building across kiosk
+// persisted server-side (not localStorage -- see APPROACH_STORE_URL below)
+// so it's shared across every viewer and keeps building across kiosk
 // reboots/reloads, not just within one session. There's no good free
 // dataset of official approach paths to draw from instead (unlike runways,
 // which OSM/Overpass has real geometry for -- FAA approach plates are PDF
@@ -675,17 +676,41 @@ function flightPhaseColor(p) {
 // free-but-approximate stand-in this complements.
 const RDU_APPROACH_RADIUS_NM = 12;       // track candidate points out to this far from RDU
 const RDU_APPROACH_CEILING_FT = RDU_ELEV_FT + 6000; // ignore traffic well above a normal approach profile
-const RDU_APPROACH_CONFIRM_RADIUS_NM = 2.5; // "actually landed" confirmation window
-const RDU_APPROACH_CONFIRM_ALT_FT = RDU_ELEV_FT + 1500; // signal-loss-near-ground confirmation ceiling
-const APPROACH_STORE_KEY = 'flightwall_rdu_approaches_v1';
-const APPROACH_MAX_POINTS = 6000; // bounds localStorage size and heatmap render cost -- oldest points evicted first
+// "Actually landed" confirmation window -- deliberately looser than a
+// well-sited receiver would need. This receiver's antenna isn't mast-
+// mounted yet (see HANDOFF.md), so ADS-B reception at low altitude/close
+// range is likely worse than these numbers would suggest for a mature
+// setup: a real landing's signal can plausibly drop out well before the
+// aircraft is actually this close/low, which would mean confirmApproachOnDrop
+// never fires and a genuine landing's buffered points get silently
+// discarded. Revisit (tighten back up) once the new antenna is mast-mounted
+// and reception characteristics actually improve -- these values are a
+// starting point for current conditions, not a settled calibration.
+const RDU_APPROACH_CONFIRM_RADIUS_NM = 4;
+const RDU_APPROACH_CONFIRM_ALT_FT = RDU_ELEV_FT + 3000;
+// Backed by a small same-origin service (deploy/approach-store.py, proxied
+// at /approaches -- see 91-flightwall-approach-store.conf) instead of
+// localStorage. localStorage is scoped per-browser/per-device, so the
+// kiosk's own accumulated picture would never be visible to anyone
+// checking in from a separate browser (their laptop, phone, the Funnel
+// URL) -- this way every viewer reads and contributes to the same shared,
+// growing picture. Multiple viewers open at once could each independently
+// report the same real landing; harmless, it just over-represents that one
+// landing by a point or two, not wrong.
+const APPROACH_STORE_URL = '/approaches';
+const APPROACH_MAX_POINTS = 6000; // bounds render cost -- oldest points evicted first (server enforces its own copy of this cap too)
 
-let approachPoints = []; // [[lon,lat], ...] confirmed-landing points, persisted across sessions
-try {
-  const stored = JSON.parse(localStorage.getItem(APPROACH_STORE_KEY) || '[]');
-  if (Array.isArray(stored)) approachPoints = stored;
-} catch (e) {
-  // corrupt/unavailable storage -- start fresh; purely cosmetic either way
+let approachPoints = []; // [[lon,lat], ...] confirmed-landing points, shared across viewers
+
+async function loadApproachPoints() {
+  try {
+    const res = await fetch(APPROACH_STORE_URL, { cache: 'no-store' });
+    const data = await res.json();
+    if (Array.isArray(data)) approachPoints = data;
+  } catch (e) {
+    // approach-store unavailable -- starts/stays empty for this session, purely cosmetic either way
+  }
+  if (map && map.getSource('approaches')) map.getSource('approaches').setData(approachPointsGeoJSON());
 }
 
 function approachPointsGeoJSON() {
@@ -696,12 +721,9 @@ function commitApproachTrack(points) {
   if (!points.length) return;
   approachPoints.push(...points);
   if (approachPoints.length > APPROACH_MAX_POINTS) approachPoints.splice(0, approachPoints.length - APPROACH_MAX_POINTS);
-  try {
-    localStorage.setItem(APPROACH_STORE_KEY, JSON.stringify(approachPoints));
-  } catch (e) {
-    // storage full/unavailable -- keeps working in-memory for this session, just won't persist
-  }
   if (map && map.getSource('approaches')) map.getSource('approaches').setData(approachPointsGeoJSON());
+  fetch(APPROACH_STORE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(points) })
+    .catch(e => {}); // approach-store unavailable -- this session's own view still updated above, just won't be shared
 }
 
 // Called once per poll (not per animation frame -- this wants real GPS
@@ -1878,6 +1900,7 @@ stage.addEventListener('pointerup', (e) => {
 
 async function start() {
   discoverDatabaseFolder().then(loadTypeCodeTable); // non-blocking; type labels fill in once ready
+  loadApproachPoints(); // non-blocking; heatmap fills in once ready (or once initApproachLayer adds the source, whichever comes second)
   await loadHome();
   if (!home) {
     // keep retrying receiver info in the background until it succeeds
