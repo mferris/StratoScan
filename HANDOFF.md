@@ -274,6 +274,80 @@ shows nothing if planespotters has no photo for that airframe.
   (Chromium will pick it up on next reload/kiosk restart — no service restart
   needed unless the launch flags/URL change.)
 
+## RDU approach-path visualization (two complementary pieces)
+Requested: faint outlines of RDU's approach paths. No good free dataset of
+*real* approach procedures exists (unlike runways, which OSM/Overpass has
+real geometry for -- FAA approach plates are PDF charts, not simple line
+data), so this ended up as two complementary pieces:
+
+1. **`extendedApproachLines()`** (in `loadRunways()`) -- an immediate,
+   free approximation: extends each real runway's own centerline outward
+   (`RUNWAY_EXTENSION_NM = 8`, roughly a typical ILS/RNAV final segment
+   length) using a new `destinationPoint()` helper (the geodesic inverse of
+   `haversineBearingRange()` -- given a start point + bearing + distance,
+   find the destination). Real final approaches always align with the
+   runway heading for the last several miles regardless of which specific
+   procedure guides them there, so this is a reasonable stand-in with zero
+   new data dependency. Styled faint/dashed (`line-opacity: 0.22`,
+   `line-dasharray`) and added to the map *before* the real runway/taxiway
+   layers so the crisp real pavement paints on top of it, not competing.
+
+2. **Real accumulated approach tracks** (`updateApproachTracking()`,
+   `confirmApproachOnDrop()`, `commitApproachTrack()`) -- the more
+   interesting piece: builds a picture from aircraft *actually observed*
+   landing at RDU, growing more defined the more landings it sees.
+   Candidate points get buffered per-plane (`pl.approachPoints`) while a
+   plane is within `RDU_APPROACH_RADIUS_NM` (12) and below
+   `RDU_APPROACH_CEILING_FT` (field elevation + 6000ft) -- deliberately
+   loose criteria, since bad data is filtered at *confirmation*, not
+   collection. A buffer only gets committed to the persistent store if the
+   plane is later confirmed to have actually landed: either it reaches
+   `'ground'` status within `RDU_APPROACH_CONFIRM_RADIUS_NM` (2.5nm), or --
+   since ADS-B reception commonly drops out right at touchdown, especially
+   before a receiving antenna is mast-mounted -- it disappears (coasts out
+   past `COAST_TOTAL_MS`) close to the field at low altitude
+   (`RDU_APPROACH_CONFIRM_ALT_FT`, field elevation + 1500ft). If instead a
+   plane climbs back out or flies away without either signal, its buffer is
+   discarded -- overflights and go-arounds don't shape the picture, only
+   real landings do. Verified all of this directly (buffered-then-committed,
+   buffered-then-discarded-on-go-around, and the signal-loss-near-ground
+   path) by driving the functions with synthetic lat/lon/alt sequences.
+
+   Persisted to `localStorage` (`flightwall_rdu_approaches_v1`, capped at
+   `APPROACH_MAX_POINTS = 6000`, oldest evicted first) so it keeps building
+   across kiosk reboots/reloads, not just within one session -- confirmed
+   this survives an actual page reload. Rendered as a MapLibre `heatmap`
+   layer (`approaches-heat`), tuned low-intensity/faint on purpose, added
+   at `map.on('load', ...)` time alongside `loadRunways`/`recolorLabels`/
+   `refreshStorms` -- since it has no network dependency (just reads
+   localStorage), it always finishes before `loadRunways`'s Overpass
+   round-trip does, so the real runway lines naturally paint on top of it
+   without needing explicit layer ordering.
+
+   Starts empty on a fresh install by design -- there's no way to
+   backfill history, only real traffic from here forward builds it up.
+
+**Testing note**: hit real trouble getting a clean live screenshot of this
+in the sandbox's browser preview this session -- MapLibre's `'load'` event
+never fired no matter what (confirmed via a throwaway map instance with a
+hardcoded zoom, ruling out anything in our own code; also confirmed
+OpenFreeMap's style endpoint itself was reachable and fast). Looked like a
+stuck WebGL/rendering-context issue specific to that browser-pane process,
+possibly from creating many map instances across today's testing without
+disposing them -- survived closing tabs and even a full preview-process
+restart, so treat it as a known rough edge of long testing sessions in that
+environment, not a real bug. Fell back to verifying via direct function
+calls (thorough) and a real `grim` screenshot of the actual kiosk (confirmed
+the map/runway rendering pipeline itself is unaffected and healthy).
+
+**Unrelated but important, found while checking the kiosk**: the round
+panel's physical HDMI connection was down at the time
+(`/sys/class/drm/card1-HDMI-A-1/status: disconnected`, compositor fell back
+to its virtual/no-op output, same as before the panel was ever connected)
+-- a hardware/cable issue, not caused by this deploy. Worth a physical check
+next time someone's at the Pi, especially since the new FlightAware antenna
+was recently connected and cables may have been disturbed.
+
 ## Stock photo hit rate was much lower than it should've been
 Reported as "a lot of planes, especially private ones, can tell me the type
 but can't find a stock picture." Two real bugs, both in `lookupStockPhoto()`:
