@@ -1,0 +1,18 @@
+[Unit]
+Description=FlightWall RDU approach-track shared store
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/flightwall/approach-store.py
+Restart=always
+RestartSec=5
+# 127.0.0.1-only listener; no elevated privileges needed
+DynamicUser=yes
+NoNewPrivileges=yes
+# Persists approaches.json across restarts/reboots despite DynamicUser --
+# systemd creates/owns /var/lib/flightwall-approaches and exposes it to the
+# service via $STATE_DIRECTORY.
+StateDirectory=flightwall-approaches
+
+[Install]
+WantedBy=default.target
