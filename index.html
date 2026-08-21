@@ -622,6 +622,26 @@ function haversineBearingRange(lat1, lon1, lat2, lon2) {
   return { bearing, range };
 }
 
+// The inverse of haversineBearingRange: given a start point plus a bearing
+// and distance, find the destination point (standard great-circle "direct"
+// geodesic formula). Used to project a line beyond a runway's real pavement
+// end, approximating its final approach corridor -- see loadRunways().
+function destinationPoint(lat, lon, bearingDeg, distanceNm) {
+  const R_NM = 3440.065;
+  const toRad = d => d * Math.PI / 180;
+  const bearing = toRad(bearingDeg);
+  const phi1 = toRad(lat), lambda1 = toRad(lon);
+  const delta = distanceNm / R_NM;
+
+  const phi2 = Math.asin(Math.sin(phi1) * Math.cos(delta) + Math.cos(phi1) * Math.sin(delta) * Math.cos(bearing));
+  const lambda2 = lambda1 + Math.atan2(
+    Math.sin(bearing) * Math.sin(delta) * Math.cos(phi1),
+    Math.cos(delta) - Math.sin(phi1) * Math.sin(phi2)
+  );
+
+  return [lambda2 * 180 / Math.PI, phi2 * 180 / Math.PI]; // [lon, lat] -- GeoJSON coordinate order
+}
+
 // Aircraft in the immediate vicinity of RDU's runways, climbing or
 // descending, get called out with a distinct color regardless of their
 // altitude band -- this is deliberately narrow (tight radius + real vertical
@@ -642,6 +662,90 @@ function flightPhaseColor(p) {
   if (p.vrate <= -RDU_VRATE_MIN) return COLOR_LANDING;
   if (p.vrate >= RDU_VRATE_MIN) return COLOR_TAKEOFF;
   return null;
+}
+
+// ---- RDU approach-path accumulation -------------------------------------
+// Builds a faint picture of RDU's *real* arrival corridors from actually-
+// observed traffic, growing more defined the more landings it sees --
+// persisted in localStorage so it keeps building across kiosk
+// reboots/reloads, not just within one session. There's no good free
+// dataset of official approach paths to draw from instead (unlike runways,
+// which OSM/Overpass has real geometry for -- FAA approach plates are PDF
+// charts, not simple line data); see extendedApproachLines() above for the
+// free-but-approximate stand-in this complements.
+const RDU_APPROACH_RADIUS_NM = 12;       // track candidate points out to this far from RDU
+const RDU_APPROACH_CEILING_FT = RDU_ELEV_FT + 6000; // ignore traffic well above a normal approach profile
+const RDU_APPROACH_CONFIRM_RADIUS_NM = 2.5; // "actually landed" confirmation window
+const RDU_APPROACH_CONFIRM_ALT_FT = RDU_ELEV_FT + 1500; // signal-loss-near-ground confirmation ceiling
+const APPROACH_STORE_KEY = 'flightwall_rdu_approaches_v1';
+const APPROACH_MAX_POINTS = 6000; // bounds localStorage size and heatmap render cost -- oldest points evicted first
+
+let approachPoints = []; // [[lon,lat], ...] confirmed-landing points, persisted across sessions
+try {
+  const stored = JSON.parse(localStorage.getItem(APPROACH_STORE_KEY) || '[]');
+  if (Array.isArray(stored)) approachPoints = stored;
+} catch (e) {
+  // corrupt/unavailable storage -- start fresh; purely cosmetic either way
+}
+
+function approachPointsGeoJSON() {
+  return { type: 'FeatureCollection', features: approachPoints.map(pt => ({ type: 'Feature', geometry: { type: 'Point', coordinates: pt } })) };
+}
+
+function commitApproachTrack(points) {
+  if (!points.length) return;
+  approachPoints.push(...points);
+  if (approachPoints.length > APPROACH_MAX_POINTS) approachPoints.splice(0, approachPoints.length - APPROACH_MAX_POINTS);
+  try {
+    localStorage.setItem(APPROACH_STORE_KEY, JSON.stringify(approachPoints));
+  } catch (e) {
+    // storage full/unavailable -- keeps working in-memory for this session, just won't persist
+  }
+  if (map && map.getSource('approaches')) map.getSource('approaches').setData(approachPointsGeoJSON());
+}
+
+// Called once per poll (not per animation frame -- this wants real GPS
+// fixes, not smoothed/eased blip positions) for each tracked aircraft.
+// Buffers candidate points on `pl` while a plane is plausibly on approach
+// to RDU (within radius, below a normal-approach altitude ceiling), and
+// commits that buffer to the persistent store once the plane is confirmed
+// to have actually landed -- either it reaches 'ground' status close in, or
+// (since ADS-B reception commonly drops out right at touchdown, especially
+// before a receiving antenna is mast-mounted) it disappears close to the
+// field at low altitude. If instead it climbs back out or flies back away
+// without either signal, the buffer is discarded -- overflights and
+// go-arounds shouldn't shape the picture, only real landings.
+function updateApproachTracking(pl, lat, lon, alt) {
+  if (typeof lat !== 'number' || typeof lon !== 'number') return;
+  if (!pl.approachPoints) pl.approachPoints = [];
+
+  const rduRange = haversineBearingRange(RDU_LAT, RDU_LON, lat, lon).range;
+
+  if (alt === 'ground' && rduRange <= RDU_APPROACH_CONFIRM_RADIUS_NM) {
+    commitApproachTrack(pl.approachPoints);
+    pl.approachPoints = [];
+    return;
+  }
+
+  const withinRadius = rduRange <= RDU_APPROACH_RADIUS_NM;
+  const belowCeiling = typeof alt === 'number' && alt <= RDU_APPROACH_CEILING_FT;
+  if (withinRadius && belowCeiling) {
+    pl.approachPoints.push([lon, lat]);
+    if (pl.approachPoints.length > 400) pl.approachPoints.shift(); // bound per-plane buffer
+  } else if (pl.approachPoints.length) {
+    pl.approachPoints = []; // climbed out or flew away without landing -- not a real approach
+  }
+}
+
+// Called when a coasted-out plane is finally dropped from tracking (see
+// applyUpdate) -- catches the common case where ADS-B signal is lost right
+// at/just before touchdown rather than readsb ever reporting 'ground'.
+function confirmApproachOnDrop(pl) {
+  if (!pl.approachPoints || !pl.approachPoints.length) return;
+  if (typeof pl.alt !== 'number' || pl.alt > RDU_APPROACH_CONFIRM_ALT_FT) return;
+  if (pl.lat == null || pl.lon == null) return;
+  if (haversineBearingRange(RDU_LAT, RDU_LON, pl.lat, pl.lon).range > RDU_APPROACH_CONFIRM_RADIUS_NM) return;
+  commitApproachTrack(pl.approachPoints);
 }
 
 function formatLoc() {
@@ -700,6 +804,32 @@ function initMap() {
   map.on('load', loadRunways);
   map.on('load', recolorLabels);
   map.on('load', refreshStorms);
+  map.on('load', initApproachLayer);
+}
+
+// Registered before loadRunways() resolves (that one waits on a network
+// round-trip to Overpass; this doesn't, so it always finishes first),
+// meaning the real runway/taxiway layers loadRunways() adds later paint on
+// top of this automatically -- no explicit layer ordering needed.
+function initApproachLayer() {
+  map.addSource('approaches', { type: 'geojson', data: approachPointsGeoJSON() });
+  map.addLayer({
+    id: 'approaches-heat',
+    type: 'heatmap',
+    source: 'approaches',
+    paint: {
+      'heatmap-weight': 0.35,
+      'heatmap-intensity': 0.6,
+      'heatmap-radius': 6,
+      'heatmap-opacity': 0.45,
+      'heatmap-color': [
+        'interpolate', ['linear'], ['heatmap-density'],
+        0, 'rgba(0,0,0,0)',
+        0.3, 'rgba(255,176,32,0.25)',
+        1, 'rgba(255,176,32,0.9)',
+      ],
+    },
+  });
 }
 
 // "liberty" is styled for a light background (black text, white halo) —
@@ -754,6 +884,38 @@ function overpassToGeoJSON(elements) {
   return { type: 'FeatureCollection', features };
 }
 
+// A rough, immediate approximation of final approach corridors, derived
+// entirely from runway geometry we already have -- no new data source
+// needed. Real approach procedures curve and vector well out from the
+// field, but the final several miles always line up with the runway's own
+// heading (that's what "final approach" means), so extending each runway's
+// centerline outward a representative distance is a reasonable placeholder.
+// This is deliberately just an approximation, styled faintly/dashed to read
+// as one -- see RDU_APPROACH_* below for the real thing, built from
+// actually-observed landings over time.
+const RUNWAY_EXTENSION_NM = 8; // roughly a typical ILS/RNAV final approach segment length
+
+function extendedApproachLines(runwayGeojson) {
+  const features = [];
+  for (const f of runwayGeojson.features) {
+    if (f.properties.aeroway !== 'runway') continue;
+    const coords = f.geometry.coordinates;
+    if (coords.length < 2) continue;
+    const [lon1, lat1] = coords[0];
+    const [lon2, lat2] = coords[coords.length - 1];
+    const bearingFwd = haversineBearingRange(lat1, lon1, lat2, lon2).bearing;
+    const bearingRev = (bearingFwd + 180) % 360;
+    const ext1 = destinationPoint(lat1, lon1, bearingRev, RUNWAY_EXTENSION_NM); // beyond threshold 1
+    const ext2 = destinationPoint(lat2, lon2, bearingFwd, RUNWAY_EXTENSION_NM); // beyond threshold 2
+    features.push({
+      type: 'Feature',
+      properties: { ref: f.properties.ref },
+      geometry: { type: 'LineString', coordinates: [ext1, [lon1, lat1], [lon2, lat2], ext2] },
+    });
+  }
+  return { type: 'FeatureCollection', features };
+}
+
 async function loadRunways(attempt = 1) {
   const bb = rangeBBox(home.lat, home.lon, RANGE_NM);
   const query = `[out:json][timeout:25];(way["aeroway"="runway"](${bb.south},${bb.west},${bb.north},${bb.east});way["aeroway"="taxiway"](${bb.south},${bb.west},${bb.north},${bb.east}););out body;>;out skel qt;`;
@@ -784,6 +946,16 @@ async function loadRunways(attempt = 1) {
   if (geojson.features.length === 0) { retry(); return; }
 
   map.addSource('runways', { type: 'geojson', data: geojson });
+  map.addSource('runway-extensions', { type: 'geojson', data: extendedApproachLines(geojson) });
+  // Added first so the real runway/taxiway pavement (added next, below)
+  // paints on top of it -- the approximation reads as a faint hint
+  // underneath the crisp, real geometry, not competing with it.
+  map.addLayer({
+    id: 'runway-extensions',
+    type: 'line',
+    source: 'runway-extensions',
+    paint: { 'line-color': '#c7d0d3', 'line-width': 1, 'line-opacity': 0.22, 'line-dasharray': [2, 3] },
+  });
   map.addLayer({
     id: 'runways-taxiway',
     type: 'line',
@@ -1129,6 +1301,8 @@ function applyUpdate(list) {
     if (n.airlineIcao) {
       queueRouteLookup(n.cs, n.lat ?? home?.lat ?? 0, n.lon ?? home?.lon ?? 0);
     }
+
+    updateApproachTracking(planes.get(n.hex), n.lat, n.lon, n.alt);
   }
 
   // aircraft readsb no longer reports aren't dropped immediately -- they
@@ -1136,7 +1310,11 @@ function applyUpdate(list) {
   // out in drawPlanes, and are only removed once that grace period elapses
   for (const hex of [...planes.keys()]) {
     if (seen.has(hex)) continue;
-    if (now - planes.get(hex).lastSeen > COAST_TOTAL_MS) planes.delete(hex);
+    const pl = planes.get(hex);
+    if (now - pl.lastSeen > COAST_TOTAL_MS) {
+      confirmApproachOnDrop(pl); // catches signal loss right at touchdown, before readsb ever reports 'ground'
+      planes.delete(hex);
+    }
   }
 }
 
