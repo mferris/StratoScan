@@ -6,7 +6,11 @@ import Foundation
 /// Funnel is enabled on the same hostname. Override in Settings for a
 /// direct LAN address (e.g. http://<radar>) when on home WiFi.
 enum APIConfig {
-    private static let key = "flightwall.baseURL"
+    private static let key = "flightradar.baseURL"
+    // Real Tailscale Funnel hostname, derived from the Pi's actual system
+    // hostname ("flightwall") -- NOT a leftover from the FlightWall ->
+    // FlightRadar rename. Changing this string wouldn't rename anything;
+    // it would just point the app at a URL that doesn't exist.
     static let defaultBaseURL = "https://[funnel-hostname-redacted]"
 
     static var baseURL: String {

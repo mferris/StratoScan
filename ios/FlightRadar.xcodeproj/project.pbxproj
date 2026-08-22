@@ -1,0 +1,451 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		11062B215B7FC42D609779EF /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33AE61C77F5AA2E0EA904000 /* AircraftFeedClient.swift */; };
+		21E66BBFFBB370F65B0EE6D3 /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F0A587F7FF0A8255CEC7FC2 /* Geo.swift */; };
+		28A50A01FE2C1F1F0D43140D /* MapBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD1218B9819667BF7A9CBC13 /* MapBackgroundView.swift */; };
+		3A64EAE9030C30D6039CF671 /* RunwayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 241D622598D75146411E2CA3 /* RunwayClient.swift */; };
+		3D23A055C22D2C953504C8E7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC31DF0343CFFCD95E1DEA29 /* SettingsView.swift */; };
+		456128D7C8313A68D428E3D7 /* FlightRadarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DC7B1062C62345E4C42AC58 /* FlightRadarApp.swift */; };
+		5A04B5C4E00F837FCA754367 /* AirlineTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 395F2F72B846221140C2745B /* AirlineTable.swift */; };
+		5FD2E0DA40C160A1D5D3F40F /* RadarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1834CB50B363758DBDEC16FE /* RadarView.swift */; };
+		7D18216CA2B3C2970ABF8857 /* PlaneState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 538C5A5F38754C364C340A32 /* PlaneState.swift */; };
+		8D8C8D540D03F0E6FA5DF3BD /* AircraftTypeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BEFB58A00F45A2B7E63B7D /* AircraftTypeClient.swift */; };
+		90804E9A33181B4FA3537DF1 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113FA5CB52A7BBE22EFA946C /* ContentView.swift */; };
+		9367B851FFD5D90B37E01B4F /* Aircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06001F0C11800210A85A6FC5 /* Aircraft.swift */; };
+		9A80C0601B225E52A8EDBF75 /* NormalizedAircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = E759A06B26CD0B3076045993 /* NormalizedAircraft.swift */; };
+		ACC923BD95EE0CF92208B5C4 /* RouteLookupClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75ECD914F5D2C3A303F5F6EE /* RouteLookupClient.swift */; };
+		C1D59F1A8CC8252DB758C4DA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2CDBA50D9ACC3A0BB73EFDF5 /* Assets.xcassets */; };
+		DD3D34D35043061FD9A82B8C /* RadarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E0900CC3C63327F2B15C53 /* RadarViewModel.swift */; };
+		E33EC55CA7C827841007D045 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 913C0DDC3C8AB26790C0F6E1 /* MapLibre */; };
+		E9FF0D9937901B81D0B378E5 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471AE44E218A51331B1DF1D5 /* APIConfig.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		06001F0C11800210A85A6FC5 /* Aircraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Aircraft.swift; sourceTree = "<group>"; };
+		09E0900CC3C63327F2B15C53 /* RadarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarViewModel.swift; sourceTree = "<group>"; };
+		113FA5CB52A7BBE22EFA946C /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		1834CB50B363758DBDEC16FE /* RadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarView.swift; sourceTree = "<group>"; };
+		2285D794ABB1907DE24EAE3A /* FlightRadar.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FlightRadar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		241D622598D75146411E2CA3 /* RunwayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayClient.swift; sourceTree = "<group>"; };
+		26F556FB0F3A29522DD750D4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		2CDBA50D9ACC3A0BB73EFDF5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		33AE61C77F5AA2E0EA904000 /* AircraftFeedClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftFeedClient.swift; sourceTree = "<group>"; };
+		395F2F72B846221140C2745B /* AirlineTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirlineTable.swift; sourceTree = "<group>"; };
+		471AE44E218A51331B1DF1D5 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
+		538C5A5F38754C364C340A32 /* PlaneState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaneState.swift; sourceTree = "<group>"; };
+		5DC7B1062C62345E4C42AC58 /* FlightRadarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightRadarApp.swift; sourceTree = "<group>"; };
+		5F0A587F7FF0A8255CEC7FC2 /* Geo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geo.swift; sourceTree = "<group>"; };
+		75ECD914F5D2C3A303F5F6EE /* RouteLookupClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteLookupClient.swift; sourceTree = "<group>"; };
+		AD1218B9819667BF7A9CBC13 /* MapBackgroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapBackgroundView.swift; sourceTree = "<group>"; };
+		B8BEFB58A00F45A2B7E63B7D /* AircraftTypeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftTypeClient.swift; sourceTree = "<group>"; };
+		CC31DF0343CFFCD95E1DEA29 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		E759A06B26CD0B3076045993 /* NormalizedAircraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NormalizedAircraft.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		88E4953ED19BDF17694A3512 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E33EC55CA7C827841007D045 /* MapLibre in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1D97A07D77AAAA7142B5E893 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				06001F0C11800210A85A6FC5 /* Aircraft.swift */,
+				395F2F72B846221140C2745B /* AirlineTable.swift */,
+				E759A06B26CD0B3076045993 /* NormalizedAircraft.swift */,
+				538C5A5F38754C364C340A32 /* PlaneState.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		23E32E9E9CF2A29208586A98 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				09E0900CC3C63327F2B15C53 /* RadarViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		2B69EC024842DC06B7A17F3E /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				33AE61C77F5AA2E0EA904000 /* AircraftFeedClient.swift */,
+				B8BEFB58A00F45A2B7E63B7D /* AircraftTypeClient.swift */,
+				471AE44E218A51331B1DF1D5 /* APIConfig.swift */,
+				75ECD914F5D2C3A303F5F6EE /* RouteLookupClient.swift */,
+				241D622598D75146411E2CA3 /* RunwayClient.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		2D1C8797E4C98B2AAA7046EB /* Util */ = {
+			isa = PBXGroup;
+			children = (
+				5F0A587F7FF0A8255CEC7FC2 /* Geo.swift */,
+			);
+			path = Util;
+			sourceTree = "<group>";
+		};
+		6A2D1EF63F15B5F73DD6AD2C /* App */ = {
+			isa = PBXGroup;
+			children = (
+				2CDBA50D9ACC3A0BB73EFDF5 /* Assets.xcassets */,
+				5DC7B1062C62345E4C42AC58 /* FlightRadarApp.swift */,
+				26F556FB0F3A29522DD750D4 /* Info.plist */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		79E62DAD714502750E2B7BA1 = {
+			isa = PBXGroup;
+			children = (
+				A39A65EDC1D0AC61D54D5DE2 /* FlightRadar */,
+				B6FACC3C17C5CDB2473465E7 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A39A65EDC1D0AC61D54D5DE2 /* FlightRadar */ = {
+			isa = PBXGroup;
+			children = (
+				6A2D1EF63F15B5F73DD6AD2C /* App */,
+				1D97A07D77AAAA7142B5E893 /* Models */,
+				2B69EC024842DC06B7A17F3E /* Networking */,
+				2D1C8797E4C98B2AAA7046EB /* Util */,
+				23E32E9E9CF2A29208586A98 /* ViewModels */,
+				D1DB9F599B173F6AC8B84E54 /* Views */,
+			);
+			path = FlightRadar;
+			sourceTree = "<group>";
+		};
+		B6FACC3C17C5CDB2473465E7 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				2285D794ABB1907DE24EAE3A /* FlightRadar.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D1DB9F599B173F6AC8B84E54 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				113FA5CB52A7BBE22EFA946C /* ContentView.swift */,
+				AD1218B9819667BF7A9CBC13 /* MapBackgroundView.swift */,
+				1834CB50B363758DBDEC16FE /* RadarView.swift */,
+				CC31DF0343CFFCD95E1DEA29 /* SettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4D072EC54026FC8A6AE2AEE7 /* FlightRadar */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 841B088BAFA20C83C6B4CE6B /* Build configuration list for PBXNativeTarget "FlightRadar" */;
+			buildPhases = (
+				38E1D51365F1C094C868D476 /* Sources */,
+				2FC8999223E4020C5BDA573B /* Resources */,
+				88E4953ED19BDF17694A3512 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FlightRadar;
+			packageProductDependencies = (
+				913C0DDC3C8AB26790C0F6E1 /* MapLibre */,
+			);
+			productName = FlightRadar;
+			productReference = 2285D794ABB1907DE24EAE3A /* FlightRadar.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		22A8F44FEB0FED6D89D94466 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 35BB58F3242CB769E0AFE912 /* Build configuration list for PBXProject "FlightRadar" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 79E62DAD714502750E2B7BA1;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				765E1DA96A5875A2B370F36D /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B6FACC3C17C5CDB2473465E7 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4D072EC54026FC8A6AE2AEE7 /* FlightRadar */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		2FC8999223E4020C5BDA573B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C1D59F1A8CC8252DB758C4DA /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		38E1D51365F1C094C868D476 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9FF0D9937901B81D0B378E5 /* APIConfig.swift in Sources */,
+				9367B851FFD5D90B37E01B4F /* Aircraft.swift in Sources */,
+				11062B215B7FC42D609779EF /* AircraftFeedClient.swift in Sources */,
+				8D8C8D540D03F0E6FA5DF3BD /* AircraftTypeClient.swift in Sources */,
+				5A04B5C4E00F837FCA754367 /* AirlineTable.swift in Sources */,
+				90804E9A33181B4FA3537DF1 /* ContentView.swift in Sources */,
+				456128D7C8313A68D428E3D7 /* FlightRadarApp.swift in Sources */,
+				21E66BBFFBB370F65B0EE6D3 /* Geo.swift in Sources */,
+				28A50A01FE2C1F1F0D43140D /* MapBackgroundView.swift in Sources */,
+				9A80C0601B225E52A8EDBF75 /* NormalizedAircraft.swift in Sources */,
+				7D18216CA2B3C2970ABF8857 /* PlaneState.swift in Sources */,
+				5FD2E0DA40C160A1D5D3F40F /* RadarView.swift in Sources */,
+				DD3D34D35043061FD9A82B8C /* RadarViewModel.swift in Sources */,
+				ACC923BD95EE0CF92208B5C4 /* RouteLookupClient.swift in Sources */,
+				3A64EAE9030C30D6039CF671 /* RunwayClient.swift in Sources */,
+				3D23A055C22D2C953504C8E7 /* SettingsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		31E4C11197E8471656F4EC59 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = FlightRadar/App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.flightradar.FlightRadar;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.10;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B4731E7C8CAAD168136B602D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		C1521A5B638FDCD3BC7CFE01 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		CD0A75DFEF129A4B9CB5C3D3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = FlightRadar/App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.flightradar.FlightRadar;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.10;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		35BB58F3242CB769E0AFE912 /* Build configuration list for PBXProject "FlightRadar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C1521A5B638FDCD3BC7CFE01 /* Debug */,
+				B4731E7C8CAAD168136B602D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		841B088BAFA20C83C6B4CE6B /* Build configuration list for PBXNativeTarget "FlightRadar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				31E4C11197E8471656F4EC59 /* Debug */,
+				CD0A75DFEF129A4B9CB5C3D3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		765E1DA96A5875A2B370F36D /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/maplibre/maplibre-gl-native-distribution";
+			requirement = {
+				kind = exactVersion;
+				version = 6.28.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		913C0DDC3C8AB26790C0F6E1 /* MapLibre */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 765E1DA96A5875A2B370F36D /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */;
+			productName = MapLibre;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 22A8F44FEB0FED6D89D94466 /* Project object */;
+}
