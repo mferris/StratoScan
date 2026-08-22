@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>FlightWall</title>
+<title>FlightRadar</title>
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
@@ -309,7 +309,7 @@ const DATA_URL = '/tar1090/data/aircraft.json';
 const RECEIVER_URL = '/tar1090/data/receiver.json';
 // Overrides the receiver's actual configured position for DISPLAY purposes
 // only (readsb keeps using its own real antenna position internally for
-// signal-range/MLAT math — this only changes what FlightWall centers on).
+// signal-range/MLAT math — this only changes what FlightRadar centers on).
 // Set to null to go back to auto-detecting the receiver's real position
 // from receiver.json. When set, bearing/range are always computed via
 // haversine from raw lat/lon rather than trusting readsb's r_dst/r_dir,
@@ -689,7 +689,7 @@ const RDU_APPROACH_CEILING_FT = RDU_ELEV_FT + 6000; // ignore traffic well above
 const RDU_APPROACH_CONFIRM_RADIUS_NM = 4;
 const RDU_APPROACH_CONFIRM_ALT_FT = RDU_ELEV_FT + 3000;
 // Backed by a small same-origin service (deploy/approach-store.py, proxied
-// at /approaches -- see 91-flightwall-approach-store.conf) instead of
+// at /approaches -- see 91-flightradar-approach-store.conf) instead of
 // localStorage. localStorage is scoped per-browser/per-device, so the
 // kiosk's own accumulated picture would never be visible to anyone
 // checking in from a separate browser (their laptop, phone, the Funnel
