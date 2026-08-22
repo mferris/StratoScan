@@ -12,14 +12,24 @@ It is now **deployed and running on the Pi** (`[hostname-redacted]`, `<radar>`,
 the login user) as a Chromium kiosk launched by systemd, verified to survive a
 full reboot with no manual intervention.
 
-**Naming note**: the project was renamed FlightWall → FlightRadar (repo,
-app title, bundle ID, deploy service/file names all updated), but the Pi's
-actual system hostname is still `[hostname-redacted]` and the Tailscale Funnel URL
-below is still `[funnel-hostname-redacted]` — those are real infrastructure
-identifiers, not just branding, and changing them would mean re-registering
-Tailscale and likely getting a new Funnel URL (breaking any existing
-bookmarks/links). Left alone deliberately; revisit only if that's ever
-specifically wanted.
+**Naming note**: the project was renamed FlightWall → FlightRadar -- repo,
+app title, bundle ID, deploy service/file names, and the live services
+actually running on the Pi are all updated (`flightradar-kiosk.service`,
+`flightradar-photo-proxy.service`, `flightradar-approach-store.service`,
+`/opt/flightradar/`, lighttpd confs `89`/`91-flightradar-*.conf`). The
+approach-track store's accumulated data (4,788 points at migration time)
+was preserved across the cutover: fetched via the old service's own GET
+`/approaches` before touching anything, POSTed into the new service after
+it was up, verified the count matched on both sides before deleting the
+old service/files. The **Pi's actual system hostname is still
+`[hostname-redacted]`**, and the Tailscale Funnel URL below is still
+`[funnel-hostname-redacted]` — those are real infrastructure identifiers,
+not just branding, and changing them would mean re-registering Tailscale
+and likely getting a new Funnel URL (breaking any existing bookmarks/
+links). Left alone deliberately; revisit only if that's ever specifically
+wanted. The iOS app's `APIConfig.defaultBaseURL` correctly still points at
+that same real hostname for the same reason -- not a leftover from the
+rename, intentional.
 
 ## Display center override
 `index.html` has a `HOME_OVERRIDE` constant that, when set, centers the
