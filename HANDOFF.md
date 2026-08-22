@@ -1,4 +1,4 @@
-# FlightWall — Handoff Notes
+# FlightRadar — Handoff Notes
 
 ## Status
 `index.html` is a matured version of `docs/original-prototype.html` that renders
@@ -11,6 +11,15 @@ and clean recovery on reconnect.
 It is now **deployed and running on the Pi** (`[hostname-redacted]`, `<radar>`,
 the login user) as a Chromium kiosk launched by systemd, verified to survive a
 full reboot with no manual intervention.
+
+**Naming note**: the project was renamed FlightWall → FlightRadar (repo,
+app title, bundle ID, deploy service/file names all updated), but the Pi's
+actual system hostname is still `[hostname-redacted]` and the Tailscale Funnel URL
+below is still `[funnel-hostname-redacted]` — those are real infrastructure
+identifiers, not just branding, and changing them would mean re-registering
+Tailscale and likely getting a new Funnel URL (breaking any existing
+bookmarks/links). Left alone deliberately; revisit only if that's ever
+specifically wanted.
 
 ## Display center override
 `index.html` has a `HOME_OVERRIDE` constant that, when set, centers the
@@ -32,7 +41,7 @@ readsb's precomputed `r_dst`/`r_dir` — those are relative to the *real*
 antenna position, not an override point, and would silently produce a
 geometrically-inconsistent display if trusted while overridden. (Verified by
 hand while it was active: an aircraft readsb reported `r_dst: 3.77` for
-showed up correctly as `14.53` in FlightWall — its true haversine range from
+showed up correctly as `14.53` in FlightRadar — its true haversine range from
 the override point.) Also worth knowing: a override point far from the real
 antenna shifts the visible 40nm disc so it only partially overlaps the
 antenna's actual reception area.
@@ -64,7 +73,7 @@ Pi. Two things worth knowing:
   in `/etc/default/readsb`, original backed up alongside as
   `readsb.bak`). They used to listen on `0.0.0.0` — reachable from the whole
   LAN — but nothing on the network was actually connected to them, and
-  FlightWall/tar1090 don't use them at all (they read the JSON files readsb
+  FlightRadar/tar1090 don't use them at all (they read the JSON files readsb
   writes to disk, not these TCP ports). If you ever want to feed a live raw
   feed to another device on your LAN (Virtual Radar Server, a second
   receiver dashboard, etc.), you'll need to revert this
@@ -211,9 +220,9 @@ stakes (tapping again elsewhere and retrying works fine).
 Python service on the Pi, proxying planespotters.net's photo API — their API
 requires a descriptive custom `User-Agent` naming the app, which browser
 `fetch()` can never set itself (browsers own that header exclusively), so
-this has to happen server-side. `deploy/89-flightwall-photo-proxy.conf`
+this has to happen server-side. `deploy/89-flightradar-photo-proxy.conf`
 (lighttpd, `mod_proxy`) routes `/photo/<hex>` to it so the browser's fetch
-stays same-origin. Runs as `flightwall-photo-proxy.service`
+stays same-origin. Runs as `flightradar-photo-proxy.service`
 (`DynamicUser=yes`, no privileges needed), in-memory cache per hex, 24h TTL.
 Attribution (required by planespotters.net's terms — photographer credit +
 naming the source) is shown as **plain non-clickable text**, not a real
@@ -251,8 +260,8 @@ shows nothing if planespotters has no photo for that airframe.
   lighttpd's docroot), served at `http://localhost/` — same-origin with
   `/tar1090/`, satisfying the CORS constraint above.
 - Kiosk launcher is a **systemd user service**, checked into this repo at
-  `deploy/flightwall-kiosk.service` and deployed to
-  `~/.config/systemd/user/flightwall-kiosk.service` on the Pi (as the login user).
+  `deploy/flightradar-kiosk.service` and deployed to
+  `~/.config/systemd/user/flightradar-kiosk.service` on the Pi (as the login user).
   - Launches `chromium --kiosk ... http://localhost/index.html`
   - `ExecStartPre` waits (up to 60s) for a `wayland-*` socket in
     `$XDG_RUNTIME_DIR` before starting Chromium — needed because the compositor
@@ -291,14 +300,14 @@ instead, same shape as `deploy/photo-proxy.py`:
   dedup — multiple viewers open at once could each independently report
   the same real landing, which just over-represents that landing by a
   point or two, not a correctness problem worth the complexity of fixing.
-- **`deploy/91-flightwall-approach-store.conf`** (lighttpd, `mod_proxy`)
+- **`deploy/91-flightradar-approach-store.conf`** (lighttpd, `mod_proxy`)
   routes `/approaches` to it, keeping the browser's `fetch()` same-origin —
-  same pattern as `89-flightwall-photo-proxy.conf`.
-- **`deploy/flightwall-approach-store.service`** — `DynamicUser=yes`,
-  `NoNewPrivileges=yes`, matching `flightwall-photo-proxy.service`, plus
-  `StateDirectory=flightwall-approaches` so `approaches.json` survives
+  same pattern as `89-flightradar-photo-proxy.conf`.
+- **`deploy/flightradar-approach-store.service`** — `DynamicUser=yes`,
+  `NoNewPrivileges=yes`, matching `flightradar-photo-proxy.service`, plus
+  `StateDirectory=flightradar-approaches` so `approaches.json` survives
   restarts/reboots despite the dynamic user (systemd creates/owns
-  `/var/lib/flightwall-approaches` and hands the path to the service via
+  `/var/lib/flightradar-approaches` and hands the path to the service via
   `$STATE_DIRECTORY`).
 - `index.html`: `loadApproachPoints()` (GET, fired non-blocking at startup
   alongside the type-database discovery) replaces the old synchronous

@@ -9,7 +9,7 @@ is scoped per-browser/per-device, so the kiosk's own accumulated picture would
 never be visible to anyone checking in from a separate browser (their laptop,
 phone, the Funnel URL). This service gives every viewer the same shared,
 growing picture. lighttpd proxies /approaches requests to it (see
-91-flightwall-approach-store.conf), keeping the browser's fetch same-origin.
+91-flightradar-approach-store.conf), keeping the browser's fetch same-origin.
 
 GET  /approaches  -> current accumulated points, as a JSON array of [lon, lat] pairs
 POST /approaches  -> append points (JSON array of [lon, lat] pairs in the body);

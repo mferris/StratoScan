@@ -8,7 +8,7 @@ strings are not accepted" -- see https://www.planespotters.net/photo/api),
 and browser fetch()/XMLHttpRequest can never set that header themselves --
 it's exclusively controlled by the browser. So this runs server-side on the
 Pi instead, listening on 127.0.0.1 only; lighttpd proxies /photo/<hex>
-requests to it (see 89-flightwall-photo-proxy.conf), keeping the browser's
+requests to it (see 89-flightradar-photo-proxy.conf), keeping the browser's
 fetch same-origin exactly like aircraft.json/receiver.json already are.
 
 Attribution requirement per planespotters.net's terms of use (photographer
@@ -23,7 +23,7 @@ import time
 import urllib.request
 
 LISTEN = ("127.0.0.1", 8081)
-USER_AGENT = "FlightWall/1.0 (+https://github.com/mferris/FlightWall; personal ADS-B kiosk project)"
+USER_AGENT = "FlightRadar/1.0 (+https://github.com/mferris/FlightRadar; personal ADS-B kiosk project)"
 CACHE_TTL = 24 * 3600
 HEX_RE = re.compile(r"/photo/([0-9a-fA-F]{6})$")
 

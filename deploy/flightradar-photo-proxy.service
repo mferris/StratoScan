@@ -1,9 +1,9 @@
 [Unit]
-Description=FlightWall aircraft photo proxy (planespotters.net)
+Description=FlightRadar aircraft photo proxy (planespotters.net)
 After=network-online.target
 
 [Service]
-ExecStart=/usr/bin/python3 /opt/flightwall/photo-proxy.py
+ExecStart=/usr/bin/python3 /opt/flightradar/photo-proxy.py
 Restart=always
 RestartSec=5
 # 127.0.0.1-only listener; no elevated privileges needed

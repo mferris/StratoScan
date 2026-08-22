@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "flightwall-dev",
+      "name": "flightradar-dev",
       "runtimeExecutable": "python3",
       "runtimeArgs": ["dev-server.py"],
       "port": 8000
