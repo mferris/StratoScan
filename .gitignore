@@ -1,6 +1,11 @@
 *.log
 .DS_Store
 
+# Local Claude Code permission allowlist -- machine-specific, nothing sensitive,
+# just not meaningfully portable. .claude/launch.json (dev-server preview
+# config) is intentionally tracked, not ignored.
+.claude/settings.local.json
+
 # iOS
 ios/build/
 ios/**/xcuserdata/
