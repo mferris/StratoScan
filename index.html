@@ -395,6 +395,8 @@
     border-top: 1px solid rgba(255,255,255,0.07);
   }
   #settingsPanel .sp-row:first-of-type { border-top: none; margin-top: 10px; }
+  #settingsPanel .sp-row.disabled { opacity: 0.45; }
+  #settingsPanel .sp-row.disabled .sp-sub { color: var(--bad); }
   #settingsPanel .sp-label { font-size: 0.78rem; }
   #settingsPanel .sp-sub { font-size: 0.6rem; color: var(--text-dim); margin-top: 3px; line-height: 1.4; }
   #settingsPanel .sp-switch {
@@ -451,6 +453,15 @@
 // ---- Config ------------------------------------------------------
 const DATA_URL = '/tar1090/data/aircraft.json';
 const RECEIVER_URL = '/tar1090/data/receiver.json';
+// Set by deploy/flightradar-kiosk.service's launch URL (?kiosk=1) -- the
+// physical kiosk's Chromium runs --kiosk, a single locked-down fullscreen
+// window with no tab bar/window switcher reachable by touch. Learned the
+// hard way: window.open() there can leave the display stuck on whatever it
+// opened with no way back short of an SSH restart. Anything that opens a
+// new window/tab (see ensureAtcAudio below) must check this first and
+// refuse on the kiosk; it's unrestricted on a normal browser tab (laptop,
+// phone, the Funnel URL), where a second tab is just a second tab.
+const IS_KIOSK = new URLSearchParams(location.search).get('kiosk') === '1';
 // Overrides the receiver's actual configured position for DISPLAY purposes
 // only (readsb keeps using its own real antenna position internally for
 // signal-range/MLAT math — this only changes what FlightRadar centers on).
@@ -1393,6 +1404,15 @@ try {
 } catch (e) {
   // corrupt/unavailable storage -- defaults stand
 }
+// Force-correct a stored 'atc: true' on the kiosk itself -- this is exactly
+// the value that got left behind by testing the feature directly on the
+// physical hardware before ensureAtcAudio's own IS_KIOSK guard existed.
+// Belt-and-suspenders alongside that guard: this setting should never even
+// read as "on" here, not just silently refuse to act on it.
+if (IS_KIOSK && alertSettings.atc) {
+  alertSettings.atc = false;
+  saveAlertSettings();
+}
 
 function saveAlertSettings() {
   try { localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify(alertSettings)); } catch (e) {}
@@ -1531,15 +1551,17 @@ function checkEmergencySquawk(pl) {
 // still gives them the page view/ad impression their FAQ note about funding
 // through advertising depends on.
 //
-// This is NOT expected to work well on the physical kiosk (Chromium runs
-// `--kiosk`, a single locked-down fullscreen window with no tab bar/way to
-// switch back via touch -- see deploy/flightradar-kiosk.service) -- untested
-// on the real hardware as of when this was added. Fine and reliable from
-// any normal browser tab (laptop, phone, the Funnel URL).
+// Confirmed on the real kiosk hardware: window.open() there opened LiveATC's
+// page in a way that covered the screen with no touch-reachable way back to
+// the radar -- recovered only by SSHing in and restarting the kiosk service.
+// ensureAtcAudio refuses outright on IS_KIOSK (see its definition above);
+// this is fine and reliable from any normal browser tab (laptop, phone, the
+// Funnel URL), which is the only place the settings panel now offers it.
 const LIVEATC_KRDU_URL = 'https://www.liveatc.net/hlisten.php?mount=krdu_twr2';
 let atcWindow = null; // named-window handle so repeated calls reuse one tab instead of spawning a new one per landing
 
 function ensureAtcAudio() {
+  if (IS_KIOSK) return;
   if (atcWindow && !atcWindow.closed) return;
   atcWindow = window.open(LIVEATC_KRDU_URL, 'flightradar_atc');
 }
@@ -2521,22 +2543,34 @@ const ALERT_SETTINGS_META = [
   { key: 'nearby', label: 'Nearby aircraft alert', sub: 'Auto-pop details + chime for anything within 2 miles' },
   { key: 'emergency', label: 'Emergency squawks', sub: '7500 hijack / 7600 radio failure / 7700 emergency' },
   { key: 'rduPhase', label: 'RDU landing/takeoff chime', sub: 'Quiet tone when a plane lands or departs at RDU' },
-  { key: 'atc', label: 'RDU ATC audio', sub: 'Opens LiveATC.net’s tower feed in a new tab (not the kiosk window itself — see funnel-gateway notes)' },
+  {
+    key: 'atc', label: 'RDU ATC audio',
+    sub: 'Opens LiveATC.net’s tower feed in a new tab',
+    // Confirmed on the real hardware: opening a new window/tab from inside
+    // --kiosk Chromium can strand the display with no touch-reachable way
+    // back to the radar. Disabled here, not just silently refused by
+    // ensureAtcAudio -- a switch that looks tappable but does nothing (or
+    // worse) is its own bug.
+    kioskSub: 'Not available on this display — opening a new window here can strand the kiosk with no way back via touch. Use a laptop, phone, or the Funnel URL instead.',
+  },
 ];
 
 function renderSettingsPanel() {
   settingsPanelEl.innerHTML = `
     <div class="sp-close">&times;</div>
     <div class="sp-title">Alerts &amp; Sound</div>
-    ${ALERT_SETTINGS_META.map(({ key, label, sub }) => `
-      <div class="sp-row" data-key="${key}">
+    ${ALERT_SETTINGS_META.map(({ key, label, sub, kioskSub }) => {
+      const disabled = key === 'atc' && IS_KIOSK;
+      return `
+      <div class="sp-row${disabled ? ' disabled' : ''}" data-key="${key}">
         <div>
           <div class="sp-label">${esc(label)}</div>
-          <div class="sp-sub">${esc(sub)}</div>
+          <div class="sp-sub">${esc(disabled ? kioskSub : sub)}</div>
         </div>
-        <div class="sp-switch${alertSettings[key] ? ' on' : ''}"></div>
+        <div class="sp-switch${!disabled && alertSettings[key] ? ' on' : ''}"></div>
       </div>
-    `).join('')}
+    `;
+    }).join('')}
   `;
 }
 
@@ -2558,6 +2592,7 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   const row = e.target.closest('.sp-row');
   if (!row) return;
   e.stopPropagation();
+  if (row.classList.contains('disabled')) return;
   const key = row.dataset.key;
   alertSettings[key] = !alertSettings[key];
   saveAlertSettings();
