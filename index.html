@@ -7,10 +7,24 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
 
+  /* Color theme -- three options, selected in the settings panel (see
+     THEMES/applyTheme in the main script below) and applied via
+     [data-theme] on <html>. :root itself is "classic", the original/default
+     look; the two theme blocks after it override every token below for
+     "daylight" (a pale, light-mode option) and "highcontrast" (built
+     specifically for low-vision/colorblind readability, not just "the
+     light one with a different name" -- see its own comment).
+     Canvas-drawn colors (blips, range rings, sweep) can't just read CSS at
+     draw time, so applyTheme() also re-reads these into JS via
+     refreshCanvasColors() whenever the theme changes -- keep any new token
+     used by canvas code in sync with that function if you add one. */
   :root {
     --bg: #0a0d0f;
     --ring: #1c3236;
     --ring-bright: #2a4a4f;
+    --ring-label: #3d5a5f;
+    --crosshair: #16282b;
+    --compass: #4a6b70;
     --sweep: #ffb020;
     --text-dim: #5b7278;
     --text: #cfe8ea;
@@ -20,6 +34,82 @@
     --ground: #6b8087;
     --taxi: #4a90d9;
     --bad: #ff5d5d;
+    --rdu-highlight: #39ff6a;
+    --panel-bg: rgba(5, 8, 10, 0.78);
+    --panel-bg-strong: rgba(8, 12, 14, 0.96);
+    --panel-border: rgba(255, 255, 255, 0.1);
+    --switch-track-off: rgba(255, 255, 255, 0.15);
+    --map-filter: brightness(0.44) saturate(1.5);
+  }
+
+  /* Pale, light-mode option: light blue/green wash, black text. Accent
+     colors (altitude bands, alerts, RDU highlight) are NOT pastel versions
+     of the same blue/green -- a background wash and its foreground signal
+     colors sharing one hue family is exactly what makes a light theme hard
+     to read for colorblind users, so these lean on the same hue spread as
+     "classic" (amber/teal/purple/blue/red) just deepened enough to hold
+     contrast against a light background instead of a dark one. */
+  html[data-theme="daylight"] {
+    --bg: #eaf3f1;
+    --ring: #bfdcd6;
+    --ring-bright: #93bfb6;
+    --ring-label: #4b6066;
+    --crosshair: #a9c9c2;
+    --compass: #33484c;
+    --sweep: #c97a00;
+    --text-dim: #4b6066;
+    --text: #10181a;
+    --low: #b45f06;
+    --mid: #0f7a6c;
+    --high: #6b3fa0;
+    --ground: #5c6b6e;
+    --taxi: #1d5fa8;
+    --bad: #c0202e;
+    --rdu-highlight: #0f9d4a;
+    --panel-bg: rgba(255, 255, 255, 0.82);
+    --panel-bg-strong: rgba(255, 255, 255, 0.95);
+    --panel-border: rgba(16, 24, 26, 0.14);
+    --switch-track-off: rgba(16, 24, 26, 0.15);
+    --map-filter: brightness(1.05) saturate(0.9);
+  }
+
+  /* Built specifically for visual accessibility, not just "the light theme
+     with different names" -- requested as a check on whether "daylight"
+     above was good enough on its own; it wasn't quite, mainly because a
+     pastel palette still asks a low-vision or colorblind viewer to
+     distinguish similar-lightness hues at low contrast. This instead uses:
+     true black (the highest-contrast background there is, same principle
+     as OS-level "high contrast black" modes) with white/near-white text;
+     an accent palette adapted from Okabe & Ito's colorblind-safe palette
+     (a standard reference set designed to stay distinguishable across the
+     common forms of color vision deficiency) instead of picking hues by
+     eye; and every accent kept at a contrast ratio against pure black
+     comfortably past WCAG's AA text threshold (4.5:1), most past AAA
+     (7:1). Color is also never the *only* signal anywhere in this app
+     (alerts already pair with text/icons/animation), which matters just as
+     much as the palette itself. */
+  html[data-theme="highcontrast"] {
+    --bg: #000000;
+    --ring: #3a3a3a;
+    --ring-bright: #6e6e6e;
+    --ring-label: #cfcfcf;
+    --crosshair: #4a4a4a;
+    --compass: #f2f2f2;
+    --sweep: #ffd400;
+    --text-dim: #d8d8d8;
+    --text: #ffffff;
+    --low: #e69f00;
+    --mid: #56b4e9;
+    --high: #cc79a7;
+    --ground: #999999;
+    --taxi: #009e73;
+    --bad: #ff4d4d;
+    --rdu-highlight: #00e5ff;
+    --panel-bg: rgba(0, 0, 0, 0.92);
+    --panel-bg-strong: rgba(0, 0, 0, 0.97);
+    --panel-border: rgba(255, 255, 255, 0.35);
+    --switch-track-off: rgba(255, 255, 255, 0.25);
+    --map-filter: brightness(0.15) saturate(0.4);
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -48,7 +138,7 @@
     border-radius: 50%;
     overflow: hidden;
     background: var(--bg);
-    filter: brightness(0.44) saturate(1.5);
+    filter: var(--map-filter);
   }
 
   #mapbg .maplibregl-ctrl-attrib {
@@ -135,8 +225,8 @@
     line-height: 1.15;
     padding: 4px 8px;
     border-radius: 3px;
-    background: rgba(5, 8, 10, 0.75);
-    border: 1px solid rgba(255,255,255,0.06);
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
     white-space: nowrap;
     pointer-events: none;
     will-change: left, top;
@@ -165,15 +255,15 @@
     color: #fff;
     letter-spacing: 0.02em;
   }
-  /* Matches the bright-green ring drawn around the blip itself (see
-     RDU_PHASE_HIGHLIGHT/drawPlanes) -- a rectangular outline rather than a
+  /* Matches the highlight ring drawn around the blip itself (see
+     COLORS.rduHighlight/drawPlanes) -- a rectangular outline rather than a
      literal circle, since the tag is a box, but same color/purpose: this
      plane is plausibly on RDU's frequency right now (landing/taking off
      within RDU_PROXIMITY_NM), worth a glance if ATC audio is on. */
   .tag.rdu-phase {
-    outline: 2px solid #39ff6a;
+    outline: 2px solid var(--rdu-highlight);
     outline-offset: 1px;
-    box-shadow: 0 0 8px 1px rgba(57, 255, 106, 0.55);
+    box-shadow: 0 0 8px 1px color-mix(in srgb, var(--rdu-highlight) 55%, transparent);
   }
 
   #toast {
@@ -185,8 +275,8 @@
     font-size: 0.7rem;
     letter-spacing: 0.14em;
     color: var(--text);
-    background: rgba(5, 8, 10, 0.85);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
     padding: 6px 14px;
     border-radius: 4px;
     opacity: 0;
@@ -219,8 +309,8 @@
     width: min(72%, 480px);
     max-height: 80%;
     overflow-y: auto;
-    background: rgba(8, 12, 14, 0.96);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: var(--panel-bg-strong);
+    border: 1px solid var(--panel-border);
     border-radius: 10px;
     padding: 18px 20px;
     font-family: 'JetBrains Mono', monospace;
@@ -248,8 +338,8 @@
   }
   #detailPanel.alert.show { transform: translate(-50%, -50%) scale(1); }
   @keyframes alertGlow {
-    0%, 100% { box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,93,93,0.25); }
-    50% { box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 16px 2px rgba(255,93,93,0.55); }
+    0%, 100% { box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 0 1px color-mix(in srgb, var(--bad) 25%, transparent); }
+    50% { box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 16px 2px color-mix(in srgb, var(--bad) 55%, transparent); }
   }
   #detailPanel .dp-alert-tag {
     color: var(--bad);
@@ -357,8 +447,8 @@
     width: 46px;
     height: 46px;
     border-radius: 50%;
-    background: rgba(8, 12, 14, 0.8);
-    border: 1px solid rgba(79, 214, 200, 0.5);
+    background: var(--panel-bg-strong);
+    border: 1px solid color-mix(in srgb, var(--mid) 50%, transparent);
     color: var(--mid);
     font-size: 1.5rem;
     display: flex;
@@ -366,7 +456,7 @@
     justify-content: center;
     cursor: pointer;
     z-index: 5;
-    box-shadow: 0 0 10px 1px rgba(79, 214, 200, 0.35);
+    box-shadow: 0 0 10px 1px color-mix(in srgb, var(--mid) 35%, transparent);
   }
   #gearBtn:active { color: var(--text); }
 
@@ -388,8 +478,8 @@
     width: min(76%, 420px);
     max-height: 80%;
     overflow-y: auto;
-    background: rgba(8, 12, 14, 0.97);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: var(--panel-bg-strong);
+    border: 1px solid var(--panel-border);
     border-radius: 10px;
     padding: 18px 20px;
     font-family: 'JetBrains Mono', monospace;
@@ -413,7 +503,7 @@
     justify-content: space-between;
     gap: 14px;
     padding: 12px 0;
-    border-top: 1px solid rgba(255,255,255,0.07);
+    border-top: 1px solid var(--panel-border);
   }
   #settingsPanel .sp-row:first-of-type { border-top: none; margin-top: 10px; }
   #settingsPanel .sp-row.disabled { opacity: 0.45; }
@@ -425,7 +515,7 @@
     width: 42px;
     height: 24px;
     border-radius: 12px;
-    background: rgba(255,255,255,0.15);
+    background: var(--switch-track-off);
     flex-shrink: 0;
   }
   #settingsPanel .sp-switch.on { background: var(--mid); }
@@ -436,9 +526,60 @@
     width: 18px; height: 18px;
     border-radius: 50%;
     background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
     transition: left 0.15s ease;
   }
   #settingsPanel .sp-switch.on::after { left: 21px; }
+  #settingsPanel .sp-section-title {
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-top: 18px;
+    margin-bottom: 2px;
+  }
+  #settingsPanel .sp-theme-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--panel-border);
+    cursor: pointer;
+  }
+  #settingsPanel .sp-theme-row:first-of-type { border-top: none; }
+  #settingsPanel .sp-theme-row > div:nth-child(2) { flex: 1; }
+  #settingsPanel .sp-theme-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1px solid var(--panel-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #settingsPanel .sp-theme-swatch span {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: block;
+  }
+  #settingsPanel .sp-radio {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--panel-border);
+    flex-shrink: 0;
+    position: relative;
+  }
+  #settingsPanel .sp-radio.on { border-color: var(--mid); }
+  #settingsPanel .sp-radio.on::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    background: var(--mid);
+  }
   #settingsPanel .sp-close {
     position: absolute;
     top: 10px;
@@ -683,14 +824,31 @@ function closestPointOnRect(px, py, rx, ry, rw, rh) {
   return { x: Math.max(rx, Math.min(px, rx + rw)), y: Math.max(ry, Math.min(py, ry + rh)) };
 }
 
-const style = getComputedStyle(document.documentElement);
-const COLORS = {
-  low: style.getPropertyValue('--low').trim(),
-  mid: style.getPropertyValue('--mid').trim(),
-  high: style.getPropertyValue('--high').trim(),
-  ground: style.getPropertyValue('--ground').trim(),
-  taxi: style.getPropertyValue('--taxi').trim(),
-};
+// Canvas drawing reads plain JS strings, not CSS -- these mirror the
+// current theme's custom properties and are re-read by refreshCanvasColors()
+// (see applyTheme, near the settings panel) every time the theme changes,
+// so switching themes updates blips/rings/sweep on the very next frame
+// without needing a page reload.
+const COLORS = {};
+function refreshCanvasColors() {
+  const style = getComputedStyle(document.documentElement);
+  const read = (name) => style.getPropertyValue(name).trim();
+  COLORS.low = read('--low');
+  COLORS.mid = read('--mid');
+  COLORS.high = read('--high');
+  COLORS.ground = read('--ground');
+  COLORS.taxi = read('--taxi');
+  COLORS.bad = read('--bad');
+  COLORS.sweep = read('--sweep');
+  COLORS.ring = read('--ring');
+  COLORS.ringBright = read('--ring-bright');
+  COLORS.ringLabel = read('--ring-label');
+  COLORS.crosshair = read('--crosshair');
+  COLORS.compass = read('--compass');
+  COLORS.rduHighlight = read('--rdu-highlight');
+  COLORS.text = read('--text');
+}
+refreshCanvasColors();
 
 function altColor(alt) {
   if (alt === 'ground') return COLORS.taxi;   // confirmed on the ground
@@ -855,13 +1013,13 @@ function destinationPoint(lat, lon, bearingDeg, distanceNm) {
 // plane's whole identity color made it harder to track, not easier. Now
 // just a classification (rduPhaseOf below) that a highlight ring is drawn
 // around instead, leaving the plane's normal altitude color alone -- see
-// RDU_PHASE_HIGHLIGHT and drawPlanes/tag-rendering below.
+// COLORS.rduHighlight (theme-aware, see refreshCanvasColors) and
+// drawPlanes/tag-rendering below.
 const RDU_LAT = 35.8776, RDU_LON = -78.7875;
 const RDU_ELEV_FT = 435;         // airport reference elevation, MSL
 const RDU_PROXIMITY_NM = 0.869;  // 1 statute mile
 const RDU_VERT_FT = 500;         // within this of field elevation
 const RDU_VRATE_MIN = 150;       // ft/min -- filters out level-flight noise near zero
-const RDU_PHASE_HIGHLIGHT = '#39ff6a';
 
 function rduPhaseOf(p) {
   if (typeof p.alt !== 'number' || p.lat == null || p.lon == null || p.vrate == null) return null;
@@ -1166,19 +1324,27 @@ function initApproachLayer() {
   });
 }
 
-// "liberty" is styled for a light background (black text, white halo) —
-// flip place-name labels to the opposite convention so they stay legible
-// once #mapbg's CSS filter darkens everything underneath them.
+// "liberty" is styled for a light background (black text, white halo) --
+// on the "classic"/"highcontrast" themes (#mapbg's CSS filter darkens
+// everything underneath), labels are flipped to the opposite convention so
+// they stay legible; "daylight" keeps the map close to its own natural
+// light styling, so labels stay close to liberty's own default instead.
+// Re-run from applyTheme (not just once at map load) so switching themes
+// re-colors labels already on screen, not just future ones.
 function recolorLabels() {
+  if (!map) return;
   const LABEL_LAYERS = ['label_city_capital', 'label_city', 'label_town', 'label_village', 'label_other'];
+  const light = uiTheme === 'daylight';
+  const textColor = light ? '#1a2426' : '#e8e2d5';
+  const haloColor = light ? '#f3f8f6' : '#05080a';
   for (const id of LABEL_LAYERS) {
     if (!map.getLayer(id)) continue;
-    map.setPaintProperty(id, 'text-color', '#e8e2d5');
-    map.setPaintProperty(id, 'text-halo-color', '#05080a');
+    map.setPaintProperty(id, 'text-color', textColor);
+    map.setPaintProperty(id, 'text-halo-color', haloColor);
   }
   if (map.getLayer('water_name_point_label')) {
-    map.setPaintProperty('water_name_point_label', 'text-color', '#9fc4e8');
-    map.setPaintProperty('water_name_point_label', 'text-halo-color', '#05080a');
+    map.setPaintProperty('water_name_point_label', 'text-color', light ? '#1d5fa8' : '#9fc4e8');
+    map.setPaintProperty('water_name_point_label', 'text-halo-color', haloColor);
   }
 }
 
@@ -1450,6 +1616,41 @@ if (IS_KIOSK && alertSettings.atc) {
 function saveAlertSettings() {
   try { localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify(alertSettings)); } catch (e) {}
 }
+
+// ---- Color theme ------------------------------------------------------
+// Three options -- see the [data-theme] blocks in <style> for what each one
+// actually changes. "classic" (the original look) is the default; applying
+// a theme just sets the attribute MapLibre/CSS custom properties key off of
+// and re-reads the canvas-side color copies (COLORS, see refreshCanvasColors
+// above), since canvas drawing can't read CSS at draw time the way DOM
+// elements can.
+const THEME_KEY = 'flightradar_theme_v1';
+// swatchBg/swatchAccent are only for the small preview dot in the settings
+// panel -- a deliberate, small duplication of each theme's --bg/--sweep
+// value from the [data-theme] CSS blocks (can't read another theme's CSS
+// custom properties while a different one is active, so there's no way to
+// derive these live from the stylesheet itself).
+const THEMES = [
+  { key: 'classic', label: 'Classic', sub: 'The original look — dark background, warm accent colors', swatchBg: '#0a0d0f', swatchAccent: '#4fd6c8' },
+  { key: 'daylight', label: 'Daylight', sub: 'Light background, black text — for a bright room', swatchBg: '#eaf3f1', swatchAccent: '#0f7a6c' },
+  { key: 'highcontrast', label: 'High Contrast', sub: 'Built for low-vision/colorblind readability — true black background, colorblind-safe accents (Okabe–Ito palette)', swatchBg: '#000000', swatchAccent: '#ffd400' },
+];
+let uiTheme = 'classic';
+try {
+  const savedTheme = localStorage.getItem(THEME_KEY);
+  if (THEMES.some((t) => t.key === savedTheme)) uiTheme = savedTheme;
+} catch (e) {
+  // corrupt/unavailable storage -- default theme stands
+}
+
+function applyTheme(theme) {
+  uiTheme = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  refreshCanvasColors();
+  recolorLabels(); // no-op if the map isn't up yet (e.g. this initial call at script load) -- map.on('load', recolorLabels) covers that case once it is
+  try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+}
+applyTheme(uiTheme); // set before the first frame renders, not just on a later settings-panel interaction
 
 // A short two-note chime synthesized with the Web Audio API rather than a
 // bundled audio file -- nothing to source, license, or ship as a binary
@@ -1968,23 +2169,23 @@ function drawRings() {
     const r = (R / RINGS) * i;
     ctx.beginPath();
     ctx.arc(CX, CY, r, 0, Math.PI * 2);
-    ctx.strokeStyle = i === RINGS ? '#2a4a4f' : '#1c3236';
+    ctx.strokeStyle = i === RINGS ? COLORS.ringBright : COLORS.ring;
     ctx.lineWidth = 1;
     ctx.stroke();
 
     const nm = Math.round((RANGE_NM / RINGS) * i);
-    ctx.fillStyle = '#3d5a5f';
+    ctx.fillStyle = COLORS.ringLabel;
     ctx.font = '15px JetBrains Mono, monospace';
     ctx.fillText(nm + 'nm', CX + 6, CY - r + 14);
   }
 
-  ctx.strokeStyle = '#16282b';
+  ctx.strokeStyle = COLORS.crosshair;
   ctx.beginPath();
   ctx.moveTo(CX, CY - R); ctx.lineTo(CX, CY + R);
   ctx.moveTo(CX - R, CY); ctx.lineTo(CX + R, CY);
   ctx.stroke();
 
-  ctx.fillStyle = '#4a6b70';
+  ctx.fillStyle = COLORS.compass;
   ctx.font = '600 20px Inter, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('N', CX, CY - R + 26);
@@ -1995,7 +2196,7 @@ function drawRings() {
 
   ctx.beginPath();
   ctx.arc(CX, CY, 4, 0, Math.PI * 2);
-  ctx.fillStyle = '#ffb020';
+  ctx.fillStyle = COLORS.sweep;
   ctx.fill();
 
   ctx.restore();
@@ -2014,7 +2215,7 @@ function drawTrails() {
   for (const p of planes.values()) {
     if (p.range > RANGE_NM) continue; // matches drawPlanes' own in-range filter -- no point trailing a blip that isn't drawn
     if (!p.trail || p.trail.length < 2) continue;
-    ctx.strokeStyle = p.color || '#cfe8ea';
+    ctx.strokeStyle = p.color || COLORS.text;
     for (let i = 1; i < p.trail.length; i++) {
       const a = p.trail[i - 1], b = p.trail[i];
       const pa = polarToXY(a.bearing, a.range);
@@ -2029,12 +2230,21 @@ function drawTrails() {
   ctx.restore();
 }
 
+// Canvas gradient stops need a literal color string, not a CSS var() --
+// this turns COLORS.sweep's hex (theme-aware, see refreshCanvasColors) into
+// an rgba() string at whatever alpha the gradient needs.
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
 function drawSweep() {
   ctx.save();
   const grad = ctx.createConicGradient(sweepAngle - Math.PI / 2, CX, CY);
-  grad.addColorStop(0, 'rgba(255,176,32,0.35)');
-  grad.addColorStop(0.06, 'rgba(255,176,32,0.0)');
-  grad.addColorStop(1, 'rgba(255,176,32,0.0)');
+  grad.addColorStop(0, hexToRgba(COLORS.sweep, 0.35));
+  grad.addColorStop(0.06, hexToRgba(COLORS.sweep, 0));
+  grad.addColorStop(1, hexToRgba(COLORS.sweep, 0));
   ctx.beginPath();
   ctx.arc(CX, CY, SWEEP_RADIUS, 0, Math.PI * 2);
   ctx.fillStyle = grad;
@@ -2045,9 +2255,9 @@ function drawSweep() {
   ctx.beginPath();
   ctx.moveTo(CX, CY);
   ctx.lineTo(lineX, lineY);
-  ctx.strokeStyle = '#ffb020';
+  ctx.strokeStyle = COLORS.sweep;
   ctx.lineWidth = 2;
-  ctx.shadowColor = '#ffb020';
+  ctx.shadowColor = COLORS.sweep;
   ctx.shadowBlur = 8;
   ctx.stroke();
   ctx.restore();
@@ -2113,9 +2323,9 @@ function drawPlanes(dt) {
       ctx.save();
       ctx.globalAlpha = p.opacity;
       ctx.translate(x, y);
-      ctx.strokeStyle = RDU_PHASE_HIGHLIGHT;
+      ctx.strokeStyle = COLORS.rduHighlight;
       ctx.lineWidth = 2;
-      ctx.shadowColor = RDU_PHASE_HIGHLIGHT;
+      ctx.shadowColor = COLORS.rduHighlight;
       ctx.shadowBlur = 8;
       ctx.beginPath();
       ctx.arc(0, 0, 13, 0, Math.PI * 2);
@@ -2635,6 +2845,17 @@ function renderSettingsPanel() {
       </div>
     `;
     }).join('')}
+    <div class="sp-section-title">Color theme</div>
+    ${THEMES.map(({ key, label, sub, swatchBg, swatchAccent }) => `
+      <div class="sp-theme-row${uiTheme === key ? ' selected' : ''}" data-theme-key="${key}">
+        <div class="sp-theme-swatch" style="background:${swatchBg}"><span style="background:${swatchAccent}"></span></div>
+        <div>
+          <div class="sp-label">${esc(label)}</div>
+          <div class="sp-sub">${esc(sub)}</div>
+        </div>
+        <div class="sp-radio${uiTheme === key ? ' on' : ''}"></div>
+      </div>
+    `).join('')}
   `;
 }
 
@@ -2653,6 +2874,13 @@ function hideSettingsPanel() {
 // tap from bubbling to the stage's own pointerup handler below, which would
 // otherwise treat it as "tap anywhere while the panel's open -> close it").
 settingsPanelEl.addEventListener('pointerup', (e) => {
+  const themeRow = e.target.closest('.sp-theme-row');
+  if (themeRow) {
+    e.stopPropagation();
+    applyTheme(themeRow.dataset.themeKey);
+    renderSettingsPanel();
+    return;
+  }
   const row = e.target.closest('.sp-row');
   if (!row) return;
   e.stopPropagation();
