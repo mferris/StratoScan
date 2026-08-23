@@ -63,6 +63,9 @@ def save_points(points):
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
+    def version_string(self):
+        return "FlightRadar"  # don't advertise the Python/http.server version
+
     def do_GET(self):
         if self.path != "/approaches":
             self.send_response(404)
