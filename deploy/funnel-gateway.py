@@ -29,12 +29,35 @@ ROUNDED_PATH = "/tar1090/data/receiver.json"
 COORD_PRECISION = 2  # decimal places -- ~0.7mi at this latitude
 
 # Headers that are per-hop or would otherwise be wrong to blindly forward
-# (Content-Length is recomputed for the rewritten path; the rest are
-# transport-level, not meaningful to relay from an internal proxy hop).
-HOP_BY_HOP = {"connection", "keep-alive", "transfer-encoding", "content-length", "host"}
+# (Content-Length is recomputed for the rewritten path; "server" is excluded
+# so lighttpd's own version banner doesn't leak through this gateway on top
+# of -- see version_string() below -- our own; the rest are transport-level,
+# not meaningful to relay from an internal proxy hop).
+HOP_BY_HOP = {"connection", "keep-alive", "transfer-encoding", "content-length", "host", "server"}
+
+# Cheap, zero-risk hardening now that this is reachable from the whole
+# public internet: clickjacking/MIME-sniffing/referrer-leak protections.
+# Deliberately NOT a Content-Security-Policy here -- this app talks to enough
+# different external hosts (map tiles, fonts, several free data APIs) that a
+# CSP tight enough to matter needs to be built and tested against the live
+# page, not improvised inline; getting it wrong risks breaking the app for
+# every public viewer, worse than the marginal defense-in-depth it'd add on
+# top of the XSS fix already in index.html.
+SECURITY_HEADERS = {
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer-when-downgrade",
+}
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
+    def version_string(self):
+        return "FlightRadar"  # don't advertise the Python/http.server version
+
+    def _send_security_headers(self):
+        for k, v in SECURITY_HEADERS.items():
+            self.send_header(k, v)
+
     def do_GET(self):
         if self.path == ROUNDED_PATH:
             self._serve_rounded_receiver_json()
@@ -62,6 +85,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        self._send_security_headers()
         self.end_headers()
         self.wfile.write(body)
 
@@ -86,6 +110,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         for k, v in resp.getheaders():
             if k.lower() not in HOP_BY_HOP:
                 self.send_header(k, v)
+        self._send_security_headers()
         self.end_headers()
         self.wfile.write(resp.read())
 
