@@ -231,13 +231,22 @@
     box-shadow: 0 10px 40px rgba(0,0,0,0.6);
   }
   #detailPanel.show { opacity: 1; transform: translate(-50%, 0) scale(1); pointer-events: auto; }
-  /* Auto-popped by the nearby-aircraft alert (checkNearbyAlert), not a tap --
-     a red-tinted border/glow distinguishes "this interrupted you" from a
-     panel you opened yourself, which otherwise looks identical. */
+  /* Auto-popped by the nearby-aircraft alert (checkNearbyAlert) or an
+     emergency squawk (checkEmergencySquawk), not a tap -- a red-tinted
+     border/glow distinguishes "this interrupted you" from a panel you
+     opened yourself, which otherwise looks identical. Also recentered on
+     screen instead of bottom-anchored: something that just interrupted you
+     deserves to be front-and-center, not tucked at the edge -- worth the
+     trade of briefly covering the trail underneath it, unlike a
+     self-initiated tap where staying out of the trail's way matters more. */
   #detailPanel.alert {
     border-color: var(--bad);
     animation: alertGlow 1.4s ease-in-out infinite;
+    top: 50%;
+    bottom: auto;
+    transform: translate(-50%, -50%) scale(0.96);
   }
+  #detailPanel.alert.show { transform: translate(-50%, -50%) scale(1); }
   @keyframes alertGlow {
     0%, 100% { box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,93,93,0.25); }
     50% { box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 16px 2px rgba(255,93,93,0.55); }
@@ -1352,16 +1361,24 @@ async function loadRunways(attempt = 1) {
 // RainViewer's public discovery API needs no key and is free for hobby use
 // like this. It returns the current radar frame's tile path, which we
 // refresh periodically since RainViewer publishes a new frame roughly every
-// 10 minutes and this kiosk runs for days without a page reload. Tap empty
-// space to toggle it on/off (see the pointerup handler below); off by
-// default so the map isn't cluttered when there's nothing worth showing.
+// 10 minutes and this kiosk runs for days without a page reload. On by
+// default (toggleable in the settings panel -- see alertSettings.storms) --
+// was previously an always-on-no-toggle layer, before storms joined the
+// other display/alert options there.
 const RAINVIEWER_API_URL = 'https://api.rainviewer.com/public/weather-maps.json';
 const RAINVIEWER_REFRESH_MS = 5 * 60 * 1000;
 const RAINVIEWER_COLOR = 6;       // NEXRAD Level III palette -- the familiar green/yellow/red/purple intensity scale
 const RAINVIEWER_OPTIONS = '1_1'; // smooth interpolation, snow shown distinctly
-// Always on -- was previously a tap-to-toggle option (default off), but
-// that made storms easy to miss unless someone happened to tap empty space.
-// Freed up the empty-tap gesture for the nearby-aircraft alert toggle below.
+
+// Applies the current alertSettings.storms value to the actual map layer --
+// called after the layer is (re)created in refreshStorms, and directly from
+// the settings panel's row handler so toggling it is instant rather than
+// waiting up to RAINVIEWER_REFRESH_MS for the next refresh to notice.
+function applyStormsVisibility() {
+  if (!map || !map.getLayer('storms')) return;
+  map.setLayoutProperty('storms', 'visibility', alertSettings.storms ? 'visible' : 'none');
+}
+
 async function refreshStorms() {
   if (!map) return;
   try {
@@ -1387,6 +1404,7 @@ async function refreshStorms() {
         source: 'storms',
         paint: { 'raster-opacity': 0.65 },
       });
+      applyStormsVisibility(); // new layer defaults to visible -- match the current setting immediately
     }
   } catch (e) {
     // offline or RainViewer unavailable — storms layer just stays as it was
@@ -1411,7 +1429,7 @@ const ALERT_CLEAR_RADIUS_NM = 2.0;  // slightly wider exit threshold, so a
 // -- this is a personal display preference for whoever's looking at this
 // particular screen, not data that should be the same for every viewer.
 const ALERT_SETTINGS_KEY = 'flightradar_alert_settings_v1';
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rduPhase: true, atc: false };
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rduPhase: true, atc: false, storms: true };
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -2035,10 +2053,14 @@ function drawSweep() {
   ctx.restore();
 }
 
-function altLabel(alt) {
-  if (alt === 'ground') return 'GND';
-  if (alt === null) return '----';
-  return 'FL' + Math.round(alt / 100);
+// Shared by the on-screen tag and the detail panel, so "the label's altitude"
+// and "the detail page's altitude" are always the exact same text -- was two
+// separate formats (a flight-level shorthand on the tag, real feet in the
+// panel) until the tag was asked to match the panel's wording.
+function formatAltitude(alt) {
+  if (alt === 'ground') return 'On ground';
+  if (alt === null) return '—';
+  return `${alt.toLocaleString()} ft`;
 }
 
 function drawPlanes(dt) {
@@ -2114,7 +2136,7 @@ function drawPlanes(dt) {
     node.querySelector('.cs').textContent = p.cs;
     node.querySelector('.cs').style.color = color;
     const speedTxt = p.speed === null ? '--' : Math.round(p.speed);
-    node.querySelector('.alt').textContent = `${altLabel(p.alt)} · ${speedTxt}kt`;
+    node.querySelector('.alt').textContent = `${formatAltitude(p.alt)} · ${speedTxt}kt`;
 
     const badgeEl = node.querySelector('.badge');
     badgeEl.textContent = p.airlineLabel;
@@ -2352,7 +2374,7 @@ let detailPanelHex = null; // guards against a photo fetch resolving after the p
 function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES') {
   detailPanelHex = p.hex;
   const speedTxt = p.speed === null ? '—' : Math.round(p.speed) + ' kt';
-  const altTxt = p.alt === 'ground' ? 'On ground' : (p.alt === null ? '—' : `${p.alt.toLocaleString()} ft`);
+  const altTxt = formatAltitude(p.alt);
   const hdgTxt = p.realHdg != null ? Math.round(p.realHdg) + '°' : '—';
   const rangeTxt = `${p.range.toFixed(1)} nm · ${Math.round(p.bearing)}°`;
   const route = routeCache.get(p.cs);
@@ -2594,12 +2616,13 @@ const ALERT_SETTINGS_META = [
     // worse) is its own bug.
     kioskSub: 'Not available on this display — opening a new window here can strand the kiosk with no way back via touch. Use a laptop, phone, or the Funnel URL instead.',
   },
+  { key: 'storms', label: 'Storm radar overlay', sub: 'Live weather radar over the map (RainViewer)' },
 ];
 
 function renderSettingsPanel() {
   settingsPanelEl.innerHTML = `
     <div class="sp-close">&times;</div>
-    <div class="sp-title">Alerts &amp; Sound</div>
+    <div class="sp-title">Settings</div>
     ${ALERT_SETTINGS_META.map(({ key, label, sub, kioskSub }) => {
       const disabled = key === 'atc' && IS_KIOSK;
       return `
@@ -2640,6 +2663,7 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   if (key === 'atc') {
     if (alertSettings.atc) ensureAtcAudio(); else closeAtcAudio();
   }
+  if (key === 'storms') applyStormsVisibility();
   renderSettingsPanel();
 });
 
