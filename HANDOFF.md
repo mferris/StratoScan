@@ -22,14 +22,15 @@ was preserved across the cutover: fetched via the old service's own GET
 `/approaches` before touching anything, POSTed into the new service after
 it was up, verified the count matched on both sides before deleting the
 old service/files. The **Pi's actual system hostname is still
-`[hostname-redacted]`**, and the Tailscale Funnel URL below is still
-`[funnel-hostname-redacted]` — those are real infrastructure identifiers,
-not just branding, and changing them would mean re-registering Tailscale
-and likely getting a new Funnel URL (breaking any existing bookmarks/
-links). Left alone deliberately; revisit only if that's ever specifically
-wanted. The iOS app's `APIConfig.defaultBaseURL` correctly still points at
-that same real hostname for the same reason -- not a leftover from the
-rename, intentional.
+`[hostname-redacted]`**, and the Tailscale Funnel URL is unchanged too — those are
+real infrastructure identifiers, not just branding, and changing them would
+mean re-registering Tailscale and likely getting a new Funnel URL (breaking
+any existing bookmarks/links). Left alone deliberately; revisit only if
+that's ever specifically wanted. (The real hostname itself, along with the
+receiver's exact address/coordinates, is intentionally kept out of this
+repo -- see the "Security & going public" section below. The iOS app's
+`APIConfig.defaultBaseURL` now defaults to the generic `raspberrypi.local`
+instead, with your own real hostname set locally in Settings.)
 
 ## Display center override
 `index.html` has a `HOME_OVERRIDE` constant that, when set, centers the
@@ -39,10 +40,9 @@ configured position (`/etc/default/readsb`, `--lat`/`--lon`), which needs to
 stay accurate to the real antenna for its own signal-range/MLAT math.
 
 **Currently `null`** — back to auto-detecting the real receiver position
-from `receiver.json` (confirmed to be **[address redacted]** — its
-geocoded coordinates, [lat-redacted]/[lon-redacted], match readsb's configured
-~[lat-redacted]/[lon-redacted] to within normal geocoding precision). It was briefly set to
-[address redacted], Durham NC for a one-off request, then reverted.
+from `receiver.json` (confirmed against the real antenna's configured
+`--lat`/`--lon` to within normal geocoding precision). It was briefly set to
+a different address for a one-off request, then reverted.
 
 If it's ever set again: `loadHome()` skips fetching `receiver.json` and uses
 the override synchronously instead, and `normalizeAircraft()` always
@@ -57,8 +57,9 @@ antenna shifts the visible 40nm disc so it only partially overlaps the
 antenna's actual reception area.
 
 ## Remote access (Tailscale Funnel)
-The page is also reachable from outside the local network at
-**https://[funnel-hostname-redacted]/** via Tailscale Funnel — publicly
+The page is also reachable from outside the local network via Tailscale
+Funnel, at the same real hostname noted above (kept out of this repo) —
+publicly
 reachable HTTPS, no login/app required for whoever you send the link to, no
 router port-forwarding involved. `tailscale` is installed on the Pi, signed
 into the maintainer's tailnet, with `tailscale funnel --bg 80` proxying that
@@ -245,7 +246,8 @@ shows nothing if planespotters has no photo for that airframe.
 ## Key facts learned this session
 - Receiver home location comes from `http://<radar>/tar1090/data/receiver.json`
   (`lat`/`lon`) — the app fetches this itself at startup rather than hardcoding it.
-  Currently ~[lat-redacted]°N, [lon-redacted]°W (Raleigh-Durham area).
+  Currently somewhere in the Raleigh-Durham area (exact coordinates intentionally
+  not recorded here — see "Security & going public" below).
 - `aircraft.json` entries already include `r_dst` (range, nm) and `r_dir` (bearing,
   deg) precomputed by readsb relative to the receiver — `index.html` uses these
   directly and only falls back to a haversine calc from raw `lat`/`lon` if they're
@@ -624,3 +626,56 @@ worth a look next time the kiosk/Funnel URL is checked.
 relative paths it'll use in production, without hitting CORS on a dev machine.
 It is **not** part of the deployed app — don't copy it to the Pi. Run it with
 `python3 dev-server.py` and open `http://localhost:8000/index.html`.
+
+## Security & going public
+Prompted by an explicit ask to review this before making the repo public.
+Real findings, all addressed:
+
+- **The Funnel URL leaked exact home coordinates to anyone, unauthenticated**
+  — `/tar1090/data/receiver.json` returns survey-precision `lat`/`lon`, and
+  Funnel exposes the *whole* site (readsb's own debug UI included), not just
+  `index.html`. Fixed with a new local-only filtering proxy,
+  **`deploy/funnel-gateway.py`** (`flightradar-funnel-gateway.service`),
+  that Funnel is now pointed at instead of lighttpd directly: it rounds
+  `receiver.json`'s coordinates to 2 decimal places (~0.7mi) for anyone
+  coming in over the public internet, while passing everything else through
+  unchanged. LAN access (the kiosk, port 80 directly) still sees the exact
+  value — `readsb` itself needs that for its own signal-range/MLAT math,
+  unaffected either way.
+- **Real address/coordinates/hostname were committed to the repo** (this
+  file, `index.html`, the iOS app) — scrubbed from current files and from
+  git history (a full-history rewrite + force-push, same approach used
+  earlier for the commit-email fix). The iOS app's `APIConfig.defaultBaseURL`
+  now defaults to the generic `raspberrypi.local` instead of a real personal
+  hostname; set your own in Settings.
+- **Stored XSS via third-party content** — `showDetailPanel()` and
+  `loadDetailPhoto()` built HTML via unescaped template literals, and the
+  photo *photographer credit* comes straight from planespotters.net's own
+  user-submitted names. Fixed with an `esc()` helper applied everywhere
+  external/semi-trusted data (route text, photographer name, Wikipedia
+  image URLs) lands in `innerHTML`.
+- **`/approaches` had no auth, no validation, and no body-size cap** —
+  reachable from the public internet via Funnel. Anyone could pollute or
+  evict the real accumulated approach-track data with a single POST, or
+  send an oversized body before any validation ran. Fixed in
+  `approach-store.py`: a 200KB cap enforced before the body is even read,
+  plus shape/range validation on every point.
+  - **A real incident from testing this**: verifying the size cap against
+    the *live* endpoint (should have used a non-production target) sent a
+    batch that was accidentally under the cap, got accepted as 20,000
+    valid-shaped junk points, and evicted the entire real accumulated
+    dataset via the existing `MAX_POINTS` eviction. Recovered from a
+    leftover, never-cleaned-up state file from the FlightWall→FlightRadar
+    migration (`/var/lib/private/flightwall-approaches/`) that still had
+    the 4,788-point snapshot from that migration — real data, zero junk,
+    restored. Anything accumulated between the migration and this incident
+    (roughly 150-200 points) is permanently gone. Worth remembering: don't
+    verify destructive-shaped tests against production state, even when the
+    code path is "just validation."
+
+**Not yet done / your call**: `dev-server.py`'s hardcoded LAN IP and the SSH
+username throughout this file are low-risk (private RFC1918 address, common
+username already tied to the public GitHub handle) and weren't in scope of
+what was scrubbed above — revisit if that changes. Passwordless sudo on the
+Pi remains a deliberate, previously-accepted tradeoff for the SSH-based
+deploy workflow, unrelated to whether the repo itself is public.
