@@ -334,7 +334,7 @@ const RECEIVER_URL = '/tar1090/data/receiver.json';
 // from receiver.json. When set, bearing/range are always computed via
 // haversine from raw lat/lon rather than trusting readsb's r_dst/r_dir,
 // since those are relative to the real antenna, not this override point.
-const HOME_OVERRIDE = null; // was [address redacted], Durham NC — reverted to auto-detecting the real receiver position ([address redacted])
+const HOME_OVERRIDE = null; // was briefly set to a different address for a one-off request, then reverted to auto-detecting the real receiver position
 // "dark" turned out to be near-grayscale by design (water/parks/woods are
 // all ~0% saturation), so no CSS filter could make it colorful. "liberty"
 // has real color (blue water, green parks, warm road tones) — we darken it
@@ -378,6 +378,17 @@ const TRAIL_MAX_MS = 3 * 60 * 1000;
 
 function pruneTrail(trail, now) {
   while (trail.length && now - trail[0].t > TRAIL_MAX_MS) trail.shift();
+}
+
+// HTML-escapes a value before it goes into an innerHTML template literal.
+// Most fields we display are tightly constrained (Mode S callsigns are a
+// fixed 6-bit charset with no room for markup), but route city names come
+// from adsb.im and photo attribution comes from planespotters.net's own
+// user-submitted photographer names -- both external, neither ours to
+// trust blindly. Escaping unconditionally is cheap and means nothing here
+// depends on staying aware of which specific field came from where.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 // ICAO airline designators (ICAO Doc 8585, a public standard) mapped to a
@@ -1879,10 +1890,10 @@ function showDetailPanel(p, isAlert = false) {
     <div class="dp-close">&times;</div>
     ${isAlert ? `<div class="dp-alert-tag">⚠ WITHIN 2 MILES</div>` : ''}
     <div class="dp-photo" style="display:none"></div>
-    <div class="dp-cs" style="color:${p.color}">${p.cs}</div>
-    <div class="dp-badge" style="background:${p.badgeColor}">${p.airlineLabel}</div>
-    <div class="dp-type">${subtitle}</div>
-    ${routeTxt ? `<div class="dp-route${route.plausible ? '' : ' implausible'}">${routeTxt}</div>` : ''}
+    <div class="dp-cs" style="color:${p.color}">${esc(p.cs)}</div>
+    <div class="dp-badge" style="background:${p.badgeColor}">${esc(p.airlineLabel)}</div>
+    <div class="dp-type">${esc(subtitle)}</div>
+    ${routeTxt ? `<div class="dp-route${route.plausible ? '' : ' implausible'}">${esc(routeTxt)}</div>` : ''}
     <div class="dp-grid">
       <div class="dp-field"><div class="dp-label">Altitude</div><div class="dp-value">${altTxt}</div></div>
       <div class="dp-field"><div class="dp-label">Speed</div><div class="dp-value">${speedTxt}</div></div>
@@ -2014,8 +2025,8 @@ async function tryStockPhoto(hex, photoEl) {
   if (!stock) { showPlaceholderPhoto(photoEl); return; }
   photoEl.innerHTML = `
     <div class="dp-photo-badge">Representative photo</div>
-    <img src="${stock.thumb}" alt="${typeLabel} (representative photo, not this specific aircraft)">
-    <div class="dp-photo-credit">${typeLabel} · Wikipedia</div>
+    <img src="${esc(stock.thumb)}" alt="${esc(typeLabel)} (representative photo, not this specific aircraft)">
+    <div class="dp-photo-credit">${esc(typeLabel)} · Wikipedia</div>
   `;
   photoEl.style.display = 'block';
 }
@@ -2029,8 +2040,8 @@ async function loadDetailPhoto(hex) {
     if (detailPanelHex !== hex || !detailPanelEl.classList.contains('show')) return; // stale by the time this resolved
     if (!data.found) { await tryStockPhoto(hex, photoEl); return; }
     photoEl.innerHTML = `
-      <img src="${data.thumbLarge || data.thumb}" alt="${detailPanelEl.querySelector('.dp-cs')?.textContent || 'Aircraft'} photo">
-      <div class="dp-photo-credit">© ${data.photographer || 'Unknown'} · planespotters.net</div>
+      <img src="${esc(data.thumbLarge || data.thumb)}" alt="${esc(detailPanelEl.querySelector('.dp-cs')?.textContent || 'Aircraft')} photo">
+      <div class="dp-photo-credit">© ${esc(data.photographer || 'Unknown')} · planespotters.net</div>
     `;
     photoEl.style.display = 'block';
   } catch (e) {

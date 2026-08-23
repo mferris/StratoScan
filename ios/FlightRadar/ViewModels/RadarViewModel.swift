@@ -7,8 +7,8 @@ final class RadarViewModel: ObservableObject {
     // purposes only (readsb keeps using its own real antenna position
     // internally for signal-range/MLAT math — this only changes what
     // FlightRadar centers on). nil auto-detects the receiver's real position
-    // from receiver.json instead ([address redacted]). Kept in sync
-    // with HOME_OVERRIDE in the web version's index.html.
+    // from receiver.json instead. Kept in sync with HOME_OVERRIDE in the
+    // web version's index.html.
     static let homeOverride: Coordinate? = nil
 
     let rangeNm: Double = 40
