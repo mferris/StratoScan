@@ -802,3 +802,157 @@ invoking `loadRunways()` directly in a foregrounded tab, which succeeded
 immediately. Not a real production concern (the kiosk is always
 single-window/foreground), but the localStorage caching above is a real fix
 regardless, independent of whatever caused this particular report.
+
+## Sighting counts double-incrementing on reception dropouts (found and fixed)
+Reported as "flights from 30 minutes ago show 5-6 sightings, but I wasn't
+actually there that many times." Root cause: a plane briefly dropping off
+ADS-B reception (common with this Pi's antenna, especially for close/low
+traffic) drops it from the tracked-planes map after just `COAST_TOTAL_MS`
+(8s). If the same physical pass resumed reception seconds or minutes later,
+`applyUpdate` and `checkNearbyAlert` had no memory it was just there and
+recorded a brand-new "visit" each time.
+
+Fixed with a 5-minute cooldown (`SIGHTING_COOLDOWN_MS`, keyed by hex,
+tracked independently of the plane object's own lifecycle via
+`recordSightingOnce`) so a signal hiccup mid-pass can't inflate the count,
+while a plane genuinely returning later still counts again once the
+cooldown elapses. The already-inflated counts from before this shipped were
+manually reset to zero on the live store (`sighting-store.py`'s
+`sightings.json`) at the user's request — deliberate, not automatic, given
+the earlier approach-track data-loss incident's lesson about not touching
+production state casually.
+
+## Flight trails no longer time-limited
+Reported: trails were disappearing well before a plane left the display.
+`TRAIL_MAX_MS` (3 minutes) was a fixed wall-clock cutoff, left over from
+when trails were shortened for a different reason (drawn for every plane
+every frame instead of just the tapped one — see the "always-on" section
+above). Replaced with `TRAIL_MAX_POINTS` (7200, a generous safety cap
+against unbounded growth for something like a loitering local helicopter,
+not a real cutoff for any normal flight) — a trail now persists for as long
+as the plane itself stays tracked, dying with the plane object on coast-out
+same as before. Older segments fade toward a floor opacity
+(`TRAIL_FADE_FLOOR`) instead of vanishing at a hard time boundary, so the
+whole path stays visible while still reading recent-vs-older.
+
+## Emergency squawk and RDU landing/takeoff sound alerts
+Requested: audible alerts for emergency squawks (7500/7600/7700) and for
+RDU landings/takeoffs.
+
+- **Emergency squawks** (`checkEmergencySquawk`) — a distinct four-beep
+  chime (`playEmergencySound`, more insistent than the nearby-alert chime)
+  plus an auto-popped detail panel labeled with the specific emergency
+  ("HIJACK — SQUAWK 7500" etc, via a new `alertLabel` param on
+  `showDetailPanel`). Gated on `pl.emergencyAlerted` so it fires once per
+  emergency, not once a second while still squawking.
+- **RDU landing/takeoff** (`checkRduPhaseAlert`) — reuses the same
+  RDU-proximity/vertical-rate classification already driving the blip color
+  (at the time; see below), so "sounds like a landing" always matched
+  "drawn like one." A single quiet tone, pitched down for landing and up for
+  takeoff, so the two are distinguishable by ear.
+
+Both introduced a shared `playTones(notes)` helper (each note
+`[freq, startOffset, dur, peakGain]`), factored out of what used to be
+`playAlertSound`'s own body.
+
+## Settings panel replaces the single blind tap-toggle gesture
+Once emergency squawks and the RDU phase chime existed alongside the
+original nearby-alert toggle, "tap empty space to blindly flip one setting"
+stopped making sense — requested a real settings screen instead.
+
+A new gear-icon button (`#gearBtn`) opens a modal (`#settingsPanel`) with
+one row per alert/sound concern: nearby-aircraft alert, emergency squawks,
+RDU landing/takeoff chime, RDU ATC audio (see below). Persisted to
+`localStorage` (`flightradar_alert_settings_v1`) — a personal display
+preference, not shared state, unlike the server-side sighting/approach
+stores. Tapping empty space now opens this panel instead of directly
+toggling nearby alerts; the panel itself dismisses on any tap outside a row
+(reusing the same "any tap while X is open closes it" pattern the detail
+panel already used).
+
+Emergency squawks became toggleable here too (previously hardcoded
+always-on) — but `pl.emergencyAlerted` is only set once the alert actually
+*fires*, so if it's off during an ongoing squawk and gets turned back on,
+it still alerts for that emergency rather than silently having "already
+happened" while muted.
+
+## RDU ATC audio: link, not embed — and a real LiveATC.net outage along the way
+Requested: hear live ATC audio for RDU landings/takeoffs. Researched
+LiveATC.net's actual Terms of Use (https://www.liveatc.net/legal/, not just
+their FAQ summary) before building anything — several clauses are directly
+on point:
+
+- §2.1: the license is for personal non-commercial use *only*.
+- §3.4: bars making the service "directly available" via another dedicated
+  application, explicitly "for profit or not" — closes the
+  "but it's free/open-source" loophole.
+- §3.3: bars making the service available over another network "where it
+  could be used by others" — directly implicated by this project's own
+  public Tailscale Funnel exposure.
+- §3.15: requires *consulting LiveATC.net first* before linking directly to
+  a raw audio stream.
+
+Conclusion: embedding their raw stream in an `<audio>` element would violate
+several of these regardless of this project's open-source/non-commercial
+status. Implemented instead as a link: `ensureAtcAudio()` opens LiveATC's
+own KRDU player page (`hlisten.php`, their HTML page — not the raw stream
+URL, so §3.15's "linking directly to a stream" doesn't apply) via
+`window.open()` in a normal browser tab. Ordinary use of their site through
+an interactive browser, same as anyone bookmarking it themselves.
+
+**Kiosk safety incident, same day**: the very first live test on the
+physical kiosk did exactly what was flagged as a risk beforehand —
+`window.open()` inside `--kiosk` Chromium (a single locked-down fullscreen
+window, no tab bar) opened LiveATC's page in a way that covered the screen
+with no touch-reachable way back to the radar. Recovered by SSHing in and
+restarting `flightradar-kiosk.service`. Fixed structurally, not just
+avoided: the kiosk now launches with `?kiosk=1` on its URL
+(`deploy/flightradar-kiosk.service`), and `index.html` reads that as
+`IS_KIOSK` to (a) refuse `ensureAtcAudio()` outright there, (b)
+force-correct any stale `atc: true` left in that browser's `localStorage`
+from testing, and (c) render that one settings row visibly disabled with a
+red explanation instead of a switch that does nothing (or worse). Unaffected
+everywhere else — laptop, phone, the Funnel URL.
+
+**Real external outage, found during testing**: after the kiosk fix, ATC
+audio still didn't play — stuck on "reconnecting in Ns..." forever.
+Reproduced the *identical* symptom directly on LiveATC.net's own page (not
+our code): `krdu_twr2` (tower) was offline at their end, while `krdu_app2`
+(approach/departure) played immediately when tested side by side. Swapped
+the mount param; easy to swap back if tower comes back.
+
+## RDU phase indicator changed from a full recolor to a highlight ring
+The original design for "this plane is landing/departing at RDU" fully
+recolored the blip and label (red for landing, green for takeoff),
+replacing the plane's normal altitude-based color. Reported as not working
+well in practice — swapping a plane's whole identity color made it *harder*
+to track, not easier, especially since it happened while the eye was
+already tracking that plane by its established color.
+
+Replaced with a bright green ring around the blip (`RDU_PHASE_HIGHLIGHT`,
+drawn un-rotated in `drawPlanes` after the blip itself) and a matching
+outline/glow on the label (`.tag.rdu-phase`), layered on top of the normal
+altitude color rather than replacing it. `flightPhaseColor(p)` (which used
+to return a color) became `rduPhaseOf(p)` (returns `'landing'`/`'takeoff'`/
+`null`), used identically by the phase chime and the new highlight-ring
+pass, so sound/visual/highlight can never drift out of sync with each other.
+
+This was originally requested as a way to answer "who's being talked about
+on ATC audio right now" — real-time correlation between the audio stream's
+*content* and a specific aircraft isn't feasible (FlightRadar has no access
+to the audio content at all, since it's a link to LiveATC's own tab, not an
+embedded stream we control; and even with access, that needs real speech
+recognition tuned for noisy aviation radio phraseology). This highlight is
+the practical stand-in: "these are the planes plausibly on frequency right
+now," not "this specific plane is the one currently transmitting."
+
+## Gear/settings button visibility and placement (several rounds)
+Iterated live against the real kiosk: started at 34px/dim-gray/left:20%,
+increased to 46px/teal (`var(--mid)`, matching the app's accent
+color)/glowing, then moved progressively closer to the dial's edge per
+feedback — left:8% → left:5%, and vertically from an off-center 40% back to
+dead-center 50% (due west) per explicit request, despite that being exactly
+where a due-west aircraft's own label anchors (`LABEL_RING_RADIUS`) and can
+occasionally overlap the button. Accepted tradeoff, same as labels already
+sometimes overlap each other during heavy traffic — the button still
+renders on top (z-index) and stays tappable either way.
