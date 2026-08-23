@@ -333,29 +333,36 @@
     padding: 3px 8px;
   }
 
-  /* Left-of-center, but well clear of the dial's outer edge -- every
-     aircraft label sits on a fixed ring near the edge (LABEL_RING_RADIUS =
-     R + 60, only the angle varies -- see HANDOFF.md), so a button any
-     closer to the rim than this collides with real traffic's labels
-     constantly, not just occasionally. This radius sits inside that ring
-     with margin, and still clear of the top/bottom HUD text. */
+  /* Left side, close to the dial's edge but still just inside the label
+     ring -- every aircraft label sits on a fixed ring near the rim
+     (LABEL_RING_RADIUS = R + 60, only the angle varies -- see HANDOFF.md,
+     which works out to ~87% of the way from center to edge). 8% keeps this
+     at ~84% of that radius, close to the rim without routinely colliding
+     with real traffic's labels the way sitting right on the ring would.
+     top:50% (dead center vertically) turned out to be the single worst
+     choice for this, though -- that's exactly where a due-west aircraft's
+     label anchors, and its box (wider than tall) extends inward right
+     through this spot. Offsetting to 40% avoids sitting exactly on that
+     one bearing's collision line, without giving up "left side, near the
+     edge." */
   #gearBtn {
     position: absolute;
-    top: 50%;
-    left: 20%;
+    top: 40%;
+    left: 8%;
     transform: translateY(-50%);
-    width: 34px;
-    height: 34px;
+    width: 46px;
+    height: 46px;
     border-radius: 50%;
-    background: rgba(8, 12, 14, 0.75);
-    border: 1px solid rgba(255,255,255,0.12);
-    color: var(--text-dim);
-    font-size: 1.05rem;
+    background: rgba(8, 12, 14, 0.8);
+    border: 1px solid rgba(79, 214, 200, 0.5);
+    color: var(--mid);
+    font-size: 1.5rem;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     z-index: 5;
+    box-shadow: 0 0 10px 1px rgba(79, 214, 200, 0.35);
   }
   #gearBtn:active { color: var(--text); }
 
