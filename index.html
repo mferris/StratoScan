@@ -800,6 +800,25 @@ function commitApproachTrack(points) {
 const SIGHTING_STORE_URL = '/sightings';
 const sightingCounts = new Map(); // hex -> { total, nearby }
 
+// A plane briefly dropping off ADS-B reception (weak/unmounted antenna --
+// see the RDU-approach notes on this) and reappearing seconds later is the
+// *same* real-world visit, not a new one -- but `planes` losing the hex
+// during that gap (see COAST_TOTAL_MS) makes applyUpdate/checkNearbyAlert
+// look like a fresh sighting. This cooldown survives that coast-and-return
+// cycle so a signal hiccup mid-pass doesn't inflate the count; a plane
+// genuinely returning later (next lap, next day) still counts again once
+// the cooldown elapses.
+const SIGHTING_COOLDOWN_MS = 5 * 60 * 1000;
+const lastCountedAt = new Map(); // hex -> { total: ts, nearby: ts }
+
+function recordSightingOnce(hex, kind) {
+  const now = performance.now();
+  const last = lastCountedAt.get(hex) || {};
+  if (last[kind] !== undefined && now - last[kind] < SIGHTING_COOLDOWN_MS) return;
+  lastCountedAt.set(hex, { ...last, [kind]: now });
+  recordSighting(hex, kind);
+}
+
 async function loadSightingCounts() {
   try {
     const res = await fetch(SIGHTING_STORE_URL, { cache: 'no-store' });
@@ -1299,7 +1318,7 @@ function checkNearbyAlert(pl, range) {
       // regardless of whether the interactive popup/sound happen to be
       // toggled on right now, which is a separate, purely presentational
       // concern (see toggleNearbyAlerts).
-      recordSighting(pl.hex, 'nearby');
+      recordSightingOnce(pl.hex, 'nearby');
       if (nearbyAlertsOn) {
         showDetailPanel(pl, true);
         playAlertSound();
@@ -1597,7 +1616,7 @@ function applyUpdate(list) {
         lastSeen: now,
         trail: [{ bearing: n.bearing, range: n.range, t: now }],
       });
-      recordSighting(n.hex, 'total'); // a genuinely new visit, not just still-in-view -- see "Sighting counts" above
+      recordSightingOnce(n.hex, 'total'); // a genuinely new visit, not just still-in-view -- see "Sighting counts" above
     }
 
     if (!hexTypeCache.has(n.hex)) {
