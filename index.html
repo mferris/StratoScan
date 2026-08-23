@@ -1116,6 +1116,43 @@ function toggleNearbyAlerts() {
   showToast(nearbyAlertsOn ? 'NEARBY ALERTS ON' : 'NEARBY ALERTS OFF');
 }
 
+// A short two-note chime synthesized with the Web Audio API rather than a
+// bundled audio file -- nothing to source, license, or ship as a binary
+// asset, and the tone is trivially tunable right here. Browsers block audio
+// until a user gesture on the page, so the context is resumed opportunistically
+// on the very first tap (well before any real alert is likely to fire) --
+// on the kiosk itself, which may never get an incidental tap, Chromium is
+// instead launched with --autoplay-policy=no-user-gesture-required (see
+// deploy/flightradar-kiosk.service) so it isn't blocked there at all.
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+stage.addEventListener('pointerdown', () => { getAudioCtx().resume().catch(() => {}); }, { once: true });
+
+function playAlertSound() {
+  try {
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const now = ctx.currentTime;
+    for (const [freq, start, dur] of [[880, now, 0.14], [1175, now + 0.15, 0.18]]) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.25, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + dur + 0.02);
+    }
+  } catch (e) {
+    // Web Audio unavailable or still blocked -- the visual alert still shows regardless
+  }
+}
+
 // Called once per poll (real GPS-derived range, not the eased per-frame
 // value) for each tracked aircraft -- mirrors updateApproachTracking's same
 // reasoning for why this belongs on the poll, not the render loop.
@@ -1126,6 +1163,7 @@ function checkNearbyAlert(pl, range) {
     if (!pl.alerted) {
       pl.alerted = true;
       showDetailPanel(pl, true);
+      playAlertSound();
     }
   } else if (range > ALERT_CLEAR_RADIUS_NM) {
     pl.alerted = false; // free to re-alert if it later comes back around
