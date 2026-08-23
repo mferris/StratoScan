@@ -165,6 +165,16 @@
     color: #fff;
     letter-spacing: 0.02em;
   }
+  /* Matches the bright-green ring drawn around the blip itself (see
+     RDU_PHASE_HIGHLIGHT/drawPlanes) -- a rectangular outline rather than a
+     literal circle, since the tag is a box, but same color/purpose: this
+     plane is plausibly on RDU's frequency right now (landing/taking off
+     within RDU_PROXIMITY_NM), worth a glance if ATC audio is on. */
+  .tag.rdu-phase {
+    outline: 2px solid #39ff6a;
+    outline-offset: 1px;
+    box-shadow: 0 0 8px 1px rgba(57, 255, 106, 0.55);
+  }
 
   #toast {
     position: absolute;
@@ -827,24 +837,27 @@ function destinationPoint(lat, lon, bearingDeg, distanceNm) {
 }
 
 // Aircraft in the immediate vicinity of RDU's runways, climbing or
-// descending, get called out with a distinct color regardless of their
-// altitude band -- this is deliberately narrow (tight radius + real vertical
-// rate, not just "low altitude") so normal traffic flying low nearby doesn't
-// get flagged.
+// descending -- deliberately narrow (tight radius + real vertical rate, not
+// just "low altitude") so normal traffic flying low nearby doesn't get
+// flagged. Originally recolored the blip/label entirely (COLOR_LANDING red /
+// COLOR_TAKEOFF green), but that read poorly in practice -- swapping the
+// plane's whole identity color made it harder to track, not easier. Now
+// just a classification (rduPhaseOf below) that a highlight ring is drawn
+// around instead, leaving the plane's normal altitude color alone -- see
+// RDU_PHASE_HIGHLIGHT and drawPlanes/tag-rendering below.
 const RDU_LAT = 35.8776, RDU_LON = -78.7875;
 const RDU_ELEV_FT = 435;         // airport reference elevation, MSL
 const RDU_PROXIMITY_NM = 0.869;  // 1 statute mile
 const RDU_VERT_FT = 500;         // within this of field elevation
 const RDU_VRATE_MIN = 150;       // ft/min -- filters out level-flight noise near zero
-const COLOR_LANDING = '#ff2d2d';
-const COLOR_TAKEOFF = '#2dff6a';
+const RDU_PHASE_HIGHLIGHT = '#39ff6a';
 
-function flightPhaseColor(p) {
+function rduPhaseOf(p) {
   if (typeof p.alt !== 'number' || p.lat == null || p.lon == null || p.vrate == null) return null;
   if (Math.abs(p.alt - RDU_ELEV_FT) > RDU_VERT_FT) return null;
   if (haversineBearingRange(RDU_LAT, RDU_LON, p.lat, p.lon).range > RDU_PROXIMITY_NM) return null;
-  if (p.vrate <= -RDU_VRATE_MIN) return COLOR_LANDING;
-  if (p.vrate >= RDU_VRATE_MIN) return COLOR_TAKEOFF;
+  if (p.vrate <= -RDU_VRATE_MIN) return 'landing';
+  if (p.vrate >= RDU_VRATE_MIN) return 'takeoff';
   return null;
 }
 
@@ -1580,17 +1593,16 @@ function closeAtcAudio() {
 }
 
 // ---- RDU landing/takeoff chime -------------------------------------------
-// Reuses flightPhaseColor's own classification (tight radius + real vertical
-// rate right at field elevation -- see its comment above) so "sounds like a
-// landing/takeoff" always matches "drawn like one" on screen, rather than
-// keeping a second, possibly-drifting definition of the same thing. No
+// Reuses rduPhaseOf's own classification (tight radius + real vertical rate
+// right at field elevation -- see its comment above) so "sounds like a
+// landing/takeoff" always matches "highlighted like one" on screen, rather
+// than keeping a second, possibly-drifting definition of the same thing. No
 // auto-popped panel here, unlike the other two alerts -- RDU traffic is
 // frequent enough that interrupting the display for every one would be a lot
 // more disruptive than a quiet chime.
 function checkRduPhaseAlert(pl) {
   if (!pl) return;
-  const color = flightPhaseColor(pl);
-  const phase = color === COLOR_LANDING ? 'landing' : color === COLOR_TAKEOFF ? 'takeoff' : null;
+  const phase = rduPhaseOf(pl);
   if (phase) {
     if (pl.rduPhaseAlerted !== phase) {
       pl.rduPhaseAlerted = phase;
@@ -2054,7 +2066,8 @@ function drawPlanes(dt) {
     p.opacity = coastAge <= COAST_FRESH_MS ? 1 : Math.max(0, 1 - (coastAge - COAST_FRESH_MS) / COAST_FADE_MS);
 
     const { x, y } = polarToXY(p.bearing, p.range);
-    const color = flightPhaseColor(p) || altColor(p.alt);
+    const color = altColor(p.alt); // no longer overridden for RDU landing/takeoff -- see rduPhaseOf's comment above
+    const rduPhase = rduPhaseOf(p);
     p.anchorX = x * scale;
     p.anchorY = y * scale;
     p.color = color;
@@ -2069,6 +2082,23 @@ function drawPlanes(dt) {
     drawBlipShape(classifyAircraft(p));
     ctx.restore();
 
+    if (rduPhase) {
+      // A ring around the blip, drawn un-rotated (it's a circle -- rotating
+      // it would be pointless) so it reads as "this plane" regardless of
+      // heading, distinct from the blip's own altitude color.
+      ctx.save();
+      ctx.globalAlpha = p.opacity;
+      ctx.translate(x, y);
+      ctx.strokeStyle = RDU_PHASE_HIGHLIGHT;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = RDU_PHASE_HIGHLIGHT;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(0, 0, 13, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     let node = tagNodes.get(p.hex);
     if (!node) {
       node = document.createElement('div');
@@ -2077,6 +2107,7 @@ function drawPlanes(dt) {
       tagsEl.appendChild(node);
       tagNodes.set(p.hex, node);
     }
+    node.classList.toggle('rdu-phase', !!rduPhase);
     node.style.borderLeft = `2px solid ${color}`;
     node.querySelector('.cs').textContent = p.cs;
     node.querySelector('.cs').style.color = color;
