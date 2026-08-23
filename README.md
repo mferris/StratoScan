@@ -39,8 +39,17 @@ just a web page, so it runs fine in a normal browser too.
   callsign, just not an airline one), the detail panel shows who the plane
   is registered to, pulled from public aircraft-registry data
 - **Nearby-aircraft alert** — auto-pops flight details (with a chime) for
-  anything passing within 2 miles of the receiver, toggleable by tapping
-  empty space on the display
+  anything passing within 2 miles of the receiver
+- **Emergency squawk alert** — an unmistakable alert (distinct chime + a red
+  auto-popped panel) for 7500 (hijack), 7600 (radio failure), or 7700
+  (general emergency)
+- **RDU landing/takeoff highlight** — a bright green ring around the blip and
+  label of anything currently landing or departing at RDU, plus an optional
+  quiet chime; pairs with an optional link to LiveATC.net's live
+  approach/departure audio for the airport
+- **Settings panel** — a gear icon opens on-screen toggles for all of the
+  above (nearby alert, emergency squawks, RDU landing/takeoff chime, RDU ATC
+  audio link), persisted per-device
 - **Touch detail panel** — tap any aircraft for registration, squawk, vertical
   rate, and more
 - **Native iOS companion app** — a SwiftUI rebuild of the same radar for
@@ -112,6 +121,9 @@ vendor/         vendored MapLibre GL JS (self-hosted, no CDN dependency)
 ios/            native SwiftUI companion app
 ```
 
+See [CHANGELOG.md](CHANGELOG.md) for release notes and
+[HANDOFF.md](HANDOFF.md) for the detailed development history.
+
 ## Data sources
 
 FlightRadar leans entirely on free, no-key-required public data, same as
@@ -126,6 +138,7 @@ these choices, though no code is shared — its license is unclear):
 - **[planespotters.net](https://www.planespotters.net/)** — aircraft photos
 - **[Wikipedia / Wikimedia Commons](https://www.wikipedia.org/)** — representative type photos when no tail-specific one exists
 - **[adsbdb.com](https://www.adsbdb.com/)** — registered-owner lookups for confirmed-private aircraft
+- **[LiveATC.net](https://www.liveatc.net/)** — RDU ATC audio, opened as a link to their own player (see [Security](#security) below for why it's a link, not an embed)
 
 Please respect each service's own terms of use if you build on this.
 
@@ -156,6 +169,15 @@ before you do:
 - **No secrets or API keys anywhere.** Every external service this app talks
   to is free and keyless (see [Data sources](#data-sources) above), so
   there's nothing to leak.
+- **RDU ATC audio is a link, not an embed.** LiveATC.net's
+  [Terms of Use](https://www.liveatc.net/legal/) require consulting them
+  before linking directly to a raw audio stream, and separately bar making
+  their service "directly available" through another dedicated application,
+  for profit or not. The ATC toggle opens their own player page in a normal
+  browser tab instead — ordinary use of their site, same as bookmarking it
+  yourself — and is disabled outright on the kiosk itself (`?kiosk=1` on its
+  launch URL), since a new browser window/tab inside `--kiosk` Chromium has
+  no touch-reachable way back to the radar.
 
 ## License
 
