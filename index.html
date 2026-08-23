@@ -1557,7 +1557,15 @@ function checkEmergencySquawk(pl) {
 // ensureAtcAudio refuses outright on IS_KIOSK (see its definition above);
 // this is fine and reliable from any normal browser tab (laptop, phone, the
 // Funnel URL), which is the only place the settings panel now offers it.
-const LIVEATC_KRDU_URL = 'https://www.liveatc.net/hlisten.php?mount=krdu_twr2';
+// krdu_twr2 (tower) was the first choice -- more directly matches "landing/
+// takeoff" comms -- but that specific feeder was found offline (stuck
+// "reconnecting..." indefinitely, confirmed directly on LiveATC's own page,
+// not something wrong in our code) when this was tested against the real
+// kiosk. krdu_app2 (approach/departure) was confirmed actually playing at
+// the same time, so that's what's wired up now. If tower comes back later,
+// swap the mount param -- both still show RDU arrival/departure traffic
+// either way, just from a different controller position.
+const LIVEATC_KRDU_URL = 'https://www.liveatc.net/hlisten.php?mount=krdu_app2';
 let atcWindow = null; // named-window handle so repeated calls reuse one tab instead of spawning a new one per landing
 
 function ensureAtcAudio() {
@@ -2545,7 +2553,7 @@ const ALERT_SETTINGS_META = [
   { key: 'rduPhase', label: 'RDU landing/takeoff chime', sub: 'Quiet tone when a plane lands or departs at RDU' },
   {
     key: 'atc', label: 'RDU ATC audio',
-    sub: 'Opens LiveATC.net’s tower feed in a new tab',
+    sub: 'Opens LiveATC.net’s approach/departure feed in a new tab',
     // Confirmed on the real hardware: opening a new window/tab from inside
     // --kiosk Chromium can strand the display with no touch-reachable way
     // back to the radar. Disabled here, not just silently refused by
