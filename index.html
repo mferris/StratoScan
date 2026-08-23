@@ -1292,18 +1292,23 @@ function getAudioCtx() {
 }
 stage.addEventListener('pointerdown', () => { getAudioCtx().resume().catch(() => {}); }, { once: true });
 
-function playAlertSound() {
+// Shared tone-sequence player -- each note is [freq, startOffset, dur, peakGain].
+// Factored out of what used to be playAlertSound's own body so the emergency
+// and RDU-phase sounds below can each get a distinct, recognizable shape
+// (note count/pitch/gain) without duplicating the oscillator boilerplate.
+function playTones(notes) {
   try {
     const ctx = getAudioCtx();
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     const now = ctx.currentTime;
-    for (const [freq, start, dur] of [[880, now, 0.14], [1175, now + 0.15, 0.18]]) {
+    for (const [freq, startOffset, dur, peakGain] of notes) {
+      const start = now + startOffset;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
       osc.frequency.value = freq;
       gain.gain.setValueAtTime(0, start);
-      gain.gain.linearRampToValueAtTime(0.25, start + 0.02);
+      gain.gain.linearRampToValueAtTime(peakGain, start + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
       osc.connect(gain).connect(ctx.destination);
       osc.start(start);
@@ -1312,6 +1317,30 @@ function playAlertSound() {
   } catch (e) {
     // Web Audio unavailable or still blocked -- the visual alert still shows regardless
   }
+}
+
+// Two-note ascending chime -- unchanged from before the playTones refactor.
+function playAlertSound() {
+  playTones([[880, 0, 0.14, 0.25], [1175, 0.15, 0.18, 0.25]]);
+}
+
+// Four fast alternating beeps, higher gain and more insistent than the
+// nearby-aircraft chime -- deliberately reads as more urgent, since this
+// fires for actual emergency squawks (7500/7600/7700), not routine traffic.
+function playEmergencySound() {
+  playTones([
+    [1300, 0, 0.1, 0.3], [900, 0.14, 0.1, 0.3],
+    [1300, 0.28, 0.1, 0.3], [900, 0.42, 0.1, 0.3],
+  ]);
+}
+
+// A single short, quiet note -- deliberately the least intrusive of the
+// three, since this fires for every RDU landing/takeoff and that's frequent
+// enough that anything louder or busier would get old fast. Landing pitches
+// down, takeoff pitches up, so the two are distinguishable by ear without
+// looking at the screen.
+function playRduPhaseSound(phase) {
+  playTones(phase === 'landing' ? [[720, 0, 0.16, 0.14]] : [[1040, 0, 0.16, 0.14]]);
 }
 
 // Called once per poll (real GPS-derived range, not the eased per-frame
@@ -1334,6 +1363,57 @@ function checkNearbyAlert(pl, range) {
     }
   } else if (range > ALERT_CLEAR_RADIUS_NM) {
     pl.alerted = false; // free to re-alert if it later comes back around
+  }
+}
+
+// ---- Emergency squawk alert ---------------------------------------------
+// 7500 (hijack), 7600 (radio/comm failure), 7700 (general emergency) are the
+// three ICAO-standard codes a pilot squawks to signal a real emergency to
+// ATC -- rare enough, and important enough, that this always alerts
+// regardless of the nearbyAlertsOn toggle (unlike the RDU phase chime below,
+// which is routine and does respect it).
+const EMERGENCY_SQUAWKS = {
+  '7500': 'HIJACK — SQUAWK 7500',
+  '7600': 'RADIO FAILURE — SQUAWK 7600',
+  '7700': 'EMERGENCY — SQUAWK 7700',
+};
+
+// Called once per poll, same cadence as checkNearbyAlert. Gated on
+// pl.emergencyAlerted (reset once the squawk clears) so this fires once per
+// emergency, not once per second while it's still squawking.
+function checkEmergencySquawk(pl) {
+  if (!pl) return;
+  const label = pl.squawk != null ? EMERGENCY_SQUAWKS[String(pl.squawk)] : null;
+  if (label) {
+    if (!pl.emergencyAlerted) {
+      pl.emergencyAlerted = true;
+      playEmergencySound();
+      showDetailPanel(pl, true, label);
+    }
+  } else {
+    pl.emergencyAlerted = false;
+  }
+}
+
+// ---- RDU landing/takeoff chime -------------------------------------------
+// Reuses flightPhaseColor's own classification (tight radius + real vertical
+// rate right at field elevation -- see its comment above) so "sounds like a
+// landing/takeoff" always matches "drawn like one" on screen, rather than
+// keeping a second, possibly-drifting definition of the same thing. No
+// auto-popped panel here, unlike the other two alerts -- RDU traffic is
+// frequent enough that interrupting the display for every one would be a lot
+// more disruptive than a quiet chime.
+function checkRduPhaseAlert(pl) {
+  if (!pl) return;
+  const color = flightPhaseColor(pl);
+  const phase = color === COLOR_LANDING ? 'landing' : color === COLOR_TAKEOFF ? 'takeoff' : null;
+  if (phase) {
+    if (pl.rduPhaseAlerted !== phase) {
+      pl.rduPhaseAlerted = phase;
+      if (nearbyAlertsOn) playRduPhaseSound(phase);
+    }
+  } else {
+    pl.rduPhaseAlerted = null;
   }
 }
 
@@ -1647,6 +1727,8 @@ function applyUpdate(list) {
 
     updateApproachTracking(planes.get(n.hex), n.lat, n.lon, n.alt);
     checkNearbyAlert(planes.get(n.hex), n.range);
+    checkEmergencySquawk(planes.get(n.hex));
+    checkRduPhaseAlert(planes.get(n.hex));
   }
 
   // aircraft readsb no longer reports aren't dropped immediately -- they
@@ -2046,7 +2128,7 @@ function vrateLabel(vrate) {
 
 let detailPanelHex = null; // guards against a photo fetch resolving after the panel moved on to a different plane (or closed)
 
-function showDetailPanel(p, isAlert = false) {
+function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES') {
   detailPanelHex = p.hex;
   const speedTxt = p.speed === null ? '—' : Math.round(p.speed) + ' kt';
   const altTxt = p.alt === 'ground' ? 'On ground' : (p.alt === null ? '—' : `${p.alt.toLocaleString()} ft`);
@@ -2060,7 +2142,7 @@ function showDetailPanel(p, isAlert = false) {
 
   detailPanelEl.innerHTML = `
     <div class="dp-close">&times;</div>
-    ${isAlert ? `<div class="dp-alert-tag">⚠ WITHIN 2 MILES</div>` : ''}
+    ${isAlert ? `<div class="dp-alert-tag">⚠ ${esc(alertLabel)}</div>` : ''}
     <div class="dp-photo" style="display:none"></div>
     <div class="dp-cs" style="color:${p.color}">${esc(p.cs)}</div>
     <div class="dp-badge" style="background:${p.badgeColor}">${esc(p.airlineLabel)}</div>
