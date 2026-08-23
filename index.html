@@ -145,6 +145,7 @@
   .tag .type { display: none; color: var(--text-dim); margin-top: 0; }
   .tag .alt { color: var(--text-dim); }
   .tag .route { color: var(--text-dim); display: none; margin-top: 0; }
+  .tag .route.implausible { color: var(--bad); }
   .tag .badge {
     display: none;
     margin-top: 1px;
@@ -212,6 +213,24 @@
     box-shadow: 0 10px 40px rgba(0,0,0,0.6);
   }
   #detailPanel.show { opacity: 1; transform: translate(-50%, 0) scale(1); pointer-events: auto; }
+  /* Auto-popped by the nearby-aircraft alert (checkNearbyAlert), not a tap --
+     a red-tinted border/glow distinguishes "this interrupted you" from a
+     panel you opened yourself, which otherwise looks identical. */
+  #detailPanel.alert {
+    border-color: var(--bad);
+    animation: alertGlow 1.4s ease-in-out infinite;
+  }
+  @keyframes alertGlow {
+    0%, 100% { box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,93,93,0.25); }
+    50% { box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 16px 2px rgba(255,93,93,0.55); }
+  }
+  #detailPanel .dp-alert-tag {
+    color: var(--bad);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
   #detailPanel .dp-cs { font-size: 1.3rem; font-weight: 700; letter-spacing: 0.04em; }
   #detailPanel .dp-badge {
     display: inline-block;
@@ -225,6 +244,7 @@
   }
   #detailPanel .dp-type { margin-top: 10px; color: var(--text-dim); font-size: 0.75rem; }
   #detailPanel .dp-route { margin-top: 2px; color: var(--text-dim); font-size: 0.75rem; }
+  #detailPanel .dp-route.implausible { color: var(--bad); }
   #detailPanel .dp-grid {
     margin-top: 14px;
     display: grid;
@@ -402,6 +422,10 @@ const AIRLINES = {
 };
 const PRIVATE_LABEL = 'Private Aircraft';
 const PRIVATE_COLOR = '#44494e';
+// Distinct from PRIVATE_LABEL -- this is a contact whose callsign readsb
+// hasn't decoded yet, not a confirmed GA tail number. See normalizeAircraft.
+const ACQUIRING_LABEL = 'Identifying…';
+const ACQUIRING_COLOR = '#33393e';
 
 // ---- State -----------------------------------------------------
 let home = null;                 // { lat, lon } of the receiver
@@ -1043,8 +1067,9 @@ const RAINVIEWER_API_URL = 'https://api.rainviewer.com/public/weather-maps.json'
 const RAINVIEWER_REFRESH_MS = 5 * 60 * 1000;
 const RAINVIEWER_COLOR = 6;       // NEXRAD Level III palette -- the familiar green/yellow/red/purple intensity scale
 const RAINVIEWER_OPTIONS = '1_1'; // smooth interpolation, snow shown distinctly
-let stormsOn = false;
-
+// Always on -- was previously a tap-to-toggle option (default off), but
+// that made storms easy to miss unless someone happened to tap empty space.
+// Freed up the empty-tap gesture for the nearby-aircraft alert toggle below.
 async function refreshStorms() {
   if (!map) return;
   try {
@@ -1069,7 +1094,6 @@ async function refreshStorms() {
         type: 'raster',
         source: 'storms',
         paint: { 'raster-opacity': 0.65 },
-        layout: { visibility: stormsOn ? 'visible' : 'none' },
       });
     }
   } catch (e) {
@@ -1077,11 +1101,34 @@ async function refreshStorms() {
   }
 }
 
-function toggleStorms() {
-  stormsOn = !stormsOn;
-  showToast(stormsOn ? 'STORMS ON' : 'STORMS OFF');
-  if (map && map.getLayer('storms')) {
-    map.setLayoutProperty('storms', 'visibility', stormsOn ? 'visible' : 'none');
+// ---- Nearby-aircraft alert ---------------------------------------------
+// Automatically pops the detail panel (see showDetailPanel) for any plane
+// that comes within ALERT_RADIUS_NM of the receiver -- on by default,
+// toggled via the empty-tap gesture that used to control storms.
+const ALERT_RADIUS_NM = 0.869;      // 1 statute mile -- entry threshold
+const ALERT_CLEAR_RADIUS_NM = 1.0;  // slightly wider exit threshold, so a
+                                     // plane sitting right at the boundary
+                                     // can't flap the alert on noisy range
+let nearbyAlertsOn = true;
+
+function toggleNearbyAlerts() {
+  nearbyAlertsOn = !nearbyAlertsOn;
+  showToast(nearbyAlertsOn ? 'NEARBY ALERTS ON' : 'NEARBY ALERTS OFF');
+}
+
+// Called once per poll (real GPS-derived range, not the eased per-frame
+// value) for each tracked aircraft -- mirrors updateApproachTracking's same
+// reasoning for why this belongs on the poll, not the render loop.
+function checkNearbyAlert(pl, range) {
+  if (!pl) return;
+  if (!nearbyAlertsOn) { pl.alerted = false; return; }
+  if (range <= ALERT_RADIUS_NM) {
+    if (!pl.alerted) {
+      pl.alerted = true;
+      showDetailPanel(pl, true);
+    }
+  } else if (range > ALERT_CLEAR_RADIUS_NM) {
+    pl.alerted = false; // free to re-alert if it later comes back around
   }
 }
 
@@ -1114,11 +1161,23 @@ async function flushRouteQueue() {
     for (const route of routes) {
       if (!route || !route.callsign) continue;
       found.add(route.callsign);
-      // skip routes the API itself flags as implausible for this flight's
-      // current position, rather than showing a possibly-wrong city pair
-      const airports = route.plausible !== false ? route._airports : null;
-      routeCache.set(route.callsign, (airports && airports.length === 2)
-        ? { from: airports[0].location, to: airports[1].location }
+      // Still shown when the API flags a route implausible for this
+      // flight's current position (e.g. a reused flight number resolving to
+      // a stale scheduled route) -- rather than silently hiding it, flag it
+      // visibly (see the .route.implausible styling) so it reads as "here's
+      // our best guess, don't trust it" instead of a wrong-but-confident
+      // city pair.
+      // Regional/commuter flight numbers commonly cover more than one leg
+      // in a day's rotation (e.g. CLT-GSO-CLT, an out-and-back) -- _airports
+      // lists every stop in order, not just an origin/destination pair, and
+      // requiring exactly 2 silently dropped every one of these (common
+      // enough on regional carriers to be the main reason their flights
+      // often showed no route at all). Join every stop instead of just the
+      // first/last, since first-to-last alone degenerates to "same city
+      // both ends" for a round trip like this one.
+      const airports = route._airports;
+      routeCache.set(route.callsign, (airports && airports.length >= 2)
+        ? { text: airports.map(ap => ap.location).join(' → '), plausible: route.plausible !== false }
         : null);
     }
     for (const e of batch) {
@@ -1273,19 +1332,30 @@ function normalizeAircraft(a) {
   const alt = altRaw === 'ground' ? 'ground' : (typeof altRaw === 'number' ? altRaw : null);
   const realHdg = a.track ?? a.true_heading ?? a.mag_heading ?? a.calc_track ?? null;
   const hdg = realHdg ?? bearing; // blip rotation falls back to bearing; detail panel shows realHdg only
-  const cs = (a.flight ? a.flight.trim() : '') || a.hex.toUpperCase();
+  // readsb decodes a contact's identity (flight) squitter separately from
+  // (and slower than) its position -- a freshly-acquired plane commonly has
+  // real lat/lon for several polls before `flight` shows up at all. Falling
+  // back to the hex as `cs` in that gap is fine as a display placeholder
+  // (it's literally what tar1090 does too), but badging that gap "Private
+  // Aircraft" is actively wrong, not just uninformative -- it's a real
+  // confirmed-scheduled-carrier flight whose callsign we just haven't seen
+  // yet (self-corrects to the real badge within a poll or two once it
+  // arrives, no special handling needed there). Track hasCallsign so the two
+  // "no airline" cases -- genuinely unknown yet vs. a real GA tail number
+  // that will never match -- don't get conflated under one label.
+  const hasCallsign = !!(a.flight && a.flight.trim());
+  const cs = hasCallsign ? a.flight.trim() : a.hex.toUpperCase();
 
   // scheduled/charter flights are 3 letters + a number (e.g. DAL1234); GA tail
-  // numbers (N1182D) and hex-fallback callsigns won't match, and correctly
-  // get labeled "Private Aircraft" with no route lookup below
-  const airlineMatch = /^([A-Z]{3})\d/.exec(cs);
+  // numbers (N1182D) correctly don't match and get labeled "Private Aircraft"
+  const airlineMatch = hasCallsign ? /^([A-Z]{3})\d/.exec(cs) : null;
   const airlineIcao = airlineMatch ? airlineMatch[1] : null;
   const airline = airlineIcao ? (AIRLINES[airlineIcao] || null) : null;
-  const airlineLabel = airline ? airline.name : PRIVATE_LABEL;
-  const badgeColor = airline ? airline.color : PRIVATE_COLOR;
+  const airlineLabel = airline ? airline.name : (hasCallsign ? PRIVATE_LABEL : ACQUIRING_LABEL);
+  const badgeColor = airline ? airline.color : (hasCallsign ? PRIVATE_COLOR : ACQUIRING_COLOR);
 
   return {
-    hex: a.hex, cs, bearing, range, alt, hdg, realHdg, speed: a.gs ?? null,
+    hex: a.hex, cs, hasCallsign, bearing, range, alt, hdg, realHdg, speed: a.gs ?? null,
     lat: typeof a.lat === 'number' ? a.lat : null,
     lon: typeof a.lon === 'number' ? a.lon : null,
     squawk: a.squawk ?? null,
@@ -1358,11 +1428,19 @@ function applyUpdate(list) {
       });
     }
 
-    if (n.airlineIcao) {
+    // Try for every real callsign, not just ones that look like a scheduled
+    // airline flight number -- on-demand/charter GA traffic (badged "Private
+    // Aircraft") occasionally does have a route adsb.im can resolve, and
+    // there's no harm in asking; a miss just caches null same as today. Only
+    // truly skipped when there's no real callsign yet at all (n.cs is the
+    // hex fallback -- see hasCallsign in normalizeAircraft), since querying
+    // a hex code as if it were a flight number can't return anything.
+    if (n.hasCallsign) {
       queueRouteLookup(n.cs, n.lat ?? home?.lat ?? 0, n.lon ?? home?.lon ?? 0);
     }
 
     updateApproachTracking(planes.get(n.hex), n.lat, n.lon, n.alt);
+    checkNearbyAlert(planes.get(n.hex), n.range);
   }
 
   // aircraft readsb no longer reports aren't dropped immediately -- they
@@ -1548,7 +1626,8 @@ function drawPlanes(dt) {
     const routeEl = node.querySelector('.route');
     const route = routeCache.get(p.cs);
     if (route) {
-      routeEl.textContent = `${route.from} → ${route.to}`;
+      routeEl.textContent = route.plausible ? route.text : `${route.text} (unconfirmed)`;
+      routeEl.classList.toggle('implausible', !route.plausible);
       routeEl.style.display = 'block';
     } else {
       routeEl.style.display = 'none';
@@ -1748,23 +1827,24 @@ function vrateLabel(vrate) {
 
 let detailPanelHex = null; // guards against a photo fetch resolving after the panel moved on to a different plane (or closed)
 
-function showDetailPanel(p) {
+function showDetailPanel(p, isAlert = false) {
   detailPanelHex = p.hex;
   const speedTxt = p.speed === null ? '—' : Math.round(p.speed) + ' kt';
   const altTxt = p.alt === 'ground' ? 'On ground' : (p.alt === null ? '—' : `${p.alt.toLocaleString()} ft`);
   const hdgTxt = p.realHdg != null ? Math.round(p.realHdg) + '°' : '—';
   const rangeTxt = `${p.range.toFixed(1)} nm · ${Math.round(p.bearing)}°`;
   const route = routeCache.get(p.cs);
-  const routeTxt = route ? `${route.from} → ${route.to}` : null;
+  const routeTxt = route ? (route.plausible ? route.text : `${route.text} (unconfirmed)`) : null;
   const subtitle = [p.typeLabel || 'Unknown type', p.registration].filter(Boolean).join(' · ');
 
   detailPanelEl.innerHTML = `
     <div class="dp-close">&times;</div>
+    ${isAlert ? `<div class="dp-alert-tag">⚠ WITHIN 1 MILE</div>` : ''}
     <div class="dp-photo" style="display:none"></div>
     <div class="dp-cs" style="color:${p.color}">${p.cs}</div>
     <div class="dp-badge" style="background:${p.badgeColor}">${p.airlineLabel}</div>
     <div class="dp-type">${subtitle}</div>
-    ${routeTxt ? `<div class="dp-route">${routeTxt}</div>` : ''}
+    ${routeTxt ? `<div class="dp-route${route.plausible ? '' : ' implausible'}">${routeTxt}</div>` : ''}
     <div class="dp-grid">
       <div class="dp-field"><div class="dp-label">Altitude</div><div class="dp-value">${altTxt}</div></div>
       <div class="dp-field"><div class="dp-label">Speed</div><div class="dp-value">${speedTxt}</div></div>
@@ -1775,6 +1855,7 @@ function showDetailPanel(p) {
     </div>
   `;
   detailPanelEl.classList.add('show');
+  detailPanelEl.classList.toggle('alert', isAlert);
   detailBackdropEl.classList.add('show');
   clearTimeout(detailDismissTimer);
   detailDismissTimer = setTimeout(hideDetailPanel, 18000);
@@ -1923,6 +2004,7 @@ async function loadDetailPhoto(hex) {
 function hideDetailPanel() {
   detailPanelHex = null;
   detailPanelEl.classList.remove('show');
+  detailPanelEl.classList.remove('alert');
   detailBackdropEl.classList.remove('show');
   clearTimeout(detailDismissTimer);
 }
@@ -1956,7 +2038,7 @@ stage.addEventListener('pointerup', (e) => {
   const x = e.clientX - rect.left, y = e.clientY - rect.top;
   const p = findPlaneAtStagePoint(x, y);
   if (p) showDetailPanel(p);
-  else toggleStorms();
+  else toggleNearbyAlerts();
 });
 
 async function start() {
