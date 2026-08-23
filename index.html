@@ -923,7 +923,10 @@ function initMap() {
   // style's minzoom setting), so raising the zoom gate there does nothing.
   // Runway outlines instead come from an OpenStreetMap Overpass query
   // (retried a few times on failure), added as our own GeoJSON layer — see
-  // loadRunways().
+  // loadRunways(). loadCachedRunways() renders a previous successful
+  // result immediately, if one exists, while loadRunways() still runs
+  // regardless to refresh it in the background.
+  map.on('load', loadCachedRunways);
   map.on('load', loadRunways);
   map.on('load', recolorLabels);
   map.on('load', refreshStorms);
@@ -968,24 +971,29 @@ function initApproachLayer() {
     // between the kiosk (standard DPI) and a phone/laptop (typically
     // HiDPI) -- that turned out to be a red herring (made it worse, not
     // better) once tested properly; the zoom-level compression was the
-    // real cause all along. A much smaller radius (3) at the same
-    // production zoom keeps individual accumulated flight paths visible as
-    // distinguishable curved lines rather than one blob, while genuinely
-    // busy convergence points (e.g. right at the runway threshold) still
-    // read as more solid/bright than lightly-used stretches -- the whole
-    // point of the density gradient above.
+    // real cause all along. A much smaller radius keeps individual
+    // accumulated flight paths visible as distinguishable curved lines
+    // rather than one blob, while genuinely busy convergence points (e.g.
+    // right at the runway threshold) still read as more solid/bright than
+    // lightly-used stretches -- the whole point of the density gradient
+    // above. Dropped further still (3 -> 2) and switched from the muted
+    // --mid teal to a brighter, more saturated cyan/mint at a follow-up
+    // request for even more visible dot structure -- confirmed live at the
+    // real production zoom that individual points read clearly rather than
+    // smearing together, and the color pops harder against the darkened
+    // map than the original teal did.
     paint: {
       'heatmap-weight': 0.6,
-      'heatmap-intensity': 2,
-      'heatmap-radius': 3,
-      'heatmap-opacity': 0.9,
+      'heatmap-intensity': 2.5,
+      'heatmap-radius': 2,
+      'heatmap-opacity': 0.95,
       'heatmap-color': [
         'interpolate', ['linear'], ['heatmap-density'],
         0, 'rgba(0,0,0,0)',
-        0.15, 'rgba(79,214,200,0.15)',
-        0.4, 'rgba(79,214,200,0.4)',
-        0.7, 'rgba(79,214,200,0.7)',
-        1, 'rgba(79,214,200,0.95)',
+        0.15, 'rgba(0,255,225,0.3)',
+        0.4, 'rgba(0,255,225,0.55)',
+        0.7, 'rgba(0,255,225,0.8)',
+        1, 'rgba(120,255,240,1)',
       ],
     },
   });
@@ -1085,6 +1093,70 @@ function extendedApproachLines(runwayGeojson) {
   return { type: 'FeatureCollection', features };
 }
 
+// Runway geometry for a fixed home location never changes at runtime, so a
+// successful fetch is worth remembering across reloads, not just within one
+// -- a kiosk restart used to mean waiting out the full Overpass retry cycle
+// (up to OVERPASS_MAX_ATTEMPTS attempts, OVERPASS_RETRY_MS apart, each with
+// its own network timeout -- a couple of minutes in the worst case) before
+// runways reappeared, every single time. Caching the last successful result
+// means a restart shows real runways immediately; loadRunways() still runs
+// in the background regardless to self-heal the cache if OSM data ever
+// changes, and a failed refresh just leaves the already-displayed cached
+// copy alone.
+const RUNWAY_CACHE_KEY = 'flightradar_runways_v1';
+
+// Shared by both the cache-hit path (synchronous, fires before the other
+// map.on('load', ...) handlers below get their turn) and the network-fetch
+// path (async, resolves well after them) -- moveLayer() with no second
+// argument pins these to the very top regardless of which path added them
+// or when, so "real runway pavement paints over the faint approach-outline
+// hint" holds up either way instead of depending on incidental ordering.
+function applyRunwayData(geojson) {
+  const extensions = extendedApproachLines(geojson);
+  if (map.getSource('runways')) {
+    map.getSource('runways').setData(geojson);
+    map.getSource('runway-extensions').setData(extensions);
+    return;
+  }
+  map.addSource('runways', { type: 'geojson', data: geojson });
+  map.addSource('runway-extensions', { type: 'geojson', data: extensions });
+  // line-opacity/width bumped from the original 0.22/1 -- faint by itself,
+  // plus #mapbg's own brightness(0.3) filter darkening it further, added up
+  // to genuinely invisible rather than just subtle. Confirmed live at the
+  // real production zoom that these numbers are visible without reading as
+  // "real pavement".
+  map.addLayer({
+    id: 'runway-extensions',
+    type: 'line',
+    source: 'runway-extensions',
+    paint: { 'line-color': '#c7d0d3', 'line-width': 1.6, 'line-opacity': 0.45, 'line-dasharray': [2, 3] },
+  });
+  map.addLayer({
+    id: 'runways-taxiway',
+    type: 'line',
+    source: 'runways',
+    filter: ['==', ['get', 'aeroway'], 'taxiway'],
+    paint: { 'line-color': '#5a6469', 'line-width': 1.2 },
+  });
+  map.addLayer({
+    id: 'runways-runway',
+    type: 'line',
+    source: 'runways',
+    filter: ['==', ['get', 'aeroway'], 'runway'],
+    paint: { 'line-color': '#c7d0d3', 'line-width': 2.5 },
+  });
+  for (const id of ['runway-extensions', 'runways-taxiway', 'runways-runway']) map.moveLayer(id);
+}
+
+function loadCachedRunways() {
+  try {
+    const cached = localStorage.getItem(RUNWAY_CACHE_KEY);
+    if (cached) applyRunwayData(JSON.parse(cached));
+  } catch (e) {
+    // corrupt/unavailable cache entry -- ignore, loadRunways() below repopulates it
+  }
+}
+
 async function loadRunways(attempt = 1) {
   const bb = rangeBBox(home.lat, home.lon, RANGE_NM);
   const query = `[out:json][timeout:25];(way["aeroway"="runway"](${bb.south},${bb.west},${bb.north},${bb.east});way["aeroway"="taxiway"](${bb.south},${bb.west},${bb.north},${bb.east}););out body;>;out skel qt;`;
@@ -1114,36 +1186,8 @@ async function loadRunways(attempt = 1) {
   }
   if (geojson.features.length === 0) { retry(); return; }
 
-  map.addSource('runways', { type: 'geojson', data: geojson });
-  map.addSource('runway-extensions', { type: 'geojson', data: extendedApproachLines(geojson) });
-  // Added first so the real runway/taxiway pavement (added next, below)
-  // paints on top of it -- the approximation reads as a faint hint
-  // underneath the crisp, real geometry, not competing with it.
-  // line-opacity/width bumped from the original 0.22/1 -- same issue as
-  // approaches-heat above: that faint by itself, plus #mapbg's own
-  // brightness(0.3) filter darkening it further, added up to genuinely
-  // invisible rather than just subtle. Confirmed live at the real production
-  // zoom that these numbers are visible without reading as "real pavement".
-  map.addLayer({
-    id: 'runway-extensions',
-    type: 'line',
-    source: 'runway-extensions',
-    paint: { 'line-color': '#c7d0d3', 'line-width': 1.6, 'line-opacity': 0.45, 'line-dasharray': [2, 3] },
-  });
-  map.addLayer({
-    id: 'runways-taxiway',
-    type: 'line',
-    source: 'runways',
-    filter: ['==', ['get', 'aeroway'], 'taxiway'],
-    paint: { 'line-color': '#5a6469', 'line-width': 1.2 },
-  });
-  map.addLayer({
-    id: 'runways-runway',
-    type: 'line',
-    source: 'runways',
-    filter: ['==', ['get', 'aeroway'], 'runway'],
-    paint: { 'line-color': '#c7d0d3', 'line-width': 2.5 },
-  });
+  try { localStorage.setItem(RUNWAY_CACHE_KEY, JSON.stringify(geojson)); } catch (e) {} // storage full/unavailable -- non-fatal, just skip caching this time
+  applyRunwayData(geojson);
 }
 
 // ---- Storm radar overlay -----------------------------------------------
