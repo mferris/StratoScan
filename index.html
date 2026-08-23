@@ -439,6 +439,7 @@ let sweepAngle = 0;
 const tagsEl = document.getElementById('tags');
 const leadersEl = document.getElementById('leaders');
 const stage = document.querySelector('.stage');
+const hudEl = document.querySelector('.hud');
 const locEl = document.getElementById('loc');
 const countEl = document.getElementById('count');
 const statusEl = document.getElementById('status');
@@ -467,9 +468,13 @@ const LABEL_SEPARATION_PASSES = 24; // cheap: adjacent-pair only, O(n) per pass 
 // enough -- they need to stay inside this circle instead.
 const LABEL_BOUND_RADIUS = W / 2 - 6;
 
-function ringPointForAngle(angleDeg) {
+// scale converts internal canvas-space (1080 units) to real CSS px, same
+// factor drawPlanes already uses for anchorX/anchorY -- only equals 1 on the
+// physical 1080x1080 kiosk panel; without it labels land at the wrong CSS
+// pixel position on any other viewport (e.g. viewing over Tailscale Funnel).
+function ringPointForAngle(angleDeg, scale) {
   const rad = (angleDeg - 90) * Math.PI / 180;
-  return { x: CX + LABEL_RING_RADIUS * Math.cos(rad), y: CY + LABEL_RING_RADIUS * Math.sin(rad) };
+  return { x: CX * scale + LABEL_RING_RADIUS * scale * Math.cos(rad), y: CY * scale + LABEL_RING_RADIUS * scale * Math.sin(rad) };
 }
 
 // nearest point on an axis-aligned box to an external point — used to attach
@@ -803,10 +808,9 @@ function zoomForRange(rangeNm, lat, rPixels) {
 
 function initMap() {
   if (!home || map) return;
-  // Zoom is calibrated once, at init, against the stage's CSS size at that
-  // moment -- fine for the kiosk (fixed physical resolution, never resized),
-  // but a browser window resized after load (e.g. via the Funnel URL) would
-  // need a reload to recalibrate rather than drifting back out of alignment.
+  // Initial zoom, calibrated against the stage's CSS size at this moment --
+  // the resize listener below recalibrates this the same way if the window
+  // is resized later (e.g. via the Funnel URL).
   const rCss = R * (stage.getBoundingClientRect().width / W);
   map = new maplibregl.Map({
     container: 'mapbg',
@@ -839,16 +843,35 @@ function initApproachLayer() {
     id: 'approaches-heat',
     type: 'heatmap',
     source: 'approaches',
+    // Tuned faint on purpose, but the original numbers here (radius 6,
+    // intensity 0.6, opacity 0.45) turned out faint to the point of
+    // effectively invisible once #mapbg's own `brightness(0.3)` filter (see
+    // initMap) darkens it further on top -- confirmed live against the real
+    // accumulated point data (thousands of points, correctly clustered right
+    // over RDU) that at the production numbers nothing perceptible reached
+    // the screen at the normal operating zoom.
+    // Originally a solid orange fill (matching --low), but that both read as
+    // a filled blob rather than a corridor outline and visually blended into
+    // the base map's own orange roads. The color-ramp's non-monotonic alpha
+    // (transparent -> opaque teal at low density -> fades back down at mid
+    // density -> a modest floor at the densest cores) turns each cluster of
+    // accumulated points into a hollow ring rather than a filled disc, which
+    // reads as an actual outline tracing the corridor -- confirmed live
+    // against the real data that it draws a recognizable curved outline into
+    // the runway threshold instead of a blob. Teal (matches --mid) contrasts
+    // against the map's orange roads instead of disappearing into them.
     paint: {
-      'heatmap-weight': 0.35,
-      'heatmap-intensity': 0.6,
-      'heatmap-radius': 6,
-      'heatmap-opacity': 0.45,
+      'heatmap-weight': 0.6,
+      'heatmap-intensity': 1.2,
+      'heatmap-radius': 10,
+      'heatmap-opacity': 0.85,
       'heatmap-color': [
         'interpolate', ['linear'], ['heatmap-density'],
         0, 'rgba(0,0,0,0)',
-        0.3, 'rgba(255,176,32,0.25)',
-        1, 'rgba(255,176,32,0.9)',
+        0.08, 'rgba(0,0,0,0)',
+        0.18, 'rgba(79,214,200,0.85)',
+        0.35, 'rgba(79,214,200,0.15)',
+        1, 'rgba(79,214,200,0.35)',
       ],
     },
   });
@@ -870,7 +893,17 @@ function recolorLabels() {
   }
 }
 
-window.addEventListener('resize', () => { if (map) map.resize(); });
+// Zoom is calibrated against the stage's CSS pixel size (see zoomForRange's
+// comment above) -- a window resized after load needs both a container
+// resize AND a fresh zoom to stay aligned with the radar, not just the
+// former. Fine on the kiosk (fixed physical resolution, this never fires
+// there in practice), but keeps a resized Funnel/desktop view aligned too.
+window.addEventListener('resize', () => {
+  if (!map) return;
+  map.resize();
+  const rCss = R * (stage.getBoundingClientRect().width / W);
+  map.setZoom(zoomForRange(RANGE_NM, home.lat, rCss));
+});
 
 // ---- Runway outlines --------------------------------------------------
 // Fetch (home location never changes at runtime, so this only needs to
@@ -972,11 +1005,16 @@ async function loadRunways(attempt = 1) {
   // Added first so the real runway/taxiway pavement (added next, below)
   // paints on top of it -- the approximation reads as a faint hint
   // underneath the crisp, real geometry, not competing with it.
+  // line-opacity/width bumped from the original 0.22/1 -- same issue as
+  // approaches-heat above: that faint by itself, plus #mapbg's own
+  // brightness(0.3) filter darkening it further, added up to genuinely
+  // invisible rather than just subtle. Confirmed live at the real production
+  // zoom that these numbers are visible without reading as "real pavement".
   map.addLayer({
     id: 'runway-extensions',
     type: 'line',
     source: 'runway-extensions',
-    paint: { 'line-color': '#c7d0d3', 'line-width': 1, 'line-opacity': 0.22, 'line-dasharray': [2, 3] },
+    paint: { 'line-color': '#c7d0d3', 'line-width': 1.6, 'line-opacity': 0.45, 'line-dasharray': [2, 3] },
   });
   map.addLayer({
     id: 'runways-taxiway',
@@ -1550,8 +1588,8 @@ function drawPlanes(dt) {
       const aAngle = a.labelAngle;
       const bAngle = wrap ? b.labelAngle + 360 : b.labelAngle;
 
-      const aPt = ringPointForAngle(aAngle);
-      const bPt = ringPointForAngle(bAngle);
+      const aPt = ringPointForAngle(aAngle, scale);
+      const bPt = ringPointForAngle(bAngle, scale);
       const aBox = { x: aPt.x - a.labelW / 2, y: aPt.y - a.labelH / 2, w: a.labelW, h: a.labelH };
       const bBox = { x: bPt.x - b.labelW / 2, y: bPt.y - b.labelH / 2, w: b.labelW, h: b.labelH };
 
@@ -1565,7 +1603,7 @@ function drawPlanes(dt) {
       // always genuinely positive at this point (the guard above already
       // filtered out non-overlapping pairs)
       const push = Math.min(overlapX, overlapY) / 2;
-      const angleDelta = (push / LABEL_RING_RADIUS) * 180 / Math.PI;
+      const angleDelta = (push / (LABEL_RING_RADIUS * scale)) * 180 / Math.PI;
 
       a.labelAngle = ((a.labelAngle - angleDelta) % 360 + 360) % 360;
       b.labelAngle = ((b.labelAngle + angleDelta) % 360 + 360) % 360;
@@ -1573,8 +1611,18 @@ function drawPlanes(dt) {
   }
 
   // --- pass 4: place labels, draw a leader line back to each plane ---------
+  // The HUD (location + aircraft count) sits centered near the top of the
+  // stage -- close enough to a due-north label's natural ring position that
+  // the two can overlap. Computed once per frame (the HUD doesn't move) and
+  // used below to nudge any label that would land underneath it.
+  const hudBox = hudEl.getBoundingClientRect();
+  const hudLeft = hudBox.left - stageRect.left - LABEL_MARGIN;
+  const hudRight = hudBox.right - stageRect.left + LABEL_MARGIN;
+  const hudBottom = hudBox.bottom - stageRect.top + LABEL_MARGIN;
+
+  const cxScaled = CX * scale, cyScaled = CY * scale, boundRadiusScaled = LABEL_BOUND_RADIUS * scale;
   for (const p of inRange) {
-    const ringPt = ringPointForAngle(p.labelAngle);
+    const ringPt = ringPointForAngle(p.labelAngle, scale);
     let cxBox = ringPt.x, cyBox = ringPt.y; // box center
     const hw = p.labelW / 2, hh = p.labelH / 2;
 
@@ -1585,14 +1633,14 @@ function drawPlanes(dt) {
       let maxDist = 0;
       for (const sx of [-1, 1]) {
         for (const sy of [-1, 1]) {
-          const d = Math.hypot(cxBox + sx * hw - CX, cyBox + sy * hh - CY);
+          const d = Math.hypot(cxBox + sx * hw - cxScaled, cyBox + sy * hh - cyScaled);
           if (d > maxDist) maxDist = d;
         }
       }
-      if (maxDist <= LABEL_BOUND_RADIUS) break;
-      const s = LABEL_BOUND_RADIUS / maxDist;
-      cxBox = CX + (cxBox - CX) * s;
-      cyBox = CY + (cyBox - CY) * s;
+      if (maxDist <= boundRadiusScaled) break;
+      const s = boundRadiusScaled / maxDist;
+      cxBox = cxScaled + (cxBox - cxScaled) * s;
+      cyBox = cyScaled + (cyBox - cyScaled) * s;
     }
 
     let lx = cxBox - hw;
@@ -1600,6 +1648,12 @@ function drawPlanes(dt) {
     // final defensive clamp against the square stage bounds themselves
     lx = Math.max(2, Math.min(stageRect.width - p.labelW - 2, lx));
     ly = Math.max(2, Math.min(stageRect.height - p.labelH - 2, ly));
+
+    // clear the HUD text block rather than sit underneath it -- only
+    // triggers for labels whose ring position lands near due north
+    if (ly < hudBottom && lx < hudRight && lx + p.labelW > hudLeft) {
+      ly = Math.max(2, Math.min(stageRect.height - p.labelH - 2, hudBottom));
+    }
     p.labelX = lx;
     p.labelY = ly;
     p.node.style.left = lx + 'px';
@@ -1875,13 +1929,20 @@ function hideDetailPanel() {
 
 function findPlaneAtStagePoint(x, y) {
   const HIT_RADIUS = 22; // px, around the blip anchor
+  // when two hit targets overlap (close blips, or a blip under a neighbor's
+  // label), pick whichever plane's own blip is nearest the tap rather than
+  // just the first match in Map iteration order
+  let best = null, bestDistSq = Infinity;
   for (const p of planes.values()) {
     if (p.range > RANGE_NM) continue;
     const dx = x - p.anchorX, dy = y - p.anchorY;
-    if (dx * dx + dy * dy <= HIT_RADIUS * HIT_RADIUS) return p;
-    if (p.labelX !== undefined && x >= p.labelX && x <= p.labelX + p.labelW && y >= p.labelY && y <= p.labelY + p.labelH) return p;
+    const distSq = dx * dx + dy * dy;
+    const hitBlip = distSq <= HIT_RADIUS * HIT_RADIUS;
+    const hitLabel = p.labelX !== undefined && x >= p.labelX && x <= p.labelX + p.labelW && y >= p.labelY && y <= p.labelY + p.labelH;
+    if (!hitBlip && !hitLabel) continue;
+    if (distSq < bestDistSq) { bestDistSq = distSq; best = p; }
   }
-  return null;
+  return best;
 }
 
 stage.addEventListener('pointerup', (e) => {
