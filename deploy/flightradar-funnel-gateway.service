@@ -1,0 +1,14 @@
+[Unit]
+Description=FlightRadar Funnel-facing filtering proxy (rounds receiver.json's coordinates)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/flightradar/funnel-gateway.py
+Restart=always
+RestartSec=5
+# 127.0.0.1-only listener; no elevated privileges needed
+DynamicUser=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

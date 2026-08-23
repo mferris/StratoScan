@@ -1,17 +1,14 @@
 import Foundation
 
-/// Where the Pi is reached. Defaults to the Tailscale MagicDNS hostname —
-/// resolves privately over the tailnet if Tailscale is connected on this
-/// device (no public exposure), and also works over plain internet since
-/// Funnel is enabled on the same hostname. Override in Settings for a
-/// direct LAN address (e.g. http://<radar>) when on home WiFi.
+/// Where the Pi is reached. `raspberrypi.local` is Raspberry Pi OS's own
+/// default mDNS hostname, so this works out of the box on most home
+/// networks without editing anything -- override it in Settings with your
+/// own Tailscale MagicDNS hostname (resolves privately over the tailnet, and
+/// over plain internet too if Funnel is enabled on it) or a direct LAN
+/// address for lower latency at home.
 enum APIConfig {
     private static let key = "flightradar.baseURL"
-    // Real Tailscale Funnel hostname, derived from the Pi's actual system
-    // hostname ("flightwall") -- NOT a leftover from the FlightWall ->
-    // FlightRadar rename. Changing this string wouldn't rename anything;
-    // it would just point the app at a URL that doesn't exist.
-    static let defaultBaseURL = "https://[funnel-hostname-redacted]"
+    static let defaultBaseURL = "http://raspberrypi.local"
 
     static var baseURL: String {
         get { UserDefaults.standard.string(forKey: key) ?? defaultBaseURL }
