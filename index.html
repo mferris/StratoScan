@@ -243,6 +243,7 @@
     letter-spacing: 0.03em;
   }
   #detailPanel .dp-type { margin-top: 10px; color: var(--text-dim); font-size: 0.75rem; }
+  #detailPanel .dp-owner { margin-top: 2px; color: var(--text-dim); font-size: 0.75rem; }
   #detailPanel .dp-route { margin-top: 2px; color: var(--text-dim); font-size: 0.75rem; }
   #detailPanel .dp-route.implausible { color: var(--bad); }
   #detailPanel .dp-grid {
@@ -274,6 +275,16 @@
     margin: -18px -20px 14px;
     border-radius: 10px 10px 0 0;
     overflow: hidden;
+  }
+  /* The -18px top bleed above assumes the photo is the first thing in the
+     panel, flush with its top edge -- true normally, but the alert tag
+     (see .dp-alert-tag) renders above it when this is an auto-popped
+     nearby-aircraft alert, and the negative margin was pulling the photo
+     up over that text instead of past it. Drop just the top bleed there;
+     the left/right/bottom bleed (and rounded top corners) still look fine
+     sitting a little lower instead of flush with the panel edge. */
+  #detailPanel.alert .dp-photo {
+    margin-top: 0;
   }
   #detailPanel .dp-photo img,
   #detailPanel .dp-photo svg {
@@ -456,6 +467,7 @@ const hexTypeCache = new Map();  // hex -> human-readable type string or null
 const hexTypePending = new Set();
 const stockPhotoCache = new Map();   // typeLabel -> { thumb, page } or null -- keyed by type, not hex, since many tails share a type
 const stockPhotoPending = new Set();
+const ownerCache = new Map();        // hex -> registered owner name, or null if confirmed not in the registry
 
 if (location.protocol === 'http:') {
   // adsb.im asks that http-loaded pages call their API over http too
@@ -1885,6 +1897,7 @@ function showDetailPanel(p, isAlert = false) {
   const route = routeCache.get(p.cs);
   const routeTxt = route ? (route.plausible ? route.text : `${route.text} (unconfirmed)`) : null;
   const subtitle = [p.typeLabel || 'Unknown type', p.registration].filter(Boolean).join(' · ');
+  const isPrivate = p.airlineLabel === PRIVATE_LABEL;
 
   detailPanelEl.innerHTML = `
     <div class="dp-close">&times;</div>
@@ -1893,6 +1906,7 @@ function showDetailPanel(p, isAlert = false) {
     <div class="dp-cs" style="color:${p.color}">${esc(p.cs)}</div>
     <div class="dp-badge" style="background:${p.badgeColor}">${esc(p.airlineLabel)}</div>
     <div class="dp-type">${esc(subtitle)}</div>
+    ${isPrivate ? `<div class="dp-owner" style="display:none"></div>` : ''}
     ${routeTxt ? `<div class="dp-route${route.plausible ? '' : ' implausible'}">${esc(routeTxt)}</div>` : ''}
     <div class="dp-grid">
       <div class="dp-field"><div class="dp-label">Altitude</div><div class="dp-value">${altTxt}</div></div>
@@ -1909,6 +1923,44 @@ function showDetailPanel(p, isAlert = false) {
   clearTimeout(detailDismissTimer);
   detailDismissTimer = setTimeout(hideDetailPanel, 18000);
   loadDetailPhoto(p.hex);
+  if (isPrivate) loadOwner(p.hex);
+}
+
+// Registered-owner lookup for confirmed-private aircraft (a real callsign
+// that just doesn't match the airline flight-number pattern -- not the
+// "Identifying..." case, which isn't confirmed as anything yet). adsbdb.com
+// aggregates public aircraft registry data -- the FAA's releasable registry
+// for US tails, plus other countries' equivalents -- behind a free, no-key
+// API, same class of source as everything else this app already leans on
+// (adsb.im, planespotters, Wikipedia, Overpass, RainViewer). Queried by hex
+// rather than parsing a registration out of the callsign, since we always
+// have the hex and it's exactly what readsb already identifies the plane by.
+// Only a real answer (found, or a confirmed 404 -- not in the registry) gets
+// cached; a network hiccup doesn't, so it just retries next time the panel
+// opens, same reasoning as lookupStockPhoto above.
+async function lookupOwner(hex) {
+  if (ownerCache.has(hex)) return ownerCache.get(hex);
+  try {
+    const res = await fetch(`https://api.adsbdb.com/v0/aircraft/${hex}`);
+    if (res.status === 404) { ownerCache.set(hex, null); return null; }
+    if (!res.ok) return null;
+    const data = await res.json();
+    const owner = data?.response?.aircraft?.registered_owner || null;
+    ownerCache.set(hex, owner);
+    return owner;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function loadOwner(hex) {
+  const owner = await lookupOwner(hex);
+  if (detailPanelHex !== hex || !detailPanelEl.classList.contains('show')) return; // stale by the time this resolved
+  if (!owner) return;
+  const ownerEl = detailPanelEl.querySelector('.dp-owner');
+  if (!ownerEl) return;
+  ownerEl.textContent = `Registered to ${owner}`;
+  ownerEl.style.display = 'block';
 }
 
 // Photo comes from planespotters.net via our own same-origin /photo/<hex>
