@@ -1,0 +1,18 @@
+[Unit]
+Description=FlightRadar per-aircraft sighting-count shared store
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/flightradar/sighting-store.py
+Restart=always
+RestartSec=5
+# 127.0.0.1-only listener; no elevated privileges needed
+DynamicUser=yes
+NoNewPrivileges=yes
+# Persists sightings.json across restarts/reboots despite DynamicUser --
+# systemd creates/owns /var/lib/flightradar-sightings and exposes it to the
+# service via $STATE_DIRECTORY.
+StateDirectory=flightradar-sightings
+
+[Install]
+WantedBy=default.target

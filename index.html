@@ -146,6 +146,14 @@
   .tag .alt { color: var(--text-dim); }
   .tag .route { color: var(--text-dim); display: none; margin-top: 0; }
   .tag .route.implausible { color: var(--bad); }
+  .tag .seen {
+    display: none;
+    color: var(--mid);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    margin-top: 1px;
+  }
   .tag .badge {
     display: none;
     margin-top: 1px;
@@ -778,6 +786,48 @@ function commitApproachTrack(points) {
     .catch(e => {}); // approach-store unavailable -- this session's own view still updated above, just won't be shared
 }
 
+// ---- Sighting counts ----------------------------------------------------
+// How many distinct times this receiver has picked up each aircraft
+// ("total"), and how many of those times it came within the nearby-alert
+// radius ("nearby", see ALERT_RADIUS_NM) -- shared server-side (same
+// reasoning as approachPoints above: a browser-local count would never be
+// visible to anyone checking in from a different device) so the kiosk's
+// own accumulated history is visible to every viewer, not just whoever
+// happens to have it open. "Distinct visit", not "every poll" -- recorded
+// once when a plane is newly added to `planes` (applyUpdate) or once when
+// checkNearbyAlert's pl.alerted first flips true, not once a second while
+// it's actually in view.
+const SIGHTING_STORE_URL = '/sightings';
+const sightingCounts = new Map(); // hex -> { total, nearby }
+
+async function loadSightingCounts() {
+  try {
+    const res = await fetch(SIGHTING_STORE_URL, { cache: 'no-store' });
+    const data = await res.json();
+    if (data && typeof data === 'object') {
+      for (const [hex, counts] of Object.entries(data)) sightingCounts.set(hex, counts);
+    }
+  } catch (e) {
+    // sighting-store unavailable -- counts start/stay empty for this session, purely cosmetic either way
+  }
+}
+
+// Updates the local view immediately (so this session's own label/panel
+// stay responsive without waiting on a round-trip) and separately
+// fire-and-forgets a POST so the increment is shared and persisted --
+// same split responsibility as commitApproachTrack above. The server's
+// response (the authoritative post-increment counts) overwrites the local
+// guess once it arrives, reconciling any drift from other viewers
+// incrementing the same hex concurrently.
+function recordSighting(hex, kind) {
+  const current = sightingCounts.get(hex) || { total: 0, nearby: 0 };
+  sightingCounts.set(hex, { ...current, [kind]: (current[kind] || 0) + 1 });
+  fetch(SIGHTING_STORE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hex, kind }) })
+    .then(res => res.ok ? res.json() : null)
+    .then(counts => { if (counts) sightingCounts.set(hex, counts); })
+    .catch(e => {}); // sighting-store unavailable -- this session's own optimistic count stands, just won't be shared
+}
+
 // Called once per poll (not per animation frame -- this wants real GPS
 // fixes, not smoothed/eased blip positions) for each tracked aircraft.
 // Buffers candidate points on `pl` while a plane is plausibly on approach
@@ -1181,12 +1231,18 @@ function playAlertSound() {
 // reasoning for why this belongs on the poll, not the render loop.
 function checkNearbyAlert(pl, range) {
   if (!pl) return;
-  if (!nearbyAlertsOn) { pl.alerted = false; return; }
   if (range <= ALERT_RADIUS_NM) {
     if (!pl.alerted) {
       pl.alerted = true;
-      showDetailPanel(pl, true);
-      playAlertSound();
+      // The count is a standing record of real proximity events -- kept
+      // regardless of whether the interactive popup/sound happen to be
+      // toggled on right now, which is a separate, purely presentational
+      // concern (see toggleNearbyAlerts).
+      recordSighting(pl.hex, 'nearby');
+      if (nearbyAlertsOn) {
+        showDetailPanel(pl, true);
+        playAlertSound();
+      }
     }
   } else if (range > ALERT_CLEAR_RADIUS_NM) {
     pl.alerted = false; // free to re-alert if it later comes back around
@@ -1480,6 +1536,7 @@ function applyUpdate(list) {
         lastSeen: now,
         trail: [{ bearing: n.bearing, range: n.range, t: now }],
       });
+      recordSighting(n.hex, 'total'); // a genuinely new visit, not just still-in-view -- see "Sighting counts" above
     }
 
     if (!hexTypeCache.has(n.hex)) {
@@ -1661,7 +1718,7 @@ function drawPlanes(dt) {
     if (!node) {
       node = document.createElement('div');
       node.className = 'tag';
-      node.innerHTML = '<div class="cs"></div><div class="badge"></div><div class="type"></div><div class="alt"></div><div class="route"></div>';
+      node.innerHTML = '<div class="cs"></div><div class="badge"></div><div class="seen"></div><div class="type"></div><div class="alt"></div><div class="route"></div>';
       tagsEl.appendChild(node);
       tagNodes.set(p.hex, node);
     }
@@ -1675,6 +1732,19 @@ function drawPlanes(dt) {
     badgeEl.textContent = p.airlineLabel;
     badgeEl.style.background = p.badgeColor;
     badgeEl.style.display = 'inline-block';
+
+    // Only shown once it's actually a signal worth noticing ("you've seen
+    // this one before") -- every first-time sighting showing "×1" would
+    // just be noise on every label, every time, which is exactly the kind
+    // of label clutter this app has repeatedly tried to avoid elsewhere.
+    const seenEl = node.querySelector('.seen');
+    const counts = sightingCounts.get(p.hex);
+    if (counts && counts.total > 1) {
+      seenEl.textContent = `SEEN ×${counts.total}`;
+      seenEl.style.display = 'block';
+    } else {
+      seenEl.style.display = 'none';
+    }
 
     const typeEl = node.querySelector('.type');
     if (p.typeLabel) {
@@ -1898,6 +1968,7 @@ function showDetailPanel(p, isAlert = false) {
   const routeTxt = route ? (route.plausible ? route.text : `${route.text} (unconfirmed)`) : null;
   const subtitle = [p.typeLabel || 'Unknown type', p.registration].filter(Boolean).join(' · ');
   const isPrivate = p.airlineLabel === PRIVATE_LABEL;
+  const counts = sightingCounts.get(p.hex) || { total: 0, nearby: 0 };
 
   detailPanelEl.innerHTML = `
     <div class="dp-close">&times;</div>
@@ -1915,6 +1986,8 @@ function showDetailPanel(p, isAlert = false) {
       <div class="dp-field"><div class="dp-label">Vert. rate</div><div class="dp-value">${vrateLabel(p.vrate)}</div></div>
       <div class="dp-field"><div class="dp-label">Squawk</div><div class="dp-value">${p.squawk ?? '—'}</div></div>
       <div class="dp-field"><div class="dp-label">Range / Brg</div><div class="dp-value">${rangeTxt}</div></div>
+      <div class="dp-field"><div class="dp-label">Sightings</div><div class="dp-value">${counts.total}</div></div>
+      <div class="dp-field"><div class="dp-label">Within 2mi</div><div class="dp-value">${counts.nearby}</div></div>
     </div>
   `;
   detailPanelEl.classList.add('show');
@@ -2145,6 +2218,7 @@ stage.addEventListener('pointerup', (e) => {
 async function start() {
   discoverDatabaseFolder().then(loadTypeCodeTable); // non-blocking; type labels fill in once ready
   loadApproachPoints(); // non-blocking; heatmap fills in once ready (or once initApproachLayer adds the source, whichever comes second)
+  loadSightingCounts(); // non-blocking; counts fill in once ready, same reasoning
   await loadHome();
   if (!home) {
     // keep retrying receiver info in the background until it succeeds
