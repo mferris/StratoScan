@@ -954,18 +954,31 @@ function initApproachLayer() {
     // for an outline look -- reverted after a follow-up request wanted the
     // opposite: genuine heatmap behavior, where a busier stretch of the
     // corridor (more accumulated landings overlapping there) reads as more
-    // visually distinguished than a lightly-used one. This ramp is strictly
-    // monotonic -- transparent at zero density, growing smoothly to a bold,
-    // clearly-saturated teal at the highest-density cores -- confirmed live
-    // against the real accumulated data that denser stretches of the real
-    // corridor genuinely read as more solid/bright than sparser ones, not
-    // just "some outline exists here." Teal (matches --mid) still contrasts
-    // against the map's orange roads instead of disappearing into them.
+    // visually distinguished than a lightly-used one.
+    // radius 10 looked great at a manually-zoomed-in inspection view, but
+    // that isn't the view anyone actually sees -- at the real production
+    // zoom (the full RANGE_NM disc, what both the kiosk and every other
+    // viewer always render, since the map is non-interactive), that radius
+    // was wide enough relative to the compressed on-screen scale that
+    // individual accumulated points merged into one soft mass with no
+    // visible internal structure -- confirmed live, reproduced with a
+    // frozen snapshot of the real data so it wasn't just later points
+    // organically accumulating mid-comparison. Tried forcing MapLibre's
+    // pixelRatio up first, suspecting a device-pixel-density difference
+    // between the kiosk (standard DPI) and a phone/laptop (typically
+    // HiDPI) -- that turned out to be a red herring (made it worse, not
+    // better) once tested properly; the zoom-level compression was the
+    // real cause all along. A much smaller radius (3) at the same
+    // production zoom keeps individual accumulated flight paths visible as
+    // distinguishable curved lines rather than one blob, while genuinely
+    // busy convergence points (e.g. right at the runway threshold) still
+    // read as more solid/bright than lightly-used stretches -- the whole
+    // point of the density gradient above.
     paint: {
       'heatmap-weight': 0.6,
-      'heatmap-intensity': 1.2,
-      'heatmap-radius': 10,
-      'heatmap-opacity': 0.85,
+      'heatmap-intensity': 2,
+      'heatmap-radius': 3,
+      'heatmap-opacity': 0.9,
       'heatmap-color': [
         'interpolate', ['linear'], ['heatmap-density'],
         0, 'rgba(0,0,0,0)',
