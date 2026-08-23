@@ -1317,6 +1317,16 @@ function initApproachLayer() {
       ],
     },
   });
+  applyHeatmapVisibility(); // a freshly-added MapLibre layer defaults to visible -- immediately match the real setting (off by default, see alertSettings.heatmap)
+}
+
+// Same pattern as applyStormsVisibility -- toggleable in the settings panel
+// (default off, unlike storms: this is denser/more visually busy, and
+// starts empty on a fresh install anyway, so opting in makes more sense
+// than opting out).
+function applyHeatmapVisibility() {
+  if (!map || !map.getLayer('approaches-heat')) return;
+  map.setLayoutProperty('approaches-heat', 'visibility', alertSettings.heatmap ? 'visible' : 'none');
 }
 
 // "liberty" is styled for a light background (black text, white halo) --
@@ -1590,7 +1600,7 @@ const ALERT_CLEAR_RADIUS_NM = 2.0;  // slightly wider exit threshold, so a
 // -- this is a personal display preference for whoever's looking at this
 // particular screen, not data that should be the same for every viewer.
 const ALERT_SETTINGS_KEY = 'flightradar_alert_settings_v1';
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rduPhase: true, atc: false, storms: true };
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rduPhase: true, atc: false, storms: true, heatmap: false };
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -2822,6 +2832,7 @@ const ALERT_SETTINGS_META = [
     kioskSub: 'Not available on this display — opening a new window here can strand the kiosk with no way back via touch. Use a laptop, phone, or the Funnel URL instead.',
   },
   { key: 'storms', label: 'Storm radar overlay', sub: 'Live weather radar over the map (RainViewer)' },
+  { key: 'heatmap', label: 'RDU approach heatmap', sub: 'Density pattern built from actually observed RDU landings' },
 ];
 
 function renderSettingsPanel() {
@@ -2887,6 +2898,7 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     if (alertSettings.atc) ensureAtcAudio(); else closeAtcAudio();
   }
   if (key === 'storms') applyStormsVisibility();
+  if (key === 'heatmap') applyHeatmapVisibility();
   renderSettingsPanel();
 });
 
