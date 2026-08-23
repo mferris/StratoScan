@@ -29,8 +29,23 @@ import threading
 LISTEN = ("127.0.0.1", 8082)
 STORE_PATH = os.path.join(os.environ.get("STATE_DIRECTORY", "."), "approaches.json")
 MAX_POINTS = 6000
+# A real batch is at most a few hundred small [lon,lat] pairs (the client
+# caps its own per-plane buffer at 400 points, committed one landing at a
+# time) -- this is generous headroom over that, not a tuned limit. Exists
+# because this endpoint is reachable from the public internet via Tailscale
+# Funnel with no auth: without a cap, Content-Length is attacker-controlled
+# and the whole body gets read into memory before any validation happens.
+MAX_BODY_BYTES = 200_000
 
 lock = threading.Lock()
+
+
+def valid_point(p):
+    return (
+        isinstance(p, list) and len(p) == 2
+        and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in p)
+        and -180 <= p[0] <= 180 and -90 <= p[1] <= 90
+    )
 
 
 def load_points():
@@ -68,10 +83,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return
         length = int(self.headers.get("Content-Length", 0) or 0)
+        if length <= 0 or length > MAX_BODY_BYTES:
+            self.send_response(413)
+            self.end_headers()
+            return
         try:
             new_points = json.loads(self.rfile.read(length))
-            if not isinstance(new_points, list):
-                raise ValueError("expected a JSON array")
+            if not isinstance(new_points, list) or not all(valid_point(p) for p in new_points):
+                raise ValueError("expected a JSON array of [lon, lat] pairs")
         except (ValueError, json.JSONDecodeError):
             self.send_response(400)
             self.end_headers()
