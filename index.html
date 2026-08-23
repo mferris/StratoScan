@@ -333,21 +333,17 @@
     padding: 3px 8px;
   }
 
-  /* Due west, close to the dial's edge but still just inside the label
-     ring -- every aircraft label sits on a fixed ring near the rim
-     (LABEL_RING_RADIUS = R + 60, only the angle varies -- see HANDOFF.md,
-     which works out to ~87% of the way from center to edge). 8% keeps this
-     at ~84% of that radius, close to the rim without routinely colliding
-     with real traffic's labels the way sitting right on the ring would.
-     Note: dead-center vertically (top:50%) is also exactly where a
-     due-west aircraft's own label anchors, so a westbound plane's label
-     can still occasionally overlap this -- accepted tradeoff for the
-     requested position, same as labels already occasionally overlap each
-     other during heavy traffic. */
+  /* Due west, right at the dial's edge -- deliberately placed past where
+     the aircraft label ring sits (~87% of the way to the edge, see
+     HANDOFF.md's LABEL_RING_RADIUS), so a westbound plane's label can
+     overlap this fairly often. Accepted tradeoff for "as close to the
+     edge as possible," same as labels already sometimes overlap each
+     other during heavy traffic -- the button still renders on top
+     (z-index below) and stays tappable either way. */
   #gearBtn {
     position: absolute;
     top: 50%;
-    left: 8%;
+    left: 5%;
     transform: translateY(-50%);
     width: 46px;
     height: 46px;
