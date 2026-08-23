@@ -679,3 +679,126 @@ username already tied to the public GitHub handle) and weren't in scope of
 what was scrubbed above — revisit if that changes. Passwordless sudo on the
 Pi remains a deliberate, previously-accepted tradeoff for the SSH-based
 deploy workflow, unrelated to whether the repo itself is public.
+
+## Registered-owner lookup for confirmed-private aircraft
+For aircraft already classified "Private Aircraft" (a real callsign, just not
+one matching an airline's flight-number pattern — see the airline-badge
+section above), the detail panel now shows who the airframe is registered
+to. Source is `adsbdb.com`'s free, no-key `/v0/aircraft/{hex}` endpoint —
+same "free and keyless" bar as every other data source this project uses.
+`lookupOwner()` caches only *definitive* answers (a real registrant name
+came back); a miss or transient failure isn't cached, same reasoning as the
+stock-photo-type cache fix above — a transient failure shouldn't become a
+permanent "no owner" for that tail. `loadOwner(hex)` is staleness-guarded so
+a slow response for a plane the user has since tapped away from doesn't
+clobber whatever's currently showing.
+
+**Explicitly out of scope, asked directly and declined**: going further and
+trying to identify the actual person/location behind an LLC-registered
+owner. Most private aircraft are registered to a trust or LLC specifically
+*because* the FAA offers this as a privacy option (the same reasoning behind
+the FAA's LADD "block from public tracking" program) — building
+deanonymization on top of that would turn this project into something that
+could enable stalking/harassment, especially once it's public and running
+against anyone's home address, not just the deploying user's own driveway.
+Showing the registrant name/LLC as adsbdb already provides it is the line.
+
+## Sighting counts (total + within-alert-radius)
+Every aircraft now tracks how many distinct times this receiver has picked
+it up (`total`), and how many of those came within the nearby-alert radius
+(`nearby`) — requested specifically to make repeat visits from the same
+private aircraft near the house obvious at a glance, not just log them
+silently.
+
+Same "shared server-side store, not localStorage" pattern as the
+approach-track data (see above) and for the same reason — the kiosk's own
+accumulated counts need to be visible to every viewer, not just whichever
+browser happens to be open:
+- **`deploy/sighting-store.py`** — stdlib-only HTTP server on
+  `127.0.0.1:8083`. `GET /sightings` returns the full `{hex: {total,
+  nearby}}` map; `POST /sightings` (`{hex, kind}`) increments one counter by
+  one and returns the updated pair. Validates the hex format and body size
+  up front (`MAX_BODY_BYTES = 2000` — a real body is ~40 bytes, but it's
+  reachable from the public internet via Funnel, same caution as
+  `approach-store.py` learned the hard way about). `MAX_HEXES = 20000` with
+  oldest-inserted-first eviction.
+- **`deploy/93-flightradar-sighting-store.conf`** routes `/sightings` to it;
+  **`deploy/flightradar-sighting-store.service`** is `DynamicUser=yes` +
+  `StateDirectory=flightradar-sightings`, same shape as the photo-proxy and
+  approach-store units.
+- `index.html`: `recordSighting(hex, kind)` does an optimistic local update
+  immediately (so the badge/panel feel instant) and fire-and-forgets a POST,
+  reconciled with the server's authoritative response when it lands.
+  `'total'` fires the first time `applyUpdate()` creates a plane it hasn't
+  seen this session; `'nearby'` fires in `checkNearbyAlert()` the moment
+  `pl.alerted` first flips true — **deliberately decoupled from the
+  nearby-alert toggle**: counting always happens even while alerts are
+  toggled off, only the popup/chime are gated by the toggle.
+
+UI: a "SEEN ×N" badge on the aircraft tag once `total > 1` (hidden at
+exactly 1 — a first sighting isn't a repeat, so no badge is the right
+default state), plus `Sightings`/`Within 2mi` as always-visible fields in
+the detail panel grid.
+
+## Heatmap tuning: "looks good on web, looks like a blob on the kiosk"
+Reported after the color change above shipped: the approach-track heatmap
+looked distinct and line-like on a laptop browser but rendered as an
+undifferentiated blob of color on the physical kiosk. Two rounds:
+
+**First hypothesis (wrong): `devicePixelRatio`.** Tried forcing
+`pixelRatio: Math.max(2, window.devicePixelRatio || 1)` on the MapLibre `Map`
+constructor, reasoning the kiosk's actual DPR might be producing a
+lower-resolution raster of the heatmap layer than a retina laptop screen.
+Deployed to the kiosk to test — it made the blob *worse* (bigger, blurrier).
+Immediately reverted and redeployed the revert.
+
+**Real root cause: production zoom level, not DPR.** All prior tuning had
+been eyeballed against an artificially zoomed-in test view (easy to do by
+accident when checking a map interactively), which visually spreads a given
+`heatmap-radius` (in pixels) across more geographic area than it actually
+covers at the kiosk's real, fixed zoom (`interactive: false`, always at
+whatever `zoomForRange()` computes for `RANGE_NM` — see the alignment-bug
+section above for how that's derived). At the real production zoom, the
+same radius that looked like distinct lines when zoomed in compresses many
+genuinely-separate approach tracks into the same handful of pixels — a real
+blob, not a rendering artifact. Confirmed by testing with frozen real data
+at the true production zoom, on the real styled/darkened map, rather than
+an interactively-zoomed view.
+
+Fixed by shrinking `heatmap-radius` (down to `2`) and moving to a brighter,
+higher-contrast `heatmap-color` ramp (cyan-based,
+`rgba(0,255,225,…)` → `rgba(120,255,240,1)` at full density) so individual
+tracks stay visually separable at the real production zoom instead of
+merging. Lesson for next time this layer needs tuning: always verify against
+the actual fixed kiosk zoom, never a zoomed-in interactive view — the two
+can look completely different for the same paint properties.
+
+## Runway outlines occasionally missing after a kiosk restart (second occurrence)
+Same underlying symptom as the "Runways silently disappearing" bug fixed
+earlier (retry added, see above) still showed up occasionally after a kiosk
+restart, even with the retry in place — the retry helps a *transient*
+Overpass failure, but does nothing for the ~80-second window during which
+none of the `OVERPASS_MAX_ATTEMPTS` retries have completed yet, during which
+the map has no runway layer at all.
+
+Added a genuine additional layer of durability: on a successful
+`loadRunways()` fetch, the resulting GeoJSON is now also cached to
+`localStorage` (`flightradar_runways_v1`). `loadCachedRunways()` reads it
+synchronously on `map.on('load', ...)` (registered *before* `loadRunways`
+itself in the listener order) via a new `applyRunwayData(geojson)` helper —
+factored out so both the cache-read path and the live-fetch-success path
+share the same idempotent add-or-update-source logic instead of duplicating
+it. Net effect: a kiosk that has ever successfully fetched runway data once
+shows it immediately on every subsequent restart, with the live Overpass
+fetch (and its retries) only needed to pick up changes or serve a genuinely
+fresh install — Overpass being flaky no longer means a blank map for a full
+session.
+
+Separately investigated and ruled out as the actual cause of the reported
+instance: only 2 of an expected 3-4 retry attempts had fired within the
+observed window during testing. Traced to Chrome throttling `setTimeout` in
+a backgrounded test tab (kept switching tabs while testing) — confirmed by
+invoking `loadRunways()` directly in a foregrounded tab, which succeeded
+immediately. Not a real production concern (the kiosk is always
+single-window/foreground), but the localStorage caching above is a real fix
+regardless, independent of whatever caused this particular report.
