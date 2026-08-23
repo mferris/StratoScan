@@ -1105,8 +1105,8 @@ async function refreshStorms() {
 // Automatically pops the detail panel (see showDetailPanel) for any plane
 // that comes within ALERT_RADIUS_NM of the receiver -- on by default,
 // toggled via the empty-tap gesture that used to control storms.
-const ALERT_RADIUS_NM = 0.869;      // 1 statute mile -- entry threshold
-const ALERT_CLEAR_RADIUS_NM = 1.0;  // slightly wider exit threshold, so a
+const ALERT_RADIUS_NM = 1.738;      // 2 statute miles -- entry threshold
+const ALERT_CLEAR_RADIUS_NM = 2.0;  // slightly wider exit threshold, so a
                                      // plane sitting right at the boundary
                                      // can't flap the alert on noisy range
 let nearbyAlertsOn = true;
@@ -1839,7 +1839,7 @@ function showDetailPanel(p, isAlert = false) {
 
   detailPanelEl.innerHTML = `
     <div class="dp-close">&times;</div>
-    ${isAlert ? `<div class="dp-alert-tag">⚠ WITHIN 1 MILE</div>` : ''}
+    ${isAlert ? `<div class="dp-alert-tag">⚠ WITHIN 2 MILES</div>` : ''}
     <div class="dp-photo" style="display:none"></div>
     <div class="dp-cs" style="color:${p.color}">${p.cs}</div>
     <div class="dp-badge" style="background:${p.badgeColor}">${p.airlineLabel}</div>
