@@ -296,16 +296,18 @@
   #detailBackdrop.show { opacity: 1; pointer-events: auto; }
 
   #detailPanel {
-    /* Anchored to the bottom edge, not centered -- a centered panel sat
-       right on top of the dial's middle, which is exactly where a plane's
-       flight trail (drawTrails) is most likely to pass, now that every
-       in-range aircraft always shows one, not just the tapped plane.
-       Bottom-anchoring plus a height cap leaves the upper dial clear so the
-       trail stays visible while a plane's panel is open. */
+    /* Centered, same as an auto-popped alert -- used to be bottom-anchored
+       for a tapped plane specifically (to stay clear of the flight trail
+       passing through the dial's middle, now that every in-range aircraft
+       always shows one), but centering was requested for every panel, not
+       just alerts, so tap-opened and auto-popped panels now look/sit
+       identically aside from the alert-only red glow below. Trade-off:
+       an open panel does now sit over the middle of the dial, briefly
+       covering whatever trail happens to be there. */
     position: absolute;
     left: 50%;
-    bottom: 4%;
-    transform: translate(-50%, 0) scale(0.96);
+    top: 50%;
+    transform: translate(-50%, -50%) scale(0.96);
     width: min(72%, 480px);
     max-height: 80%;
     overflow-y: auto;
@@ -320,23 +322,16 @@
     transition: opacity 0.2s ease, transform 0.2s ease;
     box-shadow: 0 10px 40px rgba(0,0,0,0.6);
   }
-  #detailPanel.show { opacity: 1; transform: translate(-50%, 0) scale(1); pointer-events: auto; }
+  #detailPanel.show { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
   /* Auto-popped by the nearby-aircraft alert (checkNearbyAlert) or an
      emergency squawk (checkEmergencySquawk), not a tap -- a red-tinted
-     border/glow distinguishes "this interrupted you" from a panel you
-     opened yourself, which otherwise looks identical. Also recentered on
-     screen instead of bottom-anchored: something that just interrupted you
-     deserves to be front-and-center, not tucked at the edge -- worth the
-     trade of briefly covering the trail underneath it, unlike a
-     self-initiated tap where staying out of the trail's way matters more. */
+     border/glow is the only thing left distinguishing "this interrupted
+     you" from a panel you opened yourself, now that both share the same
+     centered position. */
   #detailPanel.alert {
     border-color: var(--bad);
     animation: alertGlow 1.4s ease-in-out infinite;
-    top: 50%;
-    bottom: auto;
-    transform: translate(-50%, -50%) scale(0.96);
   }
-  #detailPanel.alert.show { transform: translate(-50%, -50%) scale(1); }
   @keyframes alertGlow {
     0%, 100% { box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 0 1px color-mix(in srgb, var(--bad) 25%, transparent); }
     50% { box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 16px 2px color-mix(in srgb, var(--bad) 55%, transparent); }
