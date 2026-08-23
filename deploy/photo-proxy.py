@@ -31,6 +31,9 @@ cache = {}  # hex -> (timestamp, response_body_bytes)
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
+    def version_string(self):
+        return "FlightRadar"  # don't advertise the Python/http.server version
+
     def do_GET(self):
         m = HEX_RE.search(self.path)
         if not m:
