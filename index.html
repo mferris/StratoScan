@@ -948,14 +948,18 @@ function initApproachLayer() {
     // over RDU) that at the production numbers nothing perceptible reached
     // the screen at the normal operating zoom.
     // Originally a solid orange fill (matching --low), but that both read as
-    // a filled blob rather than a corridor outline and visually blended into
-    // the base map's own orange roads. The color-ramp's non-monotonic alpha
-    // (transparent -> opaque teal at low density -> fades back down at mid
-    // density -> a modest floor at the densest cores) turns each cluster of
-    // accumulated points into a hollow ring rather than a filled disc, which
-    // reads as an actual outline tracing the corridor -- confirmed live
-    // against the real data that it draws a recognizable curved outline into
-    // the runway threshold instead of a blob. Teal (matches --mid) contrasts
+    // an undifferentiated blob and visually blended into the base map's own
+    // orange roads. Went through a non-monotonic "outline" ramp after that
+    // (peaked at low density, faded in the interior) at a specific request
+    // for an outline look -- reverted after a follow-up request wanted the
+    // opposite: genuine heatmap behavior, where a busier stretch of the
+    // corridor (more accumulated landings overlapping there) reads as more
+    // visually distinguished than a lightly-used one. This ramp is strictly
+    // monotonic -- transparent at zero density, growing smoothly to a bold,
+    // clearly-saturated teal at the highest-density cores -- confirmed live
+    // against the real accumulated data that denser stretches of the real
+    // corridor genuinely read as more solid/bright than sparser ones, not
+    // just "some outline exists here." Teal (matches --mid) still contrasts
     // against the map's orange roads instead of disappearing into them.
     paint: {
       'heatmap-weight': 0.6,
@@ -965,10 +969,10 @@ function initApproachLayer() {
       'heatmap-color': [
         'interpolate', ['linear'], ['heatmap-density'],
         0, 'rgba(0,0,0,0)',
-        0.08, 'rgba(0,0,0,0)',
-        0.18, 'rgba(79,214,200,0.85)',
-        0.35, 'rgba(79,214,200,0.15)',
-        1, 'rgba(79,214,200,0.35)',
+        0.15, 'rgba(79,214,200,0.15)',
+        0.4, 'rgba(79,214,200,0.4)',
+        0.7, 'rgba(79,214,200,0.7)',
+        1, 'rgba(79,214,200,0.95)',
       ],
     },
   });
