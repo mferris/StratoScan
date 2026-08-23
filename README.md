@@ -24,12 +24,23 @@ just a web page, so it runs fine in a normal browser too.
 - **Aircraft type & photo** — human-readable type names ("Bombardier Regional
   Jet CRJ-900") and a real photo when one exists, falling back to a
   representative photo of the type
-- **Background map** — real terrain, roads, and runway outlines, darkened and
-  centered on the receiver, with a live weather radar overlay
-- **RDU approach visualization** — a faint outline tracing real accumulated
-  landing tracks, built up from actual observed traffic over time
+- **Background map** — real terrain, roads, and runway outlines (cached once
+  fetched, so a restart doesn't wait on a fresh query), darkened and centered
+  on the receiver, with an always-on live weather radar overlay
+- **RDU approach visualization** — a real density heatmap built from actually
+  observed landings over time, not a canned flight-path overlay — busier
+  stretches of the corridor read as more visually distinct than lightly-used
+  ones, and it keeps sharpening the longer the receiver runs
+- **Sighting counts** — every aircraft tracks how many distinct times this
+  receiver has picked it up, and how many of those came within the
+  nearby-alert radius; shown as a "SEEN ×N" badge once it's more than one,
+  and as fields in the detail panel always
+- **Registered-owner lookup** — for aircraft confirmed private (a real
+  callsign, just not an airline one), the detail panel shows who the plane
+  is registered to, pulled from public aircraft-registry data
 - **Nearby-aircraft alert** — auto-pops flight details (with a chime) for
-  anything passing within a couple of miles of the receiver
+  anything passing within 2 miles of the receiver, toggleable by tapping
+  empty space on the display
 - **Touch detail panel** — tap any aircraft for registration, squawk, vertical
   rate, and more
 - **Native iOS companion app** — a SwiftUI rebuild of the same radar for
@@ -77,8 +88,12 @@ the deployed app.
 **Deploying as a kiosk**: `index.html` is a static file — copy it to your
 receiver's web server docroot (same origin as `readsb`'s own web UI, to avoid
 CORS). [`deploy/`](deploy/) has a systemd unit for launching Chromium in
-kiosk mode on boot, plus the two small same-origin proxy services (aircraft
-photos, and a shared store for the accumulated approach-track visualization).
+kiosk mode on boot, plus four small same-origin proxy services: aircraft
+photos, the shared approach-track store, the shared sighting-count store, and
+(only relevant if you expose the page to the public internet, e.g. via
+Tailscale Funnel) a filtering gateway that rounds the receiver's exact
+coordinates before they leave your network — see [Security](#security)
+below.
 
 **iOS app**: `ios/` is an [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 project. Run `xcodegen generate` inside `ios/` if you change `project.yml`,
@@ -110,8 +125,37 @@ these choices, though no code is shared — its license is unclear):
 - **[RainViewer](https://www.rainviewer.com/)** — live weather radar overlay
 - **[planespotters.net](https://www.planespotters.net/)** — aircraft photos
 - **[Wikipedia / Wikimedia Commons](https://www.wikipedia.org/)** — representative type photos when no tail-specific one exists
+- **[adsbdb.com](https://www.adsbdb.com/)** — registered-owner lookups for confirmed-private aircraft
 
 Please respect each service's own terms of use if you build on this.
+
+## Security
+
+If you expose this beyond your own LAN (e.g. a Tailscale Funnel URL, like the
+live deployment this repo was built against), a few things are worth knowing
+before you do:
+
+- **The receiver's exact coordinates are not something you want publicly
+  reachable.** `readsb`'s own `receiver.json` endpoint returns
+  survey-precision lat/lon, and by default that's reachable by anyone who
+  finds the URL. [`deploy/funnel-gateway.py`](deploy/funnel-gateway.py) sits
+  in front of whatever you expose publicly and rounds those coordinates to
+  ~0.7 mile precision for public traffic only — your LAN/kiosk always sees
+  the exact value, which `readsb` itself needs for its own signal-range math.
+  Point your public tunnel at this gateway instead of at `readsb`/lighttpd
+  directly.
+- **External data (route text, photo credits, aircraft type) is escaped
+  before it touches the DOM.** Some of it — a photographer's display name on
+  planespotters.net, for instance — is third-party user-submitted content
+  this app doesn't control.
+- **The shared same-origin stores** (`deploy/approach-store.py`,
+  `deploy/sighting-store.py`) have no authentication — by design, low
+  stakes, matches how the app itself treats that data — but they do cap
+  request body size and validate input shape, since they're reachable from
+  wherever you expose the page.
+- **No secrets or API keys anywhere.** Every external service this app talks
+  to is free and keyless (see [Data sources](#data-sources) above), so
+  there's nothing to leak.
 
 ## License
 
