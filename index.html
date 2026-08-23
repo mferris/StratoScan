@@ -388,15 +388,23 @@ const LEADER_BASE_OPACITY = 0.55; // matches #leaders line's CSS opacity -- scal
 // isn't populated on this Pi), so the trail is built client-side from each
 // poll's already-computed bearing/range -- it only covers time since this
 // page was last loaded, not real flight history. See HANDOFF.md.
-// 3 minutes, not the original 10: that was sized for one plane at a time on
-// tap; drawn continuously for every in-range plane every frame instead, a
-// shorter window keeps the display legible (a 10-minute trail per plane,
-// all at once, gets visually messy fast) and meaningfully caps the
-// per-frame line-segment count on a Pi running this render loop 24/7.
-const TRAIL_MAX_MS = 3 * 60 * 1000;
+// No time cutoff -- the whole path stays for as long as the plane itself
+// stays tracked (the trail array is discarded along with the plane object
+// once it coasts out of range, see applyUpdate's removal pass below, so
+// this never outlives what's actually on screen). TRAIL_MAX_POINTS is just
+// a safety net against unbounded growth for the rare case of a plane
+// sitting in view a very long time (e.g. a local helicopter loitering for
+// hours) -- one point per ~1s poll, so this is a generous ceiling, not a
+// visible cutoff for any normal overflight/approach.
+const TRAIL_MAX_POINTS = 7200;
+// Fade-only window: older segments dim toward TRAIL_FADE_FLOOR rather than
+// disappearing, so a long flight path stays visible end to end but still
+// reads "recent vs older" at a glance.
+const TRAIL_FADE_MS = 5 * 60 * 1000;
+const TRAIL_FADE_FLOOR = 0.25;
 
 function pruneTrail(trail, now) {
-  while (trail.length && now - trail[0].t > TRAIL_MAX_MS) trail.shift();
+  while (trail.length > TRAIL_MAX_POINTS) trail.shift();
 }
 
 // HTML-escapes a value before it goes into an innerHTML template literal.
@@ -1712,7 +1720,7 @@ function drawTrails() {
       const a = p.trail[i - 1], b = p.trail[i];
       const pa = polarToXY(a.bearing, a.range);
       const pb = polarToXY(b.bearing, b.range);
-      ctx.globalAlpha = Math.max(0, 1 - (now - b.t) / TRAIL_MAX_MS) * 0.85;
+      ctx.globalAlpha = Math.max(TRAIL_FADE_FLOOR, 1 - (now - b.t) / TRAIL_FADE_MS) * 0.85;
       ctx.beginPath();
       ctx.moveTo(pa.x, pa.y);
       ctx.lineTo(pb.x, pb.y);
