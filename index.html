@@ -236,6 +236,7 @@
   .tag .alt { color: var(--text-dim); }
   .tag .route { color: var(--text-dim); display: none; margin-top: 0; }
   .tag .route.implausible { color: var(--bad); }
+  .tag .owner { color: var(--text-dim); display: none; margin-top: 0; font-size: 0.68rem; }
   .tag .seen {
     display: none;
     color: var(--mid);
@@ -756,7 +757,7 @@ const hexTypeCache = new Map();  // hex -> human-readable type string or null
 const hexTypePending = new Set();
 const stockPhotoCache = new Map();   // typeLabel -> { thumb, page } or null -- keyed by type, not hex, since many tails share a type
 const stockPhotoPending = new Set();
-const ownerCache = new Map();        // hex -> registered owner name, or null if confirmed not in the registry
+const ownerCache = new Map();        // hex -> { owner, country } (registered owner name + country of registration), or null if confirmed not in the registry
 
 if (location.protocol === 'http:') {
   // adsb.im asks that http-loaded pages call their API over http too
@@ -2137,6 +2138,14 @@ function applyUpdate(list) {
       });
     }
 
+    // Fired proactively here (not just when the detail panel opens, see
+    // loadOwner) so the label itself can show it too, not only the panel --
+    // same "fire once per hex, cache the miss too via lookupOwner" shape as
+    // the type lookup just above.
+    if (n.airlineLabel === PRIVATE_LABEL && !ownerCache.has(n.hex)) {
+      loadOwner(n.hex);
+    }
+
     // Try for every real callsign, not just ones that look like a scheduled
     // airline flight number -- on-demand/charter GA traffic (badged "Private
     // Aircraft") occasionally does have a route adsb.im can resolve, and
@@ -2342,7 +2351,7 @@ function drawPlanes(dt) {
     if (!node) {
       node = document.createElement('div');
       node.className = 'tag';
-      node.innerHTML = '<div class="cs"></div><div class="badge"></div><div class="seen"></div><div class="type"></div><div class="alt"></div><div class="route"></div>';
+      node.innerHTML = '<div class="cs"></div><div class="badge"></div><div class="seen"></div><div class="type"></div><div class="alt"></div><div class="route"></div><div class="owner"></div>';
       tagsEl.appendChild(node);
       tagNodes.set(p.hex, node);
     }
@@ -2387,6 +2396,14 @@ function drawPlanes(dt) {
       routeEl.style.display = 'block';
     } else {
       routeEl.style.display = 'none';
+    }
+
+    const ownerEl = node.querySelector('.owner');
+    if (p.owner) {
+      ownerEl.textContent = p.ownerCountry ? `${p.owner} (${p.ownerCountry})` : p.owner;
+      ownerEl.style.display = 'block';
+    } else {
+      ownerEl.style.display = 'none';
     }
 
     p.node = node;
@@ -2639,6 +2656,14 @@ function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES') {
 // Only a real answer (found, or a confirmed 404 -- not in the registry) gets
 // cached; a network hiccup doesn't, so it just retries next time the panel
 // opens, same reasoning as lookupStockPhoto above.
+//
+// Country of registration (registered_owner_country_name) is included too --
+// that's as far as "location" goes here, deliberately: adsbdb doesn't expose
+// anything more granular than country, and that's the right amount of detail
+// anyway -- it's public aviation-registry metadata, same category as the
+// registration number itself, not anything that narrows down a real person's
+// location the way street-address-level lookup would (see HANDOFF.md for the
+// earlier, explicitly declined request to go further than this).
 async function lookupOwner(hex) {
   if (ownerCache.has(hex)) return ownerCache.get(hex);
   try {
@@ -2647,20 +2672,24 @@ async function lookupOwner(hex) {
     if (!res.ok) return null;
     const data = await res.json();
     const owner = data?.response?.aircraft?.registered_owner || null;
-    ownerCache.set(hex, owner);
-    return owner;
+    const country = data?.response?.aircraft?.registered_owner_country_name || null;
+    const result = owner ? { owner, country } : null;
+    ownerCache.set(hex, result);
+    return result;
   } catch (e) {
     return null;
   }
 }
 
 async function loadOwner(hex) {
-  const owner = await lookupOwner(hex);
+  const info = await lookupOwner(hex);
+  if (!info) return;
+  const pl = planes.get(hex);
+  if (pl) { pl.owner = info.owner; pl.ownerCountry = info.country; } // so the tag can show it too, not just the detail panel
   if (detailPanelHex !== hex || !detailPanelEl.classList.contains('show')) return; // stale by the time this resolved
-  if (!owner) return;
   const ownerEl = detailPanelEl.querySelector('.dp-owner');
   if (!ownerEl) return;
-  ownerEl.textContent = `Registered to ${owner}`;
+  ownerEl.textContent = info.country ? `Registered to ${info.owner} (${info.country})` : `Registered to ${info.owner}`;
   ownerEl.style.display = 'block';
 }
 
