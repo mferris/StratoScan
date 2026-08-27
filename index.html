@@ -1630,6 +1630,79 @@ function refreshLightning() {
   }
 }
 
+// ---- Lightning-proximity alert -------------------------------------------
+// Distinct from the lightning overlay above (a visual density layer) --
+// this actively checks whether there's been recent lightning within
+// LIGHTNING_ALERT_RADIUS_NM of the receiver and raises an alert if so.
+// Reuses RealEarth's "probe" API (a point-value query, not a tile fetch)
+// against glmgroupdensity (a 60-minute rolling density product -- chosen
+// specifically because, unlike GOESEastGLMFEDRadC shown on the map, it's
+// one of the two RealEarth products that actually supports point probing).
+//
+// A single probe at home's exact coordinates only really tells you about
+// the one small grid-cell-sized patch of sky right overhead -- to cover a
+// real radius, this probes two concentric rings of points around home
+// (reusing destinationPoint(), the same geodesic helper the extended
+// runway lines use) plus the center point, and treats "any probe
+// non-zero" as "lightning nearby". This is a real approximation, not
+// exhaustive coverage -- storm cells are normally much wider than the gaps
+// between probe points, but a narrow cell could in principle pass between
+// them undetected. Hysteresis (separate enter/clear radii, same idea as
+// ALERT_RADIUS_NM/ALERT_CLEAR_RADIUS_NM above) avoids flapping the alert
+// on/off as a storm's exact reported density wobbles near the threshold.
+const LIGHTNING_PROBE_PRODUCT = 'glmgroupdensity';
+const LIGHTNING_ALERT_RADIUS_NM = 15;        // ~17 statute miles -- entry threshold
+const LIGHTNING_ALERT_CLEAR_RADIUS_NM = 20;  // wider exit threshold
+const LIGHTNING_ALERT_CHECK_MS = 2 * 60 * 1000; // matches the overlay's own refresh cadence -- no point checking more often than the underlying data updates
+const LIGHTNING_PROBE_RING_POINTS = 8;
+
+let lightningAlerted = false; // survives across checks, not per-plane -- there's no single "object" a storm alert is about
+
+async function probeLightningValue(lat, lon) {
+  try {
+    const res = await fetch(`https://realearth.ssec.wisc.edu/api/probe?products=${LIGHTNING_PROBE_PRODUCT}&lat=${lat}&lon=${lon}`);
+    if (!res.ok) return null;
+    const html = await res.text();
+    const m = html.match(/Data value:\s*<b>([^<]+)<\/b>/);
+    if (!m) return null;
+    const val = parseFloat(m[1]);
+    return Number.isFinite(val) ? val : null;
+  } catch (e) {
+    return null; // offline or RealEarth unavailable -- this check just tries again next cycle
+  }
+}
+
+async function checkLightningNearby() {
+  if (!home || !alertSettings.lightningAlert) return;
+  const radius = lightningAlerted ? LIGHTNING_ALERT_CLEAR_RADIUS_NM : LIGHTNING_ALERT_RADIUS_NM;
+  const points = [[home.lat, home.lon]];
+  for (const r of [radius / 2, radius]) {
+    for (let i = 0; i < LIGHTNING_PROBE_RING_POINTS; i++) {
+      const bearing = i * 360 / LIGHTNING_PROBE_RING_POINTS;
+      const [lon, lat] = destinationPoint(home.lat, home.lon, bearing, r);
+      points.push([lat, lon]);
+    }
+  }
+
+  const values = await Promise.all(points.map(([lat, lon]) => probeLightningValue(lat.toFixed(4), lon.toFixed(4))));
+  const nearby = values.some(v => v !== null && v > 0);
+
+  if (nearby && !lightningAlerted) {
+    lightningAlerted = true;
+    playLightningAlertSound();
+    showToast(`⚡ LIGHTNING WITHIN ${LIGHTNING_ALERT_RADIUS_NM}NM`, 8000);
+  } else if (!nearby && lightningAlerted) {
+    lightningAlerted = false; // free to re-alert once it's genuinely cleared past the wider radius
+  }
+}
+
+// A slower, more insistent three-note pattern -- distinct from every other
+// alert sound in the app (nearby-aircraft, emergency squawk, RDU phase),
+// since this is the one alert that isn't about a specific aircraft at all.
+function playLightningAlertSound() {
+  playTones([[600, 0, 0.18, 0.28], [600, 0.25, 0.18, 0.28], [600, 0.5, 0.24, 0.3]]);
+}
+
 // ---- Nearby-aircraft alert ---------------------------------------------
 // Automatically pops the detail panel (see showDetailPanel) for any plane
 // that comes within ALERT_RADIUS_NM of the receiver -- on by default,
@@ -1648,7 +1721,7 @@ const ALERT_CLEAR_RADIUS_NM = 2.0;  // slightly wider exit threshold, so a
 // -- this is a personal display preference for whoever's looking at this
 // particular screen, not data that should be the same for every viewer.
 const ALERT_SETTINGS_KEY = 'flightradar_alert_settings_v1';
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rduPhase: true, atc: false, storms: true, heatmap: false, lightning: false };
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rduPhase: true, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true };
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -2635,11 +2708,11 @@ const settingsBackdropEl = document.getElementById('settingsBackdrop');
 let toastTimer = null;
 let detailDismissTimer = null;
 
-function showToast(text) {
+function showToast(text, durationMs = 1400) {
   toastEl.textContent = text;
   toastEl.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1400);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), durationMs);
 }
 
 function vrateLabel(vrate) {
@@ -2910,6 +2983,7 @@ const ALERT_SETTINGS_META = [
   { key: 'storms', label: 'Storm radar overlay', sub: 'Live weather radar over the map (RainViewer)' },
   { key: 'heatmap', label: 'RDU approach heatmap', sub: 'Density pattern built from actually observed RDU landings' },
   { key: 'lightning', label: 'Lightning overlay', sub: 'Satellite-observed strike density (GOES-East GLM, via SSEC RealEarth)' },
+  { key: 'lightningAlert', label: 'Lightning proximity alert', sub: `Chime + banner when a strike is detected within ${LIGHTNING_ALERT_RADIUS_NM}nm` },
 ];
 
 function renderSettingsPanel() {
@@ -3037,6 +3111,8 @@ async function start() {
   setInterval(fetchAircraft, FETCH_INTERVAL_MS);
   setInterval(refreshStorms, RAINVIEWER_REFRESH_MS);
   setInterval(refreshLightning, LIGHTNING_REFRESH_MS);
+  setTimeout(checkLightningNearby, 10000); // give home time to populate from the first receiver.json fetch
+  setInterval(checkLightningNearby, LIGHTNING_ALERT_CHECK_MS);
   requestAnimationFrame(tick);
 }
 

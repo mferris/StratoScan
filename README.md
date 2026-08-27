@@ -41,6 +41,9 @@ just a web page, so it runs fine in a normal browser too.
   is registered to, pulled from public aircraft-registry data
 - **Nearby-aircraft alert** — auto-pops flight details (with a chime) for
   anything passing within 2 miles of the receiver
+- **Lightning proximity alert** — a chime + banner when a satellite-observed
+  strike is detected within 15nm of the receiver, independent of the map's
+  lightning overlay toggle
 - **Emergency squawk alert** — an unmistakable alert (distinct chime + a red
   auto-popped panel) for 7500 (hijack), 7600 (radio failure), or 7700
   (general emergency)
