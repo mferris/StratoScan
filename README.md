@@ -26,7 +26,8 @@ just a web page, so it runs fine in a normal browser too.
   representative photo of the type
 - **Background map** — real terrain, roads, and runway outlines (cached once
   fetched, so a restart doesn't wait on a fresh query), darkened and centered
-  on the receiver, with an always-on live weather radar overlay
+  on the receiver, with an always-on live weather radar overlay and an
+  optional satellite lightning-strike overlay
 - **RDU approach visualization** — a real density heatmap built from actually
   observed landings over time, not a canned flight-path overlay — busier
   stretches of the corridor read as more visually distinct than lightly-used
@@ -139,6 +140,7 @@ these choices, though no code is shared — its license is unclear):
 - **[Wikipedia / Wikimedia Commons](https://www.wikipedia.org/)** — representative type photos when no tail-specific one exists
 - **[adsbdb.com](https://www.adsbdb.com/)** — registered-owner lookups for confirmed-private aircraft
 - **[LiveATC.net](https://www.liveatc.net/)** — RDU ATC audio, opened as a link to their own player (see [Security](#security) below for why it's a link, not an embed)
+- **[SSEC RealEarth](https://realearth.ssec.wisc.edu/)** (UW-Madison) — satellite-observed lightning strike density (GOES-East GLM)
 
 Please respect each service's own terms of use if you build on this.
 

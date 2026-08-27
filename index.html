@@ -1251,6 +1251,7 @@ function initMap() {
   map.on('load', loadRunways);
   map.on('load', recolorLabels);
   map.on('load', refreshStorms);
+  map.on('load', refreshLightning);
   map.on('load', initApproachLayer);
 }
 
@@ -1583,6 +1584,52 @@ async function refreshStorms() {
   }
 }
 
+// ---- Lightning overlay ---------------------------------------------------
+// GOES-East GLM (Geostationary Lightning Mapper) flash-extent density --
+// a 5-minute rolling accumulation of actual satellite-observed lightning,
+// refreshed every couple of minutes -- from RealEarth (SSEC, UW-Madison),
+// a free public tile service, same "raster tile pyramid" shape as
+// RainViewer's storms layer above. Off by default (toggleable, see
+// alertSettings.lightning) -- like the approach heatmap, this is visually
+// busy enough that opting in makes more sense than opting out.
+//
+// Free tier requires attribution ("Source: SSEC RealEarth, UW-Madison" --
+// see the README's Data sources section) but no key/account. Considered
+// and rejected two other free lightning sources first: Blitzortung.org's
+// community feed, whose documented endpoint no longer works when tested
+// live, and NOAA nowCOAST's own lightning layer, discontinued in their
+// 2023 platform migration -- this is the one that actually works.
+const LIGHTNING_TILE_URL = 'https://realearth.ssec.wisc.edu/tiles/GOESEastGLMFEDRadC/{z}/{x}/{y}.png';
+const LIGHTNING_REFRESH_MS = 2 * 60 * 1000;
+
+function applyLightningVisibility() {
+  if (!map || !map.getLayer('lightning')) return;
+  map.setLayoutProperty('lightning', 'visibility', alertSettings.lightning ? 'visible' : 'none');
+}
+
+// The tile URL always points at RealEarth's "latest" alias for this
+// product (no explicit timestamp), so the underlying PNGs change over time
+// at the exact same URL -- a plain query-string cache-buster forces
+// MapLibre (and the browser) to actually refetch instead of reusing a
+// stale cached tile indefinitely, same problem RainViewer's storms layer
+// avoids by baking a real timestamp into its own tile path instead.
+function refreshLightning() {
+  if (!map) return;
+  const url = `${LIGHTNING_TILE_URL}?t=${Date.now()}`;
+  if (map.getSource('lightning')) {
+    map.getSource('lightning').setTiles([url]);
+  } else {
+    map.addSource('lightning', { type: 'raster', tiles: [url], tileSize: 256, maxzoom: 7 });
+    map.addLayer({
+      id: 'lightning',
+      type: 'raster',
+      source: 'lightning',
+      paint: { 'raster-opacity': 0.85 },
+    });
+    applyLightningVisibility(); // new layer defaults to visible -- match the real (likely off) setting immediately
+  }
+}
+
 // ---- Nearby-aircraft alert ---------------------------------------------
 // Automatically pops the detail panel (see showDetailPanel) for any plane
 // that comes within ALERT_RADIUS_NM of the receiver -- on by default,
@@ -1601,7 +1648,7 @@ const ALERT_CLEAR_RADIUS_NM = 2.0;  // slightly wider exit threshold, so a
 // -- this is a personal display preference for whoever's looking at this
 // particular screen, not data that should be the same for every viewer.
 const ALERT_SETTINGS_KEY = 'flightradar_alert_settings_v1';
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rduPhase: true, atc: false, storms: true, heatmap: false };
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rduPhase: true, atc: false, storms: true, heatmap: false, lightning: false };
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -2862,6 +2909,7 @@ const ALERT_SETTINGS_META = [
   },
   { key: 'storms', label: 'Storm radar overlay', sub: 'Live weather radar over the map (RainViewer)' },
   { key: 'heatmap', label: 'RDU approach heatmap', sub: 'Density pattern built from actually observed RDU landings' },
+  { key: 'lightning', label: 'Lightning overlay', sub: 'Satellite-observed strike density (GOES-East GLM, via SSEC RealEarth)' },
 ];
 
 function renderSettingsPanel() {
@@ -2928,6 +2976,7 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   }
   if (key === 'storms') applyStormsVisibility();
   if (key === 'heatmap') applyHeatmapVisibility();
+  if (key === 'lightning') applyLightningVisibility();
   renderSettingsPanel();
 });
 
@@ -2987,6 +3036,7 @@ async function start() {
   fetchAircraft();
   setInterval(fetchAircraft, FETCH_INTERVAL_MS);
   setInterval(refreshStorms, RAINVIEWER_REFRESH_MS);
+  setInterval(refreshLightning, LIGHTNING_REFRESH_MS);
   requestAnimationFrame(tick);
 }
 
