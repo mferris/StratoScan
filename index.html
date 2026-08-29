@@ -539,6 +539,7 @@
      within ~14px of it counts -- these controls became the only tappable
      thing in a row once the row body was handed over to scrolling. */
   #settingsPanel .sp-switch::before,
+  #settingsPanel .sp-theme-swatch::before,
   #settingsPanel .sp-radio::before {
     content: '';
     position: absolute;
@@ -578,6 +579,10 @@
     height: 28px;
     border-radius: 50%;
     flex-shrink: 0;
+    /* required: the ::before hit expander below is absolutely positioned,
+       and without a positioned ancestor here it would resolve against
+       #settingsPanel and blanket the whole panel */
+    position: relative;
     border: 1px solid var(--panel-border);
     display: flex;
     align-items: center;
@@ -3220,7 +3225,9 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
 
   const themeRow = e.target.closest('.sp-theme-row');
   if (themeRow) {
-    if (!e.target.closest('.sp-radio')) return; // row body is for scrolling
+    // the swatch counts as a control too: it's the big obvious circle on
+    // each theme row, so pressing it doing nothing read as broken
+    if (!e.target.closest('.sp-radio, .sp-theme-swatch')) return; // row body is for scrolling
     applyTheme(themeRow.dataset.themeKey);
     renderSettingsPanel();
     return;
