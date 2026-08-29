@@ -440,13 +440,13 @@
     top: 50%;
     left: 5%;
     transform: translateY(-50%);
-    width: 46px;
-    height: 46px;
+    width: 58px;
+    height: 58px;
     border-radius: 50%;
     background: var(--panel-bg-strong);
     border: 1px solid color-mix(in srgb, var(--mid) 50%, transparent);
     color: var(--mid);
-    font-size: 1.5rem;
+    font-size: 1.9rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3092,7 +3092,9 @@ stage.addEventListener('pointerup', (e) => {
   const x = e.clientX - rect.left, y = e.clientY - rect.top;
   const p = findPlaneAtStagePoint(x, y);
   if (p) showDetailPanel(p);
-  else showSettingsPanel(); // used to blind-toggle nearby alerts here; now opens the full settings panel instead
+  // a tap on empty sky does nothing. Settings open only from #gearBtn --
+  // on a wall-mounted touch panel, any stray brush against the glass used
+  // to throw the settings panel over the radar.
 });
 
 async function start() {
