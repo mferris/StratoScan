@@ -1,0 +1,530 @@
+#!/usr/bin/env python3
+"""Unprivileged HTTP tier for FlightRadar device setup.
+
+Runs as a normal user and holds no privileges of its own. Anything that
+touches the system is delegated to setupd.py over a unix socket, which
+re-validates every parameter. This process only parses HTTP, checks
+authentication, and renders the UI -- deliberately, because the HTTP parser
+is the part most exposed to hostile input and therefore the part that must
+not be root.
+
+Reachable on the LAN at http://<device>/setup via lighttpd. It is listed in
+funnel-gateway.py's LOCAL_ONLY_PATHS, so it is refused for anything arriving
+through the public tunnel -- which matters, since it accepts a WiFi password
+and a Tailscale auth key.
+
+Claiming: on first boot the device is UNCLAIMED and the first person to
+reach it sets the admin password. That is a deliberate trade-off, chosen
+because a label-printed secret has a manufacturing lead time. The window is
+narrowed by requiring a code shown on the device's own screen, so claiming
+needs physical sight of the unit rather than merely being on the network.
+"""
+import hashlib
+import hmac
+import http.server
+import json
+import os
+import re
+import secrets
+import socket
+import threading
+import time
+
+LISTEN = ("127.0.0.1", 8086)
+SOCK_PATH = "/run/flightradar/setupd.sock"
+STATE_DIR = "/var/lib/flightradar-setup"
+STATE_FILE = os.path.join(STATE_DIR, "setup.json")
+CLAIM_FILE = "/run/flightradar/claim-code"
+AIRPORTS_JSON = "/opt/flightradar/airports.json"
+UI_FILE = "/opt/flightradar/setup-ui.html"
+
+MAX_BODY = 64 * 1024
+SESSION_TTL = 8 * 3600
+SESSION_IDLE = 30 * 60
+MAX_SESSIONS = 8
+
+_sessions = {}          # sha256(token) -> {created, seen}
+_lock = threading.Lock()
+_fail = {"count": 0, "until": 0.0}
+
+
+# ------------------------------------------------------------------ state
+
+def load_state():
+    try:
+        with open(STATE_FILE) as f:
+            return json.load(f)
+    except Exception:
+        # An unreadable or corrupt state file must read as UNCLAIMED, never
+        # as "locked out" -- otherwise a single bad write bricks the owner
+        # out of their own device with no way back.
+        return {"schema": 1, "claimed": False}
+
+
+def save_state(st):
+    os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+    tmp = STATE_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(st, f, indent=1)
+        f.flush()
+        os.fsync(f.fileno())
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, STATE_FILE)
+    dfd = os.open(STATE_DIR, os.O_DIRECTORY)
+    try:
+        os.fsync(dfd)
+    finally:
+        os.close(dfd)
+
+
+# hashlib.scrypt needs OpenSSL 1.1+ and is absent from some Python builds.
+# Preferred where present, but never depended on: a missing hash function at
+# password-creation time would lock the owner out of their own device, which
+# is a brick-class failure for the sake of a nicety. The algorithm is
+# recorded per-record so existing passwords keep verifying either way.
+HAVE_SCRYPT = hasattr(hashlib, "scrypt")
+
+
+def hash_password(pw, salt=None):
+    salt = salt or os.urandom(16)
+    if HAVE_SCRYPT:
+        h = hashlib.scrypt(pw.encode(), salt=salt, n=2**14, r=8, p=1, dklen=32)
+        return {"algo": "scrypt", "n": 2**14, "r": 8, "p": 1,
+                "salt": salt.hex(), "hash": h.hex()}
+    h = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt, 600_000, dklen=32)
+    return {"algo": "pbkdf2", "iters": 600_000,
+            "salt": salt.hex(), "hash": h.hex()}
+
+
+def verify_password(pw, rec):
+    if not rec:
+        return False
+    try:
+        salt = bytes.fromhex(rec["salt"])
+        if rec.get("algo") == "scrypt":
+            if not HAVE_SCRYPT:
+                return False
+            h = hashlib.scrypt(pw.encode(), salt=salt, n=rec["n"], r=rec["r"],
+                               p=rec["p"], dklen=32)
+        elif rec.get("algo") == "pbkdf2":
+            h = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt,
+                                    rec["iters"], dklen=32)
+        else:
+            return False
+    except Exception:
+        return False
+    return hmac.compare_digest(h.hex(), rec["hash"])
+
+
+def claim_code():
+    """Shown on the device's own screen; never served over HTTP.
+
+    Behind lighttpd's proxy every request appears to come from 127.0.0.1, so
+    a 'localhost only' HTTP route would have been readable by the entire LAN.
+    The code is read from a file the on-screen console also reads.
+    """
+    try:
+        with open(CLAIM_FILE) as f:
+            return f.read().strip()
+    except Exception:
+        return None
+
+
+# ------------------------------------------------------------- setupd link
+
+def call_setupd(verb, params=None, timeout=120):
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        s.connect(SOCK_PATH)
+        s.sendall((json.dumps({"verb": verb, "params": params or {}}) + "\n").encode())
+        buf = b""
+        while not buf.endswith(b"\n"):
+            chunk = s.recv(65536)
+            if not chunk:
+                break
+            buf += chunk
+        return json.loads(buf or b'{"ok":false,"code":"no_response"}')
+    except FileNotFoundError:
+        return {"ok": False, "code": "setupd_unavailable"}
+    except socket.timeout:
+        return {"ok": False, "code": "timeout"}
+    except Exception as e:
+        return {"ok": False, "code": "setupd_error", "detail": str(e)[:120]}
+    finally:
+        s.close()
+
+
+# ---------------------------------------------------------------- sessions
+
+def new_session():
+    tok = secrets.token_urlsafe(32)
+    now = time.time()
+    with _lock:
+        if len(_sessions) >= MAX_SESSIONS:
+            oldest = min(_sessions, key=lambda k: _sessions[k]["seen"])
+            _sessions.pop(oldest, None)
+        _sessions[hashlib.sha256(tok.encode()).hexdigest()] = {"created": now, "seen": now}
+    return tok
+
+
+def valid_session(token):
+    if not token:
+        return False
+    key = hashlib.sha256(token.encode()).hexdigest()
+    now = time.time()
+    with _lock:
+        s = _sessions.get(key)
+        if not s:
+            return False
+        if now - s["created"] > SESSION_TTL or now - s["seen"] > SESSION_IDLE:
+            _sessions.pop(key, None)
+            return False
+        s["seen"] = now
+        return True
+
+
+def drop_sessions():
+    with _lock:
+        _sessions.clear()
+
+
+def throttled():
+    """Exponential backoff, capped, always self-clearing.
+
+    Never a permanent lockout: the owner forgetting their password must not
+    require re-flashing the device.
+    """
+    return time.time() < _fail["until"]
+
+
+def note_failure():
+    _fail["count"] += 1
+    if _fail["count"] >= 5:
+        delay = min(900, 2 ** (_fail["count"] - 5))
+        _fail["until"] = time.time() + delay
+
+
+def note_success():
+    _fail["count"] = 0
+    _fail["until"] = 0.0
+
+
+# -------------------------------------------------------------------- HTTP
+
+SECURITY_HEADERS = {
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def version_string(self):
+        return "FlightRadar"
+
+    def log_message(self, fmt, *args):
+        # Never log the query string or body: they carry the WiFi password
+        # and the Tailscale auth key.
+        path = self.path.split("?", 1)[0]
+        print(f"setup {self.command} {path}", flush=True)
+
+    # -- helpers ---------------------------------------------------------
+
+    def _send(self, code, obj=None, body=None, ctype="application/json"):
+        payload = body if body is not None else json.dumps(obj or {}).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(payload)))
+        for k, v in SECURITY_HEADERS.items():
+            self.send_header(k, v)
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(payload)
+
+    def _err(self, code, token, message):
+        self._send(code, {"error": {"code": token, "message": message}})
+
+    def _body(self):
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return None
+        if n > MAX_BODY:
+            return None
+        try:
+            return json.loads(self.rfile.read(n) or b"{}")
+        except Exception:
+            return None
+
+    def _authed(self):
+        auth = self.headers.get("Authorization") or ""
+        return auth.startswith("Bearer ") and valid_session(auth[7:])
+
+    def _public_blocked(self):
+        """The gateway marks anything that came from the public tunnel.
+
+        Belt and braces alongside LOCAL_ONLY_PATHS: if the gateway's filter
+        were ever bypassed again, this still refuses the request.
+        """
+        return self.headers.get("X-FR-Public") is not None
+
+    # -- routing ---------------------------------------------------------
+
+    def do_GET(self):
+        self._route()
+
+    def do_POST(self):
+        self._route()
+
+    def do_HEAD(self):
+        self._route()
+
+    def _route(self):
+        if self._public_blocked():
+            self._send(404, {})
+            return
+        path = self.path.split("?", 1)[0].rstrip("/") or "/setup"
+        st = load_state()
+
+        if path in ("/setup", "/setup/index.html"):
+            return self._serve_ui()
+        if path == "/setup/api/hello":
+            return self._send(200, {
+                "product": "FlightRadar",
+                "claimed": bool(st.get("claimed")),
+                "steps": st.get("steps", {}),
+                "hasScreen": claim_code() is not None,
+            })
+        if path == "/setup/api/claim" and self.command == "POST":
+            return self._claim(st)
+        if path == "/setup/api/login" and self.command == "POST":
+            return self._login(st)
+
+        # everything below requires a session
+        if not self._authed():
+            return self._err(401, "unauthenticated", "Sign in to continue.")
+
+        if path == "/setup/api/status":
+            return self._status(st)
+        if path == "/setup/api/airports":
+            return self._airports()
+        if path == "/setup/api/wifi/scan":
+            return self._proxy_verb("wifi_scan")
+        if path == "/setup/api/wifi/connect" and self.command == "POST":
+            return self._wifi_connect()
+        if path == "/setup/api/wifi/confirm" and self.command == "POST":
+            return self._proxy_verb("wifi_confirm")
+        if path == "/setup/api/wifi/rollback" and self.command == "POST":
+            return self._proxy_verb("wifi_rollback")
+        if path == "/setup/api/location" and self.command == "POST":
+            return self._location(st)
+        if path == "/setup/api/airport" and self.command == "POST":
+            return self._airport(st)
+        if path == "/setup/api/tailscale/status":
+            return self._proxy_verb("tailscale_status")
+        if path == "/setup/api/tailscale/up" and self.command == "POST":
+            return self._tailscale_up(st)
+        if path == "/setup/api/tailscale/funnel" and self.command == "POST":
+            b = self._body() or {}
+            return self._proxy_verb("tailscale_funnel", {"enabled": bool(b.get("enabled"))})
+        if path == "/setup/api/hotspot" and self.command == "POST":
+            b = self._body() or {}
+            return self._proxy_verb("hotspot_start" if b.get("on") else "hotspot_stop")
+        if path == "/setup/api/password" and self.command == "POST":
+            return self._change_password(st)
+        if path == "/setup/api/reboot" and self.command == "POST":
+            b = self._body() or {}
+            if b.get("confirm") != "REBOOT":
+                return self._err(400, "confirm_required", "Confirmation missing.")
+            return self._proxy_verb("reboot")
+
+        self._send(404, {})
+
+    # -- handlers --------------------------------------------------------
+
+    def _serve_ui(self):
+        try:
+            with open(UI_FILE, "rb") as f:
+                self._send(200, body=f.read(), ctype="text/html; charset=utf-8")
+        except FileNotFoundError:
+            self._send(500, body=b"setup UI missing", ctype="text/plain")
+
+    def _claim(self, st):
+        if st.get("claimed"):
+            return self._err(409, "already_claimed",
+                             "This device has already been set up.")
+        if throttled():
+            return self._err(429, "too_many_attempts", "Too many tries. Wait a moment.")
+        b = self._body() or {}
+        code, pw = b.get("claimCode") or "", b.get("password") or ""
+        expected = claim_code()
+        if expected is None:
+            return self._err(503, "no_claim_code",
+                             "The device has not finished starting up.")
+        if not hmac.compare_digest(code.strip().upper(), expected.strip().upper()):
+            note_failure()
+            return self._err(403, "bad_claim_code",
+                             "That code does not match the one on the screen.")
+        if not (8 <= len(pw) <= 128):
+            return self._err(400, "weak_password", "Use at least 8 characters.")
+        note_success()
+        st.update({"schema": 1, "claimed": True,
+                   "password": hash_password(pw),
+                   "steps": st.get("steps", {})})
+        save_state(st)
+        return self._send(200, {"token": new_session(), "expiresIn": SESSION_TTL})
+
+    def _login(self, st):
+        if not st.get("claimed"):
+            return self._err(409, "not_claimed", "This device has not been set up yet.")
+        if throttled():
+            return self._err(429, "too_many_attempts", "Too many tries. Wait a moment.")
+        b = self._body() or {}
+        if not verify_password(b.get("password") or "", st.get("password")):
+            note_failure()
+            return self._err(401, "bad_password", "That password was not accepted.")
+        note_success()
+        return self._send(200, {"token": new_session(), "expiresIn": SESSION_TTL})
+
+    def _change_password(self, st):
+        b = self._body() or {}
+        if not verify_password(b.get("currentPassword") or "", st.get("password")):
+            return self._err(401, "bad_password", "Current password was not accepted.")
+        new = b.get("newPassword") or ""
+        if not (8 <= len(new) <= 128):
+            return self._err(400, "weak_password", "Use at least 8 characters.")
+        st["password"] = hash_password(new)
+        save_state(st)
+        drop_sessions()
+        return self._send(200, {"changed": True})
+
+    def _proxy_verb(self, verb, params=None):
+        r = call_setupd(verb, params)
+        if r.get("ok"):
+            return self._send(200, {"result": r.get("result")})
+        return self._err(400, r.get("code", "failed"),
+                         friendly(r.get("code", ""), r.get("detail", "")))
+
+    def _wifi_connect(self):
+        b = self._body()
+        if b is None:
+            return self._err(400, "bad_request", "Could not read that request.")
+        return self._proxy_verb("wifi_connect", {
+            "ssid": b.get("ssid"), "psk": b.get("psk"), "hidden": bool(b.get("hidden"))})
+
+    def _location(self, st):
+        b = self._body() or {}
+        r = call_setupd("set_location", {"lat": b.get("lat"), "lon": b.get("lon")})
+        if not r.get("ok"):
+            return self._err(400, r.get("code", "failed"),
+                             friendly(r.get("code", ""), r.get("detail", "")))
+        st.setdefault("steps", {})["location"] = True
+        st["location"] = r["result"]
+        save_state(st)
+        return self._send(200, {"result": r["result"],
+                                "nearestAirports": nearest_airports(
+                                    r["result"]["lat"], r["result"]["lon"])})
+
+    def _airport(self, st):
+        b = self._body() or {}
+        r = call_setupd("set_airport", {"code": b.get("code"),
+                                        "atcMount": b.get("atcMount", "")})
+        if not r.get("ok"):
+            return self._err(400, r.get("code", "failed"),
+                             friendly(r.get("code", ""), r.get("detail", "")))
+        st.setdefault("steps", {})["airport"] = True
+        st["airport"] = r["result"]
+        save_state(st)
+        return self._send(200, {"result": r["result"]})
+
+    def _tailscale_up(self, st):
+        b = self._body() or {}
+        r = call_setupd("tailscale_up", {
+            "authKey": b.get("authKey"), "hostname": b.get("hostname"),
+            "enableFunnel": bool(b.get("enableFunnel"))}, timeout=150)
+        if not r.get("ok"):
+            return self._err(400, r.get("code", "failed"),
+                             friendly(r.get("code", ""), r.get("detail", "")))
+        st.setdefault("steps", {})["remote"] = True
+        save_state(st)
+        return self._send(200, {"result": r["result"]})
+
+    def _status(self, st):
+        ts = call_setupd("tailscale_status")
+        pend = call_setupd("pending")
+        return self._send(200, {
+            "claimed": bool(st.get("claimed")),
+            "steps": st.get("steps", {}),
+            "location": st.get("location"),
+            "airport": st.get("airport"),
+            "remote": ts.get("result") if ts.get("ok") else None,
+            "pendingChange": pend.get("result") if pend.get("ok") else None,
+        })
+
+    def _airports(self):
+        try:
+            with open(AIRPORTS_JSON) as f:
+                data = json.load(f)
+        except Exception:
+            return self._err(500, "airports_missing", "Airport list unavailable.")
+        q = ""
+        if "?" in self.path:
+            from urllib.parse import parse_qs, urlparse
+            q = (parse_qs(urlparse(self.path).query).get("q") or [""])[0].strip().lower()
+        rows = data["airports"]
+        if q:
+            rows = [a for a in rows
+                    if q in a["code"].lower() or q in a["name"].lower()
+                    or q in (a.get("city") or "").lower()]
+        return self._send(200, {"airports": rows[:60], "total": len(rows)})
+
+
+def nearest_airports(lat, lon, n=6):
+    import math
+    try:
+        with open(AIRPORTS_JSON) as f:
+            rows = json.load(f)["airports"]
+    except Exception:
+        return []
+    out = []
+    for a in rows:
+        dy = (a["lat"] - lat) * 60.0
+        dx = (a["lon"] - lon) * 60.0 * math.cos(math.radians(lat))
+        out.append((math.hypot(dx, dy), a))
+    out.sort(key=lambda t: t[0])
+    return [dict(a, distanceNm=round(d, 1)) for d, a in out[:n]]
+
+
+FRIENDLY = {
+    "wifi_auth_failed": "That WiFi password was not accepted.",
+    "wifi_ssid_not_found": "That network was not found. Is it in range?",
+    "wifi_no_ip": "Joined the network but it did not provide an address.",
+    "wifi_no_gateway": "Joined the network but there is no route out of it.",
+    "wifi_gateway_unreachable": "Joined the network but the router did not respond.",
+    "lat_out_of_range": "That looks like it is outside the continental United States.",
+    "lon_out_of_range": "That looks like it is outside the continental United States.",
+    "unknown_airport": "That airport is not in the built-in list.",
+    "readsb_did_not_recover": "The receiver did not restart, so the previous location was restored.",
+    "funnel_guard_failed": "Refusing to publish: the privacy filter is not working.",
+    "bad_authkey": "That does not look like a Tailscale auth key.",
+    "busy": "Another change is already in progress.",
+    "setupd_unavailable": "The setup service is not running.",
+    "ssid_leading_dash": "Network names starting with a dash are not supported.",
+}
+
+
+def friendly(code, detail=""):
+    return FRIENDLY.get(code) or (detail or "That did not work.")
+
+
+class Server(http.server.ThreadingHTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+
+if __name__ == "__main__":
+    Server(LISTEN, Handler).serve_forever()
