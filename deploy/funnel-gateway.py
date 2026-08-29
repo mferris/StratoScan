@@ -28,6 +28,13 @@ LISTEN = ("127.0.0.1", 8085)
 ROUNDED_PATH = "/tar1090/data/receiver.json"
 COORD_PRECISION = 2  # decimal places -- ~0.7mi at this latitude
 
+# Paths refused for public (Funnel) traffic. /wake physically powers the
+# kiosk's display on; harmless in isolation, but it is an unauthenticated
+# side effect on hardware in someone's house, and nothing off-LAN has any
+# business reaching it. The kiosk and the rest of the LAN talk to lighttpd
+# directly and are unaffected by this.
+LOCAL_ONLY_PATHS = ("/wake",)
+
 # Headers that are per-hop or would otherwise be wrong to blindly forward
 # (Content-Length is recomputed for the rewritten path; "server" is excluded
 # so lighttpd's own version banner doesn't leak through this gateway on top
@@ -59,13 +66,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header(k, v)
 
     def do_GET(self):
+        if self._is_local_only(self.path):
+            self.send_error(404)
+            return
         if self.path == ROUNDED_PATH:
             self._serve_rounded_receiver_json()
         else:
             self._proxy()
 
     def do_POST(self):
+        if self._is_local_only(self.path):
+            self.send_error(404)  # 404, not 403 -- don't confirm it exists
+            return
         self._proxy()
+
+    @staticmethod
+    def _is_local_only(path):
+        base = path.split("?", 1)[0].rstrip("/")
+        return any(base == p or base.startswith(p + "/") for p in LOCAL_ONLY_PATHS)
 
     def _serve_rounded_receiver_json(self):
         try:
