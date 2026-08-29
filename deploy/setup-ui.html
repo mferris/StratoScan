@@ -77,8 +77,16 @@
     <p class="note">Where the antenna physically is. Used to centre the radar.
       Kept on the device; if you later publish a public page, the position it
       shows is rounded to about half a mile.</p>
-    <label>Latitude</label><input id="lat" inputmode="decimal" placeholder="35.8776">
-    <label>Longitude</label><input id="lon" inputmode="decimal" placeholder="-78.7875">
+    <label>Latitude (north)</label>
+    <input id="lat" inputmode="decimal" placeholder="35.8776">
+    <label>Longitude (west)</label>
+    <!-- inputmode="decimal" gives iOS a keypad with NO minus key, which made
+         this field impossible to fill in on a phone: every longitude in the
+         continental US is negative. "text" keeps the minus available, and
+         the code below adds the sign anyway if it is left off. -->
+    <input id="lon" inputmode="text" placeholder="-78.7875 (or just 78.7875)">
+    <div class="note">In the US, longitude is west, so it is negative. If you
+      leave the minus off, it is added for you.</div>
     <button id="locBtn">Save location</button>
     <div class="msg" id="locMsg"></div>
   </div>
@@ -223,12 +231,31 @@ $('joinBtn').onclick = async () => {
   $('joinBtn').disabled = false; $('joinBtn').textContent = 'Join network';
 };
 
+// Every continental-US longitude is negative and every latitude positive, so
+// a sign typed the wrong way (or left off entirely, which iOS's numeric
+// keypad forces) is unambiguous rather than a guess. Correct it and say so,
+// instead of rejecting input the phone keyboard could not have produced.
+function normaliseCoords(latRaw, lonRaw) {
+  let lat = parseFloat(String(latRaw).trim().replace(/[^\d.+-]/g, ''));
+  let lon = parseFloat(String(lonRaw).trim().replace(/[^\d.+-]/g, ''));
+  const notes = [];
+  if (Number.isFinite(lat) && lat < 0) { lat = -lat; notes.push('latitude made positive (north)'); }
+  if (Number.isFinite(lon) && lon > 0) { lon = -lon; notes.push('longitude made negative (west)'); }
+  return { lat, lon, notes };
+}
+
 $('locBtn').onclick = async () => {
   hide($('locMsg'));
+  const { lat, lon, notes } = normaliseCoords($('lat').value, $('lon').value);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return show($('locMsg'), 'err', 'Enter both a latitude and a longitude.');
+  }
+  $('lat').value = lat; $('lon').value = lon;   // show what will actually be sent
   try {
     const r = await api('location', { method: 'POST',
-      body: JSON.stringify({ lat: parseFloat($('lat').value), lon: parseFloat($('lon').value) }) });
-    show($('locMsg'), 'ok', 'Saved. Receiver restarted.');
+      body: JSON.stringify({ lat, lon }) });
+    show($('locMsg'), 'ok', 'Saved. Receiver restarted.' +
+      (notes.length ? ' (' + notes.join(', ') + ')' : ''));
     $('tickLoc').classList.remove('hide');
     if (r.nearestAirports?.length) {
       const sel = $('airSel'); sel.textContent = '';
