@@ -16,8 +16,11 @@ RestartSec=5
 StartLimitIntervalSec=0
 RuntimeDirectory=flightradar
 RuntimeDirectoryMode=0750
-StateDirectory=flightradar-setup
-StateDirectoryMode=0700
+# Deliberately NO StateDirectory here. Both units used to declare it, and
+# whichever started last decided the ownership -- root:0700 locked the
+# unprivileged web tier out of its own state file, so the device reported
+# itself unclaimed and the owner's real password stopped working. The web
+# tier's unit owns the directory; root can write it regardless.
 
 [Install]
 WantedBy=multi-user.target

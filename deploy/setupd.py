@@ -374,7 +374,7 @@ def wifi_scan():
 
 
 def write_pending(rec):
-    atomic_write(PENDING, json.dumps(rec), mode=0o600)
+    atomic_write(PENDING, json.dumps(rec), mode=0o660)
 
 
 def read_pending():
@@ -521,7 +521,7 @@ def hotspot_psk():
     except FileNotFoundError:
         import secrets as _s
         psk = "".join(_s.choice("23456789abcdefghjkmnpqrstuvwxyz") for _ in range(10))
-        atomic_write(path, psk, mode=0o600)
+        atomic_write(path, psk, mode=0o660)
         return psk
 
 
@@ -892,9 +892,38 @@ def ensure_claim_code():
     return code
 
 
+def share_state_dir():
+    """Let the unprivileged web tier reach the shared state.
+
+    Both units declare StateDirectory=flightradar-setup. systemd creates it
+    for whichever starts first -- this one, as root -- giving 0700 root:root,
+    which locks the web tier out of its OWN state file. The symptom is
+    brutal and silent: load_state() fails, the device reports itself
+    unclaimed, and the owner is asked to set a password they already set,
+    while their real password stops working.
+
+    Shared by group instead. The web tier legitimately reads and writes this
+    file (claiming, password changes), so group write is the intent, not a
+    weakening of it.
+    """
+    gid = resolve_gid()
+    if not gid:
+        return
+    with contextlib.suppress(Exception):
+        os.chown(STATE_DIR, 0, gid)
+        os.chmod(STATE_DIR, 0o2770)   # setgid: new files inherit the group
+    for name in os.listdir(STATE_DIR):
+        path = os.path.join(STATE_DIR, name)
+        with contextlib.suppress(Exception):
+            if os.path.isfile(path):
+                os.chown(path, os.stat(path).st_uid, gid)
+                os.chmod(path, 0o660)
+
+
 def main():
     os.makedirs(RUN_DIR, mode=0o700, exist_ok=True)
     os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+    share_state_dir()
     code = ensure_claim_code()
     if code:
         # Also to the journal: on a headless or screen-dead unit this is the

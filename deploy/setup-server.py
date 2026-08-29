@@ -68,7 +68,9 @@ def save_state(st):
         json.dump(st, f, indent=1)
         f.flush()
         os.fsync(f.fileno())
-    os.chmod(tmp, 0o600)
+    # 0660, not 0600: the root helper shares this directory by group so both
+    # tiers can read it. See share_state_dir() in setupd.py for why.
+    os.chmod(tmp, 0o660)
     os.replace(tmp, STATE_FILE)
     dfd = os.open(STATE_DIR, os.O_DIRECTORY)
     try:
