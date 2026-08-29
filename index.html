@@ -1890,6 +1890,25 @@ if (IS_KIOSK && alertSettings.atc) {
   saveAlertSettings();
 }
 
+// One-time repair for the nearby alert. It defaults on, but until the
+// drag-to-scroll fix a scroll gesture toggled whatever row sat under your
+// finger -- and "Nearby aircraft alert" is the FIRST row in the panel, so it
+// is the one that got silently switched off on any device used before that
+// fix. Restores it once per device, leaving every other choice untouched;
+// after that the toggle behaves normally and can be turned off for good.
+const NEARBY_REPAIR_KEY = 'flightradar_nearby_repair_v1';
+try {
+  if (!localStorage.getItem(NEARBY_REPAIR_KEY)) {
+    if (!alertSettings.nearby) {
+      alertSettings.nearby = true;
+      saveAlertSettings();
+    }
+    localStorage.setItem(NEARBY_REPAIR_KEY, '1');
+  }
+} catch (e) {
+  // storage unavailable -- the default (on) already stands
+}
+
 function saveAlertSettings() {
   try { localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify(alertSettings)); } catch (e) {}
 }
