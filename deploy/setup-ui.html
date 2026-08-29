@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FlightRadar setup</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--text:#e6edf3;--dim:#8b949e;
+        --accent:#2f81f7;--ok:#3fb950;--warn:#d29922;--err:#f85149}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,sans-serif;
+       padding:20px;max-width:640px;margin:0 auto;-webkit-text-size-adjust:100%}
+  h1{font-size:1.4rem;margin-bottom:4px}
+  .sub{color:var(--dim);font-size:.9rem;margin-bottom:20px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+        padding:16px;margin-bottom:14px}
+  .card h2{font-size:1rem;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .tick{color:var(--ok)}
+  label{display:block;font-size:.85rem;color:var(--dim);margin:10px 0 4px}
+  input,select{width:100%;padding:11px;background:#0d1117;color:var(--text);
+    border:1px solid var(--line);border-radius:7px;font-size:16px}
+  button{width:100%;padding:12px;margin-top:12px;background:var(--accent);color:#fff;
+    border:0;border-radius:7px;font-size:1rem;font-weight:600;cursor:pointer}
+  button.sec{background:transparent;border:1px solid var(--line);color:var(--text)}
+  button:disabled{opacity:.5;cursor:default}
+  .msg{margin-top:10px;padding:10px;border-radius:7px;font-size:.9rem;display:none}
+  .msg.show{display:block}
+  .msg.err{background:rgba(248,81,73,.12);border:1px solid var(--err);color:#ffb4ae}
+  .msg.ok{background:rgba(63,185,80,.12);border:1px solid var(--ok);color:#7ee787}
+  .msg.warn{background:rgba(210,153,34,.12);border:1px solid var(--warn);color:#e3b341}
+  .net{padding:11px;border:1px solid var(--line);border-radius:7px;margin-bottom:6px;
+       cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+  .net:hover{border-color:var(--accent)}
+  .net b{font-weight:600}
+  .net small{color:var(--dim)}
+  .hide{display:none}
+  .note{font-size:.8rem;color:var(--dim);margin-top:8px}
+</style>
+</head>
+<body>
+<h1>FlightRadar setup</h1>
+<div class="sub" id="sub">Getting started…</div>
+
+<!-- claim / login -->
+<div class="card" id="cardAuth">
+  <h2 id="authTitle">Sign in</h2>
+  <div id="claimBits" class="hide">
+    <p class="note">This device has not been set up yet. Enter the code shown
+       on the radar's own screen, then choose a password for it.</p>
+    <label>Code on the screen</label>
+    <input id="claimCode" autocomplete="off" autocapitalize="characters" placeholder="ABCD1234">
+  </div>
+  <label id="pwLabel">Password</label>
+  <input id="password" type="password" autocomplete="current-password">
+  <button id="authBtn">Continue</button>
+  <div class="msg" id="authMsg"></div>
+</div>
+
+<div id="panels" class="hide">
+  <!-- wifi -->
+  <div class="card">
+    <h2>WiFi <span class="tick hide" id="tickWifi">✓</span></h2>
+    <button class="sec" id="scanBtn">Scan for networks</button>
+    <div id="netList"></div>
+    <label class="hide" id="pskLabel">Password for <span id="pskFor"></span></label>
+    <input class="hide" id="psk" type="password" autocomplete="off">
+    <button class="hide" id="joinBtn">Join network</button>
+    <div class="msg" id="wifiMsg"></div>
+    <div class="note">Changing WiFi may briefly disconnect you. If this page stops
+      responding, rejoin your home network and open this address again — the
+      radar puts its old network back automatically if the new one doesn't work.</div>
+  </div>
+
+  <!-- location -->
+  <div class="card">
+    <h2>Receiver location <span class="tick hide" id="tickLoc">✓</span></h2>
+    <p class="note">Where the antenna physically is. Used to centre the radar.
+      Kept on the device; if you later publish a public page, the position it
+      shows is rounded to about half a mile.</p>
+    <label>Latitude</label><input id="lat" inputmode="decimal" placeholder="35.8776">
+    <label>Longitude</label><input id="lon" inputmode="decimal" placeholder="-78.7875">
+    <button id="locBtn">Save location</button>
+    <div class="msg" id="locMsg"></div>
+  </div>
+
+  <!-- airport -->
+  <div class="card">
+    <h2>Home airport <span class="tick hide" id="tickAir">✓</span></h2>
+    <p class="note">Sets the landing/takeoff highlight and the approach heatmap.</p>
+    <label>Search</label>
+    <input id="airQ" placeholder="Type a city, name or code">
+    <select id="airSel" size="6"></select>
+    <label>LiveATC feed name (optional)</label>
+    <input id="atcMount" placeholder="e.g. krdu_app2 — leave blank if unsure" autocapitalize="none">
+    <div class="note">Feed names can't be worked out from the airport code, so this
+      is left blank unless you fill it in. Find yours at liveatc.net and paste the
+      <b>mount</b> value. Blank simply turns the ATC feature off.</div>
+    <button id="airBtn">Save airport</button>
+    <div class="msg" id="airMsg"></div>
+  </div>
+
+  <!-- remote -->
+  <div class="card">
+    <h2>Public web address <span class="tick hide" id="tickRem">✓</span></h2>
+    <p class="note">Optional. Uses <b>your own</b> Tailscale account, so the device
+      and its location stay under your control. Create a free account, generate an
+      auth key, and paste it here. Skip this to keep the radar on your home
+      network only.</p>
+    <label>Tailscale auth key</label>
+    <input id="authKey" autocomplete="off" placeholder="tskey-auth-…">
+    <label>Device name</label>
+    <input id="tsHost" autocomplete="off" placeholder="flightradar" autocapitalize="none">
+    <label><input type="checkbox" id="funnel" style="width:auto"> Also publish a public https page</label>
+    <button id="remBtn">Connect</button>
+    <div class="msg" id="remMsg"></div>
+  </div>
+</div>
+
+<script>
+let TOKEN = null, CHOSEN = null, AIRPORTS = [];
+const $ = id => document.getElementById(id);
+const show = (el, cls, text) => { el.className = 'msg show ' + cls; el.textContent = text; };
+const hide = el => { el.className = 'msg'; };
+
+async function api(path, opts = {}) {
+  const h = { 'Content-Type': 'application/json' };
+  if (TOKEN) h['Authorization'] = 'Bearer ' + TOKEN;
+  const r = await fetch('/setup/api/' + path, { ...opts, headers: h });
+  let body = {};
+  try { body = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(body?.error?.message || 'That did not work.');
+  return body;
+}
+
+async function boot() {
+  try {
+    const h = await api('hello');
+    if (h.claimed) {
+      $('authTitle').textContent = 'Sign in';
+      $('pwLabel').textContent = 'Password';
+    } else {
+      $('authTitle').textContent = 'Set up this device';
+      $('claimBits').classList.remove('hide');
+      $('pwLabel').textContent = 'Choose a password';
+      $('password').autocomplete = 'new-password';
+      if (!h.hasScreen) show($('authMsg'), 'warn',
+        'The device could not show a setup code on its screen. Check the display is connected.');
+    }
+    $('sub').textContent = h.claimed ? 'Signed out.' : 'First-time setup.';
+  } catch (e) { show($('authMsg'), 'err', e.message); }
+}
+
+$('authBtn').onclick = async () => {
+  hide($('authMsg'));
+  const pw = $('password').value;
+  const code = $('claimCode').value;
+  const claiming = !$('claimBits').classList.contains('hide');
+  try {
+    const r = await api(claiming ? 'claim' : 'login', {
+      method: 'POST',
+      body: JSON.stringify(claiming ? { password: pw, claimCode: code } : { password: pw }),
+    });
+    TOKEN = r.token;
+    $('cardAuth').classList.add('hide');
+    $('panels').classList.remove('hide');
+    $('sub').textContent = 'Signed in.';
+    refresh();
+  } catch (e) { show($('authMsg'), 'err', e.message); }
+};
+
+async function refresh() {
+  try {
+    const s = await api('status');
+    if (s.steps?.wifi) $('tickWifi').classList.remove('hide');
+    if (s.location) { $('lat').value = s.location.lat; $('lon').value = s.location.lon;
+                      $('tickLoc').classList.remove('hide'); }
+    if (s.airport) { $('atcMount').value = s.airport.atcMount || '';
+                     $('tickAir').classList.remove('hide'); }
+    if (s.steps?.remote) $('tickRem').classList.remove('hide');
+    if (s.pendingChange) show($('wifiMsg'), 'warn',
+      'A network change is waiting to be confirmed. If this page is working, press Join again to keep it.');
+  } catch (e) {}
+}
+
+$('scanBtn').onclick = async () => {
+  hide($('wifiMsg'));
+  $('scanBtn').disabled = true; $('scanBtn').textContent = 'Scanning…';
+  try {
+    const r = await api('wifi/scan');
+    const list = $('netList'); list.textContent = '';
+    (r.result || []).forEach(n => {
+      const d = document.createElement('div');
+      d.className = 'net';
+      const b = document.createElement('b'); b.textContent = n.ssid;  // never innerHTML: SSIDs are attacker-controlled
+      const s = document.createElement('small');
+      s.textContent = (n.secured ? 'secured' : 'open') + ' · ' + n.signal + '%';
+      d.append(b, s);
+      d.onclick = () => {
+        CHOSEN = n;
+        $('pskFor').textContent = n.ssid;
+        $('pskLabel').classList.toggle('hide', !n.secured);
+        $('psk').classList.toggle('hide', !n.secured);
+        $('joinBtn').classList.remove('hide');
+      };
+      list.appendChild(d);
+    });
+    if (!(r.result || []).length) show($('wifiMsg'), 'warn', 'No networks found.');
+  } catch (e) { show($('wifiMsg'), 'err', e.message); }
+  $('scanBtn').disabled = false; $('scanBtn').textContent = 'Scan for networks';
+};
+
+$('joinBtn').onclick = async () => {
+  if (!CHOSEN) return;
+  hide($('wifiMsg'));
+  $('joinBtn').disabled = true; $('joinBtn').textContent = 'Joining…';
+  try {
+    await api('wifi/connect', { method: 'POST',
+      body: JSON.stringify({ ssid: CHOSEN.ssid, psk: $('psk').value }) });
+    await api('wifi/confirm', { method: 'POST' });
+    show($('wifiMsg'), 'ok', 'Connected to ' + CHOSEN.ssid + '.');
+    $('tickWifi').classList.remove('hide');
+  } catch (e) { show($('wifiMsg'), 'err', e.message); }
+  $('joinBtn').disabled = false; $('joinBtn').textContent = 'Join network';
+};
+
+$('locBtn').onclick = async () => {
+  hide($('locMsg'));
+  try {
+    const r = await api('location', { method: 'POST',
+      body: JSON.stringify({ lat: parseFloat($('lat').value), lon: parseFloat($('lon').value) }) });
+    show($('locMsg'), 'ok', 'Saved. Receiver restarted.');
+    $('tickLoc').classList.remove('hide');
+    if (r.nearestAirports?.length) {
+      const sel = $('airSel'); sel.textContent = '';
+      r.nearestAirports.forEach(a => {
+        const o = document.createElement('option');
+        o.value = a.code;
+        o.textContent = `${a.code} — ${a.name} (${a.distanceNm} nm)`;
+        sel.appendChild(o);
+      });
+    }
+  } catch (e) { show($('locMsg'), 'err', e.message); }
+};
+
+let qTimer;
+$('airQ').oninput = () => { clearTimeout(qTimer); qTimer = setTimeout(searchAirports, 250); };
+async function searchAirports() {
+  const q = $('airQ').value.trim();
+  if (q.length < 2) return;
+  try {
+    const r = await api('airports?q=' + encodeURIComponent(q));
+    const sel = $('airSel'); sel.textContent = '';
+    r.airports.forEach(a => {
+      const o = document.createElement('option');
+      o.value = a.code;
+      o.textContent = `${a.code} — ${a.name} (${a.city || ''}, ${a.state || ''})`;
+      sel.appendChild(o);
+    });
+  } catch (e) {}
+}
+
+$('airBtn').onclick = async () => {
+  hide($('airMsg'));
+  const code = $('airSel').value;
+  if (!code) return show($('airMsg'), 'err', 'Pick an airport from the list first.');
+  try {
+    await api('airport', { method: 'POST',
+      body: JSON.stringify({ code, atcMount: $('atcMount').value.trim() }) });
+    show($('airMsg'), 'ok', 'Home airport set to ' + code + '.');
+    $('tickAir').classList.remove('hide');
+  } catch (e) { show($('airMsg'), 'err', e.message); }
+};
+
+$('remBtn').onclick = async () => {
+  hide($('remMsg'));
+  $('remBtn').disabled = true; $('remBtn').textContent = 'Connecting…';
+  try {
+    const r = await api('tailscale/up', { method: 'POST', body: JSON.stringify({
+      authKey: $('authKey').value.trim(), hostname: $('tsHost').value.trim(),
+      enableFunnel: $('funnel').checked }) });
+    const url = r.result?.funnel?.publicUrl;
+    show($('remMsg'), 'ok', url ? 'Published at ' + url : 'Connected to your Tailscale network.');
+    $('authKey').value = '';
+    $('tickRem').classList.remove('hide');
+  } catch (e) { show($('remMsg'), 'err', e.message); }
+  $('remBtn').disabled = false; $('remBtn').textContent = 'Connect';
+};
+
+boot();
+</script>
+</body>
+</html>
