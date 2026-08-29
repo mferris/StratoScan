@@ -207,6 +207,17 @@ cradle_arc = 130;                          // degrees of arc each arm wraps: 65d
 arm_w   = 16;                              // width of each arm along the case's depth axis
 arm_gap = 26;                              // gap between the two arms
 base_w = outer_dia*0.86; base_d = 150; base_h = 16;
+// ---------- CRADLE STYLING ----------
+// The arms were bare ring segments ending in sawn-off square faces, which
+// read as unfinished next to the case's riveted, ribbed body -- and the tips
+// are exactly what the user looks at head-on. Two additions, both purely
+// additive so neither touches the bore or the retention geometry:
+//   - rounded caps on every arm tip, turning a cut edge into a forged one
+//   - a rivet arc across the FRONT arm's outward face, echoing the ring of
+//     rivets around the case itself (same rivet_dia/rivet_h)
+cradle_rivets      = 7;
+cradle_rivet_inset = 14;  // degrees held back from each tip so none sit on the round
+
 keel_arc   = 46;   // arc (deg) of the solid keel under the bowl
 keel_reach = 80;   // how far the keel extends radially outward (trimmed at the desk plane)
 
@@ -599,14 +610,40 @@ module antenna_turret_cuts() {
 // simply sets down into it.
 // ============================================================
 module cradle_arm(depth_offset) {
+    arm_t = (cradle_od - cradle_id) / 2;      // radial thickness of the arm
+    r_mid = (cradle_id + cradle_od) / 4;      // mid-thickness radius
     // ring segment: lies flat in the XY plane, hole-axis along local Z,
     // arc centered on "straight down" (270deg) so it cradles the
     // underside and wraps partway up both sides
-    translate([0, 0, depth_offset])
+    translate([0, 0, depth_offset]) {
         rotate([0,0, 270 - cradle_arc/2])
             rotate_extrude(angle = cradle_arc, $fn=96)
                 translate([cradle_id/2, 0])
-                    square([(cradle_od - cradle_id)/2, arm_w]);
+                    square([arm_t, arm_w]);
+        // Rounded tip caps. Diameter is exactly the arm's own thickness and
+        // they sit on the mid-thickness radius, so they span cradle_id/2 to
+        // cradle_od/2 precisely -- rounding the tip in plan view without
+        // narrowing the bore by a thousandth.
+        for (a = [270 - cradle_arc/2, 270 + cradle_arc/2])
+            translate([r_mid*cos(a), r_mid*sin(a), 0])
+                cylinder(d=arm_t, h=arm_w, $fn=48);
+    }
+}
+
+// Rivet arc across the front arm's outward face -- the surface the user
+// actually looks at. Same diameter and proud height as the case's rivets, so
+// the two read as one family. Held clear of the tips (cradle_rivet_inset) so
+// none straddle the new rounds.
+module cradle_front_rivets() {
+    r_mid  = (cradle_id + cradle_od) / 4;
+    z_face = arm_gap/2 + arm_w;               // outward face of the FRONT arm
+    a0     = 270 - cradle_arc/2 + cradle_rivet_inset;
+    span   = cradle_arc - 2*cradle_rivet_inset;
+    for (i = [0:cradle_rivets-1]) {
+        a = a0 + i * span / (cradle_rivets - 1);
+        translate([r_mid*cos(a), r_mid*sin(a), z_face])
+            cylinder(d=rivet_dia, h=rivet_h, $fn=16);
+    }
 }
 
 module stand() {
@@ -650,6 +687,7 @@ module stand() {
             rotate([90 - stand_angle, 0, 0]) {
                 cradle_arm(-(arm_gap/2 + arm_w));
                 cradle_arm(arm_gap/2);
+                cradle_front_rivets();
                 translate([0, 0, -(arm_gap/2 + arm_w)])
                     rotate([0, 0, 270 - keel_arc/2])
                         rotate_extrude(angle = keel_arc, $fn=96)
