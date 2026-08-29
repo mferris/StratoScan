@@ -322,6 +322,28 @@ def nm_active_wifi_uuid():
     return None
 
 
+def net_status():
+    """What the device is actually on right now, for display in the UI.
+
+    Shown so the owner can see what is already configured rather than having
+    to guess whether a screen has been filled in before.
+    """
+    ssid = None
+    p = run([NMCLI, "-t", "-f", "ACTIVE,SSID", "device", "wifi"], timeout=20)
+    for line in p.stdout.decode("utf-8", "replace").splitlines():
+        parts = re.split(r"(?<!\\):", line)
+        if len(parts) >= 2 and parts[0] == "yes":
+            ssid = parts[1].replace("\\:", ":")
+            break
+    addr = None
+    a = run([NMCLI, "-t", "-f", "IP4.ADDRESS", "device", "show", "wlan0"], timeout=15)
+    for line in a.stdout.decode().splitlines():
+        if "/" in line:
+            addr = line.split(":", 1)[-1].split("/")[0]
+            break
+    return {"ssid": ssid, "ipv4": addr, "hotspotActive": hotspot_active()}
+
+
 def nm_delete_profile(name_or_uuid):
     run([NMCLI, "connection", "delete", name_or_uuid], timeout=20)
 
@@ -710,6 +732,7 @@ VERBS = {
     "tailscale_funnel": lambda p: tailscale_funnel(bool(p.get("enabled"))),
     "reboot": lambda p: (run([SYSTEMCTL, "reboot"], timeout=10), {"rebooting": True})[1],
     "pending": lambda p: read_pending(),
+    "net_status": lambda p: net_status(),
     "reset_settings": lambda p: reset_settings(),
     "reset_full": lambda p: reset_full(),
 }
