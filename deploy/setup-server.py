@@ -496,8 +496,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return self._send(200, {
             "claimed": bool(st.get("claimed")),
             "steps": st.get("steps", {}),
-            "location": st.get("location"),
-            "airport": st.get("airport"),
+            "location": actual_location() or st.get("location"),
+            "airport": actual_airport() or st.get("airport"),
             "remote": ts.get("result") if ts.get("ok") else None,
             "pendingChange": pend.get("result") if pend.get("ok") else None,
         })
@@ -621,6 +621,22 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
         if path == "/onboard/airport":
             return self._verb("set_airport", {"code": body.get("code"),
                                               "atcMount": body.get("atcMount", "")})
+        if path == "/onboard/password":
+            # Setting the admin password from the device's own screen. No
+            # claim code is required here: being able to reach this listener
+            # already means being on the device, which is the same physical
+            # proof the code exists to establish. Without this, a unit set up
+            # entirely on-screen would stay unclaimed forever and keep
+            # showing its first-run instructions.
+            pw = body.get("password") or ""
+            if not (8 <= len(pw) <= 128):
+                return self._json(400, {"error": {"message": "Use at least 8 characters."}})
+            st = load_state()
+            st.update({"schema": 1, "claimed": True, "password": hash_password(pw)})
+            st.setdefault("steps", {})["password"] = True
+            save_state(st)
+            drop_sessions()
+            return self._json(200, {"result": {"claimed": True}})
         if path == "/onboard/reset":
             # Erasing everything from the screen is the give-it-away path AND
             # the forgotten-password path, so it deliberately needs no
@@ -647,10 +663,33 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", "http://localhost")
+        self.send_header("Access-Control-Allow-Origin", self._allowed_origin())
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(body)
+
+    @staticmethod
+    def _origin_ok(origin):
+        """Loopback origins only.
+
+        The listener is already bound to loopback, so this is a second layer
+        rather than the primary control -- it stops some other page loaded in
+        the kiosk browser from reading the claim code. Any localhost port is
+        accepted because the kiosk is served from :80 while diagnostics and
+        forwarded sessions are not.
+        """
+        if not origin:
+            return False
+        from urllib.parse import urlparse
+        try:
+            h = urlparse(origin).hostname
+        except Exception:
+            return False
+        return h in ("localhost", "127.0.0.1", "::1")
+
+    def _allowed_origin(self):
+        o = self.headers.get("Origin")
+        return o if self._origin_ok(o) else "http://localhost"
 
     def do_OPTIONS(self):
         self._json(204, {})
@@ -680,8 +719,10 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             "hotspot": hs.get("result") if hs.get("ok") else None,
             "addresses": lan_addresses(),
             "steps": st.get("steps", {}),
-            "location": st.get("location"),
-            "airport": st.get("airport"),
+            "location": actual_location() or st.get("location"),
+            "airport": actual_airport() or st.get("airport"),
+            "network": (lambda r: r.get("result") if r.get("ok") else None)(
+                call_setupd("net_status")),
         }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -689,9 +730,41 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         # The kiosk page is served from http://localhost/, so reading this
         # port is cross-origin. Only that origin is permitted.
-        self.send_header("Access-Control-Allow-Origin", "http://localhost")
+        self.send_header("Access-Control-Allow-Origin", self._allowed_origin())
         self.end_headers()
         self.wfile.write(body)
+
+
+def actual_location():
+    """The coordinates readsb is really using, not what our state file recalls.
+
+    The two can disagree: a unit configured before this service existed, or
+    one whose state file was reset, still has a perfectly good location in
+    /etc/default/readsb. Reporting "Not set" for a working configuration
+    would invite the owner to re-enter something that was never wrong.
+    """
+    try:
+        with open("/etc/default/readsb") as f:
+            body = f.read()
+    except Exception:
+        return None
+    lat = re.search(r"--lat[= ]([-\d.]+)", body)
+    lon = re.search(r"--lon[= ]([-\d.]+)", body)
+    if not (lat and lon):
+        return None
+    try:
+        return {"lat": float(lat.group(1)), "lon": float(lon.group(1))}
+    except ValueError:
+        return None
+
+
+def actual_airport():
+    """Whatever the web app is actually rendering, from its own config."""
+    try:
+        with open("/var/www/html/config.json") as f:
+            return (json.load(f) or {}).get("airport")
+    except Exception:
+        return None
 
 
 def lan_addresses():

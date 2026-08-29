@@ -644,6 +644,19 @@
   #onboard b { color: #fff; font-size: 1.15em; }
   #onboard .code { font-size: 1.6rem; letter-spacing: .18em; color: #fff; margin-top: 14px; }
   #onboard .foot { margin-top: 16px; font-size: .78rem; color: var(--text-dim); }
+  /* The overlay covers the whole screen, including the gear button, so
+     without this the on-screen setup route is unreachable on exactly the
+     devices that need it most: a new one, with no phone to hand. */
+  #onboard .ob-btn {
+    display: inline-block;
+    margin-top: 18px;
+    padding: 14px 22px;
+    border: 1px solid var(--mid);
+    border-radius: 8px;
+    color: var(--mid);
+    font-size: .95rem;
+    letter-spacing: .05em;
+  }
 
   /* On-screen keyboard. Without one the device cannot be set up from its own
      screen at all -- a WiFi password has to be typeable somehow, and a
@@ -2028,6 +2041,8 @@ async function refreshOnboarding() {
     // no setup service on this unit -- nothing to show, ever
   }
   if (!d || d.claimed) { el.classList.remove('show'); return; }
+  // Never reappear on top of someone who is actively using the setup screens.
+  if (settingsPanelEl.classList.contains('show')) { el.classList.remove('show'); return; }
 
   const hs = d.hotspot || {};
   const addr = (d.addresses || [])[0];
@@ -2047,11 +2062,29 @@ async function refreshOnboarding() {
   steps.push('Enter the code below when asked');
 
   document.getElementById('onboardInner').innerHTML =
-    `<h2>SET UP THIS RADAR</h2><ol><li>${steps.join('</li><li>')}</li></ol>` +
+    `<h2>SET UP THIS RADAR</h2>` +
+    `<ol><li>${steps.join('</li><li>')}</li></ol>` +
     (d.claimCode ? `<div class="code">${esc(d.claimCode)}</div>` : '') +
-    `<div class="foot">This screen disappears once setup is complete.</div>`;
+    `<div class="ob-btn" id="obSetupHere">Or set it up on this screen &#8250;</div>` +
+    `<div class="foot">This screen disappears once a password is set.</div>`;
   el.classList.add('show');
 }
+
+// The overlay sits above the gear, so it carries its own way through to the
+// on-screen setup. Without this a brand-new device -- the one case where the
+// on-screen route matters most -- could only be set up from a phone.
+document.getElementById('onboard').addEventListener('pointerup', (e) => {
+  e.stopPropagation();
+  if (!e.target.closest('#obSetupHere')) return;
+  document.getElementById('onboard').classList.remove('show');
+  settingsSection = 'device';
+  deviceView = null;
+  deviceMsg = '';
+  showSettingsPanel();
+  settingsSection = 'device';        // showSettingsPanel resets it to the menu
+  renderSettingsPanel();
+  loadDeviceStatus().then(renderSettingsPanel);
+});
 
 // ---- Night dimming ------------------------------------------------------
 // Darkens the whole display between sunset and sunrise at the RECEIVER's own
@@ -3508,7 +3541,8 @@ async function deviceApi(path, opts = {}) {
   return b;
 }
 
-let deviceView = null;   // null | 'wifi' | 'location' | 'airport' | 'reset'
+let deviceView = null;   // null | 'wifi' | 'location' | 'airport' | 'reset' | 'password'
+let deviceStatus = null; // last /onboard payload, so screens can show what is already set
 let deviceMsg = '';
 let deviceBusy = false;
 let wifiNets = [];
@@ -3528,7 +3562,10 @@ function renderDeviceSetup() {
             <div class="sp-chevron">&#8250;</div>
           </div>`).join('')
       : '<div class="sp-sub" style="padding:10px 0">Tap Scan to look for networks.</div>';
-    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">WiFi</div>
+    const cur = (deviceStatus && deviceStatus.network) || {};
+    const curLine = cur.ssid
+      ? `<div class="sp-sub" style="padding:6px 0">Currently on <b>${esc(cur.ssid)}</b></div>` : '';
+    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">WiFi</div>${curLine}
             <div class="sp-menu-row" data-act="wifi-scan">
               <div><div class="sp-label">Scan for networks</div></div><div class="sp-chevron">&#8250;</div>
             </div>${busy}${msg}${list}`;
@@ -3540,7 +3577,10 @@ function renderDeviceSetup() {
              <div class="sp-sub">${esc(a.city || '')}, ${esc(a.state || '')}</div></div>
         <div class="sp-chevron">&#8250;</div>
       </div>`).join('');
-    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Home airport</div>
+    const cua = (deviceStatus && deviceStatus.airport) || null;
+    const cuaLine = cua
+      ? `<div class="sp-sub" style="padding:6px 0">Currently <b>${esc(cua.code)}</b></div>` : '';
+    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Home airport</div>${cuaLine}
             <div class="sp-menu-row" data-act="airport-search">
               <div><div class="sp-label">Search airports</div>
                    <div class="sp-sub">By code, name or city</div></div>
@@ -3561,16 +3601,39 @@ function renderDeviceSetup() {
              <div class="sp-sub">Nothing happens until the word matches</div></div>
         <div class="sp-chevron">&#8250;</div></div>`;
   }
+  // Every row states what it is CURRENTLY set to. Without this the owner has
+  // no way to tell a configured device from an unconfigured one, and would
+  // have to re-enter a value just to find out what it already was.
+  const d = deviceStatus || {};
+  const net = d.network || {};
+  const wifiNow = net.hotspotActive ? 'Running its own setup network'
+                : net.ssid ? `Connected to ${net.ssid}${net.ipv4 ? ' · ' + net.ipv4 : ''}`
+                : 'Not connected';
+  const locNow = d.location
+    ? `${Number(d.location.lat).toFixed(4)}, ${Number(d.location.lon).toFixed(4)}`
+    : 'Not set';
+  const airNow = d.airport
+    ? `${d.airport.code}${d.airport.atcMount ? ' · ATC feed set' : ''}`
+    : 'Not set';
+  const pwNow = d.claimed ? 'Set' : 'Not set — anyone nearby can set it';
+
   return `<div class="sp-back">&#8592; Settings</div><div class="sp-title">Device setup</div>${busy}${msg}
     <div class="sp-menu-row" data-dev="wifi"><div><div class="sp-label">WiFi</div>
-      <div class="sp-sub">Join a different network</div></div><div class="sp-chevron">&#8250;</div></div>
+      <div class="sp-sub">${esc(wifiNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-act="set-location"><div><div class="sp-label">Receiver location</div>
-      <div class="sp-sub">Where this antenna is</div></div><div class="sp-chevron">&#8250;</div></div>
+      <div class="sp-sub">${esc(locNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="airport"><div><div class="sp-label">Home airport</div>
-      <div class="sp-sub">Landing highlight and approach heatmap</div></div><div class="sp-chevron">&#8250;</div></div>
+      <div class="sp-sub">${esc(airNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
+    <div class="sp-menu-row" data-act="set-password"><div><div class="sp-label">Admin password</div>
+      <div class="sp-sub">${esc(pwNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="reset"><div><div class="sp-label" style="color:#ff6b6b">Erase everything</div>
       <div class="sp-sub">Reset for a new owner, or if the password is lost</div></div>
       <div class="sp-chevron">&#8250;</div></div>`;
+}
+
+async function loadDeviceStatus() {
+  try { deviceStatus = await deviceApi('/onboard'); }
+  catch (e) { deviceStatus = null; }
 }
 
 async function handleDeviceTap(row) {
@@ -3578,6 +3641,20 @@ async function handleDeviceTap(row) {
   deviceMsg = '';
 
   if (dev) { deviceView = dev; wifiNets = []; airportRows = []; return renderSettingsPanel(); }
+
+  if (act === 'set-password') {
+    const pw = await openKeyboard('NEW ADMIN PASSWORD  (8+ characters)', '', { secret: true });
+    if (pw === null) return;
+    deviceBusy = true; renderSettingsPanel();
+    try {
+      await deviceApi('/onboard/password', { method: 'POST',
+        body: JSON.stringify({ password: pw }) });
+      deviceMsg = 'Password set. Setup is complete.';
+      await loadDeviceStatus();
+      refreshOnboarding();     // dismisses the first-run screen
+    } catch (e) { deviceMsg = e.message; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
 
   if (act === 'wifi-scan') {
     deviceBusy = true; renderSettingsPanel();
@@ -3798,6 +3875,13 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     return;
   }
   const menuRow = e.target.closest('.sp-menu-row');
+  if (menuRow && menuRow.dataset.group === 'device') {
+    settingsSection = 'device';
+    settingsPanelEl.scrollTop = 0;
+    renderSettingsPanel();
+    loadDeviceStatus().then(renderSettingsPanel); // fill in the current values
+    return;
+  }
   if (menuRow && (menuRow.dataset.dev || menuRow.dataset.act ||
                   menuRow.dataset.wifi || menuRow.dataset.airport)) {
     handleDeviceTap(menuRow);
