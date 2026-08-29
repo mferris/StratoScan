@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the FlightRadar network watchdog at boot and every 2 minutes
+
+[Timer]
+# 45s after boot: long enough for NetworkManager to have genuinely tried the
+# saved profiles, short enough that a recipient is not left staring at a
+# device that appears dead.
+OnBootSec=45
+OnUnitActiveSec=120
+AccuracySec=10
+
+[Install]
+WantedBy=timers.target

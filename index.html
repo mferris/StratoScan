@@ -618,6 +618,32 @@
     border-radius: 50%;
     background: var(--mid);
   }
+  /* First-run instructions, shown on the radar's own screen.
+     This is the ONLY channel a recipient has before the device is on their
+     network: no SSH, no LAN address, no app. It must therefore carry
+     everything needed to get in -- the hotspot name and password, the
+     address to open, and the claim code. */
+  #onboard {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.93);
+    z-index: 60;
+    font-family: 'JetBrains Mono', monospace;
+    color: #e6edf3;
+    text-align: center;
+    padding: 8%;
+  }
+  #onboard.show { display: flex; }
+  #onboardInner { max-width: 78%; }
+  #onboard h2 { font-size: 1.15rem; letter-spacing: .08em; margin-bottom: 14px; color: var(--mid); }
+  #onboard ol { text-align: left; margin: 0 auto; display: inline-block; font-size: .95rem; line-height: 1.9; }
+  #onboard b { color: #fff; font-size: 1.15em; }
+  #onboard .code { font-size: 1.6rem; letter-spacing: .18em; color: #fff; margin-top: 14px; }
+  #onboard .foot { margin-top: 16px; font-size: .78rem; color: var(--text-dim); }
+
   /* Night dimming. Sits above everything (including the panels) so the
      whole display dims uniformly, and pointer-events:none so it never
      eats a touch. NOTE: the panel has no hardware backlight control
@@ -672,6 +698,7 @@
   <div id="settingsBackdrop"></div>
   <div id="settingsPanel"></div>
   <div id="nightDim"></div>
+  <div id="onboard"><div id="onboardInner"></div></div>
 </div>
 
 <script src="vendor/maplibre-gl.js"></script>
@@ -1823,6 +1850,51 @@ async function checkLightningNearby() {
 // since this is the one alert that isn't about a specific aircraft at all.
 function playLightningAlertSound() {
   playTones([[600, 0, 0.18, 0.28], [600, 0.25, 0.18, 0.28], [600, 0.5, 0.24, 0.3]]);
+}
+
+// ---- First-run onboarding overlay ---------------------------------------
+// Reads a loopback-only endpoint (127.0.0.1:8090) that is deliberately NOT
+// proxied by lighttpd, so the claim code it carries is readable by software
+// running on the device -- this page -- and by nothing on the network.
+// Fails silently when the setup service is absent, so a hand-built unit that
+// never had one behaves exactly as before.
+const ONBOARD_URL = 'http://127.0.0.1:8090/onboard';
+const ONBOARD_POLL_MS = 5000;
+
+async function refreshOnboarding() {
+  const el = document.getElementById('onboard');
+  if (!el) return;
+  let d = null;
+  try {
+    const res = await fetch(ONBOARD_URL, { cache: 'no-store' });
+    if (res.ok) d = await res.json();
+  } catch (e) {
+    // no setup service on this unit -- nothing to show, ever
+  }
+  if (!d || d.claimed) { el.classList.remove('show'); return; }
+
+  const hs = d.hotspot || {};
+  const addr = (d.addresses || [])[0];
+  const steps = [];
+  // Branch on whether the AP is actually UP, not merely on whether it has a
+  // name: if the radar is already on a network, sending someone to look for
+  // "FlightRadar-Setup" sends them hunting for a network that isn't there.
+  if (hs.active && hs.ssid) {
+    steps.push(`On your phone, join the WiFi network <b>${esc(hs.ssid)}</b>` +
+               (hs.psk ? ` using password <b>${esc(hs.psk)}</b>` : ''));
+    steps.push('Open <b>http://192.168.4.1/setup</b> in your browser');
+  } else if (addr) {
+    steps.push(`On a device on the same network, open <b>http://${esc(addr)}/setup</b>`);
+  } else {
+    steps.push('Connect this radar to a network, or wait for it to start its own');
+  }
+  steps.push('Enter the code below when asked');
+
+  document.getElementById('onboardInner').innerHTML =
+    `<h2>SET UP THIS RADAR</h2><ol><li>${steps.join('</li><li>')}</li></ol>` +
+    (d.claimCode ? `<div class="code">${esc(d.claimCode)}</div>` : '') +
+    `<div class="foot">This screen disappears once setup is complete.</div>`;
+  el.classList.add('show');
 }
 
 // ---- Night dimming ------------------------------------------------------
@@ -3451,6 +3523,8 @@ async function start() {
   setInterval(checkLightningNearby, LIGHTNING_ALERT_CHECK_MS);
   applyNightDim();
   setInterval(applyNightDim, NIGHT_DIM_CHECK_MS);
+  refreshOnboarding();
+  setInterval(refreshOnboarding, ONBOARD_POLL_MS);
   requestAnimationFrame(tick);
 }
 
