@@ -377,11 +377,23 @@
   }
   #detailPanel .dp-close {
     position: absolute;
-    top: 10px;
-    right: 12px;
-    font-size: 1.1rem;
+    top: 6px;
+    right: 8px;
+    /* 44px square: a real touch target. Was 26x30, which on the kiosk's
+       touch panel needed a deliberate fingertip poke to hit. */
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.7rem;
+    line-height: 1;
     color: var(--text-dim);
-    padding: 4px 8px;
+    /* .dp-photo is positioned and comes LATER in the panel markup, so with
+       no z-index here it painted straight over this button -- any aircraft
+       with a photo had an entirely unclickable close button. */
+    z-index: 2;
+    text-shadow: 0 0 4px var(--panel-bg-strong), 0 0 4px var(--panel-bg-strong);
   }
   #detailPanel .dp-photo {
     position: relative;
