@@ -645,6 +645,53 @@
   #onboard .code { font-size: 1.6rem; letter-spacing: .18em; color: #fff; margin-top: 14px; }
   #onboard .foot { margin-top: 16px; font-size: .78rem; color: var(--text-dim); }
 
+  /* On-screen keyboard. Without one the device cannot be set up from its own
+     screen at all -- a WiFi password has to be typeable somehow, and a
+     recipient may have no phone to hand. Takes the whole display while open
+     because on a 1080px round panel there is no room to share. */
+  #kbd {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0,0,0,0.97);
+    z-index: 70;
+    padding: 6%;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  #kbd.show { display: flex; }
+  #kbdField {
+    width: 86%;
+    min-height: 46px;
+    padding: 10px 14px;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 1.05rem;
+    word-break: break-all;
+    text-align: left;
+  }
+  #kbdLabel { color: var(--text-dim); font-size: .72rem; display: block; letter-spacing: .08em; }
+  #kbdValue { font-size: 1.1rem; }
+  #kbdValue::after { content: '\258F'; opacity: .7; }
+  #kbdKeys { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; width: 92%; }
+  #kbdKeys div {
+    min-width: 52px;
+    padding: 13px 4px;
+    background: var(--panel-bg-strong);
+    border: 1px solid var(--panel-border);
+    border-radius: 7px;
+    text-align: center;
+    font-size: 1rem;
+    color: var(--text);
+    flex: 0 0 auto;
+  }
+  #kbdKeys div.wide { min-width: 84px; }
+  #kbdKeys div.go { border-color: var(--mid); color: var(--mid); }
+
   /* Night dimming. Sits above everything (including the panels) so the
      whole display dims uniformly, and pointer-events:none so it never
      eats a touch. NOTE: the panel has no hardware backlight control
@@ -737,6 +784,7 @@
   <div id="settingsPanel"></div>
   <div id="nightDim"></div>
   <div id="onboard"><div id="onboardInner"></div></div>
+  <div id="kbd"><div id="kbdField"><span id="kbdLabel"></span><span id="kbdValue"></span></div><div id="kbdKeys"></div></div>
 </div>
 
 <script src="vendor/maplibre-gl.js"></script>
@@ -1889,6 +1937,76 @@ async function checkLightningNearby() {
 function playLightningAlertSound() {
   playTones([[600, 0, 0.18, 0.28], [600, 0.25, 0.18, 0.28], [600, 0.5, 0.24, 0.3]]);
 }
+
+// ---- On-screen keyboard --------------------------------------------------
+// The device has to be fully set up from its own screen: a recipient may
+// have no phone, and someone who has forgotten the admin password has no
+// other way in at all. That makes a touch keyboard a hard requirement, not
+// a convenience.
+const KBD_ROWS = {
+  lower: ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'],
+  upper: ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'],
+  num:   ['1234567890', '-_.:/@#&+', '!?$%*()='],
+};
+let kbdState = { mode: 'lower', value: '', onDone: null, secret: false };
+
+function openKeyboard(label, initial, { secret = false, mode = 'lower' } = {}) {
+  return new Promise((resolve) => {
+    // Open on the layout the field actually needs: coordinates are digits and
+    // a minus, and making someone hunt for the 123 key first is the kind of
+    // friction that makes an on-screen keyboard feel unusable.
+    kbdState = { mode, value: initial || '', onDone: resolve, secret };
+    document.getElementById('kbdLabel').textContent = label;
+    document.getElementById('kbd').classList.add('show');
+    drawKeyboard();
+  });
+}
+
+function closeKeyboard(value) {
+  document.getElementById('kbd').classList.remove('show');
+  const done = kbdState.onDone;
+  kbdState.onDone = null;
+  if (done) done(value);
+}
+
+function drawKeyboard() {
+  const val = kbdState.secret ? '•'.repeat(kbdState.value.length) : kbdState.value;
+  document.getElementById('kbdValue').textContent = val;
+  const keys = document.getElementById('kbdKeys');
+  keys.textContent = '';
+  const add = (text, cls, action) => {
+    const d = document.createElement('div');
+    d.textContent = text;
+    if (cls) d.className = cls;
+    d.dataset.action = action || '';
+    keys.appendChild(d);
+  };
+  KBD_ROWS[kbdState.mode].forEach(row => {
+    [...row].forEach(ch => add(ch));
+    add('\u23CE', 'hide');           // row break placeholder, hidden
+  });
+  add(kbdState.mode === 'num' ? 'abc' : '123', 'wide', 'mode');
+  add(kbdState.mode === 'upper' ? 'abc' : 'ABC', 'wide', 'case');
+  add('space', 'wide', 'space');
+  add('\u232B', 'wide', 'back');
+  add('Cancel', 'wide', 'cancel');
+  add('Done', 'wide go', 'done');
+}
+
+document.getElementById('kbd').addEventListener('pointerup', (e) => {
+  e.stopPropagation();
+  const k = e.target.closest('#kbdKeys div');
+  if (!k) return;
+  const a = k.dataset.action;
+  if (a === 'done') return closeKeyboard(kbdState.value);
+  if (a === 'cancel') return closeKeyboard(null);
+  if (a === 'back') kbdState.value = kbdState.value.slice(0, -1);
+  else if (a === 'space') kbdState.value += ' ';
+  else if (a === 'mode') kbdState.mode = kbdState.mode === 'num' ? 'lower' : 'num';
+  else if (a === 'case') kbdState.mode = kbdState.mode === 'upper' ? 'lower' : 'upper';
+  else if (!a && k.textContent.length === 1) kbdState.value += k.textContent;
+  drawKeyboard();
+});
 
 // ---- First-run onboarding overlay ---------------------------------------
 // Reads a loopback-only endpoint (127.0.0.1:8090) that is deliberately NOT
@@ -3312,6 +3430,7 @@ const SETTINGS_GROUPS = [
   { key: 'overlays', label: 'Map overlays', sub: 'Weather, lightning and approach patterns' },
   { key: 'display',  label: 'Display',      sub: 'Night dimming and colour theme' },
   { key: 'audio',    label: 'ATC audio',    sub: 'Live tower feed for the home airport' },
+  { key: 'device',   label: 'Device setup',  sub: 'WiFi, location, home airport, reset' },
 ];
 let settingsSection = null;  // null = the menu; otherwise a group key
 
@@ -3339,6 +3458,10 @@ function alertSettingsMeta() { return [
 
 function renderSettingsPanel() {
   if (!settingsSection) return renderSettingsMenu();
+  if (settingsSection === 'device') {
+    settingsPanelEl.innerHTML = `<div class="sp-close">&times;</div>` + renderDeviceSetup();
+    return;
+  }
   const group = SETTINGS_GROUPS.find(g => g.key === settingsSection);
   const rows = alertSettingsMeta().filter(m => m.group === settingsSection);
   settingsPanelEl.innerHTML = `
@@ -3371,6 +3494,173 @@ function renderSettingsPanel() {
   `;
 }
 
+// Talks to the loopback-only setup listener. Not reachable from the network,
+// so no credential is needed -- and none can be required, since this is the
+// only way back in for someone who has forgotten the admin password.
+const DEVICE_API = 'http://127.0.0.1:8090';
+
+async function deviceApi(path, opts = {}) {
+  const r = await fetch(DEVICE_API + path, {
+    ...opts, headers: { 'Content-Type': 'application/json' } });
+  let b = {};
+  try { b = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(b?.error?.message || 'That did not work.');
+  return b;
+}
+
+let deviceView = null;   // null | 'wifi' | 'location' | 'airport' | 'reset'
+let deviceMsg = '';
+let deviceBusy = false;
+let wifiNets = [];
+let airportRows = [];
+
+function renderDeviceSetup() {
+  const msg = deviceMsg
+    ? `<div class="sp-sub" style="padding:8px 0;color:var(--text)">${esc(deviceMsg)}</div>` : '';
+  const busy = deviceBusy ? '<div class="sp-sub" style="padding:8px 0">Working…</div>' : '';
+
+  if (deviceView === 'wifi') {
+    const list = wifiNets.length
+      ? wifiNets.map(n => `
+          <div class="sp-menu-row" data-wifi="${esc(n.ssid)}">
+            <div><div class="sp-label">${esc(n.ssid)}</div>
+                 <div class="sp-sub">${n.secured ? 'password needed' : 'open'} · ${n.signal}%</div></div>
+            <div class="sp-chevron">&#8250;</div>
+          </div>`).join('')
+      : '<div class="sp-sub" style="padding:10px 0">Tap Scan to look for networks.</div>';
+    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">WiFi</div>
+            <div class="sp-menu-row" data-act="wifi-scan">
+              <div><div class="sp-label">Scan for networks</div></div><div class="sp-chevron">&#8250;</div>
+            </div>${busy}${msg}${list}`;
+  }
+  if (deviceView === 'airport') {
+    const list = airportRows.map(a => `
+      <div class="sp-menu-row" data-airport="${esc(a.code)}">
+        <div><div class="sp-label">${esc(a.code)} — ${esc(a.name)}</div>
+             <div class="sp-sub">${esc(a.city || '')}, ${esc(a.state || '')}</div></div>
+        <div class="sp-chevron">&#8250;</div>
+      </div>`).join('');
+    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Home airport</div>
+            <div class="sp-menu-row" data-act="airport-search">
+              <div><div class="sp-label">Search airports</div>
+                   <div class="sp-sub">By code, name or city</div></div>
+              <div class="sp-chevron">&#8250;</div></div>${busy}${msg}${list}`;
+  }
+  if (deviceView === 'reset') {
+    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Erase everything</div>
+      <div class="sp-sub" style="padding:10px 0;line-height:1.7">
+        This removes the WiFi network, the remote access account, the admin
+        password, this radar's location, and the flight history and approach
+        heatmap built up here. Use it before giving the radar to someone else,
+        or to start over if you have forgotten the password.<br><br>
+        The radar will then start its own setup network and show new
+        instructions on this screen.</div>
+      ${busy}${msg}
+      <div class="sp-menu-row" data-act="reset-confirm">
+        <div><div class="sp-label" style="color:#ff6b6b">Type ERASE to confirm</div>
+             <div class="sp-sub">Nothing happens until the word matches</div></div>
+        <div class="sp-chevron">&#8250;</div></div>`;
+  }
+  return `<div class="sp-back">&#8592; Settings</div><div class="sp-title">Device setup</div>${busy}${msg}
+    <div class="sp-menu-row" data-dev="wifi"><div><div class="sp-label">WiFi</div>
+      <div class="sp-sub">Join a different network</div></div><div class="sp-chevron">&#8250;</div></div>
+    <div class="sp-menu-row" data-act="set-location"><div><div class="sp-label">Receiver location</div>
+      <div class="sp-sub">Where this antenna is</div></div><div class="sp-chevron">&#8250;</div></div>
+    <div class="sp-menu-row" data-dev="airport"><div><div class="sp-label">Home airport</div>
+      <div class="sp-sub">Landing highlight and approach heatmap</div></div><div class="sp-chevron">&#8250;</div></div>
+    <div class="sp-menu-row" data-dev="reset"><div><div class="sp-label" style="color:#ff6b6b">Erase everything</div>
+      <div class="sp-sub">Reset for a new owner, or if the password is lost</div></div>
+      <div class="sp-chevron">&#8250;</div></div>`;
+}
+
+async function handleDeviceTap(row) {
+  const { dev, act, wifi, airport } = row.dataset;
+  deviceMsg = '';
+
+  if (dev) { deviceView = dev; wifiNets = []; airportRows = []; return renderSettingsPanel(); }
+
+  if (act === 'wifi-scan') {
+    deviceBusy = true; renderSettingsPanel();
+    try { wifiNets = (await deviceApi('/onboard/wifi/scan', { method: 'POST' })).result || []; }
+    catch (e) { deviceMsg = e.message; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (wifi) {
+    const psk = await openKeyboard(`PASSWORD FOR ${wifi}`, '', { secret: true });
+    if (psk === null) return;
+    deviceBusy = true; renderSettingsPanel();
+    try {
+      await deviceApi('/onboard/wifi/connect', { method: 'POST',
+        body: JSON.stringify({ ssid: wifi, psk }) });
+      deviceMsg = `Connected to ${wifi}.`;
+    } catch (e) { deviceMsg = e.message; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (act === 'set-location') {
+    const latS = await openKeyboard('LATITUDE  (e.g. 35.8776)', '', { mode: 'num' });
+    if (latS === null) return;
+    const lonS = await openKeyboard('LONGITUDE  (west, e.g. -78.7875)', '-', { mode: 'num' });
+    if (lonS === null) return;
+    let lat = parseFloat(latS), lon = parseFloat(lonS);
+    // Same forgiving normalisation as the phone page: in the continental US
+    // latitude is always positive and longitude always negative, so a sign
+    // left off is unambiguous rather than a guess.
+    if (Number.isFinite(lat) && lat < 0) lat = -lat;
+    if (Number.isFinite(lon) && lon > 0) lon = -lon;
+    deviceBusy = true; renderSettingsPanel();
+    try {
+      await deviceApi('/onboard/location', { method: 'POST',
+        body: JSON.stringify({ lat, lon }) });
+      deviceMsg = `Location set to ${lat.toFixed(4)}, ${lon.toFixed(4)}.`;
+    } catch (e) { deviceMsg = e.message; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (act === 'airport-search') {
+    const q = await openKeyboard('SEARCH AIRPORTS', '');
+    if (q === null || q.trim().length < 2) return;
+    deviceBusy = true; renderSettingsPanel();
+    try {
+      airportRows = (await deviceApi('/onboard/airports?q=' +
+        encodeURIComponent(q.trim()))).airports || [];
+      if (!airportRows.length) deviceMsg = 'No airports matched.';
+    } catch (e) { deviceMsg = e.message; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (airport) {
+    deviceBusy = true; renderSettingsPanel();
+    try {
+      await deviceApi('/onboard/airport', { method: 'POST',
+        body: JSON.stringify({ code: airport }) });
+      await loadAirportConfig();           // pick the change up immediately
+      deviceMsg = `Home airport set to ${airport}.`;
+      airportRows = [];
+    } catch (e) { deviceMsg = e.message; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (act === 'reset-confirm') {
+    // Typed confirmation, not a second tap: this wipes the owner's WiFi,
+    // password and location, and a stray touch must never reach it.
+    const word = await openKeyboard('TYPE  ERASE  TO CONFIRM', '', { mode: 'upper' });
+    if (word === null) return;
+    if (word.trim().toUpperCase() !== 'ERASE') {
+      deviceMsg = 'Not erased — the word did not match.';
+      return renderSettingsPanel();
+    }
+    deviceBusy = true; renderSettingsPanel();
+    try {
+      await deviceApi('/onboard/reset', { method: 'POST',
+        body: JSON.stringify({ confirm: 'ERASE' }) });
+      hideSettingsPanel();
+      refreshOnboarding();                 // the setup screen takes over
+    } catch (e) { deviceMsg = e.message; deviceBusy = false; renderSettingsPanel(); }
+  }
+}
+
 function renderSettingsMenu() {
   settingsPanelEl.innerHTML = `
     <div class="sp-close">&times;</div>
@@ -3395,6 +3685,7 @@ function showSettingsPanel() {
   // stopPropagation meant the stage handler never got to close it either.
   hideDetailPanel();
   settingsSection = null; // always open at the top level
+  deviceView = null; deviceMsg = ''; deviceBusy = false;
   renderSettingsPanel();
   settingsPanelEl.classList.add('show');
   settingsBackdropEl.classList.add('show');
@@ -3498,11 +3789,20 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > PANEL_DRAG_SLOP_PX) return;
 
   if (e.target.closest('.sp-back')) {
-    settingsSection = null;
+    if (settingsSection === 'device' && deviceView) {
+      deviceView = null; deviceMsg = '';   // step back within device setup
+    } else {
+      settingsSection = null;
+    }
     renderSettingsPanel();
     return;
   }
   const menuRow = e.target.closest('.sp-menu-row');
+  if (menuRow && (menuRow.dataset.dev || menuRow.dataset.act ||
+                  menuRow.dataset.wifi || menuRow.dataset.airport)) {
+    handleDeviceTap(menuRow);
+    return;
+  }
   if (menuRow) {
     // The whole row is the target here, not a small control: there is
     // nothing on it to toggle, so a tap anywhere on it is unambiguous.
