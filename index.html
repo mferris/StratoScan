@@ -312,6 +312,10 @@
     width: min(72%, 480px);
     max-height: 80%;
     overflow-y: auto;
+    /* let the browser own vertical panning, and don't chain the scroll to
+       whatever is behind the panel when it hits an end */
+    touch-action: pan-y;
+    overscroll-behavior: contain;
     background: var(--panel-bg-strong);
     border: 1px solid var(--panel-border);
     border-radius: 10px;
@@ -486,6 +490,10 @@
     width: min(76%, 420px);
     max-height: 80%;
     overflow-y: auto;
+    /* let the browser own vertical panning, and don't chain the scroll to
+       whatever is behind the panel when it hits an end */
+    touch-action: pan-y;
+    overscroll-behavior: contain;
     background: var(--panel-bg-strong);
     border: 1px solid var(--panel-border);
     border-radius: 10px;
@@ -527,6 +535,15 @@
     flex-shrink: 0;
   }
   #settingsPanel .sp-switch.on { background: var(--mid); }
+  /* Invisible hit expander. The visible switch stays 42x24, but tapping
+     within ~14px of it counts -- these controls became the only tappable
+     thing in a row once the row body was handed over to scrolling. */
+  #settingsPanel .sp-switch::before,
+  #settingsPanel .sp-radio::before {
+    content: '';
+    position: absolute;
+    inset: -14px -16px;
+  }
   #settingsPanel .sp-switch::after {
     content: '';
     position: absolute;
@@ -3142,17 +3159,52 @@ function hideSettingsPanel() {
 // Tapping a row toggles that setting without closing the panel (stops the
 // tap from bubbling to the stage's own pointerup handler below, which would
 // otherwise treat it as "tap anywhere while the panel's open -> close it").
+// The panel scrolls by dragging anywhere on it, so a press on a row must NOT
+// be treated as a choice: dragging used to end in a pointerup on whatever row
+// happened to be under your finger, flipping that setting every time you tried
+// to scroll. Two guards now: the press has to land on an actual control (the
+// switch or the theme radio -- both given generous invisible hit areas in the
+// CSS above), and it has to be a tap rather than a drag.
+const SETTINGS_DRAG_SLOP_PX = 8; // a real tap wanders a few px; a scroll goes much further
+let settingsPointerStart = null;
+
+settingsPanelEl.addEventListener('pointerdown', (e) => {
+  settingsPointerStart = { x: e.clientX, y: e.clientY };
+});
+
+settingsPanelEl.addEventListener('pointercancel', () => { settingsPointerStart = null; });
+
 settingsPanelEl.addEventListener('pointerup', (e) => {
+  const start = settingsPointerStart;
+  settingsPointerStart = null;
+
+  // The close button is the one interior control that dismisses. It used to
+  // work purely by bubbling to the stage handler; now that everything else
+  // inside the panel stops propagation (below), it has to say so itself.
+  if (e.target.closest('.sp-close')) {
+    e.stopPropagation();
+    hideSettingsPanel();
+    return;
+  }
+
+  // Nothing else inside the panel dismisses it. Without this the stage
+  // handler -- which closes the panel on any tap that reaches it -- would
+  // shut the panel every time a scroll drag ended on the panel background.
+  e.stopPropagation();
+
+  // moved too far -> that was a scroll, not a choice
+  if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > SETTINGS_DRAG_SLOP_PX) return;
+
   const themeRow = e.target.closest('.sp-theme-row');
   if (themeRow) {
-    e.stopPropagation();
+    if (!e.target.closest('.sp-radio')) return; // row body is for scrolling
     applyTheme(themeRow.dataset.themeKey);
     renderSettingsPanel();
     return;
   }
   const row = e.target.closest('.sp-row');
   if (!row) return;
-  e.stopPropagation();
+  if (!e.target.closest('.sp-switch')) return; // row body is for scrolling
   if (row.classList.contains('disabled')) return;
   const key = row.dataset.key;
   alertSettings[key] = !alertSettings[key];
