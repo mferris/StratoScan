@@ -588,8 +588,88 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass  # this endpoint carries the claim code; never log it
 
+    def do_POST(self):
+        """Device-local setup actions, for the radar's own touchscreen.
+
+        Unauthenticated BY DESIGN, and safe only because this listener is
+        bound to loopback and is not proxied by lighttpd -- reaching it means
+        already running on the device. Physical access is ownership here, the
+        same assumption every appliance makes.
+
+        It also has to be unauthenticated to be useful: this is the only
+        recovery path for someone who has forgotten the admin password. If it
+        demanded that password, a forgotten one would mean a dead unit.
+        """
+        path = self.path.split("?", 1)[0].rstrip("/")
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(n) or b"{}") if n else {}
+        except Exception:
+            return self._json(400, {"error": {"message": "Bad request."}})
+
+        if path == "/onboard/wifi/scan":
+            return self._verb("wifi_scan")
+        if path == "/onboard/wifi/connect":
+            r = call_setupd("wifi_connect", {"ssid": body.get("ssid"),
+                                             "psk": body.get("psk")}, timeout=150)
+            if r.get("ok"):
+                call_setupd("wifi_confirm")
+            return self._relay(r)
+        if path == "/onboard/location":
+            return self._verb("set_location", {"lat": body.get("lat"),
+                                               "lon": body.get("lon")}, timeout=90)
+        if path == "/onboard/airport":
+            return self._verb("set_airport", {"code": body.get("code"),
+                                              "atcMount": body.get("atcMount", "")})
+        if path == "/onboard/reset":
+            # Erasing everything from the screen is the give-it-away path AND
+            # the forgotten-password path, so it deliberately needs no
+            # credential -- only the typed word, checked here as well as in
+            # the UI so a stray tap can never reach it.
+            if body.get("confirm") != "ERASE":
+                return self._json(400, {"error": {"message": "Confirmation missing."}})
+            return self._verb("reset_full", timeout=180)
+        return self._json(404, {})
+
+    def _verb(self, verb, params=None, timeout=120):
+        return self._relay(call_setupd(verb, params, timeout))
+
+    def _relay(self, r):
+        if r.get("ok"):
+            return self._json(200, {"result": r.get("result")})
+        return self._json(400, {"error": {
+            "code": r.get("code", "failed"),
+            "message": friendly(r.get("code", ""), r.get("detail", ""))}})
+
+    def _json(self, code, obj):
+        body = json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Origin", "http://localhost")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        self._json(204, {})
+
     def do_GET(self):
-        if self.path.split("?", 1)[0].rstrip("/") not in ("/onboard", ""):
+        p = self.path.split("?", 1)[0].rstrip("/")
+        if p == "/onboard/airports":
+            try:
+                with open(AIRPORTS_JSON) as f:
+                    rows = json.load(f)["airports"]
+            except Exception:
+                return self._json(500, {"error": {"message": "Airport list missing."}})
+            from urllib.parse import parse_qs, urlparse
+            q = (parse_qs(urlparse(self.path).query).get("q") or [""])[0].strip().lower()
+            if q:
+                rows = [a for a in rows if q in a["code"].lower()
+                        or q in a["name"].lower() or q in (a.get("city") or "").lower()]
+            return self._json(200, {"airports": rows[:40]})
+        if p not in ("/onboard", ""):
             self.send_error(404)
             return
         st = load_state()
@@ -600,6 +680,8 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             "hotspot": hs.get("result") if hs.get("ok") else None,
             "addresses": lan_addresses(),
             "steps": st.get("steps", {}),
+            "location": st.get("location"),
+            "airport": st.get("airport"),
         }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
