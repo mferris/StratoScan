@@ -92,6 +92,12 @@ installation) is covered in [`docs/project-spec.md`](docs/project-spec.md),
 including a suggested two-wave purchase plan so you can confirm reception
 before buying a display.
 
+One thing worth doing before you chase any reception problem: install
+[`deploy/blacklist-rtlsdr.conf`](deploy/blacklist-rtlsdr.conf) to
+`/etc/modprobe.d/`. The RTL2832U is sold as a TV tuner, so without it the
+kernel's DVB-T driver claims the dongle on every plug and fights readsb for
+it, producing `error -71` and constant disconnects.
+
 **Running the web app locally**, against a receiver on your network:
 
 ```bash
