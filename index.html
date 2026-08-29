@@ -690,10 +690,16 @@
   #kbdLabel { color: var(--text-dim); font-size: .72rem; display: block; letter-spacing: .08em; }
   #kbdValue { font-size: 1.1rem; }
   #kbdValue::after { content: '\258F'; opacity: .7; }
-  #kbdKeys { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; width: 92%; }
-  #kbdKeys div {
-    min-width: 52px;
-    padding: 13px 4px;
+  /* Explicit rows. This previously relied on flex-wrap with a hidden
+     "row break" element, which does not break a flex line at all -- and the
+     class it used was never defined, so it rendered as a stray key. The
+     result was one wrapped blob in which the bottom row could vanish
+     entirely. Rows are now real containers. */
+  #kbdKeys { display: flex; flex-direction: column; gap: 7px; align-items: center; width: 100%; }
+  .kbd-row { display: flex; gap: 6px; justify-content: center; width: 100%; }
+  .kbd-row div {
+    min-width: 46px;
+    padding: 12px 3px;
     background: var(--panel-bg-strong);
     border: 1px solid var(--panel-border);
     border-radius: 7px;
@@ -702,8 +708,8 @@
     color: var(--text);
     flex: 0 0 auto;
   }
-  #kbdKeys div.wide { min-width: 84px; }
-  #kbdKeys div.go { border-color: var(--mid); color: var(--mid); }
+  .kbd-row div.wide { min-width: 78px; font-size: .85rem; }
+  .kbd-row div.go { border-color: var(--mid); color: var(--mid); }
 
   /* Night dimming. Sits above everything (including the panels) so the
      whole display dims uniformly, and pointer-events:none so it never
@@ -1987,28 +1993,38 @@ function drawKeyboard() {
   document.getElementById('kbdValue').textContent = val;
   const keys = document.getElementById('kbdKeys');
   keys.textContent = '';
-  const add = (text, cls, action) => {
+  const newRow = () => {
+    const r = document.createElement('div');
+    r.className = 'kbd-row';
+    keys.appendChild(r);
+    return r;
+  };
+  const add = (row, text, cls, action) => {
     const d = document.createElement('div');
     d.textContent = text;
     if (cls) d.className = cls;
     d.dataset.action = action || '';
-    keys.appendChild(d);
+    row.appendChild(d);
   };
+  // One container per letter row, so the layout is what it looks like rather
+  // than whatever flex-wrap happens to produce at this width.
   KBD_ROWS[kbdState.mode].forEach(row => {
-    [...row].forEach(ch => add(ch));
-    add('\u23CE', 'hide');           // row break placeholder, hidden
+    const r = newRow();
+    [...row].forEach(ch => add(r, ch));
   });
-  add(kbdState.mode === 'num' ? 'abc' : '123', 'wide', 'mode');
-  add(kbdState.mode === 'upper' ? 'abc' : 'ABC', 'wide', 'case');
-  add('space', 'wide', 'space');
-  add('\u232B', 'wide', 'back');
-  add('Cancel', 'wide', 'cancel');
-  add('Done', 'wide go', 'done');
+  const fn = newRow();
+  add(fn, kbdState.mode === 'num' ? 'abc' : '123', 'wide', 'mode');
+  add(fn, kbdState.mode === 'upper' ? 'abc' : 'ABC', 'wide', 'case');
+  add(fn, 'space', 'wide', 'space');
+  add(fn, '\u232B', 'wide', 'back');
+  const fn2 = newRow();
+  add(fn2, 'Cancel', 'wide', 'cancel');
+  add(fn2, 'Done', 'wide go', 'done');
 }
 
 document.getElementById('kbd').addEventListener('pointerup', (e) => {
   e.stopPropagation();
-  const k = e.target.closest('#kbdKeys div');
+  const k = e.target.closest('.kbd-row div');
   if (!k) return;
   const a = k.dataset.action;
   if (a === 'done') return closeKeyboard(kbdState.value);
