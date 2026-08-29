@@ -1092,16 +1092,57 @@ function destinationPoint(lat, lon, bearingDeg, distanceNm) {
 // around instead, leaving the plane's normal altitude color alone -- see
 // COLORS.rduHighlight (theme-aware, see refreshCanvasColors) and
 // drawPlanes/tag-rendering below.
-const RDU_LAT = 35.8776, RDU_LON = -78.7875;
-const RDU_ELEV_FT = 435;         // airport reference elevation, MSL
+// ---- Home airport, configurable ------------------------------------------
+// These were hardcoded to RDU. They are now defaults, overridden at startup
+// by /config.json if the device has been set up for somewhere else (see
+// deploy/setup-server.py). Everything airport-shaped reads through
+// AIRPORT.*: the landing/takeoff highlight, the approach heatmap, and the
+// ATC link. Without this, relocating a unit left it drawing an approach
+// corridor for an airport hundreds of miles away.
+//
+// Deliberately a `let` bound once at load rather than a const: the page has
+// to render sensibly before /config.json resolves, so RDU stands in until
+// (and unless) a real config arrives.
+let AIRPORT = {
+  code: 'RDU',
+  lat: 35.8776,
+  lon: -78.7875,
+  elevFt: 435,
+  // LiveATC mount for this field. Empty string disables the ATC feature
+  // rather than linking somewhere wrong for a relocated unit.
+  atcMount: 'krdu_app2',
+};
+
+async function loadAirportConfig() {
+  try {
+    const res = await fetch('/config.json', { cache: 'no-store' });
+    if (!res.ok) return; // no config deployed -- defaults stand
+    const cfg = await res.json();
+    const a = cfg && cfg.airport;
+    if (!a) return;
+    if (typeof a.lat === 'number' && typeof a.lon === 'number') {
+      AIRPORT = {
+        code: typeof a.code === 'string' ? a.code : AIRPORT.code,
+        lat: a.lat,
+        lon: a.lon,
+        elevFt: typeof a.elevFt === 'number' ? a.elevFt : 0,
+        atcMount: typeof a.atcMount === 'string' ? a.atcMount : '',
+      };
+    }
+  } catch (e) {
+    // unreachable or malformed -- the RDU defaults above stand, which is
+    // wrong for a relocated unit but never breaks the page
+  }
+}
+
 const RDU_PROXIMITY_NM = 0.869;  // 1 statute mile
 const RDU_VERT_FT = 500;         // within this of field elevation
 const RDU_VRATE_MIN = 150;       // ft/min -- filters out level-flight noise near zero
 
 function rduPhaseOf(p) {
   if (typeof p.alt !== 'number' || p.lat == null || p.lon == null || p.vrate == null) return null;
-  if (Math.abs(p.alt - RDU_ELEV_FT) > RDU_VERT_FT) return null;
-  if (haversineBearingRange(RDU_LAT, RDU_LON, p.lat, p.lon).range > RDU_PROXIMITY_NM) return null;
+  if (Math.abs(p.alt - AIRPORT.elevFt) > RDU_VERT_FT) return null;
+  if (haversineBearingRange(AIRPORT.lat, AIRPORT.lon, p.lat, p.lon).range > RDU_PROXIMITY_NM) return null;
   if (p.vrate <= -RDU_VRATE_MIN) return 'landing';
   if (p.vrate >= RDU_VRATE_MIN) return 'takeoff';
   return null;
@@ -1118,7 +1159,7 @@ function rduPhaseOf(p) {
 // charts, not simple line data); see extendedApproachLines() above for the
 // free-but-approximate stand-in this complements.
 const RDU_APPROACH_RADIUS_NM = 12;       // track candidate points out to this far from RDU
-const RDU_APPROACH_CEILING_FT = RDU_ELEV_FT + 6000; // ignore traffic well above a normal approach profile
+function approachCeilingFt() { return AIRPORT.elevFt + 6000; } // ignore traffic well above a normal approach profile
 // "Actually landed" confirmation window -- deliberately looser than a
 // well-sited receiver would need. This receiver's antenna isn't mast-
 // mounted yet (see HANDOFF.md), so ADS-B reception at low altitude/close
@@ -1130,7 +1171,7 @@ const RDU_APPROACH_CEILING_FT = RDU_ELEV_FT + 6000; // ignore traffic well above
 // and reception characteristics actually improve -- these values are a
 // starting point for current conditions, not a settled calibration.
 const RDU_APPROACH_CONFIRM_RADIUS_NM = 4;
-const RDU_APPROACH_CONFIRM_ALT_FT = RDU_ELEV_FT + 3000;
+function approachConfirmAltFt() { return AIRPORT.elevFt + 3000; }
 // Backed by a small same-origin service (deploy/approach-store.py, proxied
 // at /approaches -- see 91-flightradar-approach-store.conf) instead of
 // localStorage. localStorage is scoped per-browser/per-device, so the
@@ -1245,7 +1286,7 @@ function updateApproachTracking(pl, lat, lon, alt) {
   if (typeof lat !== 'number' || typeof lon !== 'number') return;
   if (!pl.approachPoints) pl.approachPoints = [];
 
-  const rduRange = haversineBearingRange(RDU_LAT, RDU_LON, lat, lon).range;
+  const rduRange = haversineBearingRange(AIRPORT.lat, AIRPORT.lon, lat, lon).range;
 
   if (alt === 'ground' && rduRange <= RDU_APPROACH_CONFIRM_RADIUS_NM) {
     commitApproachTrack(pl.approachPoints);
@@ -1254,7 +1295,7 @@ function updateApproachTracking(pl, lat, lon, alt) {
   }
 
   const withinRadius = rduRange <= RDU_APPROACH_RADIUS_NM;
-  const belowCeiling = typeof alt === 'number' && alt <= RDU_APPROACH_CEILING_FT;
+  const belowCeiling = typeof alt === 'number' && alt <= approachCeilingFt();
   if (withinRadius && belowCeiling) {
     pl.approachPoints.push([lon, lat]);
     if (pl.approachPoints.length > 400) pl.approachPoints.shift(); // bound per-plane buffer
@@ -1268,9 +1309,9 @@ function updateApproachTracking(pl, lat, lon, alt) {
 // at/just before touchdown rather than readsb ever reporting 'ground'.
 function confirmApproachOnDrop(pl) {
   if (!pl.approachPoints || !pl.approachPoints.length) return;
-  if (typeof pl.alt !== 'number' || pl.alt > RDU_APPROACH_CONFIRM_ALT_FT) return;
+  if (typeof pl.alt !== 'number' || pl.alt > approachConfirmAltFt()) return;
   if (pl.lat == null || pl.lon == null) return;
-  if (haversineBearingRange(RDU_LAT, RDU_LON, pl.lat, pl.lon).range > RDU_APPROACH_CONFIRM_RADIUS_NM) return;
+  if (haversineBearingRange(AIRPORT.lat, AIRPORT.lon, pl.lat, pl.lon).range > RDU_APPROACH_CONFIRM_RADIUS_NM) return;
   commitApproachTrack(pl.approachPoints);
 }
 
@@ -2097,13 +2138,17 @@ function checkEmergencySquawk(pl) {
 // the same time, so that's what's wired up now. If tower comes back later,
 // swap the mount param -- both still show RDU arrival/departure traffic
 // either way, just from a different controller position.
-const LIVEATC_KRDU_URL = 'https://www.liveatc.net/hlisten.php?mount=krdu_app2';
+function liveAtcUrl() {
+  return AIRPORT.atcMount ? `https://www.liveatc.net/hlisten.php?mount=${encodeURIComponent(AIRPORT.atcMount)}` : null;
+}
 let atcWindow = null; // named-window handle so repeated calls reuse one tab instead of spawning a new one per landing
 
 function ensureAtcAudio() {
   if (IS_KIOSK) return;
+  const url = liveAtcUrl();
+  if (!url) return; // relocated unit with no configured feed -- see AIRPORT.atcMount
   if (atcWindow && !atcWindow.closed) return;
-  atcWindow = window.open(LIVEATC_KRDU_URL, 'flightradar_atc');
+  atcWindow = window.open(url, 'flightradar_atc');
 }
 
 function closeAtcAudio() {
@@ -3144,12 +3189,16 @@ function hideDetailPanel() {
 // persistent DOM with two-way binding -- this is a handful of rows opened
 // occasionally, not a hot path, so the simplicity is worth more than the
 // avoided re-render.
-const ALERT_SETTINGS_META = [
+// A function, not a const array: the labels interpolate AIRPORT.code, and
+// AIRPORT is not final until loadAirportConfig() resolves during start().
+// Evaluated at parse time this would have frozen "RDU" into the labels of
+// every relocated unit -- the exact bug this whole change exists to prevent.
+function alertSettingsMeta() { return [
   { key: 'nearby', label: 'Nearby aircraft alert', sub: 'Auto-pop details + chime for anything within 2 miles' },
   { key: 'emergency', label: 'Emergency squawks', sub: '7500 hijack / 7600 radio failure / 7700 emergency' },
-  { key: 'rduPhase', label: 'RDU landing/takeoff chime', sub: 'Quiet tone when a plane lands or departs at RDU' },
+  { key: 'rduPhase', label: `${AIRPORT.code} landing/takeoff chime`, sub: `Quiet tone when a plane lands or departs at ${AIRPORT.code}` },
   {
-    key: 'atc', label: 'RDU ATC audio',
+    key: 'atc', label: `${AIRPORT.code} ATC audio`,
     sub: 'Opens LiveATC.net’s approach/departure feed in a new tab',
     // Confirmed on the real hardware: opening a new window/tab from inside
     // --kiosk Chromium can strand the display with no touch-reachable way
@@ -3159,18 +3208,18 @@ const ALERT_SETTINGS_META = [
     kioskSub: 'Not available on this display — opening a new window here can strand the kiosk with no way back via touch. Use a laptop, phone, or the Funnel URL instead.',
   },
   { key: 'storms', label: 'Storm radar overlay', sub: 'Live weather radar over the map (RainViewer)' },
-  { key: 'heatmap', label: 'RDU approach heatmap', sub: 'Density pattern built from actually observed RDU landings' },
+  { key: 'heatmap', label: `${AIRPORT.code} approach heatmap`, sub: `Density pattern built from actually observed ${AIRPORT.code} landings` },
   { key: 'lightning', label: 'Lightning overlay', sub: 'Satellite-observed strike density (GOES-East GLM, via SSEC RealEarth)' },
   { key: 'lightningAlert', label: 'Lightning proximity alert', sub: `Chime + banner when a strike is detected within ${LIGHTNING_ALERT_RADIUS_NM}nm` },
   { key: 'nightDim', label: 'Dim at night', sub: 'Darkens the display between sunset and sunrise at the receiver' },
   { key: 'alertWake', label: 'Alerts wake the screen', sub: 'Nearby + emergency alerts undim, and wake the display if the screensaver blanked it' },
-];
+]; }
 
 function renderSettingsPanel() {
   settingsPanelEl.innerHTML = `
     <div class="sp-close">&times;</div>
     <div class="sp-title">Settings</div>
-    ${ALERT_SETTINGS_META.map(({ key, label, sub, kioskSub }) => {
+    ${alertSettingsMeta().map(({ key, label, sub, kioskSub }) => {
       const disabled = key === 'atc' && IS_KIOSK;
       return `
       <div class="sp-row${disabled ? ' disabled' : ''}" data-key="${key}">
@@ -3380,6 +3429,9 @@ stage.addEventListener('pointerup', (e) => {
 });
 
 async function start() {
+  // Must complete before the settings panel renders or any approach/phase
+  // logic runs, so a relocated unit never briefly uses RDU's coordinates.
+  await loadAirportConfig();
   discoverDatabaseFolder().then(loadTypeCodeTable); // non-blocking; type labels fill in once ready
   loadApproachPoints(); // non-blocking; heatmap fills in once ready (or once initApproachLayer adds the source, whichever comes second)
   loadSightingCounts(); // non-blocking; counts fill in once ready, same reasoning
