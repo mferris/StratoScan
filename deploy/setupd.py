@@ -615,6 +615,82 @@ def tailscale_funnel(enabled):
     return {"enabled": bool(enabled), "publicUrl": url}
 
 
+# ------------------------------------------------------------------- reset
+
+def reset_settings():
+    """Undo configuration, keep the device on the network.
+
+    Deliberately survivable remotely: it clears what the owner chose, but
+    leaves WiFi and Tailscale alone so the device is still reachable
+    afterwards. If this dropped the network it would be indistinguishable
+    from a brick to anyone without a keyboard.
+    """
+    with contextlib.suppress(FileNotFoundError):
+        os.unlink(CONFIG_JSON)
+    if os.path.exists(READSB_ORIG):
+        with open(READSB_ORIG) as f:
+            pristine = f.read()
+        atomic_write(READSB_DEFAULT, pristine, mode=0o644)
+        os.chown(READSB_DEFAULT, 0, 0)
+        run([SYSTEMCTL, "restart", "readsb"], timeout=30)
+    return {"reset": "settings"}
+
+
+def reset_full():
+    """Prepare the unit to be given to someone else.
+
+    Everything below is either a credential or is geolocated to the current
+    owner's house, so a unit handed on with any of it still present is a
+    privacy problem, not merely untidy:
+
+      * WiFi profiles      -- their network name and password
+      * Tailscale state    -- their tailnet identity
+      * admin password     -- the new owner must be able to claim it
+      * receiver lat/lon   -- their home address, to five decimal places
+      * sighting counts    -- which aircraft have passed over their house
+      * approach heatmap   -- accumulated tracks around their home airport
+
+    The device is left UNCLAIMED with a fresh claim code, and the hotspot is
+    raised so the next owner can reach it with no network of their own. The
+    reachability pieces -- hotspot, watchdog, setup service -- are never
+    removed, or the unit would arrive dead.
+    """
+    # 1. network identity
+    p = run([NMCLI, "-t", "-f", "UUID,TYPE", "connection", "show"], timeout=20)
+    for line in p.stdout.decode("utf-8", "replace").splitlines():
+        parts = line.split(":")
+        if len(parts) >= 2 and parts[1] == "802-11-wireless":
+            with contextlib.suppress(Exception):
+                nm_delete_profile(parts[0])
+
+    # 2. tailscale
+    with contextlib.suppress(Exception):
+        run([TAILSCALE, "funnel", "443", "off"], timeout=30)
+    with contextlib.suppress(Exception):
+        run([TAILSCALE, "logout"], timeout=60)
+
+    # 3. owner-specific data. The stores are geolocated to their house.
+    for path in (os.path.join(STATE_DIR, "setup.json"),
+                 CONFIG_JSON,
+                 "/var/lib/flightradar-sightings/sightings.json",
+                 "/var/lib/flightradar-approaches/approaches.json"):
+        with contextlib.suppress(Exception):
+            os.unlink(path)
+
+    # 4. receiver position back to the shipped default
+    if os.path.exists(READSB_ORIG):
+        with open(READSB_ORIG) as f:
+            atomic_write(READSB_DEFAULT, f.read(), mode=0o644)
+        os.chown(READSB_DEFAULT, 0, 0)
+
+    clear_pending()
+
+    # 5. leave it reachable and claimable by its next owner
+    with contextlib.suppress(Exception):
+        hotspot_start()
+    return {"reset": "full", "hotspot": "FlightRadar-Setup"}
+
+
 # ------------------------------------------------------------------- verbs
 
 VERBS = {
@@ -634,13 +710,15 @@ VERBS = {
     "tailscale_funnel": lambda p: tailscale_funnel(bool(p.get("enabled"))),
     "reboot": lambda p: (run([SYSTEMCTL, "reboot"], timeout=10), {"rebooting": True})[1],
     "pending": lambda p: read_pending(),
+    "reset_settings": lambda p: reset_settings(),
+    "reset_full": lambda p: reset_full(),
 }
 # Shutdown is deliberately absent: a remote caller must never be able to
 # power off an appliance that then needs a physical visit to turn back on.
 
 MUTATING = {"wifi_connect", "wifi_confirm", "wifi_rollback", "hotspot_start",
             "hotspot_stop", "set_location", "set_airport", "tailscale_up",
-            "tailscale_funnel", "reboot"}
+            "tailscale_funnel", "reboot", "reset_settings", "reset_full"}
 
 
 class Handler(socketserver.StreamRequestHandler):

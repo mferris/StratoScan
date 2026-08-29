@@ -336,6 +336,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._proxy_verb("hotspot_start" if b.get("on") else "hotspot_stop")
         if path == "/setup/api/password" and self.command == "POST":
             return self._change_password(st)
+        if path == "/setup/api/reset" and self.command == "POST":
+            return self._reset(st)
         if path == "/setup/api/reboot" and self.command == "POST":
             b = self._body() or {}
             if b.get("confirm") != "REBOOT":
@@ -451,6 +453,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
                              friendly(r.get("code", ""), r.get("detail", "")))
         st.setdefault("steps", {})["remote"] = True
         save_state(st)
+        return self._send(200, {"result": r["result"]})
+
+    def _reset(self, st):
+        """Both tiers require the current password to be re-entered.
+
+        A live session is not enough: the destructive action should need the
+        secret again, not merely an unlocked browser tab left open.
+        """
+        b = self._body() or {}
+        if not verify_password(b.get("currentPassword") or "", st.get("password")):
+            return self._err(401, "bad_password", "Password was not accepted.")
+        scope = b.get("scope")
+        if scope == "settings":
+            if b.get("confirm") != "RESET":
+                return self._err(400, "confirm_required", "Type RESET to confirm.")
+            r = call_setupd("reset_settings", timeout=90)
+        elif scope == "full":
+            if b.get("confirm") != "ERASE":
+                return self._err(400, "confirm_required", "Type ERASE to confirm.")
+            r = call_setupd("reset_full", timeout=180)
+        else:
+            return self._err(400, "bad_scope", "Unknown reset type.")
+        if not r.get("ok"):
+            return self._err(400, r.get("code", "failed"),
+                             friendly(r.get("code", ""), r.get("detail", "")))
+        if scope == "full":
+            # The state file is gone; drop every session so the device is
+            # genuinely unclaimed rather than still driveable by this tab.
+            drop_sessions()
+        else:
+            st.pop("location", None)
+            st.pop("airport", None)
+            st["steps"] = {k: v for k, v in (st.get("steps") or {}).items()
+                           if k in ("password", "wifi", "remote")}
+            save_state(st)
         return self._send(200, {"result": r["result"]})
 
     def _status(self, st):

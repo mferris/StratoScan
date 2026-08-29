@@ -122,6 +122,35 @@
     <button id="remBtn">Connect</button>
     <div class="msg" id="remMsg"></div>
   </div>
+  <!-- password -->
+  <div class="card">
+    <h2>Change password</h2>
+    <label>Current password</label><input id="pwCur" type="password" autocomplete="current-password">
+    <label>New password</label><input id="pwNew" type="password" autocomplete="new-password">
+    <button class="sec" id="pwBtn">Change password</button>
+    <div class="note">Changing it signs out every other device.</div>
+    <div class="msg" id="pwMsg"></div>
+  </div>
+
+  <!-- reset -->
+  <div class="card">
+    <h2>Reset</h2>
+    <button class="sec" id="resetToggle">Show reset options</button>
+    <div id="resetBits" class="hide">
+      <p class="note"><b>Reset settings</b> clears the location and home airport
+        but keeps this radar on your WiFi, so you can carry on using it.</p>
+      <p class="note" style="margin-top:10px"><b>Erase everything</b> is for giving
+        the radar to someone else. It removes your WiFi, your Tailscale account,
+        your password, the receiver's location, and the flight history and
+        approach heatmap built up at this address. The radar then starts its own
+        setup network so the next person can claim it.</p>
+      <label>Your password</label><input id="rsPw" type="password" autocomplete="current-password">
+      <label>Type <b id="rsWord">RESET</b> to confirm</label><input id="rsConfirm" autocapitalize="characters">
+      <label><input type="checkbox" id="rsFull" style="width:auto"> Erase everything (giving it away)</label>
+      <button class="sec" id="rsBtn" style="border-color:#f85149;color:#ffb4ae">Reset</button>
+      <div class="msg" id="rsMsg"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -311,6 +340,56 @@ $('remBtn').onclick = async () => {
     $('tickRem').classList.remove('hide');
   } catch (e) { show($('remMsg'), 'err', e.message); }
   $('remBtn').disabled = false; $('remBtn').textContent = 'Connect';
+};
+
+$('pwBtn').onclick = async () => {
+  hide($('pwMsg'));
+  try {
+    await api('password', { method: 'POST', body: JSON.stringify({
+      currentPassword: $('pwCur').value, newPassword: $('pwNew').value }) });
+    show($('pwMsg'), 'ok', 'Password changed. Other devices have been signed out.');
+    $('pwCur').value = ''; $('pwNew').value = '';
+  } catch (e) { show($('pwMsg'), 'err', e.message); }
+};
+
+$('resetToggle').onclick = () => {
+  const b = $('resetBits');
+  b.classList.toggle('hide');
+  $('resetToggle').textContent = b.classList.contains('hide')
+    ? 'Show reset options' : 'Hide reset options';
+};
+
+// The confirmation word differs between the two so muscle memory from a
+// settings reset cannot carry someone through the destructive one.
+$('rsFull').onchange = () => {
+  $('rsWord').textContent = $('rsFull').checked ? 'ERASE' : 'RESET';
+  $('rsConfirm').value = '';
+};
+
+$('rsBtn').onclick = async () => {
+  hide($('rsMsg'));
+  const full = $('rsFull').checked;
+  const want = full ? 'ERASE' : 'RESET';
+  if ($('rsConfirm').value.trim().toUpperCase() !== want)
+    return show($('rsMsg'), 'err', `Type ${want} to confirm.`);
+  $('rsBtn').disabled = true;
+  try {
+    await api('reset', { method: 'POST', body: JSON.stringify({
+      scope: full ? 'full' : 'settings',
+      confirm: want,
+      currentPassword: $('rsPw').value }) });
+    if (full) {
+      show($('rsMsg'), 'ok',
+        'Erased. This radar is starting its own setup network — the next person ' +
+        'can set it up from its screen. You are now signed out.');
+      TOKEN = null;
+      setTimeout(() => location.reload(), 4000);
+    } else {
+      show($('rsMsg'), 'ok', 'Settings cleared. Your WiFi is untouched.');
+      refresh();
+    }
+  } catch (e) { show($('rsMsg'), 'err', e.message); }
+  $('rsBtn').disabled = false;
 };
 
 boot();
