@@ -637,6 +637,14 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             save_state(st)
             drop_sessions()
             return self._json(200, {"result": {"claimed": True}})
+        if path == "/onboard/remote/start":
+            return self._verb("tailscale_login_start",
+                              {"hostname": body.get("hostname")}, timeout=60)
+        if path == "/onboard/remote/status":
+            return self._verb("tailscale_login_status", timeout=30)
+        if path == "/onboard/remote/funnel":
+            return self._verb("tailscale_funnel",
+                              {"enabled": bool(body.get("enabled"))}, timeout=90)
         if path == "/onboard/reset":
             # Erasing everything from the screen is the give-it-away path AND
             # the forgotten-password path, so it deliberately needs no
@@ -723,6 +731,8 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             "airport": actual_airport() or st.get("airport"),
             "network": (lambda r: r.get("result") if r.get("ok") else None)(
                 call_setupd("net_status")),
+            "remote": (lambda r: r.get("result") if r.get("ok") else None)(
+                call_setupd("tailscale_status")),
         }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
