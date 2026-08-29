@@ -700,7 +700,20 @@ const ROUTE_BATCH_MS = 4000;      // how often we flush queued route lookups
 const ROUTE_BATCH_MAX = 50;       // callsigns per request
 const RANGE_NM = 20;             // outer ring range in nautical miles
 const RINGS = 2;                 // number of range rings
-const SWEEP_SPEED = 0.008;       // radians per frame
+// Radians per SECOND, not per frame. It was 0.008 rad/frame, which silently
+// tied the sweep's speed to whatever frame rate the browser happened to hit
+// -- and broke outright once the loop below started skipping frames.
+// 0.008 * 60fps = 0.48, so the sweep keeps its original ~13s per revolution.
+const SWEEP_RAD_PER_SEC = 0.48;
+
+// The kiosk redraws a 1080x1080 canvas -- 1.17M pixels cleared and repainted
+// every frame. At full rAF that pinned Chromium at ~85% CPU and held the Pi 5
+// at 77-79C with its fan already maxed (pwm 250/255, 5300rpm), tripping the
+// soft temperature limit. Nothing on a radar needs 60fps: the sweep takes 13
+// seconds per revolution and aircraft are interpolated from 1Hz data. On a
+// 60Hz panel the achievable rates are 60/n, so this lands on 20fps.
+const TARGET_FPS = 20;
+const FRAME_MIN_MS = 1000 / TARGET_FPS - 4; // slack so vsync jitter doesn't cost a whole frame
 const SMOOTH_TAU = 0.35;         // seconds; exponential smoothing time constant for plane motion
 const FETCH_INTERVAL_MS = 1000;  // how often we poll aircraft.json
 const STALE_MS = 15000;          // no good fetch in this long -> show NO SIGNAL
@@ -2811,7 +2824,14 @@ function updateStatus() {
 let lastFrameTs = performance.now();
 
 function tick(ts) {
-  const dt = Math.min(0.25, Math.max(0, (ts - lastFrameTs) / 1000)); // seconds, clamped
+  // re-arm first: an early return below must not kill the loop
+  requestAnimationFrame(tick);
+
+  const since = ts - lastFrameTs;
+  if (since < FRAME_MIN_MS) return; // frame budget not up yet -- skip the repaint
+  // dt is measured from the last frame actually DRAWN, so interpolation and
+  // the sweep stay correct across skipped frames
+  const dt = Math.min(0.25, Math.max(0, since / 1000));
   lastFrameTs = ts;
 
   ctx.clearRect(0, 0, W, H);
@@ -2821,10 +2841,8 @@ function tick(ts) {
   drawPlanes(dt);
   updateStatus();
 
-  sweepAngle += SWEEP_SPEED;
+  sweepAngle += SWEEP_RAD_PER_SEC * dt;
   if (sweepAngle > Math.PI * 2) sweepAngle -= Math.PI * 2;
-
-  requestAnimationFrame(tick);
 }
 
 // ---- Touch interaction --------------------------------------------------
