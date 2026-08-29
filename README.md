@@ -122,6 +122,13 @@ below. Two of those units are `systemctl --user` services rather than
 system ones (the screensaver and the display-wake endpoint), because they
 need the graphical session's `WAYLAND_DISPLAY` to reach the compositor.
 
+**The enclosure**: [`enclosure/`](enclosure/) has the parametric OpenSCAD
+source for the printed case — shell, bezel, retainer and desk cradle, plus
+speaker mounts, a fan bracket and an antenna turret. Everything derives from
+the measured values at the top of the file. See
+[`enclosure/README.md`](enclosure/README.md) for how to export each part, and
+for the dimensional mistakes that are easy to repeat.
+
 **iOS app**: `ios/` is an [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 project. Run `xcodegen generate` inside `ios/` if you change `project.yml`,
 then open `FlightRadar.xcodeproj` in Xcode. Set your own signing team under
@@ -135,6 +142,7 @@ index.html      the whole web app — single file, no build step
 dev-server.py   local-only dev proxy (not deployed)
 deploy/         systemd units + same-origin proxy services for the kiosk
 docs/           hardware/software spec, original prototype, screenshots
+enclosure/      parametric OpenSCAD source for the 3D-printed case
 vendor/         vendored MapLibre GL JS (self-hosted, no CDN dependency)
 ios/            native SwiftUI companion app
 ```
