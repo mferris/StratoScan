@@ -1,0 +1,23 @@
+[Unit]
+Description=FlightRadar setup root helper (privileged verb server)
+After=network.target NetworkManager.service
+
+[Service]
+# Root by necessity: it drives nmcli, tailscale, systemctl and rewrites
+# /etc/default/readsb. It has no network listener of its own -- only a unix
+# socket -- so the attack surface is the verb enum, not an HTTP parser.
+User=root
+Environment=SETUP_GROUP=frsetup
+ExecStart=/usr/bin/python3 /opt/flightradar/setupd.py
+Restart=always
+RestartSec=5
+# The default start limit turns five quick restarts into a PERMANENTLY dead
+# unit. On a recovery-critical service that is a brick, so it is disabled.
+StartLimitIntervalSec=0
+RuntimeDirectory=flightradar
+RuntimeDirectoryMode=0750
+StateDirectory=flightradar-setup
+StateDirectoryMode=0700
+
+[Install]
+WantedBy=multi-user.target

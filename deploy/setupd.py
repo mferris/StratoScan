@@ -659,23 +659,72 @@ class Handler(socketserver.StreamRequestHandler):
             self.wfile.write((json.dumps(obj) + "\n").encode())
 
 
+def resolve_gid():
+    """Group shared with the unprivileged web tier, so it alone can reach us."""
+    import grp
+    name = os.environ.get("SETUP_GROUP", "frsetup")
+    try:
+        return grp.getgrnam(name).gr_gid
+    except KeyError:
+        return 0
+
+
 class Server(socketserver.ThreadingUnixStreamServer):
     daemon_threads = True
     allow_reuse_address = True
 
 
+def ensure_claim_code():
+    """Regenerate the code that authorises first-time setup.
+
+    Written on every start, so an unclaimed device that has been power-cycled
+    gets a fresh one. It is deliberately NOT served over HTTP: behind
+    lighttpd's proxy every request looks like it came from 127.0.0.1, so a
+    "localhost only" route would have been readable by the whole LAN. It goes
+    to a file that the on-screen display reads, which makes claiming require
+    physical sight of the unit rather than merely being on the network.
+
+    Skipped once the device is claimed, so the code cannot be used to take
+    over a device that already has an owner.
+    """
+    import secrets as _s
+    try:
+        with open(os.path.join(STATE_DIR, "setup.json")) as f:
+            if json.load(f).get("claimed"):
+                with contextlib.suppress(FileNotFoundError):
+                    os.unlink(os.path.join(RUN_DIR, "claim-code"))
+                return None
+    except Exception:
+        pass  # unreadable state => treat as unclaimed, never as locked out
+    # Crockford-style alphabet: no I/L/O/U, so nothing is misread off a screen
+    alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    code = "".join(_s.choice(alphabet) for _ in range(8))
+    atomic_write(os.path.join(RUN_DIR, "claim-code"), code, mode=0o640)
+    return code
+
+
 def main():
     os.makedirs(RUN_DIR, mode=0o700, exist_ok=True)
     os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+    code = ensure_claim_code()
+    if code:
+        # Also to the journal: on a headless or screen-dead unit this is the
+        # only way an owner with shell access can complete setup.
+        print(f"setupd: device is UNCLAIMED, setup code is {code}", flush=True)
     with contextlib.suppress(FileNotFoundError):
         os.unlink(SOCK_PATH)
     srv = Server(SOCK_PATH, Handler)
     # 0660 + the web tier's group: the unprivileged HTTP process may talk to
     # us, nothing else on the box may.
     os.chmod(SOCK_PATH, 0o660)
-    gid = int(os.environ.get("SETUP_GID", "0"))
+    gid = resolve_gid()
     if gid:
         os.chown(SOCK_PATH, 0, gid)
+        os.chown(os.path.join(RUN_DIR, "claim-code"), 0, gid) if os.path.exists(
+            os.path.join(RUN_DIR, "claim-code")) else None
+        with contextlib.suppress(Exception):
+            os.chmod(RUN_DIR, 0o750)
+            os.chown(RUN_DIR, 0, gid)
     srv.serve_forever()
 
 
