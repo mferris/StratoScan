@@ -20,8 +20,11 @@ a literal street address to anyone who curls the Funnel URL.
 """
 import http.server
 import json
-import urllib.request
+import posixpath
+import re
 import urllib.error
+import urllib.parse
+import urllib.request
 
 UPSTREAM = "http://127.0.0.1:80"
 LISTEN = ("127.0.0.1", 8085)
@@ -33,7 +36,12 @@ COORD_PRECISION = 2  # decimal places -- ~0.7mi at this latitude
 # side effect on hardware in someone's house, and nothing off-LAN has any
 # business reaching it. The kiosk and the rest of the LAN talk to lighttpd
 # directly and are unaffected by this.
-LOCAL_ONLY_PATHS = ("/wake",)
+LOCAL_ONLY_PATHS = ("/wake", "/setup")
+
+# A future edit that empties or mistypes this list would silently expose the
+# device's privileged endpoints to the public internet. Fail loudly instead.
+assert "/wake" in LOCAL_ONLY_PATHS and "/setup" in LOCAL_ONLY_PATHS, \
+    "LOCAL_ONLY_PATHS must keep /wake and /setup off the public tunnel"
 
 # Headers that are per-hop or would otherwise be wrong to blindly forward
 # (Content-Length is recomputed for the rewritten path; "server" is excluded
@@ -65,24 +73,59 @@ class Handler(http.server.BaseHTTPRequestHandler):
         for k, v in SECURITY_HEADERS.items():
             self.send_header(k, v)
 
-    def do_GET(self):
+    def _dispatch(self):
+        """Single gate for every HTTP method.
+
+        Previously only do_GET and do_POST checked LOCAL_ONLY_PATHS, so any
+        method added later would silently bypass it. Deny first, always.
+        """
         if self._is_local_only(self.path):
-            self.send_error(404)
+            self.send_error(404)  # 404, not 403 -- don't confirm it exists
             return
-        if self.path == ROUNDED_PATH:
+        if self.command == "GET" and self.path == ROUNDED_PATH:
             self._serve_rounded_receiver_json()
         else:
             self._proxy()
 
-    def do_POST(self):
-        if self._is_local_only(self.path):
-            self.send_error(404)  # 404, not 403 -- don't confirm it exists
-            return
-        self._proxy()
+    do_GET = _dispatch
+    do_POST = _dispatch
+    do_HEAD = _dispatch
+    do_PUT = _dispatch
+    do_DELETE = _dispatch
+    do_PATCH = _dispatch
+    do_OPTIONS = _dispatch
 
     @staticmethod
-    def _is_local_only(path):
-        base = path.split("?", 1)[0].rstrip("/")
+    def _normalise(path):
+        """Reduce a request path to the form the UPSTREAM server will act on.
+
+        Matching the raw path is not enough and was a real hole: lighttpd
+        percent-decodes and collapses traversal before routing, so /%77ake,
+        /./wake and /x/../wake all reach the wake service while none of them
+        string-compare equal to "/wake". Verified against the live gateway --
+        all three returned 204 instead of 404.
+
+        Decode repeatedly, because a single pass turns %2577 into %77 rather
+        than into "w".
+        """
+        base = path.split("?", 1)[0].split("#", 1)[0]
+        for _ in range(4):
+            decoded = urllib.parse.unquote(base)
+            if decoded == base:
+                break
+            base = decoded
+        base = base.replace("\\", "/")          # defensive: some clients send backslashes
+        base = re.sub(r"/{2,}", "/", base)      # //wake -> /wake
+        if not base.startswith("/"):
+            base = "/" + base
+        base = posixpath.normpath(base)         # /x/../wake -> /wake
+        if not base.startswith("/"):            # normpath can yield ".."
+            base = "/" + base.lstrip("./")
+        return (base.rstrip("/") or "/").casefold()
+
+    @classmethod
+    def _is_local_only(cls, path):
+        base = cls._normalise(path)
         return any(base == p or base.startswith(p + "/") for p in LOCAL_ONLY_PATHS)
 
     def _serve_rounded_receiver_json(self):

@@ -193,12 +193,15 @@ before you do:
   stakes, matches how the app itself treats that data — but they do cap
   request body size and validate input shape, since they're reachable from
   wherever you expose the page.
-- **The display-wake endpoint is refused for public traffic.** `/wake`
-  physically powers the kiosk's panel on, so
-  [`deploy/funnel-gateway.py`](deploy/funnel-gateway.py) 404s it for
-  anything arriving through the public tunnel (`LOCAL_ONLY_PATHS`). It's
-  harmless in isolation, but it's an unauthenticated side effect on hardware
-  in your house, and nothing off-LAN has any business reaching it.
+- **Privileged endpoints are refused for public traffic**, and the check
+  normalises the path first. `/wake` (which powers the kiosk's panel on) and
+  `/setup` are listed in `LOCAL_ONLY_PATHS` in
+  [`deploy/funnel-gateway.py`](deploy/funnel-gateway.py) and 404 for anything
+  arriving through the tunnel. The normalising matters: an earlier version
+  compared the raw path, and because lighttpd percent-decodes and collapses
+  traversal before routing, `/./wake`, `/x/../wake` and `/%77ake` all reached
+  the endpoint anyway. [`tests/test_funnel_gateway_paths.py`](tests/test_funnel_gateway_paths.py)
+  pins the behaviour — run it after touching that filter.
 - **No secrets or API keys anywhere.** Every external service this app talks
   to is free and keyless (see [Data sources](#data-sources) above), so
   there's nothing to leak.
