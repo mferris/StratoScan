@@ -3586,6 +3586,44 @@ function renderDeviceSetup() {
                    <div class="sp-sub">By code, name or city</div></div>
               <div class="sp-chevron">&#8250;</div></div>${busy}${msg}${list}`;
   }
+  if (deviceView === 'remote') {
+    const rem = deviceStatus && deviceStatus.remote || {};
+    if (rem.loginUrl) {
+      return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Remote access</div>
+        <div class="sp-sub" style="padding:10px 0;line-height:1.8">
+          On your phone or computer, open this address and sign in to
+          Tailscale. This radar is waiting.</div>
+        <div style="padding:10px 0;font-size:1.05rem;color:var(--mid);word-break:break-all">
+          ${esc(rem.loginUrl)}</div>
+        ${busy}${msg}
+        <div class="sp-menu-row" data-act="remote-check">
+          <div><div class="sp-label">I have signed in</div>
+               <div class="sp-sub">Check now</div></div><div class="sp-chevron">&#8250;</div></div>`;
+    }
+    if (rem.state === 'Running') {
+      return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Remote access</div>
+        <div class="sp-sub" style="padding:10px 0;line-height:1.8">
+          Connected as <b>${esc(rem.magicDnsName || 'this device')}</b>.
+          ${rem.publicUrl ? `Public page: <b>${esc(rem.publicUrl)}</b>` : ''}</div>
+        ${busy}${msg}
+        <div class="sp-menu-row" data-act="remote-funnel-${rem.publicUrl ? 'off' : 'on'}">
+          <div><div class="sp-label">${rem.publicUrl ? 'Turn off the public page' : 'Publish a public page'}</div>
+               <div class="sp-sub">${rem.publicUrl
+                 ? 'Keeps remote access, removes the public web address'
+                 : 'Anyone with the address can view your radar'}</div></div>
+          <div class="sp-chevron">&#8250;</div></div>`;
+    }
+    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Remote access</div>
+      <div class="sp-sub" style="padding:10px 0;line-height:1.8">
+        Optional. Lets you view this radar from anywhere using your own free
+        Tailscale account. You will sign in on your phone — nothing long needs
+        typing here.</div>
+      ${busy}${msg}
+      <div class="sp-menu-row" data-act="remote-start">
+        <div><div class="sp-label">Set up remote access</div>
+             <div class="sp-sub">Shows a link to open on your phone</div></div>
+        <div class="sp-chevron">&#8250;</div></div>`;
+  }
   if (deviceView === 'reset') {
     return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Erase everything</div>
       <div class="sp-sub" style="padding:10px 0;line-height:1.7">
@@ -3616,6 +3654,10 @@ function renderDeviceSetup() {
     ? `${d.airport.code}${d.airport.atcMount ? ' · ATC feed set' : ''}`
     : 'Not set';
   const pwNow = d.claimed ? 'Set' : 'Not set — anyone nearby can set it';
+  const rem = d.remote || {};
+  const remNow = rem.state === 'Running'
+    ? (rem.publicUrl ? `Public page at ${rem.publicUrl}` : `Connected as ${rem.magicDnsName || 'this device'}`)
+    : 'Not connected';
 
   return `<div class="sp-back">&#8592; Settings</div><div class="sp-title">Device setup</div>${busy}${msg}
     <div class="sp-menu-row" data-dev="wifi"><div><div class="sp-label">WiFi</div>
@@ -3624,6 +3666,8 @@ function renderDeviceSetup() {
       <div class="sp-sub">${esc(locNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="airport"><div><div class="sp-label">Home airport</div>
       <div class="sp-sub">${esc(airNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
+    <div class="sp-menu-row" data-dev="remote"><div><div class="sp-label">Remote access</div>
+      <div class="sp-sub">${esc(remNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-act="set-password"><div><div class="sp-label">Admin password</div>
       <div class="sp-sub">${esc(pwNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="reset"><div><div class="sp-label" style="color:#ff6b6b">Erase everything</div>
@@ -3715,6 +3759,46 @@ async function handleDeviceTap(row) {
       await loadAirportConfig();           // pick the change up immediately
       deviceMsg = `Home airport set to ${airport}.`;
       airportRows = [];
+    } catch (e) { deviceMsg = e.message; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (act === 'remote-start') {
+    const name = await openKeyboard('NAME FOR THIS RADAR  (letters, digits, -)', 'flightradar');
+    if (name === null) return;
+    deviceBusy = true; renderSettingsPanel();
+    try {
+      const r = await deviceApi('/onboard/remote/start', { method: 'POST',
+        body: JSON.stringify({ hostname: name.trim().toLowerCase() }) });
+      deviceStatus = deviceStatus || {};
+      deviceStatus.remote = { ...(deviceStatus.remote || {}),
+                              loginUrl: r.result.url, state: r.result.state };
+      if (!r.result.url) deviceMsg = 'Already connected.';
+    } catch (e) { deviceMsg = e.message; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (act === 'remote-check') {
+    deviceBusy = true; renderSettingsPanel();
+    try {
+      const r = await deviceApi('/onboard/remote/status', { method: 'POST' });
+      deviceStatus.remote = { state: r.result.state,
+                              magicDnsName: r.result.magicDnsName,
+                              loginUrl: r.result.url };
+      if (r.result.state !== 'Running') deviceMsg = 'Not signed in yet — try again in a moment.';
+    } catch (e) { deviceMsg = e.message; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (act === 'remote-funnel-on' || act === 'remote-funnel-off') {
+    const on = act.endsWith('-on');
+    deviceBusy = true; renderSettingsPanel();
+    try {
+      const r = await deviceApi('/onboard/remote/funnel', { method: 'POST',
+        body: JSON.stringify({ enabled: on }) });
+      deviceStatus.remote = { ...(deviceStatus.remote || {}),
+                              publicUrl: r.result.publicUrl };
+      deviceMsg = on ? 'Published.' : 'Public page turned off.';
     } catch (e) { deviceMsg = e.message; }
     deviceBusy = false; return renderSettingsPanel();
   }

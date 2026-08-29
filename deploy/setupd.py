@@ -584,10 +584,25 @@ def tailscale_status():
     except Exception:
         return {"state": "unavailable"}
     self_ = d.get("Self") or {}
+    name = (self_.get("DNSName") or "").rstrip(".")
+    # Whether a PUBLIC page is actually being served, not merely whether the
+    # node is on the tailnet. Without this the UI cannot tell "connected" from
+    # "connected and published", and offers to publish something that already
+    # is -- which is how it read before this was added.
+    funnel_on = False
+    sp = run([TAILSCALE, "serve", "status", "--json"], timeout=20)
+    if sp.returncode == 0:
+        try:
+            cfg = json.loads(sp.stdout or b"{}")
+            funnel_on = any(bool(v) for v in (cfg.get("AllowFunnel") or {}).values())
+        except Exception:
+            funnel_on = False
     return {
         "state": d.get("BackendState", "unknown"),
         "hostname": self_.get("HostName"),
-        "magicDnsName": (self_.get("DNSName") or "").rstrip("."),
+        "magicDnsName": name,
+        "funnel": funnel_on,
+        "publicUrl": f"https://{name}" if (funnel_on and name) else None,
     }
 
 
@@ -612,6 +627,64 @@ def tailscale_up(authkey, hostname, enable_funnel=False):
     return result
 
 
+# Interactive login, so nobody has to type a 50-character auth key on an
+# on-screen keyboard. `tailscale up` without a key prints a short login URL
+# and blocks; we capture that URL, leave the process running, and let the
+# owner open it on a phone. The device polls until the backend goes Running.
+_login_proc = {"p": None, "url": None, "started": 0.0}
+
+
+def tailscale_login_start(hostname):
+    hostname = v_ts_hostname(hostname)
+    # A login already in flight: hand back the same URL rather than starting
+    # a second one, which would invalidate the first.
+    if _login_proc["p"] and _login_proc["p"].poll() is None and _login_proc["url"]:
+        return {"url": _login_proc["url"], "state": tailscale_status().get("state")}
+
+    with contextlib.suppress(Exception):
+        if _login_proc["p"]:
+            _login_proc["p"].terminate()
+
+    proc = subprocess.Popen(
+        [TAILSCALE, "up", f"--hostname={hostname}", "--accept-dns=false",
+         "--force-reauth"],
+        env=ENV, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=False)
+    _login_proc.update({"p": proc, "url": None, "started": time.time()})
+
+    # Read only until the URL appears; the process keeps running afterwards,
+    # waiting for the owner to complete the login in a browser.
+    deadline = time.time() + 30
+    url = None
+    while time.time() < deadline and proc.poll() is None:
+        line = proc.stdout.readline()
+        if not line:
+            break
+        text = line.decode("utf-8", "replace")
+        m = re.search(r"https://login\.tailscale\.com/\S+", text)
+        if m:
+            url = m.group(0).rstrip(".,)")
+            break
+    if not url:
+        # Already logged in: `up` returns immediately with no URL.
+        st = tailscale_status()
+        if st.get("state") == "Running":
+            return {"url": None, "state": "Running", "alreadyLoggedIn": True}
+        raise Err("tailscale_no_url", "could not start a login")
+    _login_proc["url"] = url
+    return {"url": url, "state": tailscale_status().get("state")}
+
+
+def tailscale_login_status():
+    st = tailscale_status()
+    running = st.get("state") == "Running"
+    if running and _login_proc["p"] and _login_proc["p"].poll() is None:
+        with contextlib.suppress(Exception):
+            _login_proc["p"].terminate()   # login finished; stop waiting
+    return {"state": st.get("state"), "hostname": st.get("hostname"),
+            "magicDnsName": st.get("magicDnsName"),
+            "url": None if running else _login_proc["url"]}
+
+
 def tailscale_funnel(enabled):
     """Only ever point Funnel at the filtering gateway, never at lighttpd.
 
@@ -633,8 +706,8 @@ def tailscale_funnel(enabled):
     else:
         run([TAILSCALE, "funnel", "443", "off"], timeout=45)
     st = tailscale_status()
-    url = f"https://{st['magicDnsName']}" if st.get("magicDnsName") and enabled else None
-    return {"enabled": bool(enabled), "publicUrl": url}
+    return {"enabled": st.get("funnel", bool(enabled)),
+            "publicUrl": st.get("publicUrl")}
 
 
 # ------------------------------------------------------------------- reset
@@ -727,6 +800,8 @@ VERBS = {
     "set_location": lambda p: set_location(p.get("lat"), p.get("lon")),
     "set_airport": lambda p: set_airport(p.get("code"), p.get("atcMount", "")),
     "tailscale_status": lambda p: tailscale_status(),
+    "tailscale_login_start": lambda p: tailscale_login_start(p.get("hostname")),
+    "tailscale_login_status": lambda p: tailscale_login_status(),
     "tailscale_up": lambda p: tailscale_up(p.get("authKey"), p.get("hostname"),
                                            bool(p.get("enableFunnel"))),
     "tailscale_funnel": lambda p: tailscale_funnel(bool(p.get("enabled"))),
@@ -741,7 +816,8 @@ VERBS = {
 
 MUTATING = {"wifi_connect", "wifi_confirm", "wifi_rollback", "hotspot_start",
             "hotspot_stop", "set_location", "set_airport", "tailscale_up",
-            "tailscale_funnel", "reboot", "reset_settings", "reset_full"}
+            "tailscale_funnel", "reboot", "reset_settings", "reset_full",
+            "tailscale_login_start"}
 
 
 class Handler(socketserver.StreamRequestHandler):
