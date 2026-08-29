@@ -51,9 +51,15 @@ just a web page, so it runs fine in a normal browser too.
   label of anything currently landing or departing at RDU, plus an optional
   quiet chime; pairs with an optional link to LiveATC.net's live
   approach/departure audio for the airport
+- **Night dimming** — the display darkens between sunset and sunrise,
+  computed from the receiver's own coordinates so it tracks the seasons
+  without any configuration; alerts can optionally undim it
+- **Screensaver** — the panel genuinely powers off after a configurable idle
+  period (see [`deploy/`](deploy/)) and wakes on touch, or on an alert if
+  you've enabled that
 - **Settings panel** — a gear icon opens on-screen toggles for all of the
   above (nearby alert, emergency squawks, RDU landing/takeoff chime, RDU ATC
-  audio link), persisted per-device
+  audio link, night dimming), persisted per-device
 - **Touch detail panel** — tap any aircraft for registration, squawk, vertical
   rate, and more
 - **Native iOS companion app** — a SwiftUI rebuild of the same radar for
@@ -106,7 +112,9 @@ photos, the shared approach-track store, the shared sighting-count store, and
 (only relevant if you expose the page to the public internet, e.g. via
 Tailscale Funnel) a filtering gateway that rounds the receiver's exact
 coordinates before they leave your network — see [Security](#security)
-below.
+below. Two of those units are `systemctl --user` services rather than
+system ones (the screensaver and the display-wake endpoint), because they
+need the graphical session's `WAYLAND_DISPLAY` to reach the compositor.
 
 **iOS app**: `ios/` is an [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 project. Run `xcodegen generate` inside `ios/` if you change `project.yml`,
@@ -171,6 +179,12 @@ before you do:
   stakes, matches how the app itself treats that data — but they do cap
   request body size and validate input shape, since they're reachable from
   wherever you expose the page.
+- **The display-wake endpoint is refused for public traffic.** `/wake`
+  physically powers the kiosk's panel on, so
+  [`deploy/funnel-gateway.py`](deploy/funnel-gateway.py) 404s it for
+  anything arriving through the public tunnel (`LOCAL_ONLY_PATHS`). It's
+  harmless in isolation, but it's an unauthenticated side effect on hardware
+  in your house, and nothing off-LAN has any business reaching it.
 - **No secrets or API keys anywhere.** Every external service this app talks
   to is free and keyless (see [Data sources](#data-sources) above), so
   there's nothing to leak.
