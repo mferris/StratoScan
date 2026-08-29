@@ -515,6 +515,7 @@
   }
   #settingsPanel.show { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
   #settingsPanel .sp-title {
+    margin-top: 14px;
     font-size: 0.85rem;
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -660,6 +661,43 @@
     z-index: 50;
   }
   #nightDim.on { opacity: var(--night-dim, 0.55); }
+
+  #settingsPanel .sp-menu-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 2px;
+    border-top: 1px solid color-mix(in srgb, var(--panel-border) 55%, transparent);
+  }
+  #settingsPanel .sp-menu-row:first-of-type { border-top: none; }
+  #settingsPanel .sp-chevron {
+    font-size: 1.5rem;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    position: relative;
+  }
+  /* Same invisible hit expander as the switches: the chevron is decorative
+     and small, but the whole row is the target. */
+  #settingsPanel .sp-menu-row .sp-chevron::before {
+    content: '';
+    position: absolute;
+    inset: -16px -20px;
+  }
+  #settingsPanel .sp-back {
+    position: absolute;
+    top: 12px;
+    left: 14px;
+    font-size: .78rem;
+    letter-spacing: .06em;
+    color: var(--text-dim);
+    padding: 6px 10px 6px 0;
+  }
+  #settingsPanel .sp-back::before {
+    content: '';
+    position: absolute;
+    inset: -12px -14px;
+  }
 
   #settingsPanel .sp-close {
     position: absolute;
@@ -3265,12 +3303,24 @@ function hideDetailPanel() {
 // AIRPORT is not final until loadAirportConfig() resolves during start().
 // Evaluated at parse time this would have frozen "RDU" into the labels of
 // every relocated unit -- the exact bug this whole change exists to prevent.
+// The panel had grown to 14 rows, which on a 1080px round screen means
+// scrolling past most of it to reach anything. Grouped into four short
+// sub-screens reached from a menu instead: every row is now at most one tap
+// away and nothing needs scrolling on a normal-length section.
+const SETTINGS_GROUPS = [
+  { key: 'alerts',   label: 'Alerts',       sub: 'What interrupts you, and how' },
+  { key: 'overlays', label: 'Map overlays', sub: 'Weather, lightning and approach patterns' },
+  { key: 'display',  label: 'Display',      sub: 'Night dimming and colour theme' },
+  { key: 'audio',    label: 'ATC audio',    sub: 'Live tower feed for the home airport' },
+];
+let settingsSection = null;  // null = the menu; otherwise a group key
+
 function alertSettingsMeta() { return [
-  { key: 'nearby', label: 'Nearby aircraft alert', sub: 'Auto-pop details + chime for anything within 2 miles' },
-  { key: 'emergency', label: 'Emergency squawks', sub: '7500 hijack / 7600 radio failure / 7700 emergency' },
-  { key: 'rduPhase', label: `${AIRPORT.code} landing/takeoff chime`, sub: `Quiet tone when a plane lands or departs at ${AIRPORT.code}` },
+  { group: 'alerts', key: 'nearby', label: 'Nearby aircraft alert', sub: 'Auto-pop details + chime for anything within 2 miles' },
+  { group: 'alerts', key: 'emergency', label: 'Emergency squawks', sub: '7500 hijack / 7600 radio failure / 7700 emergency' },
+  { group: 'alerts', key: 'rduPhase', label: `${AIRPORT.code} landing/takeoff chime`, sub: `Quiet tone when a plane lands or departs at ${AIRPORT.code}` },
   {
-    key: 'atc', label: `${AIRPORT.code} ATC audio`,
+    group: 'audio', key: 'atc', label: `${AIRPORT.code} ATC audio`,
     sub: 'Opens LiveATC.net’s approach/departure feed in a new tab',
     // Confirmed on the real hardware: opening a new window/tab from inside
     // --kiosk Chromium can strand the display with no touch-reachable way
@@ -3279,19 +3329,23 @@ function alertSettingsMeta() { return [
     // worse) is its own bug.
     kioskSub: 'Not available on this display — opening a new window here can strand the kiosk with no way back via touch. Use a laptop, phone, or the Funnel URL instead.',
   },
-  { key: 'storms', label: 'Storm radar overlay', sub: 'Live weather radar over the map (RainViewer)' },
-  { key: 'heatmap', label: `${AIRPORT.code} approach heatmap`, sub: `Density pattern built from actually observed ${AIRPORT.code} landings` },
-  { key: 'lightning', label: 'Lightning overlay', sub: 'Satellite-observed strike density (GOES-East GLM, via SSEC RealEarth)' },
-  { key: 'lightningAlert', label: 'Lightning proximity alert', sub: `Chime + banner when a strike is detected within ${LIGHTNING_ALERT_RADIUS_NM}nm` },
-  { key: 'nightDim', label: 'Dim at night', sub: 'Darkens the display between sunset and sunrise at the receiver' },
-  { key: 'alertWake', label: 'Alerts wake the screen', sub: 'Nearby + emergency alerts undim, and wake the display if the screensaver blanked it' },
+  { group: 'overlays', key: 'storms', label: 'Storm radar overlay', sub: 'Live weather radar over the map (RainViewer)' },
+  { group: 'overlays', key: 'heatmap', label: `${AIRPORT.code} approach heatmap`, sub: `Density pattern built from actually observed ${AIRPORT.code} landings` },
+  { group: 'overlays', key: 'lightning', label: 'Lightning overlay', sub: 'Satellite-observed strike density (GOES-East GLM, via SSEC RealEarth)' },
+  { group: 'alerts', key: 'lightningAlert', label: 'Lightning proximity alert', sub: `Chime + banner when a strike is detected within ${LIGHTNING_ALERT_RADIUS_NM}nm` },
+  { group: 'display', key: 'nightDim', label: 'Dim at night', sub: 'Darkens the display between sunset and sunrise at the receiver' },
+  { group: 'alerts', key: 'alertWake', label: 'Alerts wake the screen', sub: 'Nearby + emergency alerts undim, and wake the display if the screensaver blanked it' },
 ]; }
 
 function renderSettingsPanel() {
+  if (!settingsSection) return renderSettingsMenu();
+  const group = SETTINGS_GROUPS.find(g => g.key === settingsSection);
+  const rows = alertSettingsMeta().filter(m => m.group === settingsSection);
   settingsPanelEl.innerHTML = `
     <div class="sp-close">&times;</div>
-    <div class="sp-title">Settings</div>
-    ${alertSettingsMeta().map(({ key, label, sub, kioskSub }) => {
+    <div class="sp-back">&#8592; Settings</div>
+    <div class="sp-title">${esc(group ? group.label : 'Settings')}</div>
+    ${rows.map(({ key, label, sub, kioskSub }) => {
       const disabled = key === 'atc' && IS_KIOSK;
       return `
       <div class="sp-row${disabled ? ' disabled' : ''}" data-key="${key}">
@@ -3303,8 +3357,8 @@ function renderSettingsPanel() {
       </div>
     `;
     }).join('')}
-    <div class="sp-section-title">Color theme</div>
-    ${THEMES.map(({ key, label, sub, swatchBg, swatchAccent }) => `
+    ${settingsSection !== 'display' ? '' : `
+    <div class="sp-section-title">Color theme</div>` + THEMES.map(({ key, label, sub, swatchBg, swatchAccent }) => `
       <div class="sp-theme-row${uiTheme === key ? ' selected' : ''}" data-theme-key="${key}">
         <div class="sp-theme-swatch" style="background:${swatchBg}"><span style="background:${swatchAccent}"></span></div>
         <div>
@@ -3317,6 +3371,22 @@ function renderSettingsPanel() {
   `;
 }
 
+function renderSettingsMenu() {
+  settingsPanelEl.innerHTML = `
+    <div class="sp-close">&times;</div>
+    <div class="sp-title">Settings</div>
+    ${SETTINGS_GROUPS.map(({ key, label, sub }) => `
+      <div class="sp-menu-row" data-group="${key}">
+        <div>
+          <div class="sp-label">${esc(label)}</div>
+          <div class="sp-sub">${esc(sub)}</div>
+        </div>
+        <div class="sp-chevron">&#8250;</div>
+      </div>
+    `).join('')}
+  `;
+}
+
 function showSettingsPanel() {
   // Only one panel may be open at a time. Tapping the gear while a plane's
   // detail panel was up left BOTH open: settings rendered on top, and
@@ -3324,6 +3394,7 @@ function showSettingsPanel() {
   // like the gear "kept bringing up the same plane details". The gear's own
   // stopPropagation meant the stage handler never got to close it either.
   hideDetailPanel();
+  settingsSection = null; // always open at the top level
   renderSettingsPanel();
   settingsPanelEl.classList.add('show');
   settingsBackdropEl.classList.add('show');
@@ -3426,6 +3497,20 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   // moved too far -> that was a scroll, not a choice
   if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > PANEL_DRAG_SLOP_PX) return;
 
+  if (e.target.closest('.sp-back')) {
+    settingsSection = null;
+    renderSettingsPanel();
+    return;
+  }
+  const menuRow = e.target.closest('.sp-menu-row');
+  if (menuRow) {
+    // The whole row is the target here, not a small control: there is
+    // nothing on it to toggle, so a tap anywhere on it is unambiguous.
+    settingsSection = menuRow.dataset.group;
+    settingsPanelEl.scrollTop = 0;
+    renderSettingsPanel();
+    return;
+  }
   const themeRow = e.target.closest('.sp-theme-row');
   if (themeRow) {
     // the swatch counts as a control too: it's the big obvious circle on
