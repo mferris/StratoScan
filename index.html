@@ -3165,8 +3165,31 @@ function hideSettingsPanel() {
 // to scroll. Two guards now: the press has to land on an actual control (the
 // switch or the theme radio -- both given generous invisible hit areas in the
 // CSS above), and it has to be a tap rather than a drag.
-const SETTINGS_DRAG_SLOP_PX = 8; // a real tap wanders a few px; a scroll goes much further
+const PANEL_DRAG_SLOP_PX = 8; // a real tap wanders a few px; a scroll goes much further
 let settingsPointerStart = null;
+
+// The detail panel scrolls the same way. It differs from the settings panel
+// in that a TAP anywhere on it is a legitimate dismiss gesture (and always
+// has been -- that's how the close button works, by bubbling to the stage
+// handler), so the only thing to suppress here is the drag: without this,
+// scrolling a long panel ended in a pointerup that reached the stage and
+// closed the panel mid-scroll.
+let detailPointerStart = null;
+
+detailPanelEl.addEventListener('pointerdown', (e) => {
+  detailPointerStart = { x: e.clientX, y: e.clientY };
+});
+
+detailPanelEl.addEventListener('pointercancel', () => { detailPointerStart = null; });
+
+detailPanelEl.addEventListener('pointerup', (e) => {
+  const start = detailPointerStart;
+  detailPointerStart = null;
+  if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > PANEL_DRAG_SLOP_PX) {
+    e.stopPropagation(); // that was a scroll -- leave the panel open
+  }
+  // a genuine tap falls through to the stage handler, which dismisses
+});
 
 settingsPanelEl.addEventListener('pointerdown', (e) => {
   settingsPointerStart = { x: e.clientX, y: e.clientY };
@@ -3193,7 +3216,7 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   e.stopPropagation();
 
   // moved too far -> that was a scroll, not a choice
-  if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > SETTINGS_DRAG_SLOP_PX) return;
+  if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > PANEL_DRAG_SLOP_PX) return;
 
   const themeRow = e.target.closest('.sp-theme-row');
   if (themeRow) {
