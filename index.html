@@ -2874,6 +2874,7 @@ function vrateLabel(vrate) {
 let detailPanelHex = null; // guards against a photo fetch resolving after the panel moved on to a different plane (or closed)
 
 function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES') {
+  hideSettingsPanel(); // mutually exclusive -- see showSettingsPanel
   detailPanelHex = p.hex;
   const speedTxt = p.speed === null ? '—' : Math.round(p.speed) + ' kt';
   const altTxt = formatAltitude(p.alt);
@@ -3169,6 +3170,12 @@ function renderSettingsPanel() {
 }
 
 function showSettingsPanel() {
+  // Only one panel may be open at a time. Tapping the gear while a plane's
+  // detail panel was up left BOTH open: settings rendered on top, and
+  // dismissing it revealed the stale detail panel underneath, so it looked
+  // like the gear "kept bringing up the same plane details". The gear's own
+  // stopPropagation meant the stage handler never got to close it either.
+  hideDetailPanel();
   renderSettingsPanel();
   settingsPanelEl.classList.add('show');
   settingsBackdropEl.classList.add('show');
@@ -3269,7 +3276,12 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
 
 gearBtnEl.addEventListener('pointerup', (e) => {
   e.stopPropagation(); // otherwise this tap also reaches the stage handler below and immediately closes what it just opened
-  showSettingsPanel();
+  // Toggle, not just open. The panel covers most of a 1080px round display
+  // and no longer dismisses on a body tap (that was given over to scrolling),
+  // so without this the gear is a one-way door: the only ways out are the
+  // small close button or the narrow strip of screen beside the panel.
+  if (settingsPanelEl.classList.contains('show')) hideSettingsPanel();
+  else showSettingsPanel();
 });
 
 function findPlaneAtStagePoint(x, y) {
