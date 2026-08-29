@@ -49,3 +49,12 @@ echo
 echo "Setup page:  http://$(hostname -I | awk '{print $1}')/setup"
 echo "Claim code:  shown below (also in /run/flightradar/claim-code)"
 cat /run/flightradar/claim-code 2>/dev/null || echo "  (not generated yet)"
+
+echo
+echo "== installing the network watchdog (rollback + hotspot fallback) =="
+install -m 0755 deploy/net-watchdog.py /opt/flightradar/net-watchdog.py
+install -m 0644 deploy/flightradar-netwatchdog.service /etc/systemd/system/
+install -m 0644 deploy/flightradar-netwatchdog.timer   /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now flightradar-netwatchdog.timer
+echo "  watchdog timer: $(systemctl is-active flightradar-netwatchdog.timer)"

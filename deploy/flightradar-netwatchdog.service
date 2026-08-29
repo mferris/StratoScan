@@ -1,0 +1,11 @@
+[Unit]
+Description=FlightRadar network watchdog (rollback + setup hotspot fallback)
+After=NetworkManager.service flightradar-setupd.service
+Wants=flightradar-setupd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/flightradar/net-watchdog.py
+# No StartLimit concerns for a oneshot, but be explicit: this unit is the
+# recovery path, so it must never be rate-limited into permanent failure.
+StartLimitIntervalSec=0

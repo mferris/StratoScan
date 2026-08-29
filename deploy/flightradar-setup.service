@@ -19,7 +19,11 @@ ProtectHome=yes
 PrivateTmp=yes
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
-RestrictAddressFamilies=AF_INET AF_UNIX
+# AF_NETLINK is required: without it the process cannot enumerate network
+# interfaces, so it cannot tell the recipient which address to open the setup
+# page on. This only shows up under the real sandbox -- running the same code
+# by hand as the same user works fine, which is a good way to be misled.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 StateDirectory=flightradar-setup
 StateDirectoryMode=0700
 

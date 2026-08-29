@@ -503,6 +503,17 @@ def hotspot_psk():
         return psk
 
 
+def hotspot_active():
+    """Whether the AP is actually up right now, not merely configured.
+
+    The onboarding screen branches on this: telling a recipient to join
+    'FlightRadar-Setup' when the device is already on their WiFi sends them
+    looking for a network that does not exist.
+    """
+    p = run([NMCLI, "-t", "-f", "NAME", "connection", "show", "--active"], timeout=15)
+    return HOTSPOT_PROFILE in p.stdout.decode("utf-8", "replace")
+
+
 def hotspot_stop():
     with contextlib.suppress(Exception):
         nm_delete_profile(HOTSPOT_PROFILE)
@@ -613,7 +624,8 @@ VERBS = {
     "wifi_rollback": lambda p: wifi_rollback(),
     "hotspot_start": lambda p: hotspot_start(),
     "hotspot_stop": lambda p: hotspot_stop(),
-    "hotspot_info": lambda p: {"ssid": "FlightRadar-Setup", "psk": hotspot_psk()},
+    "hotspot_info": lambda p: {"ssid": "FlightRadar-Setup", "psk": hotspot_psk(),
+                               "active": hotspot_active()},
     "set_location": lambda p: set_location(p.get("lat"), p.get("lon")),
     "set_airport": lambda p: set_airport(p.get("code"), p.get("atcMount", "")),
     "tailscale_status": lambda p: tailscale_status(),

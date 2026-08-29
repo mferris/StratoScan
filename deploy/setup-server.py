@@ -527,10 +527,75 @@ def friendly(code, detail=""):
     return FRIENDLY.get(code) or (detail or "That did not work.")
 
 
+# ------------------------------------------------- on-screen onboarding tier
+#
+# The radar's own display is the only channel a recipient has before the
+# device is on their network: no SSH, no LAN address, nothing. It has to be
+# able to show them the hotspot name, its password, and the claim code.
+#
+# That information cannot go on the LAN-reachable API. Behind lighttpd's
+# proxy every request appears to come from 127.0.0.1, so a "localhost only"
+# check on the main port would have been readable by the whole network.
+# Instead this is a SEPARATE listener bound to loopback and deliberately NOT
+# proxied by lighttpd, so only software running on the device itself -- i.e.
+# the kiosk browser -- can read it.
+ONBOARD_LISTEN = ("127.0.0.1", 8090)
+
+
+class OnboardHandler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def version_string(self):
+        return "FlightRadar"
+
+    def log_message(self, *a):
+        pass  # this endpoint carries the claim code; never log it
+
+    def do_GET(self):
+        if self.path.split("?", 1)[0].rstrip("/") not in ("/onboard", ""):
+            self.send_error(404)
+            return
+        st = load_state()
+        hs = call_setupd("hotspot_info")
+        body = json.dumps({
+            "claimed": bool(st.get("claimed")),
+            "claimCode": None if st.get("claimed") else claim_code(),
+            "hotspot": hs.get("result") if hs.get("ok") else None,
+            "addresses": lan_addresses(),
+            "steps": st.get("steps", {}),
+        }).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        # The kiosk page is served from http://localhost/, so reading this
+        # port is cross-origin. Only that origin is permitted.
+        self.send_header("Access-Control-Allow-Origin", "http://localhost")
+        self.end_headers()
+        self.wfile.write(body)
+
+
+def lan_addresses():
+    """Addresses a phone could actually reach the setup page on."""
+    out = []
+    try:
+        import subprocess
+        p = subprocess.run(["/usr/bin/hostname", "-I"], capture_output=True, timeout=5)
+        out = [a for a in p.stdout.decode().split()
+               if ":" not in a and not a.startswith("127.")]
+    except Exception:
+        pass
+    return out
+
+
 class Server(http.server.ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
 
 if __name__ == "__main__":
+    threading.Thread(
+        target=lambda: Server(ONBOARD_LISTEN, OnboardHandler).serve_forever(),
+        daemon=True,
+    ).start()
     Server(LISTEN, Handler).serve_forever()
