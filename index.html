@@ -122,6 +122,14 @@
     justify-content: center;
     font-family: 'Inter', sans-serif;
     overflow: hidden;
+    /* This is a touch kiosk -- nothing here is text to be selected, and
+       letting it be selectable actively breaks the UI: dragging a finger
+       across a settings row to scroll the panel started a text selection
+       instead of panning, so the list wouldn't move. Also suppresses the
+       long-press callout/magnifier for the same reason. */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
 
   .stage {
