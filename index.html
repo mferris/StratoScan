@@ -588,6 +588,23 @@
     border-radius: 50%;
     background: var(--mid);
   }
+  /* Night dimming. Sits above everything (including the panels) so the
+     whole display dims uniformly, and pointer-events:none so it never
+     eats a touch. NOTE: the panel has no hardware backlight control
+     (/sys/class/backlight is empty on this Pi), so this darkens pixels
+     only -- the backlight stays lit. Good enough to stop the radar
+     glaring in a dark room; the real "off" is the screensaver service. */
+  #nightDim {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 2.5s ease;
+    z-index: 50;
+  }
+  #nightDim.on { opacity: var(--night-dim, 0.55); }
+
   #settingsPanel .sp-close {
     position: absolute;
     top: 6px;
@@ -624,6 +641,7 @@
   <div id="gearBtn" title="Settings">⚙</div>
   <div id="settingsBackdrop"></div>
   <div id="settingsPanel"></div>
+  <div id="nightDim"></div>
 </div>
 
 <script src="vendor/maplibre-gl.js"></script>
@@ -1723,6 +1741,76 @@ function playLightningAlertSound() {
   playTones([[600, 0, 0.18, 0.28], [600, 0.25, 0.18, 0.28], [600, 0.5, 0.24, 0.3]]);
 }
 
+// ---- Night dimming ------------------------------------------------------
+// Darkens the whole display between sunset and sunrise at the RECEIVER's own
+// coordinates, so it tracks the seasons on its own instead of needing hours
+// typed in twice a year (sunset here swings from ~17:00 in December to
+// ~20:30 in June). Pixels only -- this Pi exposes no backlight control, so
+// the backlight stays lit; the real power-off is the separate screensaver
+// service (deploy/flightradar-screensaver.service).
+const NIGHT_DIM_CHECK_MS = 60 * 1000;
+const NIGHT_WAKE_MS = 60 * 1000;   // how long an alert holds the screen bright
+let nightWakeUntil = 0;
+
+// Sunrise/sunset from lat/lon using the standard low-precision solar
+// position algorithm (Astronomical Almanac / NOAA). Good to about a minute,
+// which is far tighter than "is it dark out" needs. Returns null when the
+// sun neither rises nor sets that day (polar latitudes) so callers can fall
+// back rather than trusting a NaN.
+function sunTimesFor(date, lat, lon) {
+  const rad = Math.PI / 180, dayMs = 86400000;
+  const jdate = date.valueOf() / dayMs - 0.5 + 2440588;
+  const n = Math.round(jdate - 2451545 - 0.0009 + lon / 360);
+  const jNoon = 2451545 + 0.0009 - lon / 360 + n;
+  const M = rad * (357.5291 + 0.98560028 * (jNoon - 2451545));
+  const C = rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M));
+  const L = M + C + rad * 102.9372 + Math.PI;
+  const jTransit = jNoon + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+  const dec = Math.asin(Math.sin(rad * 23.4397) * Math.sin(L));
+  // -0.833deg: the sun's apparent radius plus atmospheric refraction, i.e.
+  // the standard definition of sunrise/sunset (upper limb at the horizon)
+  const cosH = (Math.sin(rad * -0.833) - Math.sin(rad * lat) * Math.sin(dec)) /
+               (Math.cos(rad * lat) * Math.cos(dec));
+  if (cosH > 1 || cosH < -1) return null; // polar day or night
+  const H = Math.acos(cosH) / (2 * Math.PI);
+  const jSet = 2451545 + 0.0009 + (H - lon / 360) + n + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+  const jRise = jTransit - (jSet - jTransit);
+  const toDate = (j) => new Date((j + 0.5 - 2440588) * dayMs);
+  return { sunrise: toDate(jRise), sunset: toDate(jSet) };
+}
+
+// True when the sun is down at the receiver right now. Checks against
+// yesterday's sunset too -- after midnight, "today's" sunset is still in the
+// future, so a naive now>sunset test reads as daytime at 2am.
+function isNightAtReceiver(now = new Date()) {
+  if (!home) return false;
+  const t = sunTimesFor(now, home.lat, home.lon);
+  if (!t) return false;
+  if (now < t.sunrise) {
+    const y = sunTimesFor(new Date(now.valueOf() - 86400000), home.lat, home.lon);
+    return !y || now >= y.sunset;
+  }
+  return now >= t.sunset;
+}
+
+function applyNightDim() {
+  const el = document.getElementById('nightDim');
+  if (!el) return;
+  const wake = Date.now() < nightWakeUntil;
+  el.classList.toggle('on', !!alertSettings.nightDim && isNightAtReceiver() && !wake);
+}
+
+// Called when an alert fires. Undims for NIGHT_WAKE_MS, and asks the Pi to
+// power the panel back on if the screensaver has blanked it (see
+// deploy/wake-listener.py). The fetch is best-effort: on a laptop, or with
+// the service absent, it just fails quietly and the undim still happens.
+function wakeScreenForAlert() {
+  if (!alertSettings.alertWake) return;
+  nightWakeUntil = Date.now() + NIGHT_WAKE_MS;
+  applyNightDim();
+  fetch('/wake', { method: 'POST' }).catch(() => {});
+}
+
 // ---- Nearby-aircraft alert ---------------------------------------------
 // Automatically pops the detail panel (see showDetailPanel) for any plane
 // that comes within ALERT_RADIUS_NM of the receiver -- on by default,
@@ -1741,7 +1829,7 @@ const ALERT_CLEAR_RADIUS_NM = 2.0;  // slightly wider exit threshold, so a
 // -- this is a personal display preference for whoever's looking at this
 // particular screen, not data that should be the same for every viewer.
 const ALERT_SETTINGS_KEY = 'flightradar_alert_settings_v1';
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rduPhase: true, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true };
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rduPhase: true, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true };
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -1878,6 +1966,7 @@ function checkNearbyAlert(pl, range) {
       // concern (see the settings panel below).
       recordSightingOnce(pl.hex, 'nearby');
       if (alertSettings.nearby) {
+        wakeScreenForAlert();
         showDetailPanel(pl, true);
         playAlertSound();
       }
@@ -1911,6 +2000,7 @@ function checkEmergencySquawk(pl) {
   if (label) {
     if (!pl.emergencyAlerted && alertSettings.emergency) {
       pl.emergencyAlerted = true;
+      wakeScreenForAlert();
       playEmergencySound();
       showDetailPanel(pl, true, label);
     }
@@ -3004,6 +3094,8 @@ const ALERT_SETTINGS_META = [
   { key: 'heatmap', label: 'RDU approach heatmap', sub: 'Density pattern built from actually observed RDU landings' },
   { key: 'lightning', label: 'Lightning overlay', sub: 'Satellite-observed strike density (GOES-East GLM, via SSEC RealEarth)' },
   { key: 'lightningAlert', label: 'Lightning proximity alert', sub: `Chime + banner when a strike is detected within ${LIGHTNING_ALERT_RADIUS_NM}nm` },
+  { key: 'nightDim', label: 'Dim at night', sub: 'Darkens the display between sunset and sunrise at the receiver' },
+  { key: 'alertWake', label: 'Alerts wake the screen', sub: 'Nearby + emergency alerts undim, and wake the display if the screensaver blanked it' },
 ];
 
 function renderSettingsPanel() {
@@ -3071,6 +3163,7 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   if (key === 'storms') applyStormsVisibility();
   if (key === 'heatmap') applyHeatmapVisibility();
   if (key === 'lightning') applyLightningVisibility();
+  if (key === 'nightDim') { nightWakeUntil = 0; applyNightDim(); } // re-evaluate now, don't wait for the next minute tick
   renderSettingsPanel();
 });
 
@@ -3135,6 +3228,8 @@ async function start() {
   setInterval(refreshLightning, LIGHTNING_REFRESH_MS);
   setTimeout(checkLightningNearby, 10000); // give home time to populate from the first receiver.json fetch
   setInterval(checkLightningNearby, LIGHTNING_ALERT_CHECK_MS);
+  applyNightDim();
+  setInterval(applyNightDim, NIGHT_DIM_CHECK_MS);
   requestAnimationFrame(tick);
 }
 

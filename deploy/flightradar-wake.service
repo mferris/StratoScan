@@ -1,0 +1,15 @@
+[Unit]
+Description=FlightRadar display wake endpoint
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+# A --user service on purpose: it needs the session's WAYLAND_DISPLAY to
+# reach the compositor, which the DynamicUser system services here cannot.
+ExecStartPre=/bin/sh -c 'i=0; while [ $i -lt 60 ]; do ls "$XDG_RUNTIME_DIR"/wayland-*[0-9] >/dev/null 2>&1 && exit 0; sleep 1; i=$((i+1)); done; exit 1'
+ExecStart=/usr/bin/python3 /opt/flightradar/wake-listener.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
