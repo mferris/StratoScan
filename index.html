@@ -3206,6 +3206,34 @@ function hideSettingsPanel() {
 const PANEL_DRAG_SLOP_PX = 8; // a real tap wanders a few px; a scroll goes much further
 let settingsPointerStart = null;
 
+// Drag-to-scroll, done in JS rather than left to the browser.
+//
+// Relying on native touch panning was not enough on the kiosk: dragging
+// across the option text did nothing and the only thing that actually
+// scrolled the list was the scrollbar itself, which is a few pixels wide and
+// easy to miss -- missing it lands on the backdrop and shuts the panel. So
+// the panel now follows the finger directly: grab anywhere and slide, exactly
+// as if you had hold of the scrollbar.
+//
+// Deliberately no setPointerCapture here: capturing retargets subsequent
+// events to the panel, which would break the `e.target.closest('.sp-switch')`
+// checks that decide whether a press was on a control.
+function attachDragScroll(el, getStart) {
+  el.addEventListener('pointermove', (e) => {
+    // `start` is set on pointerdown and cleared on pointerup/cancel, so its
+    // presence alone means a drag is under way. Deliberately NOT gating on
+    // e.buttons: that is not reliably populated for touch pointers, and on a
+    // touch-only kiosk it would silently disable this whole feature.
+    const start = getStart();
+    if (!start) return;
+    const dy = e.clientY - start.y;
+    if (Math.abs(dy) <= PANEL_DRAG_SLOP_PX) return; // still within tap tolerance
+    el.scrollTop = start.scrollTop - dy;
+  });
+}
+
+attachDragScroll(settingsPanelEl, () => settingsPointerStart);
+
 // The detail panel scrolls the same way. It differs from the settings panel
 // in that a TAP anywhere on it is a legitimate dismiss gesture (and always
 // has been -- that's how the close button works, by bubbling to the stage
@@ -3215,10 +3243,12 @@ let settingsPointerStart = null;
 let detailPointerStart = null;
 
 detailPanelEl.addEventListener('pointerdown', (e) => {
-  detailPointerStart = { x: e.clientX, y: e.clientY };
+  detailPointerStart = { x: e.clientX, y: e.clientY, scrollTop: detailPanelEl.scrollTop };
 });
 
 detailPanelEl.addEventListener('pointercancel', () => { detailPointerStart = null; });
+
+attachDragScroll(detailPanelEl, () => detailPointerStart);
 
 detailPanelEl.addEventListener('pointerup', (e) => {
   const start = detailPointerStart;
@@ -3230,7 +3260,7 @@ detailPanelEl.addEventListener('pointerup', (e) => {
 });
 
 settingsPanelEl.addEventListener('pointerdown', (e) => {
-  settingsPointerStart = { x: e.clientX, y: e.clientY };
+  settingsPointerStart = { x: e.clientX, y: e.clientY, scrollTop: settingsPanelEl.scrollTop };
 });
 
 settingsPanelEl.addEventListener('pointercancel', () => { settingsPointerStart = null; });
