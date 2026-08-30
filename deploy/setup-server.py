@@ -639,6 +639,9 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             save_state(st)
             drop_sessions()
             return self._json(200, {"result": {"claimed": True}})
+        if path == "/onboard/hotspot":
+            return self._verb("hotspot_start" if body.get("on") else "hotspot_stop",
+                              timeout=90)
         if path == "/onboard/remote/start":
             return self._verb("tailscale_login_start",
                               {"hostname": body.get("hostname")}, timeout=60)

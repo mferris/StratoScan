@@ -3706,6 +3706,10 @@ function renderDeviceSetup() {
     ? `${d.airport.code}${d.airport.atcMount ? ' · ATC feed set' : ''}`
     : 'Not set';
   const pwNow = d.claimed ? 'Set' : 'Not set — anyone nearby can set it';
+  const hs2 = d.hotspot || {};
+  const hsNow = hs2.active
+    ? `On — join ${hs2.ssid}, then open http://${hs2.address || '10.42.0.1'}/setup`
+    : 'Off — turn on to set this radar up from a phone';
   const rem = d.remote || {};
   const remNow = rem.state === 'Running'
     ? (rem.publicUrl ? `Public page at ${rem.publicUrl}` : `Connected as ${rem.magicDnsName || 'this device'}`)
@@ -3722,6 +3726,8 @@ function renderDeviceSetup() {
       <div class="sp-sub">${esc(remNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-act="set-password"><div><div class="sp-label">Admin password</div>
       <div class="sp-sub">${esc(pwNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
+    <div class="sp-menu-row" data-act="hotspot-toggle"><div><div class="sp-label">Setup network</div>
+      <div class="sp-sub">${esc(hsNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="reset"><div><div class="sp-label" style="color:#ff6b6b">Erase everything</div>
       <div class="sp-sub">Reset for a new owner, or if the password is lost</div></div>
       <div class="sp-chevron">&#8250;</div></div>`;
@@ -3811,6 +3817,21 @@ async function handleDeviceTap(row) {
       await loadAirportConfig();           // pick the change up immediately
       deviceMsg = `Home airport set to ${airport}.`;
       airportRows = [];
+    } catch (e) { deviceMsg = e.message; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (act === 'hotspot-toggle') {
+    const on = !((deviceStatus && deviceStatus.hotspot) || {}).active;
+    deviceBusy = true; renderSettingsPanel();
+    try {
+      await deviceApi('/onboard/hotspot', { method: 'POST',
+        body: JSON.stringify({ on }) });
+      await loadDeviceStatus();
+      const h = (deviceStatus && deviceStatus.hotspot) || {};
+      deviceMsg = on
+        ? `Setup network on. Join "${h.ssid}" (password ${h.psk}) and open http://${h.address || '10.42.0.1'}/setup`
+        : 'Setup network off.';
     } catch (e) { deviceMsg = e.message; }
     deviceBusy = false; return renderSettingsPanel();
   }

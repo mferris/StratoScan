@@ -65,6 +65,26 @@ SECURITY_HEADERS = {
 }
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Relay redirects to the client instead of following them here.
+
+    urlopen follows 3xx by default, which made this gateway hang: lighttpd's
+    captive-portal rule returns a redirect to the hotspot address, and when
+    the hotspot is down that address does not exist -- so the gateway sat
+    there until timeout with a worker blocked, on a PUBLIC endpoint. Enough
+    such requests is a denial of service.
+
+    A proxy has no business chasing redirects anyway: the client should see
+    the 3xx and decide.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_opener = urllib.request.build_opener(_NoRedirect)
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def version_string(self):
         return "FlightRadar"  # don't advertise the Python/http.server version
@@ -130,7 +150,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def _serve_rounded_receiver_json(self):
         try:
-            with urllib.request.urlopen(UPSTREAM + self.path, timeout=5) as upstream:
+            with _opener.open(UPSTREAM + self.path, timeout=5) as upstream:
                 data = json.loads(upstream.read())
         except Exception:
             self.send_response(502)
@@ -158,7 +178,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         req = urllib.request.Request(UPSTREAM + self.path, data=body, headers=req_headers, method=self.command)
 
         try:
-            with urllib.request.urlopen(req, timeout=10) as upstream:
+            with _opener.open(req, timeout=10) as upstream:
                 self._relay(upstream.status, upstream)
         except urllib.error.HTTPError as e:
             self._relay(e.code, e)
