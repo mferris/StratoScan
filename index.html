@@ -269,6 +269,12 @@
      literal circle, since the tag is a box, but same color/purpose: this
      plane is plausibly on RDU's frequency right now (landing/taking off
      within AIRPORT_PROXIMITY_NM), worth a glance if ATC audio is on. */
+  /* The rare-aircraft reason, in the detail panel. Uses the same accent as
+     the landing/takeoff ring so "the app is pointing at something" reads
+     consistently, rather than introducing a fourth alert colour. */
+  .dp-field.dp-rare { grid-column: 1 / -1; }
+  .dp-field.dp-rare .dp-value { color: var(--airport-highlight); }
+
   .tag.airport-phase {
     outline: 2px solid var(--airport-highlight);
     outline-offset: 1px;
@@ -2243,7 +2249,7 @@ const ALERT_CLEAR_RADIUS_NM = 2.0;  // slightly wider exit threshold, so a
 // -- this is a personal display preference for whoever's looking at this
 // particular screen, not data that should be the same for every viewer.
 const ALERT_SETTINGS_KEY = 'flightradar_alert_settings_v1';
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, airportPhase: true, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true };
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true };
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -2418,6 +2424,123 @@ function checkNearbyAlert(pl, range) {
   } else if (range > ALERT_CLEAR_RADIUS_NM) {
     pl.alerted = false; // free to re-alert if it later comes back around
   }
+}
+
+// ---- Rare aircraft alert -------------------------------------------------
+// The point of a receiver that has been running in one place for months is
+// that it knows what NORMAL looks like here, so it can tell you when
+// something is not. This is the "go outside and look up" alert.
+//
+// Three independent reasons, deliberately tuned so the combined rate stays
+// low -- an alert that fires constantly is one you learn to ignore, which is
+// worse than not having it.
+
+// ICAO 24-bit addresses are allocated by country, and each country reserves
+// blocks for military/government airframes. This is the commonly-published
+// list, and it is deliberately a conservative subset: a missing range costs
+// a missed alert, while a wrong range costs a false one, so erring toward
+// omission is the safe direction. Measured against this receiver's own
+// catalogue of 384 aircraft it matched exactly one (ae206d, a US military
+// address) -- about 1 in 400, which is the rate a rarity alert wants.
+const MILITARY_HEX_RANGES = [
+  [0x33ff00, 0x33ffff, 'Italian military'],
+  [0x350000, 0x37ffff, 'Spanish military'],
+  [0x3aa000, 0x3affff, 'French military'],
+  [0x3b7000, 0x3bffff, 'French military'],
+  [0x3ea000, 0x3ebfff, 'German military'],
+  [0x3f4000, 0x3fbfff, 'German military'],
+  [0x400000, 0x40003f, 'UK military'],
+  [0x43c000, 0x43cfff, 'UK military'],
+  [0x480000, 0x480fff, 'Dutch military'],
+  [0x4b7000, 0x4b7fff, 'Swiss military'],
+  [0xadf7c8, 0xafffff, 'US military'],
+  [0xc20000, 0xc3ffff, 'Canadian military'],
+  [0xe40000, 0xe41fff, 'Brazilian military'],
+];
+
+function militaryOperator(hex) {
+  const v = parseInt(hex, 16);
+  if (!Number.isFinite(v)) return null;
+  for (const [lo, hi, who] of MILITARY_HEX_RANGES) if (v >= lo && v <= hi) return who;
+  return null;
+}
+
+// ICAO type designators worth walking outside for. Mostly aircraft the
+// military hex check above cannot catch (civil heavies and vintage types)
+// plus a few military ones that fly on civil-registered addresses.
+const NOTABLE_TYPES = new Map([
+  ['A388', 'Airbus A380'], ['A124', 'Antonov An-124'], ['A225', 'Antonov An-225'],
+  ['B741', 'Boeing 747'], ['B742', 'Boeing 747'], ['B743', 'Boeing 747'],
+  ['B744', 'Boeing 747'], ['B748', 'Boeing 747-8'], ['B74S', 'Boeing 747SP'],
+  ['C17', 'C-17 Globemaster'], ['C5M', 'C-5 Galaxy'], ['C5', 'C-5 Galaxy'],
+  ['B52', 'B-52 Stratofortress'], ['B1', 'B-1 Lancer'], ['B2', 'B-2 Spirit'],
+  ['K35R', 'KC-135 Stratotanker'], ['KC46', 'KC-46 Pegasus'], ['KC10', 'KC-10 Extender'],
+  ['E3TF', 'E-3 Sentry (AWACS)'], ['E3CF', 'E-3 Sentry (AWACS)'], ['P8', 'P-8 Poseidon'],
+  ['V22', 'V-22 Osprey'], ['U2', 'U-2 Dragon Lady'], ['R135', 'RC-135'],
+  ['VC25', 'VC-25 (Air Force One)'], ['C32', 'C-32 (Air Force Two)'],
+  ['DC3', 'Douglas DC-3'], ['C47', 'Douglas C-47'], ['B17', 'B-17 Flying Fortress'],
+  ['P51', 'P-51 Mustang'], ['B29', 'B-29 Superfortress'], ['SPIT', 'Supermarine Spitfire'],
+]);
+
+// "Never seen here before" is the most appealing reason and the least usable
+// one early on: measured against the live store, 70% of all sighting events
+// were still first-ever sightings, because the catalogue only held 384
+// aircraft. Firing on 7 of every 10 planes is not a rarity alert. So this
+// reason stays switched off until the receiver has met enough traffic for
+// "new" to actually mean something; the settings row says so while it waits.
+const RARE_FIRST_MIN_CATALOGUE = 2000;
+// A floor between alerts regardless of reason. At the measured military rate
+// (~1 in 400 aircraft) this should essentially never bind -- it exists so a
+// bad type table or a corrupt store can never turn this into a firehose.
+const RARE_ALERT_COOLDOWN_MS = 10 * 60 * 1000;
+let lastRareAlertAt = -Infinity;
+
+// Returns {kind, label} for the strongest reason this aircraft is unusual,
+// or null if it is just ordinary traffic.
+function rarityOf(pl) {
+  const mil = militaryOperator(pl.hex);
+  if (mil) return { kind: 'military', label: mil };
+
+  const notable = pl.typeCode ? NOTABLE_TYPES.get(pl.typeCode.toUpperCase()) : null;
+  if (notable) return { kind: 'type', label: notable };
+
+  // pl.priorTotal is the count as it stood BEFORE this visit was recorded,
+  // captured in applyUpdate -- reading sightingCounts here would always show
+  // the increment this visit just made and never report anything as new.
+  if (sightingCounts.size >= RARE_FIRST_MIN_CATALOGUE && pl.priorTotal === 0) {
+    return { kind: 'first', label: 'Never seen here before' };
+  }
+  return null;
+}
+
+// Called once per poll like the other per-aircraft checks, and again when a
+// type lookup resolves -- the type arrives asynchronously, so an aircraft
+// can become recognisably notable a second or two after it first appears.
+function checkRareAircraft(pl) {
+  if (!pl || pl.rareAlerted) return;
+  const why = rarityOf(pl);
+  if (!why) return;
+
+  // Marked before the settings check, like checkNearbyAlert and unlike the
+  // emergency one: this is a standing property of the aircraft, not an
+  // ongoing condition, so there is nothing to re-alert about later.
+  pl.rareAlerted = true;
+  pl.rareReason = why;
+  if (!alertSettings.rareAircraft) return;
+  if (performance.now() - lastRareAlertAt < RARE_ALERT_COOLDOWN_MS) return;
+  lastRareAlertAt = performance.now();
+
+  wakeScreenForAlert();
+  showDetailPanel(pl, true, why.label.toUpperCase(), '\u2726');
+  playRareSound();
+  showToast(`\u2726 ${why.label.toUpperCase()} \u00b7 ${pl.cs}`, 8000);
+}
+
+// A rising three-note arpeggio -- the only ascending triad among the alert
+// sounds, so it reads as "something good" rather than the nearby chime's
+// two notes or the emergency alert's insistent alternation.
+function playRareSound() {
+  playTones([[660, 0, 0.16, 0.22], [880, 0.16, 0.16, 0.22], [1320, 0.32, 0.3, 0.24]]);
 }
 
 // ---- Emergency squawk alert ---------------------------------------------
@@ -2645,7 +2768,7 @@ function fetchShard(bkey) {
 // each shard either has the remaining hex suffix as a direct key, or a
 // "children" list naming deeper shards to descend into.
 async function lookupType(hex) {
-  const empty = { type: null, reg: null, desc: null, wtc: null };
+  const empty = { type: null, reg: null, desc: null, wtc: null, typeCode: null };
   if (hexTypeCache.has(hex)) return hexTypeCache.get(hex);
   if (!databaseFolder || hexTypePending.has(hex)) return empty;
   hexTypePending.add(hex);
@@ -2669,7 +2792,8 @@ async function lookupType(hex) {
     let type = null;
     if (typeLong) type = humanizeType(typeLong);
     else if (meta) type = meta.label;
-    result = { type, reg: reg || null, desc: meta ? meta.desc : null, wtc: meta ? meta.wtc : null };
+    result = { type, reg: reg || null, desc: meta ? meta.desc : null, wtc: meta ? meta.wtc : null,
+               typeCode: typeCode ? typeCode.toUpperCase() : null };
   }
 
   hexTypeCache.set(hex, result);
@@ -2823,10 +2947,15 @@ function applyUpdate(list) {
       existing.trail.push({ bearing: n.bearing, range: n.range, t: now });
       pruneTrail(existing.trail, now);
     } else {
+      // Read before recordSightingOnce below increments it -- rarityOf needs
+      // to know whether this receiver had ever seen the aircraft before now.
+      const priorTotal = (sightingCounts.get(n.hex) || {}).total || 0;
       planes.set(n.hex, {
         ...n,
+        priorTotal,
         targetBearing: n.bearing,
         targetRange: n.range,
+        typeCode: null,
         typeLabel: null,
         registration: null,
         typeDesc: null,
@@ -2840,7 +2969,11 @@ function applyUpdate(list) {
     if (!hexTypeCache.has(n.hex)) {
       lookupType(n.hex).then(info => {
         const pl = planes.get(n.hex);
-        if (pl) { pl.typeLabel = info.type; pl.registration = info.reg; pl.typeDesc = info.desc; pl.wtc = info.wtc; }
+        if (pl) {
+          pl.typeLabel = info.type; pl.registration = info.reg; pl.typeDesc = info.desc; pl.wtc = info.wtc;
+          pl.typeCode = info.typeCode;
+          checkRareAircraft(pl); // the type is what makes some aircraft notable, and it arrives late
+        }
       });
     }
 
@@ -2867,6 +3000,7 @@ function applyUpdate(list) {
     checkNearbyAlert(planes.get(n.hex), n.range);
     checkEmergencySquawk(planes.get(n.hex));
     checkAirportPhaseAlert(planes.get(n.hex));
+    checkRareAircraft(planes.get(n.hex));
   }
 
   // aircraft readsb no longer reports aren't dropped immediately -- they
@@ -3321,7 +3455,7 @@ function vrateLabel(vrate) {
 
 let detailPanelHex = null; // guards against a photo fetch resolving after the panel moved on to a different plane (or closed)
 
-function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES') {
+function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES', alertGlyph = '\u26a0') {
   hideSettingsPanel(); // mutually exclusive -- see showSettingsPanel
   detailPanelHex = p.hex;
   const speedTxt = p.speed === null ? '—' : Math.round(p.speed) + ' kt';
@@ -3336,7 +3470,7 @@ function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES') {
 
   detailPanelEl.innerHTML = `
     <div class="dp-close">&times;</div>
-    ${isAlert ? `<div class="dp-alert-tag">⚠ ${esc(alertLabel)}</div>` : ''}
+    ${isAlert ? `<div class="dp-alert-tag">${alertGlyph} ${esc(alertLabel)}</div>` : ''}
     <div class="dp-photo" style="display:none"></div>
     <div class="dp-cs" style="color:${p.color}">${esc(p.cs)}</div>
     <div class="dp-badge" style="background:${p.badgeColor}">${esc(p.airlineLabel)}</div>
@@ -3350,6 +3484,7 @@ function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES') {
       <div class="dp-field"><div class="dp-label">Vert. rate</div><div class="dp-value">${vrateLabel(p.vrate)}</div></div>
       <div class="dp-field"><div class="dp-label">Squawk</div><div class="dp-value">${p.squawk ?? '—'}</div></div>
       <div class="dp-field"><div class="dp-label">Range / Brg</div><div class="dp-value">${rangeTxt}</div></div>
+      ${!p.rareReason ? '' : `<div class="dp-field dp-rare"><div class="dp-label">Notable</div><div class="dp-value">${esc(p.rareReason.label)}</div></div>`}
       <div class="dp-field"><div class="dp-label">Sightings</div><div class="dp-value">${counts.total}</div></div>
       <div class="dp-field"><div class="dp-label">Within 2mi</div><div class="dp-value">${counts.nearby}</div></div>
     </div>
@@ -3585,6 +3720,16 @@ let settingsSection = null;  // null = the menu; otherwise a group key
 function alertSettingsMeta() { return [
   { group: 'alerts', key: 'nearby', label: 'Nearby aircraft alert', sub: 'Auto-pop details + chime for anything within 2 miles' },
   { group: 'alerts', key: 'emergency', label: 'Emergency squawks', sub: '7500 hijack / 7600 radio failure / 7700 emergency' },
+  {
+    group: 'alerts', key: 'rareAircraft', label: 'Rare aircraft alert',
+    // Says which reasons are actually live rather than describing the
+    // feature in the abstract: "never seen here before" stays dormant until
+    // the receiver has met enough traffic for it to mean anything, and a
+    // toggle that quietly does less than it claims is its own bug.
+    sub: sightingCounts.size >= RARE_FIRST_MIN_CATALOGUE
+      ? 'Military, unusual types, and aircraft never seen here before'
+      : `Military and unusual aircraft types. Still learning the regular traffic (${sightingCounts.size}/${RARE_FIRST_MIN_CATALOGUE} aircraft) before it can flag first-time visitors`,
+  },
   { group: 'alerts', key: 'airportPhase', label: `${AIRPORT.code} landing/takeoff chime`, sub: `Quiet tone when a plane lands or departs at ${AIRPORT.code}` },
   {
     group: 'audio', key: 'atc', label: `${AIRPORT.code} ATC audio`,

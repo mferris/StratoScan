@@ -46,6 +46,11 @@ too.
 - **Lightning proximity alert** — a chime + banner when a satellite-observed
   strike is detected within 15nm of the receiver, independent of the map's
   lightning overlay toggle
+- **Rare aircraft alert** — a chime and an auto-popped panel for something
+  worth walking outside for: an airframe on a military/government ICAO
+  address, or an unusual type (747, A380, C-17, warbirds). Once the receiver
+  has met enough traffic to know what normal looks like locally, it also
+  flags aircraft it has never seen before
 - **Emergency squawk alert** — an unmistakable alert (distinct chime + a red
   auto-popped panel) for 7500 (hijack), 7600 (radio failure), or 7700
   (general emergency)
