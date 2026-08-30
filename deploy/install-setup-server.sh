@@ -58,3 +58,15 @@ install -m 0644 deploy/flightradar-netwatchdog.timer   /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now flightradar-netwatchdog.timer
 echo "  watchdog timer: $(systemctl is-active flightradar-netwatchdog.timer)"
+
+echo
+echo "== installing the captive portal (so phones stop using cellular) =="
+install -m 0644 deploy/99-flightradar-captive.conf /etc/lighttpd/conf-available/
+ln -sf /etc/lighttpd/conf-available/99-flightradar-captive.conf \
+       /etc/lighttpd/conf-enabled/99-flightradar-captive.conf
+install -d -m 0755 /etc/NetworkManager/dnsmasq-shared.d
+install -m 0644 deploy/flightradar-captive-dns.conf \
+        /etc/NetworkManager/dnsmasq-shared.d/flightradar-captive.conf
+lighttpd -tt -f /etc/lighttpd/lighttpd.conf
+systemctl reload lighttpd
+echo "  captive portal installed"

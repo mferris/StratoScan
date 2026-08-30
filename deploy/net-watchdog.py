@@ -62,6 +62,19 @@ def call_setupd(verb, params=None, timeout=120):
         s.close()
 
 
+def is_claimed():
+    """Has anyone finished setting this unit up?
+
+    Read directly rather than asked of the web tier: this runs at boot, when
+    that service may not be listening yet.
+    """
+    try:
+        with open(os.path.join(STATE_DIR, "setup.json")) as f:
+            return bool(json.load(f).get("claimed"))
+    except Exception:
+        return False    # unreadable or absent => treat as not yet set up
+
+
 def hotspot_active():
     p = run([NMCLI, "-t", "-f", "NAME", "connection", "show", "--active"], timeout=15)
     return HOTSPOT_PROFILE in p.stdout.decode("utf-8", "replace")
@@ -116,8 +129,14 @@ def main():
 
     # 2. keep the device reachable
     if have_connectivity():
-        if hotspot_active():
-            print("net-watchdog: connectivity restored; dropping the hotspot", flush=True)
+        # An UNCLAIMED unit keeps its setup network up even when it has
+        # connectivity by some other route. Plugging in an ethernet cable
+        # otherwise tore the hotspot down mid-setup, stranding whoever was
+        # part-way through configuring it from a phone. Once the unit is
+        # claimed, setup is finished and the AP is just an open door.
+        if hotspot_active() and is_claimed():
+            print("net-watchdog: setup complete and online; dropping the hotspot",
+                  flush=True)
             call_setupd("hotspot_stop")
         return 0
 
