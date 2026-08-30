@@ -30,7 +30,10 @@ d = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(d)
 d.os.chown = lambda *a, **k: None  # the daemon runs as root; tests do not
 
-REAL_READSB = (
+# Deliberately FICTIONAL coordinates. An earlier version of this fixture used
+# the development receiver's real position to 14 decimal places, which is a
+# home address in numeric form and has no business in a git history.
+SAMPLE_READSB = (
     'RECEIVER_OPTIONS="--device 0 --device-type rtlsdr --gain auto --ppm 0"\n'
     'DECODER_OPTIONS="--lat 38.88880000000000 --lon -77.0000000000000'
     ' --max-range 450 --write-json-every 1"\n'
@@ -89,9 +92,9 @@ def check_readsb(fails):
             with open(p) as f:
                 return f.read()
 
-        out = rewrite(REAL_READSB, 41.786, -87.7524)
+        out = rewrite(SAMPLE_READSB, 41.786, -87.7524)
         for key in ("RECEIVER_OPTIONS", "NET_OPTIONS", "JSON_OPTIONS"):
-            a = re.search(rf'{key}="(.*)"', REAL_READSB).group(1)
+            a = re.search(rf'{key}="(.*)"', SAMPLE_READSB).group(1)
             b = re.search(rf'{key}="(.*)"', out).group(1)
             if a != b:
                 fails.append(f"{key} was modified")
