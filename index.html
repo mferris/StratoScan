@@ -678,18 +678,33 @@
   #kbd.show { display: flex; }
   #kbdField {
     width: 86%;
-    min-height: 46px;
-    padding: 10px 14px;
-    border: 1px solid var(--panel-border);
+    min-height: 84px;
+    padding: 12px 18px;
+    border: 2px solid var(--mid);
     border-radius: 8px;
+    background: rgba(255,255,255,0.04);
     color: var(--text);
-    font-size: 1.05rem;
     word-break: break-all;
     text-align: left;
   }
-  #kbdLabel { color: var(--text-dim); font-size: .72rem; display: block; letter-spacing: .08em; }
-  #kbdValue { font-size: 1.1rem; }
+  #kbdLabel {
+    color: var(--text-dim);
+    font-size: .8rem;
+    display: block;
+    letter-spacing: .1em;
+    margin-bottom: 4px;
+  }
+  /* Big enough to read at arm's length on a wall-mounted panel. It was
+     1.1rem, which is fine on a phone held 30cm away and useless here --
+     and being unable to check what you typed is the difference between a
+     WiFi password that works first time and one that silently does not. */
+  #kbdValue { font-size: 1.75rem; line-height: 1.25; color: #fff; }
   #kbdValue::after { content: '\258F'; opacity: .7; }
+  #kbdValue.empty::before {
+    content: attr(data-placeholder);
+    color: var(--text-dim);
+    font-size: 1.1rem;
+  }
   /* Explicit rows. This previously relied on flex-wrap with a hidden
      "row break" element, which does not break a flex line at all -- and the
      class it used was never defined, so it rendered as a stray key. The
@@ -1974,7 +1989,12 @@ function openKeyboard(label, initial, { secret = false, mode = 'lower' } = {}) {
     // Open on the layout the field actually needs: coordinates are digits and
     // a minus, and making someone hunt for the 123 key first is the kind of
     // friction that makes an on-screen keyboard feel unusable.
-    kbdState = { mode, value: initial || '', onDone: resolve, secret };
+    //
+    // `secret` marks a field as maskable, but it starts REVEALED. On an
+    // unfamiliar touch keyboard a mistyped WiFi password is near-certain and
+    // invisible, and this screen is in someone's home, not in public. A Hide
+    // key is offered for anyone who wants it.
+    kbdState = { mode, value: initial || '', onDone: resolve, secret, masked: false };
     document.getElementById('kbdLabel').textContent = label;
     document.getElementById('kbd').classList.add('show');
     drawKeyboard();
@@ -1989,8 +2009,13 @@ function closeKeyboard(value) {
 }
 
 function drawKeyboard() {
-  const val = kbdState.secret ? '•'.repeat(kbdState.value.length) : kbdState.value;
-  document.getElementById('kbdValue').textContent = val;
+  const shown = (kbdState.secret && kbdState.masked)
+    ? '•'.repeat(kbdState.value.length)
+    : kbdState.value;
+  const valueEl = document.getElementById('kbdValue');
+  valueEl.textContent = shown;
+  valueEl.classList.toggle('empty', kbdState.value.length === 0);
+  valueEl.dataset.placeholder = 'type here…';
   const keys = document.getElementById('kbdKeys');
   keys.textContent = '';
   const newRow = () => {
@@ -2018,6 +2043,7 @@ function drawKeyboard() {
   add(fn, 'space', 'wide', 'space');
   add(fn, '\u232B', 'wide', 'back');
   const fn2 = newRow();
+  if (kbdState.secret) add(fn2, kbdState.masked ? 'Show' : 'Hide', 'wide', 'mask');
   add(fn2, 'Cancel', 'wide', 'cancel');
   add(fn2, 'Done', 'wide go', 'done');
 }
@@ -2033,6 +2059,7 @@ document.getElementById('kbd').addEventListener('pointerup', (e) => {
   else if (a === 'space') kbdState.value += ' ';
   else if (a === 'mode') kbdState.mode = kbdState.mode === 'num' ? 'lower' : 'num';
   else if (a === 'case') kbdState.mode = kbdState.mode === 'upper' ? 'lower' : 'upper';
+  else if (a === 'mask') kbdState.masked = !kbdState.masked;
   else if (!a && k.textContent.length === 1) kbdState.value += k.textContent;
   drawKeyboard();
 });
@@ -2069,18 +2096,27 @@ async function refreshOnboarding() {
   if (hs.active && hs.ssid) {
     steps.push(`On your phone, join the WiFi network <b>${esc(hs.ssid)}</b>` +
                (hs.psk ? ` using password <b>${esc(hs.psk)}</b>` : ''));
-    steps.push('Open <b>http://192.168.4.1/setup</b> in your browser');
+    // Never hardcode this address. The first version printed 192.168.4.1,
+    // which was just the development network's router -- anyone following it
+    // reached nothing at all. Use whatever the hotspot is really serving on.
+    const hsAddr = hs.address || addr;
+    steps.push(hsAddr
+      ? `Open <b>http://${esc(hsAddr)}/setup</b> in your browser`
+      : 'Open the address shown on your phone once it connects');
   } else if (addr) {
     steps.push(`On a device on the same network, open <b>http://${esc(addr)}/setup</b>`);
   } else {
     steps.push('Connect this radar to a network, or wait for it to start its own');
   }
-  steps.push('Enter the code below when asked');
+  if (d.claimCode) steps.push('Enter the code below when asked');
 
   document.getElementById('onboardInner').innerHTML =
     `<h2>SET UP THIS RADAR</h2>` +
     `<ol><li>${steps.join('</li><li>')}</li></ol>` +
-    (d.claimCode ? `<div class="code">${esc(d.claimCode)}</div>` : '') +
+    (d.claimCode
+      ? `<div class="code">${esc(d.claimCode)}</div>`
+      : `<div class="foot" style="color:#e3b341">No setup code available — use
+         "set it up on this screen" below, or restart the radar to generate one.</div>`) +
     `<div class="ob-btn" id="obSetupHere">Or set it up on this screen &#8250;</div>` +
     `<div class="foot">This screen disappears once a password is set.</div>`;
   el.classList.add('show');
