@@ -344,6 +344,21 @@ def net_status():
     return {"ssid": ssid, "ipv4": addr, "hotspotActive": hotspot_active()}
 
 
+def hotspot_address():
+    """The address the hotspot is actually serving on.
+
+    Never hardcode this. NetworkManager's shared mode hands out 10.42.0.1 by
+    default, but it is configurable and can differ -- and the first version of
+    the setup screen printed a hardcoded 192.168.4.1, which was simply the
+    development network's router. Anyone following it reached nothing.
+    """
+    a = run([NMCLI, "-t", "-f", "IP4.ADDRESS", "device", "show", "wlan0"], timeout=15)
+    for line in a.stdout.decode().splitlines():
+        if "/" in line:
+            return line.split(":", 1)[-1].split("/")[0]
+    return None
+
+
 def nm_delete_profile(name_or_uuid):
     run([NMCLI, "connection", "delete", name_or_uuid], timeout=20)
 
@@ -780,10 +795,20 @@ def reset_full():
 
     clear_pending()
 
-    # 5. leave it reachable and claimable by its next owner
+    # 5. a fresh claim code. Without this the device is unclaimABLE after a
+    # reset: ensure_claim_code() only ran at daemon startup, and the previous
+    # code was deleted when the unit was first claimed -- so the setup screen
+    # said "enter the code below" with nothing below it.
+    code = None
     with contextlib.suppress(Exception):
-        hotspot_start()
-    return {"reset": "full", "hotspot": "FlightRadar-Setup"}
+        code = ensure_claim_code()
+
+    # 6. leave it reachable and claimable by its next owner
+    hs = None
+    with contextlib.suppress(Exception):
+        hs = hotspot_start()
+    return {"reset": "full", "hotspot": (hs or {}).get("ssid", "FlightRadar-Setup"),
+            "claimCode": code}
 
 
 # ------------------------------------------------------------------- verbs
@@ -796,7 +821,8 @@ VERBS = {
     "hotspot_start": lambda p: hotspot_start(),
     "hotspot_stop": lambda p: hotspot_stop(),
     "hotspot_info": lambda p: {"ssid": "FlightRadar-Setup", "psk": hotspot_psk(),
-                               "active": hotspot_active()},
+                               "active": hotspot_active(),
+                               "address": hotspot_address()},
     "set_location": lambda p: set_location(p.get("lat"), p.get("lon")),
     "set_airport": lambda p: set_airport(p.get("code"), p.get("atcMount", "")),
     "tailscale_status": lambda p: tailscale_status(),
@@ -880,6 +906,7 @@ def ensure_claim_code():
     try:
         with open(os.path.join(STATE_DIR, "setup.json")) as f:
             if json.load(f).get("claimed"):
+                # already owned -- no code, so it cannot be re-claimed
                 with contextlib.suppress(FileNotFoundError):
                     os.unlink(os.path.join(RUN_DIR, "claim-code"))
                 return None
