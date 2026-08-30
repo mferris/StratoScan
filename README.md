@@ -188,11 +188,15 @@ before you do:
   before it touches the DOM.** Some of it — a photographer's display name on
   planespotters.net, for instance — is third-party user-submitted content
   this app doesn't control.
-- **The shared same-origin stores** (`deploy/approach-store.py`,
-  `deploy/sighting-store.py`) have no authentication — by design, low
-  stakes, matches how the app itself treats that data — but they do cap
-  request body size and validate input shape, since they're reachable from
-  wherever you expose the page.
+- **The shared same-origin stores are read-only for public traffic.**
+  `deploy/approach-store.py` and `deploy/sighting-store.py` have no
+  authentication of their own, which was fine while only the LAN could reach
+  them. Once the page is exposed through a tunnel they become writable by
+  anyone holding the URL — confirmed by injecting a fake sighting through it
+  — so the gateway now refuses any non-GET to `/sightings` and `/approaches`
+  from public traffic (`READ_ONLY_PUBLIC_PATHS`). Reads stay open, because
+  public viewers need them; the kiosk and LAN still write normally. They also
+  cap request body size and validate input shape.
 - **Privileged endpoints are refused for public traffic**, and the check
   normalises the path first. `/wake` (which powers the kiosk's panel on) and
   `/setup` are listed in `LOCAL_ONLY_PATHS` in

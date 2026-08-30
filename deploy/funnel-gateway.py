@@ -38,6 +38,17 @@ COORD_PRECISION = 2  # decimal places -- ~0.7mi at this latitude
 # directly and are unaffected by this.
 LOCAL_ONLY_PATHS = ("/wake", "/setup")
 
+# Paths that may be READ publicly but must not be WRITTEN publicly.
+#
+# The shared stores accept POSTs with no authentication -- fine when the only
+# clients were on the LAN, but the Funnel makes them writable by anyone
+# holding the URL. Verified: a POST through the tunnel successfully injected
+# a fake sighting. A stranger could pollute the sighting counts and the
+# approach heatmap, which is months of accumulated data.
+#
+# Reads stay open, because the page itself needs them from public viewers.
+READ_ONLY_PUBLIC_PATHS = ("/sightings", "/approaches")
+
 # A future edit that empties or mistypes this list would silently expose the
 # device's privileged endpoints to the public internet. Fail loudly instead.
 assert "/wake" in LOCAL_ONLY_PATHS and "/setup" in LOCAL_ONLY_PATHS, \
@@ -93,6 +104,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         for k, v in SECURITY_HEADERS.items():
             self.send_header(k, v)
 
+    @classmethod
+    def _is_read_only_public(cls, path):
+        base = cls._normalise(path)
+        return any(base == p or base.startswith(p + "/")
+                   for p in READ_ONLY_PUBLIC_PATHS)
+
     def _dispatch(self):
         """Single gate for every HTTP method.
 
@@ -101,6 +118,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         """
         if self._is_local_only(self.path):
             self.send_error(404)  # 404, not 403 -- don't confirm it exists
+            return
+        # Public traffic may read the shared stores but never write them.
+        if self.command != "GET" and self._is_read_only_public(self.path):
+            self.send_error(403, "Read-only")
             return
         if self.command == "GET" and self.path == ROUNDED_PATH:
             self._serve_rounded_receiver_json()
