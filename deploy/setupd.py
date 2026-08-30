@@ -612,6 +612,12 @@ def tailscale_status():
             funnel_on = any(bool(v) for v in (cfg.get("AllowFunnel") or {}).values())
         except Exception:
             funnel_on = False
+    if not funnel_on:
+        # Cross-check: serve status can report AllowFunnel null while funnel
+        # status still shows it live, depending on how it was configured.
+        fp = run([TAILSCALE, "funnel", "status"], timeout=20)
+        if fp.returncode == 0 and b"Funnel on" in fp.stdout:
+            funnel_on = True
     return {
         "state": d.get("BackendState", "unknown"),
         "hostname": self_.get("HostName"),
@@ -637,7 +643,11 @@ def tailscale_up(authkey, hostname, enable_funnel=False):
             os.unlink(keyfile)
 
     result = tailscale_status()
-    if enable_funnel:
+    # A rename invalidates any existing serve/funnel config, so re-apply it
+    # whenever the node was already publishing. Without this the owner ends up
+    # with a device that reports itself connected and a public URL that 404s
+    # at DNS, with nothing obviously wrong in either place.
+    if enable_funnel or result.get("funnel"):
         result["funnel"] = tailscale_funnel(True)
     return result
 
@@ -716,10 +726,25 @@ def tailscale_funnel(enabled):
             if p.stdout.strip() != b"404":
                 raise Err("funnel_guard_failed",
                           f"gateway did not refuse {path} (got {p.stdout.decode()})")
-        run([TAILSCALE, "serve", "--bg", "--https=443", "http://127.0.0.1:8085"], timeout=45)
-        run([TAILSCALE, "funnel", "--bg", "443", "on"], timeout=45)
+        # Clear any existing serve config first. Renaming the node (which
+        # setting a hostname during setup does) leaves the old config bound to
+        # the PREVIOUS name -- serve status then shows a hostname the device no
+        # longer has, funnel is off, and the public URL simply does not exist.
+        # Observed exactly that after a rename from flightwall to
+        # flightradar-rdu.
+        # Tailscale 1.5x changed this CLI. The old `funnel <port> on` form now
+        # exits with "the CLI for serve and funnel has changed" -- and because
+        # nothing checked that exit code, the device reported success while
+        # quietly staying tailnet-only. `funnel --bg <target>` sets up serve
+        # and funnel together.
+        run([TAILSCALE, "serve", "reset"], timeout=30)
+        p = run([TAILSCALE, "funnel", "--bg", "http://127.0.0.1:8085"], timeout=60)
+        if p.returncode != 0:
+            raise Err("funnel_failed",
+                      redact(p.stderr.decode("utf-8", "replace") or
+                             p.stdout.decode("utf-8", "replace"))[:300])
     else:
-        run([TAILSCALE, "funnel", "443", "off"], timeout=45)
+        run([TAILSCALE, "funnel", "reset"], timeout=45)
     st = tailscale_status()
     return {"enabled": st.get("funnel", bool(enabled)),
             "publicUrl": st.get("publicUrl")}
