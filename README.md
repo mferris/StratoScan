@@ -12,8 +12,9 @@ Point an RTL-SDR dongle and a small antenna at the sky, and FlightRadar turns
 whatever ADS-B traffic it hears into a live circular radar display: bearing,
 range, altitude, speed, heading, airline, aircraft type, route, and (when
 available) a real photo of the airframe. It's designed to run unattended,
-full-screen, on a small round touch panel mounted on a wall — but it's also
-just a web page, so it runs fine in a normal browser too.
+full-screen, on a small round touch panel — on a wall, or in the printed desk
+cradle — but it's also just a web page, so it runs fine in a normal browser
+too.
 
 - **Live tracking** — polls a local [`readsb`](https://github.com/wiedehopf/readsb)
   instance every second; altitude-coded blips, smooth interpolation between
@@ -28,10 +29,11 @@ just a web page, so it runs fine in a normal browser too.
   fetched, so a restart doesn't wait on a fresh query), darkened and centered
   on the receiver, with an always-on live weather radar overlay and an
   optional satellite lightning-strike overlay
-- **RDU approach visualization** — a real density heatmap built from actually
-  observed landings over time, not a canned flight-path overlay — busier
-  stretches of the corridor read as more visually distinct than lightly-used
-  ones, and it keeps sharpening the longer the receiver runs
+- **Approach visualization** — a real density heatmap of your home airport,
+  built from actually observed landings over time rather than a canned
+  flight-path overlay — busier stretches of the corridor read as more
+  visually distinct than lightly-used ones, and it keeps sharpening the
+  longer the receiver runs
 - **Sighting counts** — every aircraft tracks how many distinct times this
   receiver has picked it up, and how many of those came within the
   nearby-alert radius; shown as a "SEEN ×N" badge once it's more than one,
@@ -47,19 +49,31 @@ just a web page, so it runs fine in a normal browser too.
 - **Emergency squawk alert** — an unmistakable alert (distinct chime + a red
   auto-popped panel) for 7500 (hijack), 7600 (radio failure), or 7700
   (general emergency)
-- **RDU landing/takeoff highlight** — a bright green ring around the blip and
-  label of anything currently landing or departing at RDU, plus an optional
-  quiet chime; pairs with an optional link to LiveATC.net's live
-  approach/departure audio for the airport
+- **Landing/takeoff highlight** — a bright green ring around the blip and
+  label of anything currently landing or departing at your home airport, plus
+  an optional quiet chime; pairs with an optional link to LiveATC.net's live
+  approach/departure audio
 - **Night dimming** — the display darkens between sunset and sunrise,
   computed from the receiver's own coordinates so it tracks the seasons
   without any configuration; alerts can optionally undim it
 - **Screensaver** — the panel genuinely powers off after a configurable idle
   period (see [`deploy/`](deploy/)) and wakes on touch, or on an alert if
   you've enabled that
-- **Settings panel** — a gear icon opens on-screen toggles for all of the
-  above (nearby alert, emergency squawks, RDU landing/takeoff chime, RDU ATC
-  audio link, night dimming), persisted per-device
+- **Settings menu** — a gear icon opens a menu grouped into short screens
+  (Alerts, Map overlays, Display, ATC audio, Device setup) rather than one
+  long list; every setting is one tap from the top, and the panel scrolls by
+  dragging anywhere on it. Choices persist per-device
+- **Configurable home airport** — 433 continental-US airports are bundled, so
+  a unit can be moved or given away and re-pointed at a different field. The
+  landing highlight, approach heatmap and ATC link all follow it
+- **Set up entirely from the touchscreen** — WiFi (with an on-screen
+  keyboard), receiver location, home airport, remote access and a factory
+  reset, all without a phone or a shell. This is also the recovery path if
+  the admin password is ever forgotten
+- **First-run provisioning for a device you did not configure** — a unit with
+  no known network raises its own `FlightRadar-Setup` WiFi and displays what
+  to join, what address to open and a claim code. A captive portal makes the
+  setup page open automatically on a phone
 - **Touch detail panel** — tap any aircraft for registration, squawk, vertical
   rate, and more
 - **Native iOS companion app** — a SwiftUI rebuild of the same radar for
@@ -113,14 +127,50 @@ the deployed app.
 **Deploying as a kiosk**: `index.html` is a static file — copy it to your
 receiver's web server docroot (same origin as `readsb`'s own web UI, to avoid
 CORS). [`deploy/`](deploy/) has a systemd unit for launching Chromium in
-kiosk mode on boot, plus four small same-origin proxy services: aircraft
-photos, the shared approach-track store, the shared sighting-count store, and
-(only relevant if you expose the page to the public internet, e.g. via
-Tailscale Funnel) a filtering gateway that rounds the receiver's exact
-coordinates before they leave your network — see [Security](#security)
-below. Two of those units are `systemctl --user` services rather than
-system ones (the screensaver and the display-wake endpoint), because they
-need the graphical session's `WAYLAND_DISPLAY` to reach the compositor.
+kiosk mode on boot, plus small same-origin services: aircraft photos, the
+shared approach-track store, the shared sighting-count store, the display-wake
+endpoint, and (only relevant if you expose the page to the public internet,
+e.g. via Tailscale Funnel) a filtering gateway that rounds the receiver's
+exact coordinates before they leave your network — see
+[Security](#security) below.
+
+**Device setup (optional)**: everything above works on a receiver you
+configured yourself. If you want a unit someone *else* can set up — moved to a
+new house, or given away — install the setup server:
+
+```bash
+sudo sh deploy/install-setup-server.sh
+```
+
+That adds a web setup page at `http://<device>/setup`, the same screens on the
+radar's own touchscreen, and the pieces that make a device with no network
+recoverable. The installer refuses to finish unless it can prove the public
+gateway is refusing `/setup`, since that page accepts a WiFi password and a
+Tailscale auth key.
+
+How a fresh unit behaves:
+
+1. It finds no known WiFi, so after ~45s it raises `FlightRadar-Setup`
+2. Its screen shows that network's name and password, the address to open,
+   and an 8-character claim code
+3. A phone joining that network gets the setup page automatically, via the
+   captive portal
+4. WiFi, receiver location, home airport and an admin password are set; the
+   setup screen disappears
+
+The same things can be done on the touchscreen instead, which is the only
+route if the admin password is ever forgotten. **Erase everything** clears the
+WiFi, the Tailscale identity, the password, the coordinates *and* the
+accumulated flight history and approach heatmap — the last two are a record of
+what flew over the previous owner's house — then raises the hotspot so the
+next person can claim it.
+
+Two services run as `systemctl --user` rather than system units (the
+screensaver and display-wake endpoint) because they need the graphical
+session's `WAYLAND_DISPLAY`. A `flightradar-netwatchdog` timer rolls back any
+unconfirmed network change at boot and raises the hotspot when there is no
+usable connection — so a mistyped WiFi password reverts itself rather than
+stranding the device.
 
 **The enclosure**: [`enclosure/`](enclosure/) has the parametric OpenSCAD
 source for the printed case — shell, bezel, retainer and desk cradle, plus
@@ -140,9 +190,10 @@ Settings screen.
 ```
 index.html      the whole web app — single file, no build step
 dev-server.py   local-only dev proxy (not deployed)
-deploy/         systemd units + same-origin proxy services for the kiosk
+deploy/         systemd units, same-origin services, and the setup server
 docs/           hardware/software spec, original prototype, screenshots
 enclosure/      parametric OpenSCAD source for the 3D-printed case
+tests/          regression tests for the security-critical paths
 vendor/         vendored MapLibre GL JS (self-hosted, no CDN dependency)
 ios/            native SwiftUI companion app
 ```
@@ -164,8 +215,9 @@ these choices, though no code is shared — its license is unclear):
 - **[planespotters.net](https://www.planespotters.net/)** — aircraft photos
 - **[Wikipedia / Wikimedia Commons](https://www.wikipedia.org/)** — representative type photos when no tail-specific one exists
 - **[adsbdb.com](https://www.adsbdb.com/)** — registered-owner lookups for confirmed-private aircraft
-- **[LiveATC.net](https://www.liveatc.net/)** — RDU ATC audio, opened as a link to their own player (see [Security](#security) below for why it's a link, not an embed)
+- **[LiveATC.net](https://www.liveatc.net/)** — ATC audio for the configured airport, opened as a link to their own player (see [Security](#security) below for why it's a link, not an embed)
 - **[SSEC RealEarth](https://realearth.ssec.wisc.edu/)** (UW-Madison) — satellite-observed lightning strike density (GOES-East GLM)
+- **[OurAirports](https://ourairports.com/data/)** (public domain) — the bundled airport table in [`deploy/airports.json`](deploy/airports.json)
 
 Please respect each service's own terms of use if you build on this.
 
@@ -206,10 +258,31 @@ before you do:
   traversal before routing, `/./wake`, `/x/../wake` and `/%77ake` all reached
   the endpoint anyway. [`tests/test_funnel_gateway_paths.py`](tests/test_funnel_gateway_paths.py)
   pins the behaviour — run it after touching that filter.
+- **The setup server is split across a privilege boundary.** The HTTP tier
+  runs unprivileged and can only ask a small root helper
+  ([`deploy/setupd.py`](deploy/setupd.py)) to perform a closed list of verbs
+  over a unix socket — there is no "run nmcli" passthrough, so compromising
+  the HTTP parser does not yield arbitrary root. The root helper re-validates
+  every parameter rather than trusting the caller, uses no shell, and keeps
+  secrets out of argv (where any local user could read them from `/proc`).
+  [`tests/test_setupd_validation.py`](tests/test_setupd_validation.py) pins
+  the validation table and the `/etc/default/readsb` rewriter, which is a
+  root-sourced shell file and therefore a command-execution sink.
+- **On-device setup deliberately needs no password**, and the endpoint behind
+  it is bound to loopback and not proxied, so reaching it means already being
+  on the device. That is the same physical assumption every appliance makes,
+  and it has to be true: it is the only way back in for someone who has
+  forgotten the admin password. The web route, which *is* reachable across
+  the LAN, still requires it.
+- **Erasing a unit removes the accumulated data too.** The sighting counts
+  and approach heatmap are a record of which aircraft passed over the
+  previous owner's house, so a full reset clears them along with the
+  credentials and coordinates. A settings-only reset keeps them, and keeps
+  the network, so it is safe to run remotely.
 - **No secrets or API keys anywhere.** Every external service this app talks
   to is free and keyless (see [Data sources](#data-sources) above), so
   there's nothing to leak.
-- **RDU ATC audio is a link, not an embed.** LiveATC.net's
+- **ATC audio is a link, not an embed.** LiveATC.net's
   [Terms of Use](https://www.liveatc.net/legal/) require consulting them
   before linking directly to a raw audio stream, and separately bar making
   their service "directly available" through another dedicated application,
