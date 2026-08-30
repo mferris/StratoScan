@@ -34,7 +34,7 @@
     --ground: #6b8087;
     --taxi: #4a90d9;
     --bad: #ff5d5d;
-    --rdu-highlight: #39ff6a;
+    --airport-highlight: #39ff6a;
     --panel-bg: rgba(5, 8, 10, 0.78);
     --panel-bg-strong: rgba(8, 12, 14, 0.96);
     --panel-border: rgba(255, 255, 255, 0.1);
@@ -65,7 +65,7 @@
     --ground: #5c6b6e;
     --taxi: #1d5fa8;
     --bad: #c0202e;
-    --rdu-highlight: #0f9d4a;
+    --airport-highlight: #0f9d4a;
     --panel-bg: rgba(255, 255, 255, 0.82);
     --panel-bg-strong: rgba(255, 255, 255, 0.95);
     --panel-border: rgba(16, 24, 26, 0.14);
@@ -104,7 +104,7 @@
     --ground: #999999;
     --taxi: #009e73;
     --bad: #ff4d4d;
-    --rdu-highlight: #00e5ff;
+    --airport-highlight: #00e5ff;
     --panel-bg: rgba(0, 0, 0, 0.92);
     --panel-bg-strong: rgba(0, 0, 0, 0.97);
     --panel-border: rgba(255, 255, 255, 0.35);
@@ -265,14 +265,14 @@
     letter-spacing: 0.02em;
   }
   /* Matches the highlight ring drawn around the blip itself (see
-     COLORS.rduHighlight/drawPlanes) -- a rectangular outline rather than a
+     COLORS.airportHighlight/drawPlanes) -- a rectangular outline rather than a
      literal circle, since the tag is a box, but same color/purpose: this
      plane is plausibly on RDU's frequency right now (landing/taking off
-     within RDU_PROXIMITY_NM), worth a glance if ATC audio is on. */
-  .tag.rdu-phase {
-    outline: 2px solid var(--rdu-highlight);
+     within AIRPORT_PROXIMITY_NM), worth a glance if ATC audio is on. */
+  .tag.airport-phase {
+    outline: 2px solid var(--airport-highlight);
     outline-offset: 1px;
-    box-shadow: 0 0 8px 1px color-mix(in srgb, var(--rdu-highlight) 55%, transparent);
+    box-shadow: 0 0 8px 1px color-mix(in srgb, var(--airport-highlight) 55%, transparent);
   }
 
   #toast {
@@ -1069,7 +1069,7 @@ function refreshCanvasColors() {
   COLORS.ringLabel = read('--ring-label');
   COLORS.crosshair = read('--crosshair');
   COLORS.compass = read('--compass');
-  COLORS.rduHighlight = read('--rdu-highlight');
+  COLORS.airportHighlight = read('--airport-highlight');
   COLORS.text = read('--text');
 }
 refreshCanvasColors();
@@ -1235,9 +1235,9 @@ function destinationPoint(lat, lon, bearingDeg, distanceNm) {
 // flagged. Originally recolored the blip/label entirely (COLOR_LANDING red /
 // COLOR_TAKEOFF green), but that read poorly in practice -- swapping the
 // plane's whole identity color made it harder to track, not easier. Now
-// just a classification (rduPhaseOf below) that a highlight ring is drawn
+// just a classification (airportPhaseOf below) that a highlight ring is drawn
 // around instead, leaving the plane's normal altitude color alone -- see
-// COLORS.rduHighlight (theme-aware, see refreshCanvasColors) and
+// COLORS.airportHighlight (theme-aware, see refreshCanvasColors) and
 // drawPlanes/tag-rendering below.
 // ---- Home airport, configurable ------------------------------------------
 // These were hardcoded to RDU. They are now defaults, overridden at startup
@@ -1282,16 +1282,16 @@ async function loadAirportConfig() {
   }
 }
 
-const RDU_PROXIMITY_NM = 0.869;  // 1 statute mile
-const RDU_VERT_FT = 500;         // within this of field elevation
-const RDU_VRATE_MIN = 150;       // ft/min -- filters out level-flight noise near zero
+const AIRPORT_PROXIMITY_NM = 0.869;  // 1 statute mile
+const AIRPORT_VERT_FT = 500;         // within this of field elevation
+const AIRPORT_VRATE_MIN = 150;       // ft/min -- filters out level-flight noise near zero
 
-function rduPhaseOf(p) {
+function airportPhaseOf(p) {
   if (typeof p.alt !== 'number' || p.lat == null || p.lon == null || p.vrate == null) return null;
-  if (Math.abs(p.alt - AIRPORT.elevFt) > RDU_VERT_FT) return null;
-  if (haversineBearingRange(AIRPORT.lat, AIRPORT.lon, p.lat, p.lon).range > RDU_PROXIMITY_NM) return null;
-  if (p.vrate <= -RDU_VRATE_MIN) return 'landing';
-  if (p.vrate >= RDU_VRATE_MIN) return 'takeoff';
+  if (Math.abs(p.alt - AIRPORT.elevFt) > AIRPORT_VERT_FT) return null;
+  if (haversineBearingRange(AIRPORT.lat, AIRPORT.lon, p.lat, p.lon).range > AIRPORT_PROXIMITY_NM) return null;
+  if (p.vrate <= -AIRPORT_VRATE_MIN) return 'landing';
+  if (p.vrate >= AIRPORT_VRATE_MIN) return 'takeoff';
   return null;
 }
 
@@ -1305,7 +1305,7 @@ function rduPhaseOf(p) {
 // which OSM/Overpass has real geometry for -- FAA approach plates are PDF
 // charts, not simple line data); see extendedApproachLines() above for the
 // free-but-approximate stand-in this complements.
-const RDU_APPROACH_RADIUS_NM = 12;       // track candidate points out to this far from RDU
+const AIRPORT_APPROACH_RADIUS_NM = 12;       // track candidate points out to this far from RDU
 function approachCeilingFt() { return AIRPORT.elevFt + 6000; } // ignore traffic well above a normal approach profile
 // "Actually landed" confirmation window -- deliberately looser than a
 // well-sited receiver would need. This receiver's antenna isn't mast-
@@ -1317,7 +1317,7 @@ function approachCeilingFt() { return AIRPORT.elevFt + 6000; } // ignore traffic
 // discarded. Revisit (tighten back up) once the new antenna is mast-mounted
 // and reception characteristics actually improve -- these values are a
 // starting point for current conditions, not a settled calibration.
-const RDU_APPROACH_CONFIRM_RADIUS_NM = 4;
+const AIRPORT_APPROACH_CONFIRM_RADIUS_NM = 4;
 function approachConfirmAltFt() { return AIRPORT.elevFt + 3000; }
 // Backed by a small same-origin service (deploy/approach-store.py, proxied
 // at /approaches -- see 91-flightradar-approach-store.conf) instead of
@@ -1433,15 +1433,15 @@ function updateApproachTracking(pl, lat, lon, alt) {
   if (typeof lat !== 'number' || typeof lon !== 'number') return;
   if (!pl.approachPoints) pl.approachPoints = [];
 
-  const rduRange = haversineBearingRange(AIRPORT.lat, AIRPORT.lon, lat, lon).range;
+  const airportRange = haversineBearingRange(AIRPORT.lat, AIRPORT.lon, lat, lon).range;
 
-  if (alt === 'ground' && rduRange <= RDU_APPROACH_CONFIRM_RADIUS_NM) {
+  if (alt === 'ground' && airportRange <= AIRPORT_APPROACH_CONFIRM_RADIUS_NM) {
     commitApproachTrack(pl.approachPoints);
     pl.approachPoints = [];
     return;
   }
 
-  const withinRadius = rduRange <= RDU_APPROACH_RADIUS_NM;
+  const withinRadius = airportRange <= AIRPORT_APPROACH_RADIUS_NM;
   const belowCeiling = typeof alt === 'number' && alt <= approachCeilingFt();
   if (withinRadius && belowCeiling) {
     pl.approachPoints.push([lon, lat]);
@@ -1458,7 +1458,7 @@ function confirmApproachOnDrop(pl) {
   if (!pl.approachPoints || !pl.approachPoints.length) return;
   if (typeof pl.alt !== 'number' || pl.alt > approachConfirmAltFt()) return;
   if (pl.lat == null || pl.lon == null) return;
-  if (haversineBearingRange(AIRPORT.lat, AIRPORT.lon, pl.lat, pl.lon).range > RDU_APPROACH_CONFIRM_RADIUS_NM) return;
+  if (haversineBearingRange(AIRPORT.lat, AIRPORT.lon, pl.lat, pl.lon).range > AIRPORT_APPROACH_CONFIRM_RADIUS_NM) return;
   commitApproachTrack(pl.approachPoints);
 }
 
@@ -1677,7 +1677,7 @@ function overpassToGeoJSON(elements) {
 // heading (that's what "final approach" means), so extending each runway's
 // centerline outward a representative distance is a reasonable placeholder.
 // This is deliberately just an approximation, styled faintly/dashed to read
-// as one -- see RDU_APPROACH_* below for the real thing, built from
+// as one -- see AIRPORT_APPROACH_* below for the real thing, built from
 // actually-observed landings over time.
 const RUNWAY_EXTENSION_NM = 8; // roughly a typical ILS/RNAV final approach segment length
 
@@ -2220,17 +2220,28 @@ const ALERT_CLEAR_RADIUS_NM = 2.0;  // slightly wider exit threshold, so a
 // ---- Alert settings -------------------------------------------------
 // One place for every alert/sound toggle -- started as a single nearby-alert
 // on/off (the empty-tap gesture below used to flip just that), but once
-// emergency squawks, the RDU phase chime, and ATC audio all became separate
+// emergency squawks, the landing/takeoff chime, and ATC audio all became separate
 // concerns, a single blind toggle stopped making sense. localStorage, not
 // the shared server-side stores used elsewhere (sightings, approach track)
 // -- this is a personal display preference for whoever's looking at this
 // particular screen, not data that should be the same for every viewer.
 const ALERT_SETTINGS_KEY = 'flightradar_alert_settings_v1';
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rduPhase: true, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true };
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, airportPhase: true, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true };
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
-  if (saved && typeof saved === 'object') alertSettings = { ...DEFAULT_ALERT_SETTINGS, ...saved };
+  if (saved && typeof saved === 'object') {
+    // This toggle was stored as 'rduPhase' before the airport became
+    // configurable. Carry the old value over rather than letting the spread
+    // below fall through to the default -- the default is ON, so a device
+    // where someone had deliberately silenced the chime would have started
+    // chiming again on upgrade.
+    if ('rduPhase' in saved && !('airportPhase' in saved)) {
+      saved.airportPhase = saved.rduPhase;
+    }
+    delete saved.rduPhase;
+    alertSettings = { ...DEFAULT_ALERT_SETTINGS, ...saved };
+  }
 } catch (e) {
   // corrupt/unavailable storage -- defaults stand
 }
@@ -2364,7 +2375,7 @@ function playEmergencySound() {
 // enough that anything louder or busier would get old fast. Landing pitches
 // down, takeoff pitches up, so the two are distinguishable by ear without
 // looking at the screen.
-function playRduPhaseSound(phase) {
+function playAirportPhaseSound(phase) {
   playTones(phase === 'landing' ? [[720, 0, 0.16, 0.14]] : [[1040, 0, 0.16, 0.14]]);
 }
 
@@ -2470,24 +2481,24 @@ function closeAtcAudio() {
 }
 
 // ---- RDU landing/takeoff chime -------------------------------------------
-// Reuses rduPhaseOf's own classification (tight radius + real vertical rate
+// Reuses airportPhaseOf's own classification (tight radius + real vertical rate
 // right at field elevation -- see its comment above) so "sounds like a
 // landing/takeoff" always matches "highlighted like one" on screen, rather
 // than keeping a second, possibly-drifting definition of the same thing. No
 // auto-popped panel here, unlike the other two alerts -- RDU traffic is
 // frequent enough that interrupting the display for every one would be a lot
 // more disruptive than a quiet chime.
-function checkRduPhaseAlert(pl) {
+function checkAirportPhaseAlert(pl) {
   if (!pl) return;
-  const phase = rduPhaseOf(pl);
+  const phase = airportPhaseOf(pl);
   if (phase) {
-    if (pl.rduPhaseAlerted !== phase) {
-      pl.rduPhaseAlerted = phase;
-      if (alertSettings.rduPhase) playRduPhaseSound(phase);
+    if (pl.airportPhaseAlerted !== phase) {
+      pl.airportPhaseAlerted = phase;
+      if (alertSettings.airportPhase) playAirportPhaseSound(phase);
       if (alertSettings.atc) ensureAtcAudio();
     }
   } else {
-    pl.rduPhaseAlerted = null;
+    pl.airportPhaseAlerted = null;
   }
 }
 
@@ -2810,7 +2821,7 @@ function applyUpdate(list) {
     updateApproachTracking(planes.get(n.hex), n.lat, n.lon, n.alt);
     checkNearbyAlert(planes.get(n.hex), n.range);
     checkEmergencySquawk(planes.get(n.hex));
-    checkRduPhaseAlert(planes.get(n.hex));
+    checkAirportPhaseAlert(planes.get(n.hex));
   }
 
   // aircraft readsb no longer reports aren't dropped immediately -- they
@@ -2964,8 +2975,8 @@ function drawPlanes(dt) {
     p.opacity = coastAge <= COAST_FRESH_MS ? 1 : Math.max(0, 1 - (coastAge - COAST_FRESH_MS) / COAST_FADE_MS);
 
     const { x, y } = polarToXY(p.bearing, p.range);
-    const color = altColor(p.alt); // no longer overridden for RDU landing/takeoff -- see rduPhaseOf's comment above
-    const rduPhase = rduPhaseOf(p);
+    const color = altColor(p.alt); // no longer overridden for RDU landing/takeoff -- see airportPhaseOf's comment above
+    const airportPhase = airportPhaseOf(p);
     p.anchorX = x * scale;
     p.anchorY = y * scale;
     p.color = color;
@@ -2980,16 +2991,16 @@ function drawPlanes(dt) {
     drawBlipShape(classifyAircraft(p));
     ctx.restore();
 
-    if (rduPhase) {
+    if (airportPhase) {
       // A ring around the blip, drawn un-rotated (it's a circle -- rotating
       // it would be pointless) so it reads as "this plane" regardless of
       // heading, distinct from the blip's own altitude color.
       ctx.save();
       ctx.globalAlpha = p.opacity;
       ctx.translate(x, y);
-      ctx.strokeStyle = COLORS.rduHighlight;
+      ctx.strokeStyle = COLORS.airportHighlight;
       ctx.lineWidth = 2;
-      ctx.shadowColor = COLORS.rduHighlight;
+      ctx.shadowColor = COLORS.airportHighlight;
       ctx.shadowBlur = 8;
       ctx.beginPath();
       ctx.arc(0, 0, 13, 0, Math.PI * 2);
@@ -3005,7 +3016,7 @@ function drawPlanes(dt) {
       tagsEl.appendChild(node);
       tagNodes.set(p.hex, node);
     }
-    node.classList.toggle('rdu-phase', !!rduPhase);
+    node.classList.toggle('airport-phase', !!airportPhase);
     node.style.borderLeft = `2px solid ${color}`;
     node.querySelector('.cs').textContent = p.cs;
     node.querySelector('.cs').style.color = color;
@@ -3522,7 +3533,7 @@ let settingsSection = null;  // null = the menu; otherwise a group key
 function alertSettingsMeta() { return [
   { group: 'alerts', key: 'nearby', label: 'Nearby aircraft alert', sub: 'Auto-pop details + chime for anything within 2 miles' },
   { group: 'alerts', key: 'emergency', label: 'Emergency squawks', sub: '7500 hijack / 7600 radio failure / 7700 emergency' },
-  { group: 'alerts', key: 'rduPhase', label: `${AIRPORT.code} landing/takeoff chime`, sub: `Quiet tone when a plane lands or departs at ${AIRPORT.code}` },
+  { group: 'alerts', key: 'airportPhase', label: `${AIRPORT.code} landing/takeoff chime`, sub: `Quiet tone when a plane lands or departs at ${AIRPORT.code}` },
   {
     group: 'audio', key: 'atc', label: `${AIRPORT.code} ATC audio`,
     sub: 'Opens LiveATC.net’s approach/departure feed in a new tab',
