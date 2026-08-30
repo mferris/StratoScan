@@ -870,6 +870,18 @@ const SWEEP_RAD_PER_SEC = 0.48;
 const TARGET_FPS = 20;
 const FRAME_MIN_MS = 1000 / TARGET_FPS - 4; // slack so vsync jitter doesn't cost a whole frame
 const SMOOTH_TAU = 0.35;         // seconds; exponential smoothing time constant for plane motion
+// A position in aircraft.json is not "now" -- it is the last position message
+// readsb decoded, and `seen_pos` says how long ago that was. Measured against
+// the live feed here, that age runs a median of ~7s and a 90th percentile of
+// ~48s, because ADS-B position squitters arrive far less often than the
+// velocity/altitude ones (and drop out entirely at the edge of coverage).
+// Drawing a blip at that raw fix puts a jet up to 8nm -- a third of the radar
+// radius -- behind where it actually is, trailing its own track, which is
+// what made departures appear to lag the runway they had just left. So the
+// fix is carried forward along the reported ground track before it is
+// plotted, the same dead reckoning tar1090 does.
+const DR_MAX_S = 60;             // stop extrapolating past this; a minute-old fix is a guess, not a position
+const DR_MIN_GS_KT = 25;         // below this the aircraft is taxiing/parked and the track is noise
 const FETCH_INTERVAL_MS = 1000;  // how often we poll aircraft.json
 const STALE_MS = 15000;          // no good fetch in this long -> show NO SIGNAL
 const DROP_MS = 45000;           // no good fetch in this long -> clear stale blips
@@ -1457,8 +1469,13 @@ function updateApproachTracking(pl, lat, lon, alt) {
 function confirmApproachOnDrop(pl) {
   if (!pl.approachPoints || !pl.approachPoints.length) return;
   if (typeof pl.alt !== 'number' || pl.alt > approachConfirmAltFt()) return;
-  if (pl.lat == null || pl.lon == null) return;
-  if (haversineBearingRange(AIRPORT.lat, AIRPORT.lon, pl.lat, pl.lon).range > AIRPORT_APPROACH_CONFIRM_RADIUS_NM) return;
+  // The raw fix, not the dead-reckoned position: this asks "was it over the
+  // field when we lost it", and the fix is the only part of that we actually
+  // observed. Extrapolating a lost contact up to DR_MAX_S forward could
+  // carry it clean past the confirmation radius and discard a real landing.
+  const lat = pl.fixLat ?? pl.lat, lon = pl.fixLon ?? pl.lon;
+  if (lat == null || lon == null) return;
+  if (haversineBearingRange(AIRPORT.lat, AIRPORT.lon, lat, lon).range > AIRPORT_APPROACH_CONFIRM_RADIUS_NM) return;
   commitApproachTrack(pl.approachPoints);
 }
 
@@ -2686,12 +2703,34 @@ function normalizeAircraft(a) {
   // lat/lon — but never trust r_dst/r_dir when HOME_OVERRIDE is active, since
   // those are computed by readsb relative to the real antenna position, not
   // whatever point we're displaying as home
+  const fixLat = typeof a.lat === 'number' ? a.lat : null;
+  const fixLon = typeof a.lon === 'number' ? a.lon : null;
+
+  // Carry the last fix forward to now along the reported ground track (see
+  // DR_MAX_S). Guarded on every input the projection needs, so anything
+  // missing gs/track, sitting still, or carrying no position age at all
+  // simply falls through to the raw fix rather than being flung somewhere.
+  const posAge = Math.min(typeof a.seen_pos === 'number' ? Math.max(0, a.seen_pos) : 0, DR_MAX_S);
+  const trackDeg = a.track ?? a.calc_track ?? null;
+  let lat = fixLat, lon = fixLon;
+  if (fixLat !== null && fixLon !== null && posAge > 0 &&
+      typeof a.gs === 'number' && a.gs >= DR_MIN_GS_KT && typeof trackDeg === 'number') {
+    const [drLon, drLat] = destinationPoint(fixLat, fixLon, trackDeg, a.gs * posAge / 3600);
+    lat = drLat;
+    lon = drLon;
+  }
+
   let bearing, range;
-  if (!HOME_OVERRIDE && typeof a.r_dst === 'number' && typeof a.r_dir === 'number') {
+  // readsb's precomputed r_dst/r_dir describe the raw fix, so they are only
+  // usable when we did not move it -- otherwise they would undo the dead
+  // reckoning above. Same reason HOME_OVERRIDE disqualifies them: they are
+  // measured from the real antenna, not from whatever we display as home.
+  if (!HOME_OVERRIDE && lat === fixLat && lon === fixLon &&
+      typeof a.r_dst === 'number' && typeof a.r_dir === 'number') {
     range = a.r_dst;
     bearing = a.r_dir;
-  } else if (home && typeof a.lat === 'number' && typeof a.lon === 'number') {
-    const hb = haversineBearingRange(home.lat, home.lon, a.lat, a.lon);
+  } else if (home && lat !== null && lon !== null) {
+    const hb = haversineBearingRange(home.lat, home.lon, lat, lon);
     bearing = hb.bearing;
     range = hb.range;
   } else {
@@ -2726,8 +2765,11 @@ function normalizeAircraft(a) {
 
   return {
     hex: a.hex, cs, hasCallsign, bearing, range, alt, hdg, realHdg, speed: a.gs ?? null,
-    lat: typeof a.lat === 'number' ? a.lat : null,
-    lon: typeof a.lon === 'number' ? a.lon : null,
+    // lat/lon are the dead-reckoned display position; fixLat/fixLon are the
+    // raw observed fix, kept because the approach heatmap must be built from
+    // positions that were actually reported -- extrapolated points would
+    // smear the corridor with our own guesses.
+    lat, lon, fixLat, fixLon, posAge,
     squawk: a.squawk ?? null,
     vrate: a.baro_rate ?? a.geom_rate ?? null,
     category: a.category ?? null,
@@ -2767,6 +2809,9 @@ function applyUpdate(list) {
       existing.speed = n.speed;
       existing.lat = n.lat;
       existing.lon = n.lon;
+      existing.fixLat = n.fixLat;
+      existing.fixLon = n.fixLon;
+      existing.posAge = n.posAge;
       existing.airlineIcao = n.airlineIcao;
       existing.airlineLabel = n.airlineLabel;
       existing.badgeColor = n.badgeColor;
@@ -2818,7 +2863,7 @@ function applyUpdate(list) {
       queueRouteLookup(n.cs, n.lat ?? home?.lat ?? 0, n.lon ?? home?.lon ?? 0);
     }
 
-    updateApproachTracking(planes.get(n.hex), n.lat, n.lon, n.alt);
+    updateApproachTracking(planes.get(n.hex), n.fixLat, n.fixLon, n.alt);
     checkNearbyAlert(planes.get(n.hex), n.range);
     checkEmergencySquawk(planes.get(n.hex));
     checkAirportPhaseAlert(planes.get(n.hex));
@@ -2971,8 +3016,15 @@ function drawPlanes(dt) {
 
     // signal lost this poll (or several) -> hold position and fade rather
     // than vanishing outright; see COAST_TOTAL_MS
+    // Two different kinds of staleness, and the blip should show the worse of
+    // them: readsb has stopped mentioning the aircraft at all (coastAge), or
+    // it still reports it but has no fresh position, so what we are drawing
+    // is dead reckoning (posAge). Without the second term a minute-old
+    // extrapolated guess renders as solid as a one-second-old fix.
     const coastAge = now - p.lastSeen;
-    p.opacity = coastAge <= COAST_FRESH_MS ? 1 : Math.max(0, 1 - (coastAge - COAST_FRESH_MS) / COAST_FADE_MS);
+    const coastFade = coastAge <= COAST_FRESH_MS ? 1 : Math.max(0, 1 - (coastAge - COAST_FRESH_MS) / COAST_FADE_MS);
+    const drFade = 1 - 0.45 * Math.min(1, (p.posAge || 0) / DR_MAX_S);
+    p.opacity = Math.min(coastFade, drFade);
 
     const { x, y } = polarToXY(p.bearing, p.range);
     const color = altColor(p.alt); // no longer overridden for RDU landing/takeoff -- see airportPhaseOf's comment above
