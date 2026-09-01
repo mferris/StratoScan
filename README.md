@@ -79,6 +79,13 @@ too.
   no known network raises its own `FlightRadar-Setup` WiFi and displays what
   to join, what address to open and a claim code. A captive portal makes the
   setup page open automatically on a phone
+- **Connectivity status** — a pill at the bottom of the display says whether
+  the radar is actually working: online, on a network that is not reaching
+  the internet, running its own setup WiFi, or receiving no aircraft data.
+  On the device it reports what NetworkManager concludes about the
+  connection; viewed remotely it falls back to whether data is still flowing
+- **Restart from the screen** — a Restart row under Device setup, so a stuck
+  unit does not need someone to find and pull the plug
 - **Touch detail panel** — tap any aircraft for registration, squawk, vertical
   rate, and more
 - **Native iOS companion app** — a SwiftUI rebuild of the same radar for

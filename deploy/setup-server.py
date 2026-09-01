@@ -650,6 +650,15 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
         if path == "/onboard/remote/funnel":
             return self._verb("tailscale_funnel",
                               {"enabled": bool(body.get("enabled"))}, timeout=90)
+        if path == "/onboard/reboot":
+            # Restarting is recoverable in a way reset_full is not, so this
+            # needs no typed word -- but it still takes a confirm token, so a
+            # stray tap on a touchscreen can never reach it through a bare
+            # POST. setupd deliberately exposes no shutdown verb, only this:
+            # an appliance that powers itself off needs a physical visit.
+            if body.get("confirm") != "REBOOT":
+                return self._json(400, {"error": {"message": "Confirmation missing."}})
+            return self._verb("reboot", timeout=30)
         if path == "/onboard/reset":
             # Erasing everything from the screen is the give-it-away path AND
             # the forgotten-password path, so it deliberately needs no
