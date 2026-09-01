@@ -34,6 +34,8 @@
     --ground: #6b8087;
     --taxi: #4a90d9;
     --bad: #ff5d5d;
+    --good: #3ddc97;
+    --warn: #ffb020;
     --airport-highlight: #39ff6a;
     --panel-bg: rgba(5, 8, 10, 0.78);
     --panel-bg-strong: rgba(8, 12, 14, 0.96);
@@ -65,6 +67,8 @@
     --ground: #5c6b6e;
     --taxi: #1d5fa8;
     --bad: #c0202e;
+    --good: #0a7d4f;
+    --warn: #8a5a00;
     --airport-highlight: #0f9d4a;
     --panel-bg: rgba(255, 255, 255, 0.82);
     --panel-bg-strong: rgba(255, 255, 255, 0.95);
@@ -104,6 +108,8 @@
     --ground: #999999;
     --taxi: #009e73;
     --bad: #ff4d4d;
+    --good: #009e73;
+    --warn: #e69f00;
     --airport-highlight: #00e5ff;
     --panel-bg: rgba(0, 0, 0, 0.92);
     --panel-bg-strong: rgba(0, 0, 0, 0.97);
@@ -465,6 +471,53 @@
      edge as possible," same as labels already sometimes overlap each
      other during heavy traffic -- the button still renders on top
      (z-index below) and stays tappable either way. */
+  /* Connectivity, bottom-centre, mirroring the .hud block at the top. Always
+     present rather than only-on-failure like .status above it: the question
+     this answers is "is it working?", and a thing that is invisible when
+     healthy cannot answer that -- you can never tell working from broken-and-
+     silent. Sits below .status (8%) so both can show at once. */
+  .netpill {
+    position: absolute;
+    /* Just inside the round bezel, below the .status banner at 8% so both can
+       show at once. */
+    bottom: 4.6%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: var(--panel-bg);
+    border: 1px solid color-mix(in srgb, var(--mid) 28%, transparent);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    cursor: pointer;
+    white-space: nowrap;
+    /* Same reason #gearBtn carries one: #tags comes later in the markup, so
+       without this any aircraft label drifting to the bottom of the disc
+       paints straight over the pill -- which is how the first deploy of this
+       buried it under a JetBlue label. */
+    z-index: 5;
+  }
+  .netpill .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    box-shadow: 0 0 6px currentColor;
+    flex: none;
+  }
+  .netpill.ok    { color: var(--good); }
+  .netpill.warn  { color: var(--warn); }
+  .netpill.bad   { color: var(--bad); }
+  .netpill.ok .dot   { background: var(--good); }
+  .netpill.warn .dot { background: var(--warn); }
+  .netpill.bad .dot  { background: var(--bad); }
+
   #gearBtn {
     position: absolute;
     top: 50%;
@@ -815,6 +868,7 @@
     <div class="count" id="count">0 AIRCRAFT</div>
   </div>
   <div class="status" id="status">NO SIGNAL — CHECK RECEIVER</div>
+  <div class="netpill" id="netPill"><span class="dot"></span><span id="netPillText">CHECKING…</span></div>
   <div id="tags"></div>
   <div id="toast"></div>
   <div id="detailBackdrop"></div>
@@ -2227,6 +2281,8 @@ function applyNightDim() {
 function wakeScreenForAlert() {
   if (!alertSettings.alertWake) return;
   nightWakeUntil = Date.now() + NIGHT_WAKE_MS;
+  refreshNetStatus();
+  setInterval(refreshNetStatus, NET_STATUS_POLL_MS);
   applyNightDim();
   fetch('/wake', { method: 'POST' }).catch(() => {});
 }
@@ -2425,6 +2481,79 @@ function checkNearbyAlert(pl, range) {
     pl.alerted = false; // free to re-alert if it later comes back around
   }
 }
+
+// ---- Connectivity status -------------------------------------------------
+// Answers one question at a glance: is this thing working? Two independent
+// halves, because they fail independently and the fix differs.
+//
+//   the receiver  -- is aircraft data still arriving? Known from lastGoodFetch,
+//                    so this half works from any origin, laptop included.
+//   the network   -- is the device on a network, and does that network
+//                    actually reach the internet? Only the device itself can
+//                    answer that, via the loopback-only setup listener, so a
+//                    remote viewer falls back to the receiver half alone.
+//
+// NetworkManager already runs its own connectivity probe, so setupd reports
+// what NM concluded rather than this page making an outbound request to some
+// third party to test the line. "limited" is the interesting state: associated
+// with an IP but reaching nothing -- exactly the case an address alone cannot
+// distinguish, and exactly what a page full of blank map tiles looks like.
+const NET_STATUS_POLL_MS = 30 * 1000;
+let netInfo = null;        // last /onboard payload, or null if unreachable
+let netInfoReachable = false;
+
+async function refreshNetStatus() {
+  try {
+    const res = await fetch(ONBOARD_URL, { cache: 'no-store' });
+    if (res.ok) { netInfo = await res.json(); netInfoReachable = true; }
+  } catch (e) {
+    // Not on the device (a laptop, or the public URL). Not an error: the
+    // receiver half below still works, and claiming the network is down
+    // because we cannot ask would be worse than saying less.
+    netInfoReachable = false;
+  }
+  renderNetStatus();
+}
+
+function netStatusState() {
+  const dataAge = performance.now() - lastGoodFetch;
+  const dataDead = !connected || dataAge > STALE_MS;
+
+  if (netInfoReachable && netInfo) {
+    const n = netInfo.network || {};
+    const hotspot = n.hotspotActive || (netInfo.hotspot && netInfo.hotspot.active);
+    if (hotspot) return { cls: 'warn', text: 'SETUP WIFI', detail: 'Broadcasting its own setup network — not connected to your WiFi' };
+    if (!n.ipv4) return { cls: 'bad', text: 'NO NETWORK', detail: 'Not connected to any network' };
+    if (n.connectivity === 'limited' || n.connectivity === 'portal') {
+      return { cls: 'warn', text: 'NO INTERNET',
+               detail: `On ${n.ssid || 'the network'} (${n.ipv4}) but it is not reaching the internet` };
+    }
+    if (dataDead) return { cls: 'bad', text: 'NO RECEIVER', detail: `Online via ${n.ssid || 'network'} (${n.ipv4}), but no aircraft data` };
+    const pub = netInfo.remote && netInfo.remote.funnelUrl;
+    return { cls: 'ok', text: 'ONLINE',
+             detail: `${n.ssid ? n.ssid + ' · ' : ''}${n.ipv4}${pub ? ' · public page live' : ''}` };
+  }
+
+  // Remote viewer: the page loaded, so the device is plainly reachable --
+  // all that is left to report is whether data is still flowing.
+  if (dataDead) return { cls: 'bad', text: 'NO DATA', detail: 'The radar is reachable but is not sending aircraft data' };
+  return { cls: 'ok', text: 'ONLINE', detail: 'Receiving aircraft data' };
+}
+
+function renderNetStatus() {
+  const el = document.getElementById('netPill');
+  if (!el) return;
+  const st = netStatusState();
+  el.classList.remove('ok', 'warn', 'bad');
+  el.classList.add(st.cls);
+  document.getElementById('netPillText').textContent = st.text;
+  el.dataset.detail = st.detail;
+}
+
+document.getElementById('netPill').addEventListener('click', (e) => {
+  e.stopPropagation();
+  showToast(document.getElementById('netPill').dataset.detail || '', 6000);
+});
 
 // ---- Rare aircraft alert -------------------------------------------------
 // The point of a receiver that has been running in one place for months is
@@ -3390,10 +3519,15 @@ function drawPlanes(dt) {
   countEl.textContent = inRange.length + (inRange.length === 1 ? ' AIRCRAFT' : ' AIRCRAFT');
 }
 
+let lastNetPillState = null;
 function updateStatus() {
   const now = performance.now();
   const stale = !connected || (now - lastGoodFetch) > STALE_MS;
   statusEl.classList.toggle('show', stale);
+  // Cheap enough to evaluate per frame; only touch the DOM when the answer
+  // actually changes, since this runs inside the render loop.
+  const s = netStatusState().text;
+  if (s !== lastNetPillState) { lastNetPillState = s; renderNetStatus(); }
 
   if ((now - lastGoodFetch) > DROP_MS && planes.size > 0) {
     planes.clear();
@@ -3884,6 +4018,20 @@ function renderDeviceSetup() {
              <div class="sp-sub">Shows a link to open on your phone</div></div>
         <div class="sp-chevron">&#8250;</div></div>`;
   }
+  if (deviceView === 'reboot') {
+    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Restart this radar</div>
+      <div class="sp-sub" style="padding:10px 0;line-height:1.7">
+        The screen will go dark and the radar will come back on its own in
+        about a minute. Nothing is erased — your WiFi, location, settings and
+        flight history are all kept.<br><br>
+        Aircraft in the air right now will simply be picked up again once the
+        receiver is listening.</div>
+      ${busy}${msg}
+      <div class="sp-menu-row" data-act="reboot-confirm">
+        <div><div class="sp-label">Restart now</div>
+             <div class="sp-sub">Tap to confirm</div></div>
+        <div class="sp-chevron">&#8250;</div></div>`;
+  }
   if (deviceView === 'reset') {
     return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Erase everything</div>
       <div class="sp-sub" style="padding:10px 0;line-height:1.7">
@@ -3918,6 +4066,10 @@ function renderDeviceSetup() {
   const hsNow = hs2.active
     ? `On — join ${hs2.ssid}, then open http://${hs2.address || '10.42.0.1'}/setup`
     : 'Off — turn on to set this radar up from a phone';
+  // Nothing destructive here, so the sub-line is used for reassurance rather
+  // than warning: say what a restart costs, since on an appliance with no
+  // keyboard "restart" can sound scarier than it is.
+  const rebootNow = 'Takes about a minute — settings and history are kept';
   const rem = d.remote || {};
   const remNow = rem.state === 'Running'
     ? (rem.publicUrl ? `Public page at ${rem.publicUrl}` : `Connected as ${rem.magicDnsName || 'this device'}`)
@@ -3936,6 +4088,8 @@ function renderDeviceSetup() {
       <div class="sp-sub">${esc(pwNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-act="hotspot-toggle"><div><div class="sp-label">Setup network</div>
       <div class="sp-sub">${esc(hsNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
+    <div class="sp-menu-row" data-dev="reboot"><div><div class="sp-label">Restart this radar</div>
+      <div class="sp-sub">${esc(rebootNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="reset"><div><div class="sp-label" style="color:#ff6b6b">Erase everything</div>
       <div class="sp-sub">Reset for a new owner, or if the password is lost</div></div>
       <div class="sp-chevron">&#8250;</div></div>`;
@@ -4082,6 +4236,28 @@ async function handleDeviceTap(row) {
       deviceMsg = on ? 'Published.' : 'Public page turned off.';
     } catch (e) { deviceMsg = e.message; }
     deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (act === 'reboot-confirm') {
+    // A second tap is enough here, unlike the typed word reset demands: this
+    // is recoverable, and making a routine restart feel dangerous would push
+    // people back toward pulling the plug, which is not.
+    deviceBusy = true; deviceMsg = ''; renderSettingsPanel();
+    try {
+      await deviceApi('/onboard/reboot', { method: 'POST',
+        body: JSON.stringify({ confirm: 'REBOOT' }) });
+      deviceBusy = false;
+      deviceMsg = 'Restarting… this screen will go dark shortly.';
+      renderSettingsPanel();
+    } catch (e) {
+      // A reboot can tear the socket down before the reply is written, which
+      // surfaces as a fetch failure even though the command was accepted.
+      // Reporting that as an error would be misleading, so say what is
+      // actually known and let the screen going dark be the confirmation.
+      deviceBusy = false;
+      deviceMsg = 'Restart requested. If the screen does not go dark within a minute, try again.';
+      renderSettingsPanel();
+    }
   }
 
   if (act === 'reset-confirm') {

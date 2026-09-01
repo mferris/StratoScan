@@ -341,7 +341,17 @@ def net_status():
         if "/" in line:
             addr = line.split(":", 1)[-1].split("/")[0]
             break
-    return {"ssid": ssid, "ipv4": addr, "hotspotActive": hotspot_active()}
+    # NetworkManager already runs its own connectivity check, so ask it
+    # rather than making an outbound request of our own: "full" means the
+    # internet is genuinely reachable, "limited"/"portal" means associated
+    # but going nowhere (the case a plain IP address cannot distinguish),
+    # "none" means no usable network at all. Anything unexpected, including
+    # a disabled checker reporting "unknown", is passed through verbatim for
+    # the UI to treat as indeterminate rather than as a failure.
+    c = run([NMCLI, "-t", "-f", "CONNECTIVITY", "general"], timeout=15)
+    conn = c.stdout.decode("utf-8", "replace").strip().splitlines()
+    return {"ssid": ssid, "ipv4": addr, "hotspotActive": hotspot_active(),
+            "connectivity": conn[0].strip() if conn else "unknown"}
 
 
 def hotspot_address():
