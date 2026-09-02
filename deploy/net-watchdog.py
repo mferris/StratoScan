@@ -30,6 +30,28 @@ STATE_DIR = "/var/lib/flightradar-setup"
 PENDING = os.path.join(STATE_DIR, "pending.json")
 HOTSPOT_PROFILE = "fr-hotspot"
 AP_PERIOD_S = 300          # how long to hold the AP up before retrying real networks
+# How many consecutive failed checks before touching the radio, for a unit
+# that is already set up. At the timer's 120s cadence that is a reconnect at
+# ~4 minutes and the AP at ~8. The old code went straight to AP mode on the
+# FIRST failed check, and that check was a single ping with a 3s timeout --
+# so one lost packet during a mesh roam or an AP reboot was enough to take a
+# working radar off the network until someone power-cycled it. Confirmed on
+# this receiver: fr-hotspot's NetworkManager timestamp showed the AP being
+# raised while the WiFi was healthy (-47dBm, 0/60 packet loss).
+#
+# An UNCLAIMED unit keeps the old fast path. It has no network to lose, and
+# its whole first-run story is the AP coming up promptly for someone holding
+# a phone in front of a radar they just unboxed.
+REPAIR_AFTER_FAILS = 2     # try reconnecting wlan0
+AP_AFTER_FAILS = 4         # only then fall back to the setup hotspot
+# Deliberately NOT under /run/flightradar: that is flightradar-setupd's
+# RuntimeDirectory, so systemd deletes it every time that unit restarts --
+# which would silently reset this watchdog's patience counter and, if setupd
+# were flapping, mean the escalation below never fired at all. /run is still
+# right: a reboot SHOULD start the count over. It just must not be a
+# directory whose lifetime belongs to somebody else.
+FAILCOUNT = "/run/flightradar-net/failcount"
+HOTSPOT_SINCE = "/run/flightradar-net/hotspot-since"
 ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
 NMCLI = "/usr/bin/nmcli"
 
@@ -80,8 +102,8 @@ def hotspot_active():
     return HOTSPOT_PROFILE in p.stdout.decode("utf-8", "replace")
 
 
-def have_connectivity():
-    """A real connection, not merely an associated radio.
+def probe_once():
+    """One look at whether this device has a working connection.
 
     NetworkManager reports 'activated' for an association with no DHCP lease,
     which looks connected and is unreachable -- so require an address and a
@@ -100,7 +122,66 @@ def have_connectivity():
         gw = g.stdout.decode().strip().split(":", 1)[-1]
     if not gw:
         return False
-    return run(["/bin/ping", "-c", "1", "-W", "3", gw], timeout=10).returncode == 0
+    if run(["/bin/ping", "-c", "2", "-W", "3", gw], timeout=12).returncode == 0:
+        return True
+    # Second opinion before calling it down: NetworkManager runs its own
+    # connectivity check, and a gateway that ignores ping (or is mid-roam)
+    # is not the same thing as no network.
+    c = run([NMCLI, "-t", "-f", "CONNECTIVITY", "general"], timeout=15)
+    return c.stdout.decode("utf-8", "replace").strip() in ("full", "limited", "portal")
+
+
+def have_connectivity(attempts=3, gap=4):
+    """probe_once, retried -- a dropped packet is not an outage.
+
+    WiFi loses frames for entirely ordinary reasons: a mesh steering the
+    client to another AP, a channel scan, the router rebooting. Every one of
+    those recovers on its own within seconds. Deciding from a single probe
+    that the network is gone is what made this watchdog the cause of the
+    outages it exists to prevent.
+    """
+    for i in range(attempts):
+        if probe_once():
+            return True
+        if i < attempts - 1:
+            time.sleep(gap)
+    return False
+
+
+def read_failcount():
+    try:
+        with open(FAILCOUNT) as f:
+            return int(f.read().strip() or 0)
+    except Exception:
+        return 0        # absent (fresh boot) or unreadable => no failures yet
+
+
+def touch_runtime(path):
+    """Write a marker under /run, creating the directory if it is not there.
+
+    Derived from the path rather than hardcoded: an earlier version wrote the
+    fail counter after os.makedirs("/run/flightradar") and swallowed any
+    error, so on a system where that directory was missing the counter never
+    incremented -- and a claimed unit that had genuinely lost its network
+    would have sat at "1 failed check" forever and never fallen back to the
+    hotspot. Silent, and only visible in the case you least want it.
+    """
+    d = os.path.dirname(path)
+    if d:
+        os.makedirs(d, exist_ok=True)
+    open(path, "w").close()
+    return path
+
+
+def write_failcount(n):
+    try:
+        d = os.path.dirname(FAILCOUNT)
+        if d:
+            os.makedirs(d, exist_ok=True)
+        with open(FAILCOUNT, "w") as f:
+            f.write(str(n))
+    except Exception as e:
+        print(f"net-watchdog: could not record fail count: {e}", flush=True)
 
 
 def retry_known_networks():
@@ -129,6 +210,7 @@ def main():
 
     # 2. keep the device reachable
     if have_connectivity():
+        write_failcount(0)
         # An UNCLAIMED unit keeps its setup network up even when it has
         # connectivity by some other route. Plugging in an ethernet cable
         # otherwise tore the hotspot down mid-setup, stranding whoever was
@@ -140,24 +222,49 @@ def main():
             call_setupd("hotspot_stop")
         return 0
 
+    fails = read_failcount() + 1
+    write_failcount(fails)
+    print(f"net-watchdog: no connectivity (consecutive failed checks: {fails})",
+          flush=True)
+
     if hotspot_active():
         # Alternate: give the real networks another chance rather than
         # camping in AP mode forever after a transient router outage.
-        age = time.time() - os.path.getmtime("/run/flightradar/hotspot-since") \
-            if os.path.exists("/run/flightradar/hotspot-since") else AP_PERIOD_S + 1
+        age = time.time() - os.path.getmtime(HOTSPOT_SINCE) \
+            if os.path.exists(HOTSPOT_SINCE) else AP_PERIOD_S + 1
         if age > AP_PERIOD_S:
             print("net-watchdog: retrying known networks", flush=True)
             if retry_known_networks():
                 call_setupd("hotspot_stop")
                 return 0
-            open("/run/flightradar/hotspot-since", "w").close()
+            touch_runtime(HOTSPOT_SINCE)
             call_setupd("hotspot_start")
         return 0
+
+    # A unit nobody has set up yet has no connection to lose, so it keeps the
+    # original behaviour: raise the AP at once, because someone is very
+    # probably standing in front of it with a phone waiting for exactly that.
+    # A CLAIMED unit is the opposite case -- it had a working network a moment
+    # ago, and going to AP mode takes it off that network and hides it from
+    # its owner. Give the connection a chance to come back, then try to repair
+    # it, and only fall back to the AP once the outage has clearly persisted.
+    if is_claimed():
+        if fails < REPAIR_AFTER_FAILS:
+            print("net-watchdog: waiting to see if this recovers on its own",
+                  flush=True)
+            return 0
+        if fails < AP_AFTER_FAILS:
+            print("net-watchdog: reconnecting wlan0", flush=True)
+            if retry_known_networks():
+                print("net-watchdog: reconnected", flush=True)
+                write_failcount(0)
+                return 0
+            return 0
 
     print("net-watchdog: no connectivity; raising the setup hotspot", flush=True)
     r = call_setupd("hotspot_start")
     if r.get("ok"):
-        open("/run/flightradar/hotspot-since", "w").close()
+        touch_runtime(HOTSPOT_SINCE)
         print(f"net-watchdog: hotspot up as {r['result'].get('ssid')}", flush=True)
     else:
         print(f"net-watchdog: could not raise hotspot: {r.get('code')}", flush=True)
