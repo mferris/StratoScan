@@ -2,6 +2,11 @@
 Description=FlightRadar setup web server (unprivileged)
 After=flightradar-setupd.service
 Wants=flightradar-setupd.service
+# StartLimitIntervalSec belongs in [Unit], not [Service]. Sitting in the
+# wrong section it was silently ignored, so the start-limit exemption
+# this recovery-critical unit is meant to have was never in effect: five
+# quick restarts would still have bricked it permanently.
+StartLimitIntervalSec=0
 
 [Service]
 # Deliberately NOT root. Everything privileged goes through the unix socket
@@ -12,7 +17,6 @@ Group=frsetup
 ExecStart=/usr/bin/python3 /opt/flightradar/setup-server.py
 Restart=always
 RestartSec=5
-StartLimitIntervalSec=0
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
