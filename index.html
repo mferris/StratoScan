@@ -2498,7 +2498,15 @@ function checkNearbyAlert(pl, range) {
 // third party to test the line. "limited" is the interesting state: associated
 // with an IP but reaching nothing -- exactly the case an address alone cannot
 // distinguish, and exactly what a page full of blank map tiles looks like.
-const NET_STATUS_POLL_MS = 30 * 1000;
+// Deliberately slow. Each poll costs the device 200-540ms of real work: the
+// endpoint shells out to ~6 nmcli processes and a tailscale call, and on a
+// Pi already running at its thermal limit that is not something to do twice
+// a minute forever. Nothing here changes quickly -- an SSID or a gateway is
+// stable for days -- and the half of the pill that DOES change quickly (is
+// aircraft data still arriving?) is recomputed every frame from local state,
+// costing nothing. The settings panel refreshes this on open regardless, so
+// anyone actually looking at network settings sees current values.
+const NET_STATUS_POLL_MS = 3 * 60 * 1000;
 let netInfo = null;        // last /onboard payload, or null if unreachable
 let netInfoReachable = false;
 

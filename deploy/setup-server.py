@@ -734,7 +734,12 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(404)
             return
         st = load_state()
-        hs = call_setupd("hotspot_info")
+        # Cache the setupd round-trips. Each one shells out to nmcli, so an
+        # uncached /onboard costs a few hundred ms; without this, every extra
+        # viewer of the page multiplies that cost on a device that has no
+        # headroom to spare. Short enough that the setup screens still show
+        # live values, long enough that polling is nearly free.
+        hs, net, rem = _onboard_probe()
         body = json.dumps({
             "claimed": bool(st.get("claimed")),
             "claimCode": None if st.get("claimed") else claim_code(),
@@ -743,10 +748,8 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             "steps": st.get("steps", {}),
             "location": actual_location() or st.get("location"),
             "airport": actual_airport() or st.get("airport"),
-            "network": (lambda r: r.get("result") if r.get("ok") else None)(
-                call_setupd("net_status")),
-            "remote": (lambda r: r.get("result") if r.get("ok") else None)(
-                call_setupd("tailscale_status")),
+            "network": net,
+            "remote": rem,
         }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -757,6 +760,29 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", self._allowed_origin())
         self.end_headers()
         self.wfile.write(body)
+
+
+_PROBE_TTL_S = 20
+_probe_cache = {"at": 0.0, "value": None}
+_probe_lock = threading.Lock()
+
+
+def _onboard_probe():
+    """(hotspot_info, net_status, tailscale_status), cached for _PROBE_TTL_S.
+
+    All three shell out to nmcli/tailscale. They describe things that change
+    on the order of days, so re-running them for every request is pure cost.
+    """
+    with _probe_lock:
+        now = time.monotonic()
+        if _probe_cache["value"] is not None and now - _probe_cache["at"] < _PROBE_TTL_S:
+            return _probe_cache["value"]
+        unwrap = lambda r: r.get("result") if r.get("ok") else None
+        value = (call_setupd("hotspot_info"),
+                 unwrap(call_setupd("net_status")),
+                 unwrap(call_setupd("tailscale_status")))
+        _probe_cache.update(at=now, value=value)
+        return value
 
 
 def actual_location():
