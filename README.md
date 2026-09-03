@@ -184,12 +184,12 @@ unconfirmed network change at boot and raises the hotspot when there is no
 usable connection — so a mistyped WiFi password reverts itself rather than
 stranding the device.
 
-**The enclosure**: [`enclosure/`](enclosure/) has the parametric OpenSCAD
-source for the printed case — shell, bezel, retainer and desk cradle, plus
-speaker mounts, a fan bracket and an antenna turret. Everything derives from
-the measured values at the top of the file. See
-[`enclosure/README.md`](enclosure/README.md) for how to export each part, and
-for the dimensional mistakes that are easy to repeat.
+**The enclosure**: [`enclosure/`](enclosure/) has two printable cases for the
+same hardware — the original ship's-instrument look, and one shaped like a
+sitting cat with the round display as its face. Both are parametric OpenSCAD,
+everything deriving from the measured values at the top of each file. Each
+folder's README covers how to export the parts, the interference checks, and
+the dimensional mistakes that are easy to repeat.
 
 **iOS app**: `ios/` is an [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 project. Run `xcodegen generate` inside `ios/` if you change `project.yml`,
@@ -204,7 +204,7 @@ index.html      the whole web app — single file, no build step
 dev-server.py   local-only dev proxy (not deployed)
 deploy/         systemd units, same-origin services, and the setup server
 docs/           hardware/software spec, original prototype, screenshots
-enclosure/      parametric OpenSCAD source for the 3D-printed case
+enclosure/      parametric OpenSCAD source for the printed cases (two designs)
 tests/          regression tests for the security-critical paths
 vendor/         vendored MapLibre GL JS (self-hosted, no CDN dependency)
 ios/            native SwiftUI companion app
