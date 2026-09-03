@@ -2560,30 +2560,113 @@ function checkNearbyAlert(pl, range) {
 // the setting off the device is exactly as self-contained as before.
 const NETWORK_URL = '/network';
 const NETWORK_POLL_MS = 20 * 1000;   // proxy caches for 15s; no point going faster
-let ghosts = [];          // aircraft only the network can see
+// Ghosts are TRACKED, not replaced. A poll arrives every 20s, and a 450kt
+// aircraft covers 2.5nm -- 51px on this ring -- in that time, so redrawing
+// from each payload would make them teleport, and a trail built from those
+// samples would be a chain of long straight hops rather than a path.
+//
+// Instead each ghost keeps identity by hex and is dead-reckoned forward from
+// its last fix every frame, exactly as local aircraft are when their own
+// position squitter goes stale. Every ghost in the feed carries gs and track,
+// so this is the network's own reported velocity, not a guess of ours.
+const ghostTracks = new Map();   // hex -> persistent track record
+let ghosts = [];                 // in-ring snapshots, rebuilt each frame
+const GHOST_DR_MAX_S = 45;       // stop extrapolating past this; beyond it we are inventing
+const GHOST_DROP_MS = 60 * 1000; // forget one absent from the feed this long
 let networkStats = null;  // last scorecard
 let networkError = null;
 
 async function refreshNetworkCompare() {
-  if (!alertSettings.networkCompare) { ghosts = []; return; }
+  if (!alertSettings.networkCompare) { ghosts = []; ghostTracks.clear(); return; }
   try {
     const res = await fetch(NETWORK_URL, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const d = await res.json();
     networkStats = d.stats || null;
     networkError = d.stale ? 'network unreachable — showing the last comparison' : null;
-    // Only keep ghosts inside the drawn ring, and only ones with a usable
-    // position. Everything else is noise on a 20nm display.
-    ghosts = (d.ac || []).map(a => {
-      if (!home || typeof a.lat !== 'number' || typeof a.lon !== 'number') return null;
-      const { bearing, range } = haversineBearingRange(home.lat, home.lon, a.lat, a.lon);
-      if (range > RANGE_NM) return null;
-      return { ...a, bearing, range, hdg: (typeof a.track === 'number' ? a.track : bearing) };
-    }).filter(Boolean);
+    const now = performance.now();
+    for (const a of (d.ac || [])) {
+      if (typeof a.lat !== 'number' || typeof a.lon !== 'number') continue;
+      const prev = ghostTracks.get(a.hex);
+      ghostTracks.set(a.hex, {
+        hex: a.hex,
+        flight: a.flight, type: a.type, reg: a.reg, alt: a.alt,
+        gs: a.gs, track: a.track, seenPos: a.seen_pos,
+        fixLat: a.lat, fixLon: a.lon, fixAt: now,
+        lastSeenAt: now,
+        // identity is what makes a trail possible: carry it across the poll
+        trail: prev ? prev.trail : [],
+        lastTrailAt: prev ? prev.lastTrailAt : 0,
+        bearing: prev ? prev.bearing : 0, range: prev ? prev.range : 0,
+      });
+    }
   } catch (e) {
     networkError = 'comparison unavailable';
-    ghosts = [];
+    // Deliberately NOT clearing the tracks: one failed poll should not erase
+    // trails that took minutes to build. They age out via GHOST_DROP_MS.
   }
+}
+
+// Advance every tracked ghost to now and rebuild the in-ring display list.
+// Called once per drawn frame, before anything reads `ghosts`.
+function updateGhosts(nowMs) {
+  ghosts = [];
+  if (!alertSettings.networkCompare || !home) return;
+  for (const [hex, t] of ghostTracks) {
+    if (nowMs - t.lastSeenAt > GHOST_DROP_MS) { ghostTracks.delete(hex); continue; }
+    // age of the underlying fix: how long ago the NETWORK saw it, plus how
+    // long ago we fetched that
+    const ageS = Math.min(GHOST_DR_MAX_S,
+                          (t.seenPos || 0) + (nowMs - t.fixAt) / 1000);
+    let lat = t.fixLat, lon = t.fixLon;
+    if (typeof t.gs === 'number' && t.gs >= DR_MIN_GS_KT &&
+        typeof t.track === 'number' && ageS > 0) {
+      const [drLon, drLat] = destinationPoint(t.fixLat, t.fixLon, t.track, t.gs * ageS / 3600);
+      lat = drLat; lon = drLon;
+    }
+    const { bearing, range } = haversineBearingRange(home.lat, home.lon, lat, lon);
+    t.bearing = bearing; t.range = range;
+    // confidence fades as the extrapolation runs out of road
+    t.fade = 1 - 0.55 * Math.min(1, ageS / GHOST_DR_MAX_S);
+    if (range > RANGE_NM) continue;   // outside the drawn ring: keep tracking, don't draw
+
+    if (nowMs - (t.lastTrailAt || 0) >= TRAIL_SAMPLE_MS) {
+      t.lastTrailAt = nowMs;
+      const last = t.trail[t.trail.length - 1];
+      const moved = !last ? Infinity : Math.hypot(
+        range - last.range,
+        range * bearingDelta(last.bearing, bearing) * Math.PI / 180);
+      if (moved >= TRAIL_MIN_MOVE_NM) {
+        t.trail.push({ bearing, range, t: nowMs });
+        pruneTrail(t.trail, nowMs);
+      }
+    }
+    ghosts.push(t);
+  }
+}
+
+// Ghost trails: same geometry as the real ones, but dashed and dimmer so the
+// display stays dominated by what this antenna actually heard.
+function drawGhostTrails() {
+  if (!alertSettings.networkCompare || !ghosts.length) return;
+  ctx.save();
+  ctx.lineWidth = 1.6;
+  ctx.setLineDash([3, 4]);
+  ctx.strokeStyle = COLORS.ghost;
+  const now = performance.now();
+  for (const g of ghosts) {
+    if (!g.trail || g.trail.length < 2) continue;
+    for (let i = 1; i < g.trail.length; i++) {
+      const a = g.trail[i - 1], b = g.trail[i];
+      const pa = polarToXY(a.bearing, a.range), pb = polarToXY(b.bearing, b.range);
+      ctx.globalAlpha = Math.max(TRAIL_FADE_FLOOR, 1 - (now - b.t) / TRAIL_FADE_MS) * 0.45 * (g.fade ?? 1);
+      ctx.beginPath();
+      ctx.moveTo(pa.x, pa.y);
+      ctx.lineTo(pb.x, pb.y);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 // Hollow, dimmed, no trail, no label. The visual grammar has to make it
@@ -2599,11 +2682,11 @@ function drawGhosts() {
   // theme. A marker nobody can see is the same as no feature. It is still
   // hollow and dashed, which is what keeps it distinguishable from a real
   // contact; being faint was never what did that.
-  ctx.globalAlpha = 0.85;
   ctx.lineWidth = 2;
   ctx.setLineDash([4, 3]);
   ctx.strokeStyle = COLORS.ghost;
   for (const g of ghosts) {
+    ctx.globalAlpha = 0.85 * (g.fade ?? 1);
     const { x, y } = polarToXY(g.bearing, g.range);
     const bs = blipScale(g.alt === 'ground' ? 'ground' : g.alt);
     const r = 9 * bs;
@@ -2652,7 +2735,11 @@ function showGhostPanel(g) {
   const alt = g.alt === 'ground' ? 'On the ground' : formatAltitude(g.alt);
   const spd = typeof g.gs === 'number' ? Math.round(g.gs) + ' kt' : '—';
   const trk = typeof g.track === 'number' ? Math.round(g.track) + '°' : '—';
-  const age = typeof g.seen_pos === 'number' ? g.seen_pos.toFixed(1) + 's ago' : '—';
+  // How stale the underlying fix is NOW -- their reported age plus however
+  // long ago we fetched it. The plain seen_pos would freeze at fetch time and
+  // claim a 40-second-old position was fresh.
+  const ageS = (g.seenPos || 0) + (performance.now() - g.fixAt) / 1000;
+  const age = ageS.toFixed(0) + 's ago' + (ageS >= GHOST_DR_MAX_S ? ' (estimate held)' : '');
   // On GA traffic the callsign IS the registration, so listing both just
   // prints the same string twice under itself.
   const title = g.flight || g.hex.toUpperCase();
@@ -3801,6 +3888,8 @@ function tick(ts) {
   drawRings();
   drawSweep();
   drawTrails();
+  updateGhosts(ts);      // advance dead reckoning before anything reads `ghosts`
+  drawGhostTrails();
   drawGhosts();          // under drawPlanes: a ghost must never hide a real contact
   drawPlanes(dt);
   updateStatus();
