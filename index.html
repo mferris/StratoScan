@@ -374,6 +374,12 @@
   /* Same position as .dp-alert-tag but NOT var(--bad): a ghost is not an
      alarm. Red here read as "something is wrong with this aircraft" when
      the actual meaning is "your antenna cannot hear it". */
+  #detailPanel .dp-ghost-note {
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    line-height: 1.5;
+    margin-top: 8px;
+  }
   #detailPanel .dp-ghost-tag {
     color: var(--ghost);
     font-size: 0.7rem;
@@ -2598,12 +2604,41 @@ async function refreshNetworkCompare() {
         trail: prev ? prev.trail : [],
         lastTrailAt: prev ? prev.lastTrailAt : 0,
         bearing: prev ? prev.bearing : 0, range: prev ? prev.range : 0,
+        // carried across the poll so a lookup only ever runs once per hex
+        typeLabel: prev ? prev.typeLabel : null,
+        registration: prev ? prev.registration : null,
+        typeDesc: prev ? prev.typeDesc : null,
       });
+      enrichGhost(ghostTracks.get(a.hex));
     }
   } catch (e) {
     networkError = 'comparison unavailable';
     // Deliberately NOT clearing the tracks: one failed poll should not erase
     // trails that took minutes to build. They age out via GHOST_DROP_MS.
+  }
+}
+
+// A ghost deserves the same lookups a local contact gets. Real aircraft fire
+// these from applyUpdate on first sight, which is why their panels already
+// show "Bombardier Regional Jet CRJ-900" and a city pair while a ghost showed
+// only the bare ICAO type code the network happened to send. The aircraft
+// database, the route lookup and the photo proxy are all keyed by hex or
+// callsign -- none of them care whether THIS antenna was the one that heard
+// it. Fired on first sight rather than on tap so the data is already cached
+// by the time the panel opens.
+function enrichGhost(t) {
+  if (!t || t.enriched) return;
+  t.enriched = true;
+  lookupType(t.hex).then(info => {
+    t.typeLabel = info.type;
+    t.registration = info.reg;
+    t.typeDesc = info.desc;
+    // if the panel is open on this ghost, fill it in rather than making the
+    // user close and reopen to see the answer arrive
+    if (detailPanelHex === t.hex && detailPanelEl.classList.contains('show')) showGhostPanel(t);
+  });
+  if (t.flight && /^[A-Z]{3}\d/.test(t.flight)) {
+    queueRouteLookup(t.flight, t.fixLat, t.fixLon);
   }
 }
 
@@ -2650,8 +2685,8 @@ function updateGhosts(nowMs) {
 function drawGhostTrails() {
   if (!alertSettings.networkCompare || !ghosts.length) return;
   ctx.save();
-  ctx.lineWidth = 1.6;
-  ctx.setLineDash([3, 4]);
+  ctx.lineWidth = 2.4;
+  ctx.setLineDash([6, 4]);
   ctx.strokeStyle = COLORS.ghost;
   const now = performance.now();
   for (const g of ghosts) {
@@ -2659,7 +2694,7 @@ function drawGhostTrails() {
     for (let i = 1; i < g.trail.length; i++) {
       const a = g.trail[i - 1], b = g.trail[i];
       const pa = polarToXY(a.bearing, a.range), pb = polarToXY(b.bearing, b.range);
-      ctx.globalAlpha = Math.max(TRAIL_FADE_FLOOR, 1 - (now - b.t) / TRAIL_FADE_MS) * 0.45 * (g.fade ?? 1);
+      ctx.globalAlpha = Math.max(TRAIL_FADE_FLOOR, 1 - (now - b.t) / TRAIL_FADE_MS) * 0.8 * (g.fade ?? 1);
       ctx.beginPath();
       ctx.moveTo(pa.x, pa.y);
       ctx.lineTo(pb.x, pb.y);
@@ -2682,26 +2717,41 @@ function drawGhosts() {
   // theme. A marker nobody can see is the same as no feature. It is still
   // hollow and dashed, which is what keeps it distinguishable from a real
   // contact; being faint was never what did that.
-  ctx.lineWidth = 2;
-  ctx.setLineDash([4, 3]);
+  ctx.lineWidth = 3;
+  ctx.setLineDash([5, 3]);
   ctx.strokeStyle = COLORS.ghost;
   for (const g of ghosts) {
-    ctx.globalAlpha = 0.85 * (g.fade ?? 1);
     const { x, y } = polarToXY(g.bearing, g.range);
     const bs = blipScale(g.alt === 'ground' ? 'ground' : g.alt);
-    const r = 9 * bs;
+    const r = 13 * bs;
+    ctx.globalAlpha = g.fade ?? 1;
+    // A glow, the same trick the real blips use. A thin outline is legible
+    // in a screenshot and easy to lose on the actual panel, which is the
+    // only place that matters.
+    ctx.shadowColor = COLORS.ghost;
+    ctx.shadowBlur = 8;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.stroke();
-    // a short stalk pointing the way it is heading, so a ghost reads as an
+    // a filled core, so it reads as an object rather than an empty annulus
+    ctx.shadowBlur = 0;
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 0.6 * (g.fade ?? 1);
+    ctx.fillStyle = COLORS.ghost;
+    ctx.beginPath();
+    ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    // a stalk pointing the way it is heading, so a ghost reads as an
     // aircraft rather than as a map annotation
+    ctx.globalAlpha = g.fade ?? 1;
     if (typeof g.track === 'number') {
       const a = (g.track - 90) * Math.PI / 180;
       ctx.beginPath();
       ctx.moveTo(x + r * Math.cos(a), y + r * Math.sin(a));
-      ctx.lineTo(x + (r + 7) * Math.cos(a), y + (r + 7) * Math.sin(a));
+      ctx.lineTo(x + (r + 10) * Math.cos(a), y + (r + 10) * Math.sin(a));
       ctx.stroke();
     }
+    ctx.setLineDash([5, 3]);
   }
   ctx.restore();
 }
@@ -2711,7 +2761,7 @@ function drawGhosts() {
 // An aircraft this antenna actually heard must never be shadowed by a
 // relayed marker sitting on top of it.
 function findGhostAtStagePoint(x, y) {
-  const HIT_RADIUS = 22;                       // CSS px, matching real blips
+  const HIT_RADIUS = 26;                       // CSS px; the ring itself is now 13*scale
   const scale = stage.getBoundingClientRect().width / W;   // hoisted: reading
   // this inside the loop forces a layout per ghost on every tap
   let best = null, bestDistSq = Infinity;
@@ -2743,8 +2793,14 @@ function showGhostPanel(g) {
   // On GA traffic the callsign IS the registration, so listing both just
   // prints the same string twice under itself.
   const title = g.flight || g.hex.toUpperCase();
-  const reg = (g.reg && g.reg.toUpperCase() !== title.toUpperCase()) ? g.reg : null;
-  const subtitle = [g.type, reg].filter(Boolean).join(' · ') || 'Type unknown';
+  // Prefer the aircraft database's human-readable name over the network's
+  // bare ICAO code: "Bombardier Regional Jet CRJ-900" beats "CRJ9".
+  const typeTxt = g.typeLabel || g.type || null;
+  const regRaw = g.registration || g.reg;
+  const reg = (regRaw && regRaw.toUpperCase() !== title.toUpperCase()) ? regRaw : null;
+  const subtitle = [typeTxt, reg].filter(Boolean).join(' · ') || 'Type unknown';
+  const route = g.flight ? routeCache.get(g.flight) : null;
+  const routeTxt = route ? (route.plausible ? route.text : `${route.text} (unconfirmed)`) : null;
   const src = (networkStats && networkStats.source) || 'the network';
   detailPanelEl.innerHTML = `
     <div class="dp-close">&times;</div>
@@ -2753,7 +2809,8 @@ function showGhostPanel(g) {
     <div class="dp-cs" style="color:${COLORS.ghost}">${esc(title)}</div>
     <div class="dp-badge" style="background:${COLORS.ghost};color:#0b0f12">${esc(src)}</div>
     <div class="dp-type">${esc(subtitle)}</div>
-    <div class="dp-route">Your antenna is not receiving this aircraft. Everything below is what ${esc(src)} reports.</div>
+    ${routeTxt ? `<div class="dp-route${route.plausible ? '' : ' implausible'}">${esc(routeTxt)}</div>` : ''}
+    <div class="dp-ghost-note">Your antenna is not receiving this aircraft. Everything below is what ${esc(src)} reports.</div>
     <div class="dp-grid">
       <div class="dp-field"><div class="dp-label">Altitude</div><div class="dp-value">${esc(alt)}</div></div>
       <div class="dp-field"><div class="dp-label">Speed</div><div class="dp-value">${esc(spd)}</div></div>
