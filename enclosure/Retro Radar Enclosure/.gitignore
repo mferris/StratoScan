@@ -1,0 +1,4 @@
+# Build output: regenerate with openscad -D 'part="..."' -o <name>.stl
+*.stl
+*.3mf
+*.bak*
