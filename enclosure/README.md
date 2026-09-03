@@ -26,8 +26,14 @@ openscad -D 'part="shell"' -o shell.stl enclosure/flightwall-enclosure.scad
 ```
 
 `part="preview"` shows the whole stack assembled; `part="exploded"` separates
-it. Always render with `--render` before printing — it runs the full CGAL
-pass and reports whether the result is manifold.
+it.
+
+Exporting an STL already forces a full geometry evaluation, and OpenSCAD
+prints the result on stderr — check for `Status: NoError` and the
+`Top level object is a 3D object (manifold)` line before printing. (Earlier
+notes here said to pass `--render`; as of OpenSCAD 2026.06 that flag takes an
+argument and a bare `--render` just prints the usage text, so a script using
+it silently exports nothing.)
 
 ## Things that are easy to get wrong
 
