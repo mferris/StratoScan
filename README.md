@@ -90,6 +90,13 @@ too.
   connection; viewed remotely it falls back to whether data is still flowing
 - **Restart from the screen** — a Restart row under Device setup, so a stuck
   unit does not need someone to find and pull the plug
+- **Network comparison** (off by default) — outlines the aircraft a public
+  ADS-B network can see in your ring that your antenna did not hear, and
+  keeps a scorecard of how you compare: overall coverage, which altitude
+  bands and which bearings you are blind in, and position freshness against
+  the network's. Measured here, the receiver was hearing 44% of the traffic
+  in range, and 8 of the 9 it missed were below 4,000ft — the signature of a
+  blocked horizon rather than a deaf receiver
 - **Touch detail panel** — tap any aircraft for registration, squawk, vertical
   rate, and more
 - **Native iOS companion app** — a SwiftUI rebuild of the same radar for
@@ -145,7 +152,8 @@ receiver's web server docroot (same origin as `readsb`'s own web UI, to avoid
 CORS). [`deploy/`](deploy/) has a systemd unit for launching Chromium in
 kiosk mode on boot, plus small same-origin services: aircraft photos, the
 shared approach-track store, the shared sighting-count store, the display-wake
-endpoint, and (only relevant if you expose the page to the public internet,
+endpoint, the optional network-comparison proxy, and (only relevant if you
+expose the page to the public internet,
 e.g. via Tailscale Funnel) a filtering gateway that rounds the receiver's
 exact coordinates before they leave your network — see
 [Security](#security) below.
@@ -234,6 +242,7 @@ these choices, though no code is shared — its license is unclear):
 - **[LiveATC.net](https://www.liveatc.net/)** — ATC audio for the configured airport, opened as a link to their own player (see [Security](#security) below for why it's a link, not an embed)
 - **[SSEC RealEarth](https://realearth.ssec.wisc.edu/)** (UW-Madison) — satellite-observed lightning strike density (GOES-East GLM)
 - **[OurAirports](https://ourairports.com/data/)** (public domain) — the bundled airport table in [`deploy/airports.json`](deploy/airports.json)
+- **[adsb.lol](https://adsb.lol/)** — community-run ADS-B aggregation, used only by the optional network comparison (off by default). Queried at most once every 15s no matter how many people are viewing, with coordinates rounded to ~1.1km
 
 Please respect each service's own terms of use if you build on this.
 
@@ -295,6 +304,16 @@ before you do:
   previous owner's house, so a full reset clears them along with the
   credentials and coordinates. A settings-only reset keeps them, and keeps
   the network, so it is safe to run remotely.
+- **The network comparison is opt-in and sends only a rounded position.**
+  It is off by default, because a unit given to someone else should not
+  contact a third party unless they choose it. The device-side proxy makes
+  no request of its own — it only fetches when a page with the setting on
+  asks it to — and it queries with coordinates rounded to 2dp, the same
+  precision the public gateway already exposes. Asking a stranger "what is
+  near me" with survey-precision coordinates would undo the rounding the
+  rest of this project does deliberately. `/network` is readable publicly
+  but refuses writes, so nobody holding the URL can drive traffic at a
+  community-run service on this device's behalf.
 - **No secrets or API keys anywhere.** Every external service this app talks
   to is free and keyless (see [Data sources](#data-sources) above), so
   there's nothing to leak.
