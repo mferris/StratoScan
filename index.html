@@ -36,6 +36,7 @@
     --bad: #ff5d5d;
     --good: #3ddc97;
     --warn: #ffb020;
+    --ghost: #86c5ff;
     --airport-highlight: #39ff6a;
     --panel-bg: rgba(5, 8, 10, 0.78);
     --panel-bg-strong: rgba(8, 12, 14, 0.96);
@@ -69,6 +70,7 @@
     --bad: #c0202e;
     --good: #0a7d4f;
     --warn: #8a5a00;
+    --ghost: #1d4e6b;
     --airport-highlight: #0f9d4a;
     --panel-bg: rgba(255, 255, 255, 0.82);
     --panel-bg-strong: rgba(255, 255, 255, 0.95);
@@ -110,6 +112,7 @@
     --bad: #ff4d4d;
     --good: #009e73;
     --warn: #e69f00;
+    --ghost: #ffffff;
     --airport-highlight: #00e5ff;
     --panel-bg: rgba(0, 0, 0, 0.92);
     --panel-bg-strong: rgba(0, 0, 0, 0.97);
@@ -1164,6 +1167,7 @@ function refreshCanvasColors() {
   COLORS.crosshair = read('--crosshair');
   COLORS.compass = read('--compass');
   COLORS.airportHighlight = read('--airport-highlight');
+  COLORS.ghost = read('--ghost');
   COLORS.text = read('--text');
 }
 refreshCanvasColors();
@@ -2579,16 +2583,32 @@ async function refreshNetworkCompare() {
 function drawGhosts() {
   if (!alertSettings.networkCompare || !ghosts.length) return;
   ctx.save();
-  ctx.globalAlpha = 0.42;
-  ctx.lineWidth = 1.4;
-  ctx.setLineDash([3, 2]);
+  // The first version of this drew 6px rings at 0.42 alpha in
+  // COLORS.textDim -- a key refreshCanvasColors never sets, so it silently
+  // fell through to the muted COLORS.ground and was invisible on the light
+  // theme. A marker nobody can see is the same as no feature. It is still
+  // hollow and dashed, which is what keeps it distinguishable from a real
+  // contact; being faint was never what did that.
+  ctx.globalAlpha = 0.85;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 3]);
+  ctx.strokeStyle = COLORS.ghost;
   for (const g of ghosts) {
     const { x, y } = polarToXY(g.bearing, g.range);
     const bs = blipScale(g.alt === 'ground' ? 'ground' : g.alt);
-    ctx.strokeStyle = COLORS.textDim || COLORS.ground;
+    const r = 9 * bs;
     ctx.beginPath();
-    ctx.arc(x, y, 6 * bs, 0, Math.PI * 2);
+    ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.stroke();
+    // a short stalk pointing the way it is heading, so a ghost reads as an
+    // aircraft rather than as a map annotation
+    if (typeof g.track === 'number') {
+      const a = (g.track - 90) * Math.PI / 180;
+      ctx.beginPath();
+      ctx.moveTo(x + r * Math.cos(a), y + r * Math.sin(a));
+      ctx.lineTo(x + (r + 7) * Math.cos(a), y + (r + 7) * Math.sin(a));
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -3667,7 +3687,12 @@ function drawPlanes(dt) {
     }
   }
 
-  countEl.textContent = inRange.length + (inRange.length === 1 ? ' AIRCRAFT' : ' AIRCRAFT');
+  // When the comparison is on, the interesting number is not just how many
+  // this antenna heard but how many it did NOT -- that is the whole point of
+  // the overlay, and it should be readable without hunting for faint rings.
+  const missed = alertSettings.networkCompare ? ghosts.length : 0;
+  countEl.textContent = inRange.length + ' AIRCRAFT'
+    + (missed ? ` · ${missed} NOT HEARD` : '');
 }
 
 let lastNetPillState = null;
