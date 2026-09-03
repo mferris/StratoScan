@@ -1,0 +1,31 @@
+[Unit]
+Description=FlightRadar network comparison proxy (local-only)
+After=network-online.target lighttpd.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/flightradar/network-compare.py
+Restart=always
+RestartSec=5
+# 127.0.0.1-only listener, same as the other stores. DynamicUser rather than
+# a named account: an earlier draft specified User=flightradar, which does
+# not exist on this image and would simply have failed to start.
+DynamicUser=yes
+NoNewPrivileges=yes
+StateDirectory=flightradar-network
+# Unlike the other stores this one makes an OUTBOUND request, so it needs
+# AF_INET/AF_INET6 -- and nothing else. AF_NETLINK is deliberately absent;
+# it is only needed by services that enumerate interfaces, and leaving it
+# out is what keeps this from being able to inspect the network stack.
+RestrictAddressFamilies=AF_INET AF_INET6
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=default.target
