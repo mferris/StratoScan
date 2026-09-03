@@ -926,8 +926,15 @@ const SWEEP_RAD_PER_SEC = 0.48;
 // at 77-79C with its fan already maxed (pwm 250/255, 5300rpm), tripping the
 // soft temperature limit. Nothing on a radar needs 60fps: the sweep takes 13
 // seconds per revolution and aircraft are interpolated from 1Hz data. On a
-// 60Hz panel the achievable rates are 60/n, so this lands on 20fps.
-const TARGET_FPS = 20;
+// 60Hz panel the achievable rates are 60/n, so this lands on a divisor of 60.
+//
+// Now 15 (60/4) rather than 20 (60/3). Measured in the printed enclosure at
+// 20fps: busy daytime traffic ran 79C average and peaked at 84.5C with the
+// fan already maxed, which trips the Pi 5's soft limit and quietly caps the
+// clock at exactly the moments there is most traffic to draw. Frame rate is
+// the largest CPU lever here and the sweep is the only thing that visibly
+// loses smoothness at 15.
+const TARGET_FPS = 15;
 const FRAME_MIN_MS = 1000 / TARGET_FPS - 4; // slack so vsync jitter doesn't cost a whole frame
 const SMOOTH_TAU = 0.35;         // seconds; exponential smoothing time constant for plane motion
 // A position in aircraft.json is not "now" -- it is the last position message
