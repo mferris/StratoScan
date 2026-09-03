@@ -1176,6 +1176,29 @@ function altColor(alt) {
   return COLORS.high;
 }
 
+// Blip size as a second altitude cue, alongside altColor's hue: small and
+// tight near the ground, larger at cruise. Deliberately not a perspective
+// effect -- a higher aircraft is further away and would look SMALLER if this
+// were about distance. It reads as "how high", which is the useful fact.
+//
+// The curve is sqrt rather than linear because near an airport almost all the
+// interesting spread is in the bottom few thousand feet: linear would make
+// everything below 10,000ft look identical and spend the whole range on
+// airliners at cruise that are all the same anyway.
+//
+// Hit testing is unaffected: findPlaneAtStagePoint uses a fixed 22px radius
+// around the anchor, so a shrunken low blip stays exactly as easy to tap.
+const BLIP_SCALE_MIN = 0.68;    // on the ground
+const BLIP_SCALE_MAX = 1.30;    // at BLIP_SCALE_TOP_FT and above
+const BLIP_SCALE_TOP_FT = 35000;
+
+function blipScale(alt) {
+  if (alt === 'ground') return BLIP_SCALE_MIN;
+  if (typeof alt !== 'number') return 1;   // unknown altitude: don't imply one
+  const t = Math.min(1, Math.max(0, alt / BLIP_SCALE_TOP_FT));
+  return BLIP_SCALE_MIN + (BLIP_SCALE_MAX - BLIP_SCALE_MIN) * Math.sqrt(t);
+}
+
 // ---- Blip shape classification -----------------------------------------
 // Distinguishes large commercial jets / smaller jets / prop planes / rotor-
 // craft on the radar, the way tar1090's own map does. Rather than porting
@@ -3350,12 +3373,17 @@ function drawPlanes(dt) {
     p.anchorY = y * scale;
     p.color = color;
 
+    const bscale = blipScale(p.alt);
     ctx.save();
     ctx.globalAlpha = p.opacity;
     ctx.translate(x, y);
     ctx.rotate((p.hdg) * Math.PI / 180);
+    ctx.scale(bscale, bscale);
     ctx.fillStyle = color;
     ctx.shadowColor = color;
+    // shadowBlur is NOT scaled by ctx.scale -- it is in device space. Left
+    // at 10 deliberately so a low, small blip keeps the same glow and does
+    // not fade out on the map exactly where traffic matters most.
     ctx.shadowBlur = 10;
     drawBlipShape(classifyAircraft(p));
     ctx.restore();
@@ -3372,7 +3400,10 @@ function drawPlanes(dt) {
       ctx.shadowColor = COLORS.airportHighlight;
       ctx.shadowBlur = 8;
       ctx.beginPath();
-      ctx.arc(0, 0, 13, 0, Math.PI * 2);
+      // tracks the blip's own size, or it would stand off a shrunken
+      // low-altitude blip -- and this ring only ever fires on aircraft that
+      // are landing or departing, i.e. the smallest ones on screen
+      ctx.arc(0, 0, 13 * bscale, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }

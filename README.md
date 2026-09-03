@@ -34,6 +34,10 @@ too.
   flight-path overlay — busier stretches of the corridor read as more
   visually distinct than lightly-used ones, and it keeps sharpening the
   longer the receiver runs
+- **Altitude-scaled blips** — a blip grows with altitude, from 0.68x on the
+  ground to 1.30x at cruise, so height reads at a glance alongside the
+  existing altitude colour. Deliberately not perspective: a higher aircraft
+  is further away and would be smaller if this were about distance
 - **Sighting counts** — every aircraft tracks how many distinct times this
   receiver has picked it up, and how many of those came within the
   nearby-alert radius; shown as a "SEEN ×N" badge once it's more than one,
