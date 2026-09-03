@@ -2328,6 +2328,8 @@ function wakeScreenForAlert() {
   nightWakeUntil = Date.now() + NIGHT_WAKE_MS;
   refreshNetStatus();
   setInterval(refreshNetStatus, NET_STATUS_POLL_MS);
+  refreshNetworkCompare();
+  setInterval(refreshNetworkCompare, NETWORK_POLL_MS);
   applyNightDim();
   fetch('/wake', { method: 'POST' }).catch(() => {});
 }
@@ -2350,7 +2352,7 @@ const ALERT_CLEAR_RADIUS_NM = 2.0;  // slightly wider exit threshold, so a
 // -- this is a personal display preference for whoever's looking at this
 // particular screen, not data that should be the same for every viewer.
 const ALERT_SETTINGS_KEY = 'flightradar_alert_settings_v1';
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true };
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: false, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true };
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -2525,6 +2527,70 @@ function checkNearbyAlert(pl, range) {
   } else if (range > ALERT_CLEAR_RADIUS_NM) {
     pl.alerted = false; // free to re-alert if it later comes back around
   }
+}
+
+// ---- Network comparison --------------------------------------------------
+// Two things at once, both fed by the device-side proxy at /network (see
+// deploy/network-compare.py):
+//
+//   GHOSTS    aircraft a public ADS-B network can see in this ring that this
+//             antenna did NOT hear. Drawn hollow and dimmed, with no trail,
+//             so a glance always distinguishes "my receiver heard this" from
+//             "the network says it is there".
+//   SCORECARD what the running comparison says about this receiver -- overall
+//             coverage, and which altitude bands and bearings it is blind in.
+//
+// OFF by default. These units get given away, and a recipient's radar should
+// not contact a third party unless they have chosen to. The proxy makes no
+// upstream request of its own: it only fetches when this page asks, so with
+// the setting off the device is exactly as self-contained as before.
+const NETWORK_URL = '/network';
+const NETWORK_POLL_MS = 20 * 1000;   // proxy caches for 15s; no point going faster
+let ghosts = [];          // aircraft only the network can see
+let networkStats = null;  // last scorecard
+let networkError = null;
+
+async function refreshNetworkCompare() {
+  if (!alertSettings.networkCompare) { ghosts = []; return; }
+  try {
+    const res = await fetch(NETWORK_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    networkStats = d.stats || null;
+    networkError = d.stale ? 'network unreachable — showing the last comparison' : null;
+    // Only keep ghosts inside the drawn ring, and only ones with a usable
+    // position. Everything else is noise on a 20nm display.
+    ghosts = (d.ac || []).map(a => {
+      if (!home || typeof a.lat !== 'number' || typeof a.lon !== 'number') return null;
+      const { bearing, range } = haversineBearingRange(home.lat, home.lon, a.lat, a.lon);
+      if (range > RANGE_NM) return null;
+      return { ...a, bearing, range, hdg: (typeof a.track === 'number' ? a.track : bearing) };
+    }).filter(Boolean);
+  } catch (e) {
+    networkError = 'comparison unavailable';
+    ghosts = [];
+  }
+}
+
+// Hollow, dimmed, no trail, no label. The visual grammar has to make it
+// obvious at a glance that these are not this receiver's own contacts --
+// they are somebody else's, relayed. Drawn UNDER the real blips so a ghost
+// can never obscure an aircraft this antenna actually heard.
+function drawGhosts() {
+  if (!alertSettings.networkCompare || !ghosts.length) return;
+  ctx.save();
+  ctx.globalAlpha = 0.42;
+  ctx.lineWidth = 1.4;
+  ctx.setLineDash([3, 2]);
+  for (const g of ghosts) {
+    const { x, y } = polarToXY(g.bearing, g.range);
+    const bs = blipScale(g.alt === 'ground' ? 'ground' : g.alt);
+    ctx.strokeStyle = COLORS.textDim || COLORS.ground;
+    ctx.beginPath();
+    ctx.arc(x, y, 6 * bs, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 // ---- Connectivity status -------------------------------------------------
@@ -3639,6 +3705,7 @@ function tick(ts) {
   drawRings();
   drawSweep();
   drawTrails();
+  drawGhosts();          // under drawPlanes: a ghost must never hide a real contact
   drawPlanes(dt);
   updateStatus();
 
@@ -3963,6 +4030,10 @@ function alertSettingsMeta() { return [
   { group: 'overlays', key: 'storms', label: 'Storm radar overlay', sub: 'Live weather radar over the map (RainViewer)' },
   { group: 'overlays', key: 'heatmap', label: `${AIRPORT.code} approach heatmap`, sub: `Density pattern built from actually observed ${AIRPORT.code} landings` },
   { group: 'overlays', key: 'lightning', label: 'Lightning overlay', sub: 'Satellite-observed strike density (GOES-East GLM, via SSEC RealEarth)' },
+  {
+    group: 'overlays', key: 'networkCompare', label: 'Network comparison',
+    sub: 'Outlines aircraft a public ADS-B network sees that this antenna cannot hear, and scores your coverage. Sends this radar\u2019s approximate location to adsb.lol',
+  },
   { group: 'alerts', key: 'lightningAlert', label: 'Lightning proximity alert', sub: `Chime + banner when a strike is detected within ${LIGHTNING_ALERT_RADIUS_NM}nm` },
   { group: 'display', key: 'nightDim', label: 'Dim at night', sub: 'Darkens the display between sunset and sunrise at the receiver' },
   { group: 'alerts', key: 'alertWake', label: 'Alerts wake the screen', sub: 'Nearby + emergency alerts undim, and wake the display if the screensaver blanked it' },
@@ -4103,6 +4174,65 @@ function renderDeviceSetup() {
              <div class="sp-sub">Shows a link to open on your phone</div></div>
         <div class="sp-chevron">&#8250;</div></div>`;
   }
+  if (deviceView === 'scorecard') {
+    const st = networkStats;
+    if (!alertSettings.networkCompare) {
+      return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Receiver scorecard</div>
+        <div class="sp-sub" style="padding:10px 0;line-height:1.7">
+          This compares what your antenna hears against a public ADS-B
+          network, so you can see how much of the traffic overhead you are
+          actually receiving — and, more usefully, which directions and
+          altitudes you are blind in.<br><br>
+          It is off by default because it contacts a third party. Turn on
+          <b>Network comparison</b> under Map overlays to start measuring.
+        </div>`;
+    }
+    if (!st || !st.ready) {
+      return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Receiver scorecard</div>
+        <div class="sp-sub" style="padding:10px 0;line-height:1.7">
+          ${esc(networkError || 'Collecting comparisons. A few minutes of traffic gives a usable picture; a full day gives a reliable one.')}
+        </div>`;
+    }
+    const bands = [['0-2000','below 2,000 ft'], ['2000-6000','2,000–6,000 ft'],
+                   ['6000-15000','6,000–15,000 ft'], ['15000+','above 15,000 ft']];
+    const bandRows = bands.map(([k, label]) => {
+      const b = st.byAlt[k] || {};
+      if (!b.total) return '';
+      return `<div class="sp-row"><div>
+                <div class="sp-label">${esc(label)}</div>
+                <div class="sp-sub">${b.heard} of ${b.total} heard</div>
+              </div><div class="sp-label">${b.pct}%</div></div>`;
+    }).join('');
+    // Worst and best 30-degree sector, which is what actually tells you
+    // where to point or move the antenna.
+    const sect = Object.entries(st.byBearing || {})
+      .filter(([, v]) => v.total >= 5)
+      .map(([k, v]) => ({ a: Number(k) * 30, pct: v.pct, total: v.total }))
+      .sort((x, y) => x.pct - y.pct);
+    const dirTxt = sect.length
+      ? `Worst ${sect[0].a}–${sect[0].a + 30}° at ${sect[0].pct}%, best ${sect[sect.length-1].a}–${sect[sect.length-1].a + 30}° at ${sect[sect.length-1].pct}%`
+      : 'Not enough samples per direction yet';
+    // The diagnosis worth stating plainly: low bands weak while high bands
+    // are fine is a blocked horizon, not a deaf receiver, and no amount of
+    // gain fixes it.
+    const low = st.byAlt['0-2000'] || {}, high = st.byAlt['15000+'] || {};
+    const verdict = (low.total >= 10 && high.total >= 10 && low.pct !== null && high.pct !== null && high.pct - low.pct > 30)
+      ? 'Low traffic is being missed while high traffic is heard — that is a blocked horizon (trees, roofline, indoors), not a sensitivity problem. Height and a clear view fix it; a bigger antenna will not.'
+      : 'No strong altitude bias yet.';
+    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Receiver scorecard</div>
+      <div class="sp-sub" style="padding:6px 0">vs ${esc(st.source)} · ${st.samples} comparisons</div>
+      ${networkError ? `<div class="sp-sub" style="padding:4px 0;color:var(--warn)">${esc(networkError)}</div>` : ''}
+      <div class="sp-row"><div><div class="sp-label">Coverage</div>
+        <div class="sp-sub">${st.heard} of ${st.networkTotal} aircraft in range</div></div>
+        <div class="sp-label" style="color:var(--airport-highlight)">${st.coveragePct}%</div></div>
+      <div class="sp-row"><div><div class="sp-label">Position freshness</div>
+        <div class="sp-sub">yours ${st.medianAgeMine === null ? '—' : st.medianAgeMine + 's'} · network ${st.medianAgeNetwork === null ? '—' : st.medianAgeNetwork + 's'} (median)</div></div></div>
+      <div class="sp-section-title">By altitude</div>
+      ${bandRows}
+      <div class="sp-section-title">By direction</div>
+      <div class="sp-sub" style="padding:6px 0;line-height:1.7">${esc(dirTxt)}</div>
+      <div class="sp-sub" style="padding:10px 0;line-height:1.7">${esc(verdict)}</div>`;
+  }
   if (deviceView === 'reboot') {
     return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Restart this radar</div>
       <div class="sp-sub" style="padding:10px 0;line-height:1.7">
@@ -4155,6 +4285,11 @@ function renderDeviceSetup() {
   // than warning: say what a restart costs, since on an appliance with no
   // keyboard "restart" can sound scarier than it is.
   const rebootNow = 'Takes about a minute — settings and history are kept';
+  const scoreNow = !alertSettings.networkCompare
+    ? 'Turn on Network comparison in Map overlays to measure this antenna'
+    : (networkStats && networkStats.ready
+        ? `Hearing ${networkStats.coveragePct}% of the traffic in range`
+        : 'Collecting — check back in a few minutes');
   const rem = d.remote || {};
   const remNow = rem.state === 'Running'
     ? (rem.publicUrl ? `Public page at ${rem.publicUrl}` : `Connected as ${rem.magicDnsName || 'this device'}`)
@@ -4173,6 +4308,8 @@ function renderDeviceSetup() {
       <div class="sp-sub">${esc(pwNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-act="hotspot-toggle"><div><div class="sp-label">Setup network</div>
       <div class="sp-sub">${esc(hsNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
+    <div class="sp-menu-row" data-dev="scorecard"><div><div class="sp-label">Receiver scorecard</div>
+      <div class="sp-sub">${esc(scoreNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="reboot"><div><div class="sp-label">Restart this radar</div>
       <div class="sp-sub">${esc(rebootNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="reset"><div><div class="sp-label" style="color:#ff6b6b">Erase everything</div>
@@ -4542,6 +4679,7 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   }
   if (key === 'storms') applyStormsVisibility();
   if (key === 'heatmap') applyHeatmapVisibility();
+  if (key === 'networkCompare') refreshNetworkCompare();
   if (key === 'lightning') applyLightningVisibility();
   if (key === 'nightDim') { nightWakeUntil = 0; applyNightDim(); } // re-evaluate now, don't wait for the next minute tick
   renderSettingsPanel();

@@ -31,9 +31,15 @@ MUST_BLOCK = [
 # Paths that merely start with the same letters must NOT be caught.
 MUST_ALLOW = [
     "/", "/index.html", "/wakeup", "/wake-up", "/awake", "/setupx",
-    "/sightings", "/approaches", "/config.json",
+    "/sightings", "/approaches", "/network", "/network/stats", "/config.json",
     "/tar1090/data/receiver.json", "/my/wake/board",
 ]
+
+# Paths that may be READ publicly but must never be WRITTEN publicly. The
+# stores accept unauthenticated POSTs, and /network makes an outbound call
+# on this device's behalf, so a public write path would let a stranger both
+# pollute months of data and drive traffic at a community-run API.
+MUST_BE_READ_ONLY = ["/sightings", "/approaches", "/network"]
 
 
 def main():
@@ -50,9 +56,14 @@ def main():
         if required not in fg.LOCAL_ONLY_PATHS:
             failures.append(f"{required} missing from LOCAL_ONLY_PATHS")
 
+    for required in MUST_BE_READ_ONLY:
+        if required not in fg.READ_ONLY_PUBLIC_PATHS:
+            failures.append(f"{required} missing from READ_ONLY_PUBLIC_PATHS "
+                            "(public traffic could WRITE to it)")
+
     for f in failures:
         print("FAIL:", f)
-    total = len(MUST_BLOCK) + len(MUST_ALLOW)
+    total = len(MUST_BLOCK) + len(MUST_ALLOW) + len(MUST_BE_READ_ONLY)
     print(f"{total - len(failures)}/{total} path checks passed")
     return 1 if failures else 0
 
