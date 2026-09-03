@@ -975,8 +975,23 @@ const LEADER_BASE_OPACITY = 0.55; // matches #leaders line's CSS opacity -- scal
 // this never outlives what's actually on screen). TRAIL_MAX_POINTS is just
 // a safety net against unbounded growth for the rare case of a plane
 // sitting in view a very long time (e.g. a local helicopter loitering for
-// hours) -- one point per ~1s poll, so this is a generous ceiling, not a
-// visible cutoff for any normal overflight/approach.
+// hours) -- one point per TRAIL_SAMPLE_MS, so this is a generous ceiling
+// (~30 minutes of continuous track), not a visible cutoff for any normal
+// overflight/approach.
+// How often the drawn position is recorded into the trail. The trail is a
+// record of where the blip actually WAS, so it is sampled from the render
+// loop rather than pushed once per poll from the incoming fix -- see the
+// note on p.trail in drawPlanes. 250ms sits comfortably under SMOOTH_TAU
+// (0.35s), so the recorded path resolves the easing rather than cutting
+// corners across it, without storing a point per frame.
+const TRAIL_SAMPLE_MS = 250;
+// Don't record a point the blip has not meaningfully moved to. Once the
+// eased position converges on its target -- an aircraft holding still, or
+// simply settled between fixes -- every sample would otherwise be a
+// duplicate, filling the ring buffer with coincident points and drawing
+// thousands of zero-length segments. ~0.02nm is well under half a pixel at
+// the 20nm/410px scale, so nothing visible is dropped.
+const TRAIL_MIN_MOVE_NM = 0.02;
 const TRAIL_MAX_POINTS = 7200;
 // Fade-only window: older segments dim toward TRAIL_FADE_FLOOR rather than
 // disappearing, so a long flight path stays visible end to end but still
@@ -3088,8 +3103,6 @@ function applyUpdate(list) {
       existing.vrate = n.vrate;
       existing.category = n.category;
       existing.lastSeen = now;
-      existing.trail.push({ bearing: n.bearing, range: n.range, t: now });
-      pruneTrail(existing.trail, now);
     } else {
       // Read before recordSightingOnce below increments it -- rarityOf needs
       // to know whether this receiver had ever seen the aircraft before now.
@@ -3106,6 +3119,7 @@ function applyUpdate(list) {
         wtc: null,
         lastSeen: now,
         trail: [{ bearing: n.bearing, range: n.range, t: now }],
+        lastTrailAt: now,
       });
       recordSightingOnce(n.hex, 'total'); // a genuinely new visit, not just still-in-view -- see "Sighting counts" above
     }
@@ -3288,6 +3302,31 @@ function drawPlanes(dt) {
     p.bearing += bearingDelta(p.bearing, p.targetBearing) * alpha;
     p.bearing = ((p.bearing % 360) + 360) % 360; // keep in [0,360) -- pure accumulation would otherwise drift arbitrarily far past it over a long-lived contact (e.g. a tight holding pattern), same issue labelAngle already guards against below
     p.range += (p.targetRange - p.range) * alpha;
+
+    // Record where the blip IS, not where the last fix said it should be.
+    // The trail used to be pushed from applyUpdate straight off the incoming
+    // fix, which meant the blip glided through each correction (it chases
+    // the target with SMOOTH_TAU easing) while the trail took the correction
+    // as a hard vertex. Position squitters are missed often on weak signals
+    // -- a contact at -23dBFS was measured getting a fresh position on only
+    // 7 of 20 polls, worst gap 18.7s -- so every one of those gaps ended in
+    // a visible kink behind an aircraft that looked like it was flying
+    // smoothly. Sampling the eased position instead makes the trail the
+    // history of the drawn path, which is smooth by construction.
+    if (now - (p.lastTrailAt || 0) >= TRAIL_SAMPLE_MS) {
+      p.lastTrailAt = now;
+      const last = p.trail[p.trail.length - 1];
+      // Planar distance from the previous point: radial change, plus the arc
+      // swept at this range. Cheaper than projecting both to canvas space and
+      // exact enough for a threshold this small.
+      const moved = !last ? Infinity : Math.hypot(
+        p.range - last.range,
+        p.range * bearingDelta(last.bearing, p.bearing) * Math.PI / 180);
+      if (moved >= TRAIL_MIN_MOVE_NM) {
+        p.trail.push({ bearing: p.bearing, range: p.range, t: now });
+        pruneTrail(p.trail, now);
+      }
+    }
 
     if (p.range > RANGE_NM) continue;
     inRange.push(p);
