@@ -27,9 +27,6 @@ glass_thickness   = 1.62;   // measured with calipers: just the glass sheet itse
 pcb_w = 108; pcb_h = 72;
 mount_hole_x = 58; mount_hole_y = 49;
 
-dongle_l = 95; dongle_w = 32; dongle_h = 13;
-dongle_clearance = 3;
-
 // ---------- MEASURE ON YOUR ASSEMBLED UNIT, THEN SET ----------
 // Bumped 42 -> 56 to give the side-mounted speakers (45mm along this
 // axis) room without touching the Pi/heatsink stack -- double check
@@ -88,8 +85,7 @@ shelf_h = lip_height - retainer_h;
 // Desk-stand build now (not primarily wall-hung), so the power + antenna
 // pass-throughs move to the back FLOOR disc (world Z=0..wall) instead of
 // the old radial side-wall holes -- easier to reach and keeps them off
-// to one side, close together, out of the way of the PCB standoffs,
-// dongle pocket, and keyholes.
+// to one side, close together, out of the way of the PCB standoffs.
 usbc_hole_dia      = 23;   // Adafruit #4218 round panel-mount USB-C: needs 21.5-27mm, ~29.5mm OD barrel/nut
 antenna_hole_dia   = 6.5;  // generic SMA-F/F bulkhead panel jack: 1/4-36 thread, ~6.3mm hole, ~9.5mm hex nut
 back_holes_x       = 60;   // shared X position, tucked toward one side
@@ -252,7 +248,7 @@ intake_pitch = 6;    // spacing between intake holes
 // ---------- 30mm FAN (CanaKit 5V PWM, 30x30, 25mm hole pitch) ----------
 // Mounted flat on the back floor above the Pi, drawing outside air in
 // through its own grille. Placed clear of the Pi footprint (+/-54 x +/-36),
-// the dongle pocket (y -78..-40) and the USB-C / antenna holes (x=60).
+// and the USB-C / antenna holes (x=60).
 // Stood UPRIGHT on a bracket just outside the Pi's +Y edge, axis
 // horizontal, blowing -Y straight across the top of the Pi and its
 // heatsink -- rather than lying flat on the floor, which only pushed air
@@ -367,7 +363,7 @@ module intake_grille() {
 module exhaust_slots() {
     for (i = [0:n_exhaust-1]) {
         a = i * 360/n_exhaust;
-        // skip the arc facing the dongle pocket / cable exits (around -90deg / 270deg)
+        // skip the arc facing the cable exits (around -90deg / 270deg)
         skip = (a > 270 - exhaust_skip_deg/2 && a < 270 + exhaust_skip_deg/2);
         if (!skip) {
             translate([(outer_dia/2)*cos(a), (outer_dia/2)*sin(a), exhaust_z])
@@ -724,7 +720,7 @@ module shell() {
         // USB-C power + antenna pass-throughs, through the back floor
         // disc (desk-stand build now, not primarily wall-hung -- the
         // back faces away from the viewer either way), close together
-        // off to one side, clear of the standoffs and dongle pocket
+        // off to one side, clear of the standoffs
         translate([back_holes_x, back_holes_y1, -1])
             cylinder(d=usbc_hole_dia, h=wall+2);
         translate([back_holes_x, back_holes_y2, -1])
@@ -782,22 +778,11 @@ module shell() {
         }
     }
 
-    // dongle pocket — an open-topped tray sitting on the floor, with
-    // a small notch so the USB cable can route up toward the Pi
-    dp_w = dongle_l + 2*dongle_clearance;
-    dp_d = dongle_w + 2*dongle_clearance;
-    dp_h = dongle_h + dongle_clearance + wall;
-    dp_x = -dp_w/2;
-    dp_y = -(pcb_h/2) - dp_d - 4;
-    translate([dp_x, dp_y, 0])
-        difference() {
-            cube([dp_w, dp_d, dp_h]);
-            translate([wall, wall, wall])
-                cube([dp_w - 2*wall, dp_d - 2*wall, dp_h]); // open top, floor stays at the bottom
-            // cable notch through the wall facing the Pi (the +Y side)
-            translate([dp_w/2 - 6, dp_d - wall - 1, wall + 2])
-                cube([12, wall+2, dp_h]);
-        }
+    // No dongle pocket. There was a fitted open-topped tray on the floor
+    // here; it did not work in practice -- the dongle plus its USB lead and
+    // the antenna pigtail do not sit the way a rigid tray assumes, and it
+    // fought the cable routing rather than helping it. The dongle now just
+    // lies in the cavity, which is what actually happens anyway.
 }
 
 // ============================================================
