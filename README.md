@@ -94,7 +94,8 @@ too.
   ADS-B network can see in your ring that your antenna did not hear, and
   keeps a scorecard of how you compare: overall coverage, which altitude
   bands and which bearings you are blind in, and position freshness against
-  the network's. Measured here, the receiver was hearing 44% of the traffic
+  the network's. Tap one of the outlined aircraft to see what the network
+  knows about it, clearly marked as reported rather than received. Measured here, the receiver was hearing 44% of the traffic
   in range, and 8 of the 9 it missed were below 4,000ft — the signature of a
   blocked horizon rather than a deaf receiver
 - **Touch detail panel** — tap any aircraft for registration, squawk, vertical

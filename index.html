@@ -371,6 +371,16 @@
     letter-spacing: 0.08em;
     margin-bottom: 8px;
   }
+  /* Same position as .dp-alert-tag but NOT var(--bad): a ghost is not an
+     alarm. Red here read as "something is wrong with this aircraft" when
+     the actual meaning is "your antenna cannot hear it". */
+  #detailPanel .dp-ghost-tag {
+    color: var(--ghost);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
   #detailPanel .dp-cs { font-size: 1.3rem; font-weight: 700; letter-spacing: 0.04em; }
   #detailPanel .dp-badge {
     display: inline-block;
@@ -2613,6 +2623,67 @@ function drawGhosts() {
   ctx.restore();
 }
 
+// Ghosts are tappable, but they always LOSE to a real contact: the stage
+// handler tries findPlaneAtStagePoint first and only falls through to here.
+// An aircraft this antenna actually heard must never be shadowed by a
+// relayed marker sitting on top of it.
+function findGhostAtStagePoint(x, y) {
+  const HIT_RADIUS = 22;                       // CSS px, matching real blips
+  const scale = stage.getBoundingClientRect().width / W;   // hoisted: reading
+  // this inside the loop forces a layout per ghost on every tap
+  let best = null, bestDistSq = Infinity;
+  for (const g of ghosts) {
+    const { x: gx, y: gy } = polarToXY(g.bearing, g.range);
+    const dx = x - gx * scale, dy = y - gy * scale;
+    const d2 = dx * dx + dy * dy;
+    if (d2 <= HIT_RADIUS * HIT_RADIUS && d2 < bestDistSq) { bestDistSq = d2; best = g; }
+  }
+  return best;
+}
+
+// A deliberately different panel from showDetailPanel's. This aircraft was
+// not heard here, so every field that describes THIS receiver's relationship
+// to it -- sighting counts, signal, "within 2mi" -- would be a lie or a zero
+// that reads like one. What is shown instead is what the network knows, and
+// an explicit statement of where it came from.
+function showGhostPanel(g) {
+  hideSettingsPanel();
+  detailPanelHex = g.hex;
+  const alt = g.alt === 'ground' ? 'On the ground' : formatAltitude(g.alt);
+  const spd = typeof g.gs === 'number' ? Math.round(g.gs) + ' kt' : '—';
+  const trk = typeof g.track === 'number' ? Math.round(g.track) + '°' : '—';
+  const age = typeof g.seen_pos === 'number' ? g.seen_pos.toFixed(1) + 's ago' : '—';
+  // On GA traffic the callsign IS the registration, so listing both just
+  // prints the same string twice under itself.
+  const title = g.flight || g.hex.toUpperCase();
+  const reg = (g.reg && g.reg.toUpperCase() !== title.toUpperCase()) ? g.reg : null;
+  const subtitle = [g.type, reg].filter(Boolean).join(' · ') || 'Type unknown';
+  const src = (networkStats && networkStats.source) || 'the network';
+  detailPanelEl.innerHTML = `
+    <div class="dp-close">&times;</div>
+    <div class="dp-ghost-tag">\u25cc NOT HEARD HERE</div>
+    <div class="dp-photo" style="display:none"></div>
+    <div class="dp-cs" style="color:${COLORS.ghost}">${esc(title)}</div>
+    <div class="dp-badge" style="background:${COLORS.ghost};color:#0b0f12">${esc(src)}</div>
+    <div class="dp-type">${esc(subtitle)}</div>
+    <div class="dp-route">Your antenna is not receiving this aircraft. Everything below is what ${esc(src)} reports.</div>
+    <div class="dp-grid">
+      <div class="dp-field"><div class="dp-label">Altitude</div><div class="dp-value">${esc(alt)}</div></div>
+      <div class="dp-field"><div class="dp-label">Speed</div><div class="dp-value">${esc(spd)}</div></div>
+      <div class="dp-field"><div class="dp-label">Track</div><div class="dp-value">${esc(trk)}</div></div>
+      <div class="dp-field"><div class="dp-label">Their fix</div><div class="dp-value">${esc(age)}</div></div>
+      <div class="dp-field"><div class="dp-label">Range / Brg</div><div class="dp-value">${g.range.toFixed(1)} nm · ${Math.round(g.bearing)}°</div></div>
+      <div class="dp-field"><div class="dp-label">Mode S</div><div class="dp-value">${esc(g.hex.toUpperCase())}</div></div>
+    </div>
+  `;
+  detailPanelEl.classList.add('show');
+  detailPanelEl.classList.remove('alert');   // not an alert; the tag says enough
+  detailBackdropEl.classList.add('show');
+  clearTimeout(detailDismissTimer);
+  detailDismissTimer = setTimeout(hideDetailPanel, 18000);
+  loadDetailPhoto(g.hex);   // same aircraft, same photo source as any other
+}
+
 // ---- Connectivity status -------------------------------------------------
 // Answers one question at a glance: is this thing working? Two independent
 // halves, because they fail independently and the fix differs.
@@ -4753,6 +4824,11 @@ stage.addEventListener('pointerup', (e) => {
   const x = e.clientX - rect.left, y = e.clientY - rect.top;
   const p = findPlaneAtStagePoint(x, y);
   if (p) showDetailPanel(p);
+  else {
+    // only after no real contact matched -- see findGhostAtStagePoint
+    const g = findGhostAtStagePoint(x, y);
+    if (g) showGhostPanel(g);
+  }
   // a tap on empty sky does nothing. Settings open only from #gearBtn --
   // on a wall-mounted touch panel, any stray brush against the glass used
   // to throw the settings panel over the radar.
