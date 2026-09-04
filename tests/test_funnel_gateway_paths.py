@@ -26,6 +26,9 @@ MUST_BLOCK = [
     "/WAKE", "/Wake", "/wake?x=1", "/wake#frag", "/wake/now",
     "/setup", "/setup/", "//setup", "/./setup", "/%73etup",
     "/setup/api/wifi", "/SETUP", "/setup?x=1", "/x/../setup",
+    # The kiosk's paint heartbeat. Reachable publicly it would let a stranger
+    # convince the watchdog a frozen display is healthy.
+    "/wake/alive",
 ]
 
 # Paths that merely start with the same letters must NOT be caught.

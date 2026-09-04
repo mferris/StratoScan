@@ -90,6 +90,13 @@ too.
   connection; viewed remotely it falls back to whether data is still flowing
 - **Restart from the screen** — a Restart row under Device setup, so a stuck
   unit does not need someone to find and pull the plug
+- **Frozen-display watchdog** — the radar reports each painted frame to a
+  local endpoint, and the device restarts the kiosk if the panel is powered
+  on but nothing has been drawn for two and a half minutes. Chromium can
+  lose its GPU context and stop painting while the page stays alive by every
+  other measure, which otherwise leaves a stale radar on screen until
+  somebody walks up to it. A blanked screen is not a fault: the watchdog
+  checks the panel's real power state first
 - **Statistics** — a Settings section that reads the accumulated flight
   history back: how many distinct aircraft have been heard and how many
   separate passes they made, how many came within two miles, and how much

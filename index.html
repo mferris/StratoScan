@@ -4261,6 +4261,25 @@ function updateStatus() {
 // ---- Main loop -------------------------------------------------
 let lastFrameTs = performance.now();
 
+// Reported from inside the loop, after a frame is genuinely drawn, so the
+// device can tell "still painting" from "alive but frozen" -- a distinction
+// nothing outside the browser can make. Chromium can lose its GPU context
+// and never repaint while every other sign of life continues: timers fire,
+// fetches succeed, the page looks healthy from the outside. See the watchdog
+// in deploy/wake-listener.py, which is what listens for this.
+//
+// Deliberately at the end of a drawn frame rather than on a timer of its own:
+// a timer would keep reporting health through exactly the failure it exists
+// to catch.
+const HEARTBEAT_MS = 20 * 1000;
+let lastHeartbeatAt = 0;
+
+function reportPainted(now) {
+  if (now - lastHeartbeatAt < HEARTBEAT_MS) return;
+  lastHeartbeatAt = now;
+  fetch('/wake/alive', { method: 'POST' }).catch(() => {});  // absent off-device; harmless
+}
+
 function tick(ts) {
   // re-arm first: an early return below must not kill the loop
   requestAnimationFrame(tick);
@@ -4284,6 +4303,8 @@ function tick(ts) {
 
   sweepAngle += SWEEP_RAD_PER_SEC * dt;
   if (sweepAngle > Math.PI * 2) sweepAngle -= Math.PI * 2;
+
+  reportPainted(ts);   // last, so it only ever follows a frame that was drawn
 }
 
 // ---- Touch interaction --------------------------------------------------
