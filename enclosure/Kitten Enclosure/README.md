@@ -35,10 +35,11 @@ an appearance/fit test prints in minutes rather than hours.
 - **Paws** stretch forward from the plinth: a domed pad that tapers from a
   taller, narrower ankle to a wide, low front, with four splayed toe lobes
   leading it and a cleft cut between each pair.
-- **Tail** is thick at the root and tapers to a lifted tip, sweeping around
-  the right side and curling in front of the paws — the pose a sitting cat
-  actually adopts. Interpolated through its control points with Catmull-Rom
-  so it flows rather than kinking at every joint.
+- **Tail** is thick at the root and tapers to a rounded tip. It hugs the
+  plinth around the right side, then climbs the right paw's outboard flank
+  and comes to rest draped over the foot — the pose a sitting cat actually
+  adopts. Interpolated through its control points with Catmull-Rom so it
+  flows rather than kinking at every joint.
 
 ## The antenna is different here
 
@@ -76,7 +77,8 @@ must come out **empty**:
 | `whisker_through` | a whisker hole is a real through-path, not a blind hole |
 | `head_in_cradle` | the head seats in the stand with no interference |
 | `ears_vs_cradle` | the ears clear the cradle arms |
-| `tail_vs_paws` | the tail passes outboard of the paws instead of merging into one |
+| `tail_over_paw` | the tail rests ON the right paw rather than through it |
+| `tail_vs_left_paw` | it comes nowhere near the left paw |
 | `tail_vs_head` | the tail stays under the cradled head |
 | `paws_vs_head` | so do the paws |
 
@@ -109,9 +111,11 @@ Mistakes actually made and fixed on this design, kept as warnings:
   or they dead-end in solid plastic: open from outside, sealed from inside.
 - **The tail has to stay below z≈16.** The cradled head's underside comes down
   to about z=27, so a tail that swept upward collides with it.
-- **Keep the tail outboard of the right paw** until it is clear of the paw's
-  front edge. An earlier curl cut the corner and merged into it, reading as
-  one lump rather than a tail wrapped around a foot. `tail_vs_paws` pins it.
+- **The tail rests ON the right paw, and must cross OVER it.** Tail and paw
+  deliberately meet; what must not happen is the tail passing through the
+  foot at pad height, which reads as one fused lump rather than a tail
+  draped over a paw. `tail_over_paw` asserts the tail never intrudes below
+  z=11, the paw's lower half — "must not touch" would be the wrong test here.
 - **The toes have to LEAD the pad, not sit under it.** The first version put
   them behind the pad's front sphere, so every toe was swallowed by the hull
   and the paws rendered as plain teardrops. Toe tips now define `y_front`
