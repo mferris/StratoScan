@@ -49,6 +49,29 @@ else if (check=="head_in_cradle") {
     translate([0,0,arm_lift]) rotate([90-stand_angle,0,0]) translate([0,0,-shell_depth/2]) shell();
   }
 }
+// The tail sweeps past the right paw and curls in front of both. It must
+// pass OUTBOARD of the paw rather than through it -- merging into one lump
+// is what the earlier, shorter tail did. Empty = it stays clear.
+else if (check=="tail_vs_paws") {
+  intersection() { tail(); union() { paw(44); paw(-44); } }
+}
+// The tail must also stay under the cradled head, whose underside comes
+// down to about z=27.
+else if (check=="tail_vs_head") {
+  arm_lift = base_h + cradle_od/2 - 3;
+  intersection() {
+    tail();
+    translate([0,0,arm_lift]) rotate([90-stand_angle,0,0]) translate([0,0,-shell_depth/2]) shell();
+  }
+}
+// Paws must not reach the head either, now that they are taller.
+else if (check=="paws_vs_head") {
+  arm_lift = base_h + cradle_od/2 - 3;
+  intersection() {
+    union() { paw(44); paw(-44); }
+    translate([0,0,arm_lift]) rotate([90-stand_angle,0,0]) translate([0,0,-shell_depth/2]) shell();
+  }
+}
 else if (check=="ears_vs_cradle") {
   arm_lift = base_h + cradle_od/2 - 3;
   intersection() {

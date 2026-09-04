@@ -155,25 +155,43 @@ whisker_groove_d = 0.9;
 // STAND — a sitting cat. Plinth is rounded rather than a slab.
 base_w = outer_dia*0.86; base_d = 150; base_h = 16;
 base_corner_r = 18;
-paw_x      = 42;    // paws either side of centre
-paw_w      = 34;
-paw_reach  = 26;    // how far they stretch forward of the plinth
-paw_h      = 13;
-toe_dia    = 9;
-// The tail curls flat around the right side and forward. It stays
-// below z=16 deliberately: the cradled head's underside comes down to
-// about z=27, so a tail that swept upward would collide with it.
-// The last three points stay outboard of x=62: the right paw occupies
-// x 25..59, and an earlier curl that swept in to x=36 simply merged into
-// it, reading as one lump rather than a tail beside a paw.
+// PAWS. A real foreleg is not a flat capsule with domes stuck on: it is
+// narrow and taller at the ankle, spreading and flattening forward into a
+// pad, with four toes splayed across the front and visible clefts between
+// them. Built from hulled ellipsoids rather than cylinders so the top is
+// domed rather than a flat disc, and the toes are separate lobes that break
+// the outline rather than bumps sitting on it.
+paw_x      = 44;    // paws either side of centre
+paw_w      = 38;    // across the toes, the widest point
+paw_reach  = 34;    // how far they stretch forward of the plinth
+paw_h      = 16;    // at the ankle, where it is tallest
+paw_ankle_w = 0.62; // ankle width as a fraction of paw_w -- forelegs taper
+n_toes     = 4;
+toe_dia    = 12;
+toe_splay  = 23;    // degrees between toe centres, fanned across the front
+cleft_w    = 2.6;   // width of the groove between toes
+cleft_d    = 5;     // how deep the groove cuts
+
+// TAIL. Thicker at the root and tapering to a rounded tip, sweeping around
+// the right side and curling IN FRONT OF the paws -- the pose a sitting cat
+// actually adopts. Two hard constraints:
+//   - it stays low. The cradled head's underside comes down to about z=27,
+//     so a tail that swept upward would collide with it.
+//   - it passes OUTBOARD of the right paw (x >= 66 alongside it) and only
+//     turns inward once it is clear of the paw's front edge. An earlier
+//     version cut the corner at x=36 and merged into the paw, reading as
+//     one lump rather than a tail wrapped around a foot.
 tail_pts = [
-    [ 66,  52,  7, 17],
-    [ 92,  40,  7, 16],
-    [104,  12,  7, 15],
-    [ 99, -22,  7, 14],
-    [ 88, -48,  6, 12],
-    [ 78, -66,  6, 10],
-    [ 68, -78,  5,  8],
+    [ 58,  60,  10, 25],   // root, buried in the plinth
+    [ 86,  52,  10, 24],
+    [106,  28,  10, 22],
+    [114,  -2,  10, 20],
+    [110, -36,   9, 18],
+    [ 98, -68,   9, 16],
+    [ 84, -96,   9, 14],
+    [ 66, -118,  9, 12],
+    [ 42, -126, 11, 10],   // curling in across the front of the paws
+    [ 20, -123, 13,  8],   // tip lifts slightly, the way a real tail finishes
 ];
 
 // ============================================================
@@ -511,25 +529,95 @@ module plinth() {
                 cylinder(r=base_corner_r, h=base_h);
 }
 
+// One toe lobe: an egg pointing forward, sitting low so its crown is the
+// highest thing at the front of the paw.
+// y_front is the TOE TIP line, not the pad's front. The first version put
+// the toes at y_front + 0.55*toe_dia while the pad's front sphere reached
+// 6.7mm further forward still, so every toe sat entirely inside the pad
+// hull and contributed nothing -- the paws rendered as plain teardrops.
+// The toes now lead, and the pad stops behind them.
+function toe_a(i) = (i - (n_toes - 1) / 2) * toe_splay;
+function toe_pos(i, y_front) = [
+    sin(toe_a(i)) * paw_w * 0.40,
+    y_front + toe_dia * 0.62 + (1 - cos(toe_a(i))) * 6,   // outer toes sit back
+    toe_dia * 0.46
+];
+module toe(i, y_front) {
+    translate(toe_pos(i, y_front))
+        rotate([0, 0, -toe_a(i)])
+            scale([1, 1.35, 0.85])
+                sphere(d = toe_dia, $fn = 40);
+}
+
 module paw(x) {
+    y_back  = -base_d/2 + 10;                 // buried in the plinth
     y_front = -base_d/2 - paw_reach;
     translate([x, 0, 0]) {
+        // the leg/pad, domed and tapering: narrow and tall at the ankle,
+        // wide and low at the toes
         hull() {
-            translate([0, -base_d/2 + 8, 0]) cylinder(d=paw_w, h=paw_h);
-            translate([0, y_front + paw_w/2, 0]) cylinder(d=paw_w, h=paw_h);
+            translate([0, y_back, paw_h * 0.46])
+                scale([1, 1, 0.95]) sphere(d = paw_w * paw_ankle_w, $fn = 40);
+            translate([0, (y_back + y_front) / 2, paw_h * 0.40])
+                scale([1.04, 1, 0.80]) sphere(d = paw_w * 0.84, $fn = 44);
+            // pad front, held BACK so the toes lead it
+            translate([0, y_front + toe_dia * 1.95, paw_h * 0.33])
+                scale([1.10, 1, 0.68]) sphere(d = paw_w * 0.92, $fn = 44);
         }
-        // three toe domes, sunk so only their crowns show
-        for (t = [-1, 0, 1])
-            translate([t * paw_w/3.4, y_front + paw_w/2 + 2, paw_h - 2])
-                sphere(d=toe_dia, $fn=32);
+        for (i = [0 : n_toes - 1]) toe(i, y_front);
     }
 }
 
+// Clefts between the toes. Cut at stand level rather than unioned away
+// here, because a difference inside a module that is later intersected with
+// the desk plane would be undone by the union around it.
+module paw_clefts(x) {
+    y_front = -base_d/2 - paw_reach;
+    // one cleft per gap, placed midway between adjacent toe centres so it
+    // tracks the fan however toe_splay is tuned
+    translate([x, 0, 0])
+        for (i = [0 : n_toes - 2]) {
+            pa = toe_pos(i, y_front);
+            pb = toe_pos(i + 1, y_front);
+            mid = [(pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2, (pa[2] + pb[2]) / 2];
+            ang = (toe_a(i) + toe_a(i + 1)) / 2;
+            translate([mid[0], mid[1], mid[2] + cleft_d * 0.5])
+                rotate([0, 0, -ang])
+                    hull() {
+                        translate([0, -toe_dia * 0.75, 0]) sphere(d = cleft_w, $fn = 20);
+                        translate([0,  toe_dia * 0.85, cleft_d * 0.5]) sphere(d = cleft_w * 1.6, $fn = 20);
+                    }
+        }
+}
+
+// Catmull-Rom through the control points. Hulling straight between them
+// left a visible kink at every joint -- fine for a bracket, wrong for a
+// tail, where the whole point is that it flows. Interpolating also carries
+// the diameter, so the taper is smooth rather than stepped.
+function cr(p0, p1, p2, p3, t) =
+    0.5 * ((2 * p1)
+         + (-p0 + p2) * t
+         + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t
+         + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
+
+tail_smooth_steps = 6;   // interpolated points per control segment
+
+function tail_curve() = concat(
+    [ for (i = [0 : len(tail_pts) - 2])
+        for (j = [0 : tail_smooth_steps - 1])
+            cr(tail_pts[max(i - 1, 0)],
+               tail_pts[i],
+               tail_pts[i + 1],
+               tail_pts[min(i + 2, len(tail_pts) - 1)],
+               j / tail_smooth_steps) ],
+    [ tail_pts[len(tail_pts) - 1] ]);
+
 module tail() {
-    for (i = [0 : len(tail_pts) - 2])
+    pts = tail_curve();
+    for (i = [0 : len(pts) - 2])
         hull() {
-            translate([tail_pts[i][0],   tail_pts[i][1],   tail_pts[i][2]])   sphere(d=tail_pts[i][3],   $fn=32);
-            translate([tail_pts[i+1][0], tail_pts[i+1][1], tail_pts[i+1][2]]) sphere(d=tail_pts[i+1][3], $fn=32);
+            translate([pts[i][0],   pts[i][1],   pts[i][2]])   sphere(d = max(pts[i][3],   1), $fn = 28);
+            translate([pts[i+1][0], pts[i+1][1], pts[i+1][2]]) sphere(d = max(pts[i+1][3], 1), $fn = 28);
         }
 }
 
@@ -546,6 +634,14 @@ module cradle_arm(depth_offset) {
 }
 
 module stand() {
+    difference() {
+        stand_solid();
+        paw_clefts( paw_x);
+        paw_clefts(-paw_x);
+    }
+}
+
+module stand_solid() {
     // rotate([90 - stand_angle,0,0]) lays the ring axis horizontal and
     // tips it back so the head leans at stand_angle. Rotating by only
     // stand_angle leaves the rings nearly flat, floating above the
