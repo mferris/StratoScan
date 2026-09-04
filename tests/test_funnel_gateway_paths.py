@@ -32,6 +32,7 @@ MUST_BLOCK = [
 MUST_ALLOW = [
     "/", "/index.html", "/wakeup", "/wake-up", "/awake", "/setupx",
     "/sightings", "/approaches", "/network", "/network/stats", "/config.json",
+    "/sightings/stats", "/sightings/unclassified",
     "/tar1090/data/receiver.json", "/my/wake/board",
 ]
 
@@ -39,7 +40,14 @@ MUST_ALLOW = [
 # stores accept unauthenticated POSTs, and /network makes an outbound call
 # on this device's behalf, so a public write path would let a stranger both
 # pollute months of data and drive traffic at a community-run API.
-MUST_BE_READ_ONLY = ["/sightings", "/approaches", "/network"]
+MUST_BE_READ_ONLY = [
+    "/sightings", "/approaches", "/network",
+    # The statistics endpoints hang off /sightings, and the batched write
+    # added for the classification backfill lands on /sightings itself -- a
+    # public POST there could rewrite the classification of every aircraft
+    # in months of history in one request.
+    "/sightings/stats", "/sightings/unclassified",
+]
 
 
 def main():
@@ -56,9 +64,13 @@ def main():
         if required not in fg.LOCAL_ONLY_PATHS:
             failures.append(f"{required} missing from LOCAL_ONLY_PATHS")
 
+    # Asserts the behaviour, not the literal list: a sub-path like
+    # /sightings/stats is covered by its parent's prefix rule and is never
+    # going to appear in READ_ONLY_PUBLIC_PATHS by name. What matters is that
+    # a public write to it is refused.
     for required in MUST_BE_READ_ONLY:
-        if required not in fg.READ_ONLY_PUBLIC_PATHS:
-            failures.append(f"{required} missing from READ_ONLY_PUBLIC_PATHS "
+        if not fg.Handler._is_read_only_public(required):
+            failures.append(f"{required} is not treated as read-only "
                             "(public traffic could WRITE to it)")
 
     for f in failures:

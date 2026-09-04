@@ -651,6 +651,74 @@
     margin-top: 18px;
     margin-bottom: 2px;
   }
+  /* Statistics. A distribution reads far faster as a bar than as a column
+     of percentages, and on a 1080px round display there is no room for a
+     charting library's axes and legends -- so the bar is the row itself. */
+  #settingsPanel .sp-stat {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 0;
+    border-top: 1px solid var(--panel-border);
+  }
+  #settingsPanel .sp-stat:first-of-type { border-top: none; margin-top: 8px; }
+  #settingsPanel .sp-stat-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--airport-highlight);
+    flex-shrink: 0;
+  }
+  #settingsPanel .sp-bar-row { padding: 9px 0; border-top: 1px solid var(--panel-border); }
+  #settingsPanel .sp-bar-row:first-of-type { border-top: none; }
+  #settingsPanel .sp-bar-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  #settingsPanel .sp-bar-num {
+    font-size: 0.66rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+  #settingsPanel .sp-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--switch-track-off);
+    margin-top: 7px;
+    overflow: hidden;
+  }
+  #settingsPanel .sp-bar > span {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background: var(--mid);
+  }
+  #settingsPanel .sp-hours {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 52px;
+    margin-top: 10px;
+  }
+  #settingsPanel .sp-hours > i {
+    flex: 1;
+    min-height: 1px;
+    border-radius: 1px;
+    background: var(--mid);
+  }
+  #settingsPanel .sp-hours > i.peak { background: var(--airport-highlight); }
+  #settingsPanel .sp-hours-axis {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.5rem;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    margin-top: 5px;
+  }
   #settingsPanel .sp-theme-row {
     display: flex;
     align-items: center;
@@ -1573,6 +1641,152 @@ function recordSighting(hex, kind) {
     .catch(e => {}); // sighting-store unavailable -- this session's own optimistic count stands, just won't be shared
 }
 
+// ---- Flight statistics ---------------------------------------------
+// The counts above answer "have I seen this one before?". These answer the
+// questions the Statistics screens ask of the whole accumulated history: who
+// flies over this house (commercial / private / military), what flies over it
+// (jets / props / helicopters), how much of it actually comes close, and what
+// the extremes have been.
+//
+// Classification happens here rather than on the server because this is where
+// it is already known -- the callsign gives the operator, the type database
+// gives the airframe -- and the store has neither. The store only keeps and
+// aggregates what it is told.
+const FLIGHT_STATS_URL = '/sightings/stats';
+let flightStats = null;      // last aggregate; null until the first load
+
+async function loadFlightStats() {
+  try {
+    const res = await fetch(FLIGHT_STATS_URL, { cache: 'no-store' });
+    if (res.ok) flightStats = await res.json();
+  } catch (e) {
+    // store unavailable -- the Statistics screens say so rather than
+    // rendering a page of zeroes that looks like "nothing has ever flown over"
+  }
+  return flightStats;
+}
+
+// A history collected before classification existed is not a lost cause. The
+// airframe can be recovered from the hex alone, using the same type database
+// that already decides each blip's shape on the radar -- 3,000-odd aircraft
+// that would otherwise sit in "not identified" forever. The operator cannot
+// be: that needs the callsign, which the old store never kept, so those
+// aircraft stay unidentified on the operator screen and the screen says so.
+//
+// Self-terminating by construction: the device only ever hands back aircraft
+// that still lack an airframe, so once the backlog is done this costs exactly
+// one request. Deliberately unhurried -- it is filling in history nobody is
+// waiting on, on a Pi that is already close to its thermal limit.
+const BACKFILL_START_DELAY_MS = 30 * 1000;
+const BACKFILL_CHUNK_PAUSE_MS = 2000;
+const BACKFILL_MAX_ROUNDS = 16;
+
+async function backfillClassifications() {
+  for (let round = 0; round < BACKFILL_MAX_ROUNDS; round++) {
+    let list;
+    try {
+      const res = await fetch('/sightings/unclassified', { cache: 'no-store' });
+      if (!res.ok) return;
+      list = await res.json();
+    } catch (e) {
+      return;   // store unreachable; nothing to do and nothing to report
+    }
+    const hexes = (list && list.hexes) || [];
+    if (!hexes.length) return;   // backlog cleared
+    const batch = [];
+    for (const hex of hexes) {
+      const info = await lookupType(hex);
+      batch.push({ hex, class: {
+        // An aircraft the database has never heard of resolves to 'unknown',
+        // which is itself a recorded answer -- so it leaves the backlog
+        // rather than being asked about again on every future load.
+        k: classifyAircraft({ typeDesc: info.desc, wtc: info.wtc, category: null }),
+        // militaryOperator reads the address block, not the callsign, so this
+        // much of the operator class survives the missing callsign.
+        op: militaryOperator(hex) ? 'mil' : null,
+      } });
+    }
+    try {
+      await fetch(SIGHTING_STORE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batch }),
+      });
+    } catch (e) {
+      return;
+    }
+    if (!list.remaining) return;
+    await new Promise(r => setTimeout(r, BACKFILL_CHUNK_PAUSE_MS));
+  }
+}
+
+function postSighting(body) {
+  return fetch(SIGHTING_STORE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(e => null);   // same tolerance as recordSighting: it is a counter, not a transaction
+}
+
+// Military outranks the callsign deliberately: a military airframe flying
+// something that parses as an airline flight number is still military, and
+// militaryOperator() keys off the hex block, which cannot be spoofed by a
+// callsign the crew typed in.
+function operatorClassOf(pl) {
+  if (militaryOperator(pl.hex)) return 'mil';
+  if (pl.airlineIcao && AIRLINES[pl.airlineIcao]) return 'com';
+  if (pl.airlineLabel === PRIVATE_LABEL) return 'pri';
+  return null;   // callsign not decoded yet -- nothing honest to say, ask again next poll
+}
+
+// Sent twice over a normal aircraft's life: once at first sight, when the
+// callsign already says who is flying, and again when the type database
+// resolves and the airframe is known. The store keeps the last valid value
+// per field, so the second call upgrades "unclassified" to "helicopter"
+// without the first having been wrong.
+const classifiedAs = new Map();  // hex -> signature last sent, so a steady aircraft posts once
+function classifySighting(pl) {
+  if (!pl) return;
+  const op = operatorClassOf(pl);
+  const k = classifyAircraft(pl);
+  const cs = pl.hasCallsign ? pl.cs : null;
+  const sig = `${op}|${k}|${cs}`;
+  if (classifiedAs.get(pl.hex) === sig) return;      // nothing new to say
+  if (!op && k === 'unknown' && !cs) return;         // nothing to say at all
+  classifiedAs.set(pl.hex, sig);
+  postSighting({ hex: pl.hex, class: { op, k, cs } });
+}
+
+// All-time extremes. Offered from here because range, altitude and speed are
+// already computed here, but *decided* on the server, which holds the standing
+// record -- so the same 142nm contact offered by four open viewers is recorded
+// once. recordsOffered is this session's own high-water mark, which stops a
+// plane that beats the record from re-posting on every poll of its pass.
+const recordsOffered = { far: 0, near: Infinity, high: 0, fast: 0 };
+function noteFlightRecords(pl) {
+  // Without a baseline every session's first aircraft would look like a
+  // record and post one. Wait for the standing values instead.
+  if (!pl || !flightStats) return;
+  const standing = flightStats.records || {};
+  const offer = {};
+  const consider = (key, value, higherWins) => {
+    if (typeof value !== 'number' || !isFinite(value) || value <= 0) return;
+    const held = standing[key] && typeof standing[key].v === 'number'
+      ? standing[key].v : (higherWins ? 0 : Infinity);
+    const best = higherWins ? Math.max(held, recordsOffered[key])
+                            : Math.min(held, recordsOffered[key]);
+    if (higherWins ? value > best : value < best) {
+      offer[key] = Math.round(value * 10) / 10;
+      recordsOffered[key] = value;
+    }
+  };
+  consider('far', pl.range, true);
+  consider('near', pl.range, false);
+  consider('high', typeof pl.alt === 'number' ? pl.alt : null, true);  // 'ground' is not an altitude
+  consider('fast', pl.speed, true);
+  if (Object.keys(offer).length) postSighting({ hex: pl.hex, rec: offer });
+}
+
 // Called once per poll (not per animation frame -- this wants real GPS
 // fixes, not smoothed/eased blip positions) for each tracked aircraft.
 // Buffers candidate points on `pl` while a plane is plausibly on approach
@@ -2377,6 +2591,10 @@ function wakeScreenForAlert() {
 // that comes within ALERT_RADIUS_NM of the receiver -- on by default,
 // toggled via the settings panel (see #gearBtn/showSettingsPanel below).
 const ALERT_RADIUS_NM = 1.738;      // 2 statute miles -- entry threshold
+// The same threshold in the unit people actually say out loud. The alert copy
+// has always read "within 2 miles"; the Statistics screens say it too, and one
+// constant keeps the two from drifting apart.
+const ALERT_RADIUS_MI = 2;
 const ALERT_CLEAR_RADIUS_NM = 2.0;  // slightly wider exit threshold, so a
                                      // plane sitting right at the boundary
                                      // can't flap the alert on noisy range
@@ -2618,6 +2836,7 @@ async function refreshNetworkCompare() {
         gs: a.gs, track: a.track, seenPos: a.seen_pos,
         squawk: a.squawk ?? null, vrate: typeof a.vrate === 'number' ? a.vrate : null,
         emergency: a.emergency && a.emergency !== 'none' ? a.emergency : null,
+        category: a.category ?? null,
         fixLat: a.lat, fixLon: a.lon, fixAt: now,
         lastSeenAt: now,
         // identity is what makes a trail possible: carry it across the poll
@@ -2629,8 +2848,15 @@ async function refreshNetworkCompare() {
         registration: prev ? prev.registration : null,
         typeDesc: prev ? prev.typeDesc : null,
         typeCode: prev ? prev.typeCode : null,
+        wtc: prev ? prev.wtc : null,
       });
       enrichGhost(ghostTracks.get(a.hex));
+      // Counted separately from a heard aircraft, never merged with it: the
+      // feed only ever contains what this antenna missed, so `network` is
+      // exactly "seen, but not by us". recordSightingOnce's cooldown covers
+      // a ghost dropping out of the feed and coming back mid-pass.
+      recordSightingOnce(a.hex, 'network');
+      classifyGhost(ghostTracks.get(a.hex));
     }
   } catch (e) {
     networkError = 'comparison unavailable';
@@ -2655,6 +2881,8 @@ function enrichGhost(t) {
     t.registration = info.reg;
     t.typeDesc = info.desc;
     t.typeCode = info.typeCode;
+    t.wtc = info.wtc;
+    classifyGhost(t);   // the airframe is what the first, pre-lookup pass could not say
     // if the panel is open on this ghost, fill it in rather than making the
     // user close and reopen to see the answer arrive
     if (detailPanelHex === t.hex && detailPanelEl.classList.contains('show')) showGhostPanel(t);
@@ -2662,6 +2890,21 @@ function enrichGhost(t) {
   if (t.flight && /^[A-Z]{3}\d/.test(t.flight)) {
     queueRouteLookup(t.flight, t.fixLat, t.fixLon);
   }
+}
+
+// A ghost holds the same facts a local contact does, under different names.
+// Statistics should not care which antenna heard an aeroplane, so reshape it
+// once here rather than teaching classifySighting about two record layouts.
+function classifyGhost(t) {
+  if (!t) return;
+  const hasCallsign = !!(t.flight && t.flight.trim());
+  const cs = hasCallsign ? t.flight.trim() : t.hex.toUpperCase();
+  const airline = airlineFor(cs, hasCallsign);
+  classifySighting({
+    hex: t.hex, cs, hasCallsign,
+    airlineIcao: airline.icao, airlineLabel: airline.label,
+    typeDesc: t.typeDesc, wtc: t.wtc, category: t.category,
+  });
 }
 
 // Advance every tracked ghost to now and rebuild the in-ring display list.
@@ -3494,6 +3737,7 @@ function applyUpdate(list) {
           pl.typeLabel = info.type; pl.registration = info.reg; pl.typeDesc = info.desc; pl.wtc = info.wtc;
           pl.typeCode = info.typeCode;
           checkRareAircraft(pl); // the type is what makes some aircraft notable, and it arrives late
+          classifySighting(pl);  // and it is what tells a helicopter from a jet
         }
       });
     }
@@ -3518,6 +3762,8 @@ function applyUpdate(list) {
     }
 
     updateApproachTracking(planes.get(n.hex), n.fixLat, n.fixLon, n.alt);
+    classifySighting(planes.get(n.hex));
+    noteFlightRecords(planes.get(n.hex));
     checkNearbyAlert(planes.get(n.hex), n.range);
     checkEmergencySquawk(planes.get(n.hex));
     checkAirportPhaseAlert(planes.get(n.hex));
@@ -4286,6 +4532,7 @@ const SETTINGS_GROUPS = [
   { key: 'overlays', label: 'Map overlays', sub: 'Weather, lightning and approach patterns' },
   { key: 'display',  label: 'Display',      sub: 'Night dimming and colour theme' },
   { key: 'audio',    label: 'ATC audio',    sub: 'Live tower feed for the home airport' },
+  { key: 'stats',    label: 'Statistics',   sub: 'What has flown over, and how well you hear it' },
   { key: 'device',   label: 'Device setup',  sub: 'WiFi, location, home airport, reset' },
 ];
 let settingsSection = null;  // null = the menu; otherwise a group key
@@ -4330,6 +4577,10 @@ function renderSettingsPanel() {
   if (!settingsSection) return renderSettingsMenu();
   if (settingsSection === 'device') {
     settingsPanelEl.innerHTML = `<div class="sp-close">&times;</div>` + renderDeviceSetup();
+    return;
+  }
+  if (settingsSection === 'stats') {
+    settingsPanelEl.innerHTML = `<div class="sp-close">&times;</div>` + renderStatistics();
     return;
   }
   const group = SETTINGS_GROUPS.find(g => g.key === settingsSection);
@@ -4384,6 +4635,284 @@ let deviceMsg = '';
 let deviceBusy = false;
 let wifiNets = [];
 let airportRows = [];
+
+function renderScorecard() {
+  const st = networkStats;
+  if (!alertSettings.networkCompare) {
+    return `<div class="sp-back">&#8592; Statistics</div><div class="sp-title">Receiver scorecard</div>
+      <div class="sp-sub" style="padding:10px 0;line-height:1.7">
+        This compares what your antenna hears against a public ADS-B
+        network, so you can see how much of the traffic overhead you are
+        actually receiving — and, more usefully, which directions and
+        altitudes you are blind in.<br><br>
+        Turn on <b>Network comparison</b> under Map overlays to start
+        measuring. It contacts adsb.lol, so switching it off stops both the
+        comparison and the contact.
+      </div>`;
+  }
+  if (!st || !st.ready) {
+    return `<div class="sp-back">&#8592; Statistics</div><div class="sp-title">Receiver scorecard</div>
+      <div class="sp-sub" style="padding:10px 0;line-height:1.7">
+        ${esc(networkError || 'Collecting comparisons. A few minutes of traffic gives a usable picture; a full day gives a reliable one.')}
+      </div>`;
+  }
+  const bands = [['0-2000','below 2,000 ft'], ['2000-6000','2,000–6,000 ft'],
+                 ['6000-15000','6,000–15,000 ft'], ['15000+','above 15,000 ft']];
+  const bandRows = bands.map(([k, label]) => {
+    const b = st.byAlt[k] || {};
+    if (!b.total) return '';
+    return `<div class="sp-row"><div>
+              <div class="sp-label">${esc(label)}</div>
+              <div class="sp-sub">${b.heard} of ${b.total} heard</div>
+            </div><div class="sp-label">${b.pct}%</div></div>`;
+  }).join('');
+  // Worst and best 30-degree sector, which is what actually tells you
+  // where to point or move the antenna.
+  const sect = Object.entries(st.byBearing || {})
+    .filter(([, v]) => v.total >= 5)
+    .map(([k, v]) => ({ a: Number(k) * 30, pct: v.pct, total: v.total }))
+    .sort((x, y) => x.pct - y.pct);
+  const dirTxt = sect.length
+    ? `Worst ${sect[0].a}–${sect[0].a + 30}° at ${sect[0].pct}%, best ${sect[sect.length-1].a}–${sect[sect.length-1].a + 30}° at ${sect[sect.length-1].pct}%`
+    : 'Not enough samples per direction yet';
+  // The diagnosis worth stating plainly: low bands weak while high bands
+  // are fine is a blocked horizon, not a deaf receiver, and no amount of
+  // gain fixes it.
+  const low = st.byAlt['0-2000'] || {}, high = st.byAlt['15000+'] || {};
+  const verdict = (low.total >= 10 && high.total >= 10 && low.pct !== null && high.pct !== null && high.pct - low.pct > 30)
+    ? 'Low traffic is being missed while high traffic is heard — that is a blocked horizon (trees, roofline, indoors), not a sensitivity problem. Height and a clear view fix it; a bigger antenna will not.'
+    : 'No strong altitude bias yet.';
+  return `<div class="sp-back">&#8592; Statistics</div><div class="sp-title">Receiver scorecard</div>
+    <div class="sp-sub" style="padding:6px 0">vs ${esc(st.source)} · ${st.samples} comparisons</div>
+    ${networkError ? `<div class="sp-sub" style="padding:4px 0;color:var(--warn)">${esc(networkError)}</div>` : ''}
+    <div class="sp-row"><div><div class="sp-label">Coverage</div>
+      <div class="sp-sub">${st.heard} of ${st.networkTotal} aircraft in range</div></div>
+      <div class="sp-label" style="color:var(--airport-highlight)">${st.coveragePct}%</div></div>
+    <div class="sp-row"><div><div class="sp-label">Position freshness</div>
+      <div class="sp-sub">yours ${st.medianAgeMine === null ? '—' : st.medianAgeMine + 's'} · network ${st.medianAgeNetwork === null ? '—' : st.medianAgeNetwork + 's'} (median)</div></div></div>
+    <div class="sp-section-title">By altitude</div>
+    ${bandRows}
+    <div class="sp-section-title">By direction</div>
+    <div class="sp-sub" style="padding:6px 0;line-height:1.7">${esc(dirTxt)}</div>
+    <div class="sp-sub" style="padding:10px 0;line-height:1.7">${esc(verdict)}</div>`;
+}
+
+
+// ---- Statistics ------------------------------------------------------
+// Everything here is read from the sighting store's aggregate, not
+// recomputed on the page: the history is far older than any one browser
+// session, and a laptop opening the Funnel URL for the first time should see
+// the same numbers the kiosk does.
+let statsView = null;   // null = the Statistics menu; otherwise a screen key
+
+const OP_LABELS = {
+  com: 'Commercial', pri: 'Private', mil: 'Military', unk: 'Not identified',
+};
+const KIND_LABELS = {
+  heavy: 'Heavy jets', jet: 'Jets', prop: 'Propeller', heli: 'Helicopters',
+  lta: 'Balloons & airships', unknown: 'Not identified',
+};
+
+function scorecardSubtitle() {
+  if (!alertSettings.networkCompare) return 'Turn on Network comparison in Map overlays to measure this antenna';
+  if (networkStats && networkStats.ready) return `Hearing ${networkStats.coveragePct}% of the traffic in range`;
+  return 'Collecting — check back in a few minutes';
+}
+
+const STATS_SCREENS = [
+  { key: 'overview',  label: 'Overview',      sub: () => 'Everything seen here, and how much came close' },
+  { key: 'operators', label: 'Who flies over', sub: () => 'Commercial, private and military' },
+  { key: 'kinds',     label: 'What flies over', sub: () => 'Jets, propeller aircraft, helicopters' },
+  { key: 'nearby',    label: 'Close encounters', sub: () => `Everything that came within ${ALERT_RADIUS_MI} miles` },
+  { key: 'records',   label: 'Records',       sub: () => 'Farthest, closest, highest, fastest, busiest hour' },
+  { key: 'scorecard', label: 'Receiver scorecard', sub: scorecardSubtitle },
+];
+
+function statNum(n) {
+  return typeof n === 'number' ? n.toLocaleString() : '—';
+}
+
+function statRow(label, value, sub) {
+  return `<div class="sp-stat"><div>
+      <div class="sp-label">${esc(label)}</div>
+      ${sub ? `<div class="sp-sub">${esc(sub)}</div>` : ''}
+    </div><div class="sp-stat-value">${esc(String(value))}</div></div>`;
+}
+
+// Bars are scaled against the largest row, not against the total: with one
+// category holding 90% of the traffic -- which is what a house near a big
+// airport actually looks like -- every other bar would otherwise be a stub
+// too short to compare against its neighbours.
+function statBars(rows) {
+  const max = Math.max(1, ...rows.map(r => r.value));
+  if (!rows.some(r => r.value > 0)) {
+    return '<div class="sp-sub" style="padding:10px 0">Nothing recorded yet.</div>';
+  }
+  return rows.map(r => `
+    <div class="sp-bar-row">
+      <div class="sp-bar-head">
+        <div class="sp-label">${esc(r.label)}</div>
+        <div class="sp-bar-num">${statNum(r.value)}${r.note ? ` · ${esc(r.note)}` : ''}</div>
+      </div>
+      <div class="sp-bar"><span style="width:${Math.round(100 * r.value / max)}%"></span></div>
+    </div>`).join('');
+}
+
+function statsDateLine(st) {
+  if (!st) return '';
+  // A migrated store has counts but no start date -- see sighting-store.py.
+  // Saying "since today" over months of history would be worse than saying
+  // nothing, and pretending the backlog does not exist would be worse still.
+  const started = st.since
+    ? `Counting since ${new Date(st.since * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`
+    : 'Counting from before dates were recorded';
+  const backlog = st.undated
+    ? ` · ${statNum(st.undated)} aircraft were already on file by then`
+    : '';
+  return `<div class="sp-sub" style="padding:6px 0">${esc(started + backlog)}</div>`;
+}
+
+function renderStatsScreen(key, st) {
+  const back = '<div class="sp-back">&#8592; Statistics</div>';
+  const screen = STATS_SCREENS.find(x => x.key === key);
+  const title = `<div class="sp-title">${esc(screen ? screen.label : 'Statistics')}</div>`;
+
+  if (key === 'scorecard') return renderScorecard();
+
+  if (!st) {
+    return `${back}${title}<div class="sp-sub" style="padding:10px 0;line-height:1.7">
+      The flight history is not readable right now. It lives on the radar
+      itself, so this resolves on its own once the device is reachable.</div>`;
+  }
+
+  if (key === 'overview') {
+    // "Seen" and "heard" are deliberately two numbers. Everything in the ring
+    // was seen; only what the antenna decoded was heard. Collapsing them
+    // would let the network's reach flatter this receiver's.
+    const inRing = st.heard + st.networkOnly;
+    return `${back}${title}${statsDateLine(st)}
+      ${statRow('Aircraft heard here', statNum(st.heard), 'Distinct aircraft this antenna has decoded')}
+      ${statRow('Visits', statNum(st.visits), 'Separate passes overhead, not one per aircraft')}
+      ${statRow(`Came within ${ALERT_RADIUS_MI} miles`, statNum(st.nearby), 'Passes that triggered the nearby alert')}
+      <div class="sp-section-title">With the network comparison</div>
+      ${statRow('Seen but not heard', statNum(st.networkOnly), 'Aircraft only ever seen because adsb.lol reported them')}
+      ${statRow('Aircraft in range, all sources', statNum(inRing), inRing ? `This antenna accounted for ${Math.round(100 * st.heard / inRing)}% of them` : '')}
+      <div class="sp-sub" style="padding:12px 0;line-height:1.7">
+        The second group is only counted while Network comparison is on, so it
+        undercounts any period it was off.</div>`;
+  }
+
+  if (key === 'operators') {
+    const rows = ['com', 'pri', 'mil', 'unk'].map(k => ({
+      label: OP_LABELS[k],
+      value: st.byOp[k] ? st.byOp[k].visits : 0,
+      note: `${statNum(st.byOp[k] ? st.byOp[k].ac : 0)} aircraft`,
+    }));
+    return `${back}${title}
+      <div class="sp-sub" style="padding:6px 0">Visits by operator, with distinct aircraft alongside</div>
+      ${statBars(rows)}
+      <div class="sp-sub" style="padding:12px 0;line-height:1.7">
+        Military is recognised from the aircraft's address block rather than
+        its callsign, so a military aircraft flying a civil-looking callsign
+        still lands here. "Not identified" is traffic whose callsign this
+        receiver never decoded — usually a brief, distant contact.</div>`;
+  }
+
+  if (key === 'kinds') {
+    const order = ['heavy', 'jet', 'prop', 'heli', 'lta', 'unknown'];
+    const rows = order.map(k => ({
+      label: KIND_LABELS[k],
+      value: st.byKind[k] ? st.byKind[k].visits : 0,
+      note: `${statNum(st.byKind[k] ? st.byKind[k].ac : 0)} aircraft`,
+    }));
+    return `${back}${title}
+      <div class="sp-sub" style="padding:6px 0">Visits by airframe, with distinct aircraft alongside</div>
+      ${statBars(rows)}
+      <div class="sp-sub" style="padding:12px 0;line-height:1.7">
+        Taken from the aircraft type database, which is also what picks each
+        blip's shape on the radar — so these categories match what you see
+        flying across the screen.</div>`;
+  }
+
+  if (key === 'nearby') {
+    const opRows = ['com', 'pri', 'mil', 'unk'].map(k => ({
+      label: OP_LABELS[k], value: st.byOp[k] ? st.byOp[k].nearby : 0 }));
+    const kindRows = ['heavy', 'jet', 'prop', 'heli', 'lta', 'unknown'].map(k => ({
+      label: KIND_LABELS[k], value: st.byKind[k] ? st.byKind[k].nearby : 0 }));
+    const share = st.visits ? Math.round(1000 * st.nearby / st.visits) / 10 : null;
+    return `${back}${title}
+      ${statRow(`Passes within ${ALERT_RADIUS_MI} miles`, statNum(st.nearby),
+                share === null ? '' : `${share}% of everything that has flown over`)}
+      <div class="sp-section-title">Who came close</div>
+      ${statBars(opRows)}
+      <div class="sp-section-title">What came close</div>
+      ${statBars(kindRows)}`;
+  }
+
+  if (key === 'records') {
+    const r = st.records || {};
+    const who = k => {
+      const rec = r[k];
+      if (!rec) return '';
+      const when = rec.at ? new Date(rec.at * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+      return [rec.cs || (rec.hex || '').toUpperCase(), when].filter(Boolean).join(' · ');
+    };
+    const hours = Array.isArray(st.hours) ? st.hours : [];
+    const peak = hours.length ? hours.indexOf(Math.max(...hours)) : -1;
+    const hourMax = hours.length ? Math.max(1, ...hours) : 1;
+    const hourBars = hours.length
+      ? `<div class="sp-hours">${hours.map((v, i) =>
+            `<i class="${i === peak && v > 0 ? 'peak' : ''}" style="height:${Math.max(1, Math.round(100 * v / hourMax))}%"></i>`).join('')}</div>
+         <div class="sp-hours-axis"><span>12am</span><span>6am</span><span>noon</span><span>6pm</span><span>11pm</span></div>`
+      : '';
+    // The counts above go back further than the records do -- a store
+    // migrated from before records existed has thousands of passes but no
+    // measurements of them. Saying so here stops "closest approach 3.7 nm"
+    // from reading as a contradiction of "916 passes within 2 miles".
+    const recNote = st.undated
+      ? `Measured since ${st.since ? new Date(st.since * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'recently'}. Earlier passes were counted, but their distances and altitudes were never recorded.`
+      : '';
+    return `${back}${title}
+      ${recNote ? `<div class="sp-sub" style="padding:6px 0;line-height:1.6">${esc(recNote)}</div>` : ''}
+      ${statRow('Farthest contact', r.far ? `${r.far.v} nm` : '—', who('far'))}
+      ${statRow('Closest approach', r.near ? `${r.near.v} nm` : '—', who('near'))}
+      ${statRow('Highest', r.high ? `${statNum(r.high.v)} ft` : '—', who('high'))}
+      ${statRow('Fastest', r.fast ? `${statNum(r.fast.v)} kt` : '—', who('fast'))}
+      <div class="sp-section-title">Busiest time of day</div>
+      ${peak >= 0 && hours[peak] > 0
+        ? `<div class="sp-sub" style="padding:6px 0">Most arrivals overhead between ${fmtHour(peak)} and ${fmtHour((peak + 1) % 24)}</div>${hourBars}`
+        : '<div class="sp-sub" style="padding:10px 0">Not enough traffic recorded yet.</div>'}
+      <div class="sp-section-title">Most frequent visitors</div>
+      ${(st.top || []).length
+        ? (st.top || []).map(t => `<div class="sp-stat"><div>
+              <div class="sp-label">${esc(t.cs || (t.hex || '').toUpperCase())}</div>
+              <div class="sp-sub">${esc([OP_LABELS[t.op], KIND_LABELS[t.k]].filter(Boolean).join(' · ') || 'Not identified')}</div>
+            </div><div class="sp-stat-value">${statNum(t.visits)}</div></div>`).join('')
+        : '<div class="sp-sub" style="padding:10px 0">Nothing has come back often enough yet.</div>'}`;
+  }
+
+  return `${back}${title}`;
+}
+
+function fmtHour(h) {
+  if (h === 0) return '12am';
+  if (h === 12) return 'noon';
+  return h < 12 ? `${h}am` : `${h - 12}pm`;
+}
+
+function renderStatistics() {
+  if (statsView) return renderStatsScreen(statsView, flightStats);
+  return `<div class="sp-back">&#8592; Settings</div><div class="sp-title">Statistics</div>
+    ${statsDateLine(flightStats)}
+    ${STATS_SCREENS.map(({ key, label, sub }) => `
+      <div class="sp-menu-row" data-stat="${key}">
+        <div>
+          <div class="sp-label">${esc(label)}</div>
+          <div class="sp-sub">${esc(sub())}</div>
+        </div>
+        <div class="sp-chevron">&#8250;</div>
+      </div>`).join('')}`;
+}
 
 function renderDeviceSetup() {
   const msg = deviceMsg
@@ -4461,65 +4990,6 @@ function renderDeviceSetup() {
              <div class="sp-sub">Shows a link to open on your phone</div></div>
         <div class="sp-chevron">&#8250;</div></div>`;
   }
-  if (deviceView === 'scorecard') {
-    const st = networkStats;
-    if (!alertSettings.networkCompare) {
-      return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Receiver scorecard</div>
-        <div class="sp-sub" style="padding:10px 0;line-height:1.7">
-          This compares what your antenna hears against a public ADS-B
-          network, so you can see how much of the traffic overhead you are
-          actually receiving — and, more usefully, which directions and
-          altitudes you are blind in.<br><br>
-          It is off by default because it contacts a third party. Turn on
-          <b>Network comparison</b> under Map overlays to start measuring.
-        </div>`;
-    }
-    if (!st || !st.ready) {
-      return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Receiver scorecard</div>
-        <div class="sp-sub" style="padding:10px 0;line-height:1.7">
-          ${esc(networkError || 'Collecting comparisons. A few minutes of traffic gives a usable picture; a full day gives a reliable one.')}
-        </div>`;
-    }
-    const bands = [['0-2000','below 2,000 ft'], ['2000-6000','2,000–6,000 ft'],
-                   ['6000-15000','6,000–15,000 ft'], ['15000+','above 15,000 ft']];
-    const bandRows = bands.map(([k, label]) => {
-      const b = st.byAlt[k] || {};
-      if (!b.total) return '';
-      return `<div class="sp-row"><div>
-                <div class="sp-label">${esc(label)}</div>
-                <div class="sp-sub">${b.heard} of ${b.total} heard</div>
-              </div><div class="sp-label">${b.pct}%</div></div>`;
-    }).join('');
-    // Worst and best 30-degree sector, which is what actually tells you
-    // where to point or move the antenna.
-    const sect = Object.entries(st.byBearing || {})
-      .filter(([, v]) => v.total >= 5)
-      .map(([k, v]) => ({ a: Number(k) * 30, pct: v.pct, total: v.total }))
-      .sort((x, y) => x.pct - y.pct);
-    const dirTxt = sect.length
-      ? `Worst ${sect[0].a}–${sect[0].a + 30}° at ${sect[0].pct}%, best ${sect[sect.length-1].a}–${sect[sect.length-1].a + 30}° at ${sect[sect.length-1].pct}%`
-      : 'Not enough samples per direction yet';
-    // The diagnosis worth stating plainly: low bands weak while high bands
-    // are fine is a blocked horizon, not a deaf receiver, and no amount of
-    // gain fixes it.
-    const low = st.byAlt['0-2000'] || {}, high = st.byAlt['15000+'] || {};
-    const verdict = (low.total >= 10 && high.total >= 10 && low.pct !== null && high.pct !== null && high.pct - low.pct > 30)
-      ? 'Low traffic is being missed while high traffic is heard — that is a blocked horizon (trees, roofline, indoors), not a sensitivity problem. Height and a clear view fix it; a bigger antenna will not.'
-      : 'No strong altitude bias yet.';
-    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Receiver scorecard</div>
-      <div class="sp-sub" style="padding:6px 0">vs ${esc(st.source)} · ${st.samples} comparisons</div>
-      ${networkError ? `<div class="sp-sub" style="padding:4px 0;color:var(--warn)">${esc(networkError)}</div>` : ''}
-      <div class="sp-row"><div><div class="sp-label">Coverage</div>
-        <div class="sp-sub">${st.heard} of ${st.networkTotal} aircraft in range</div></div>
-        <div class="sp-label" style="color:var(--airport-highlight)">${st.coveragePct}%</div></div>
-      <div class="sp-row"><div><div class="sp-label">Position freshness</div>
-        <div class="sp-sub">yours ${st.medianAgeMine === null ? '—' : st.medianAgeMine + 's'} · network ${st.medianAgeNetwork === null ? '—' : st.medianAgeNetwork + 's'} (median)</div></div></div>
-      <div class="sp-section-title">By altitude</div>
-      ${bandRows}
-      <div class="sp-section-title">By direction</div>
-      <div class="sp-sub" style="padding:6px 0;line-height:1.7">${esc(dirTxt)}</div>
-      <div class="sp-sub" style="padding:10px 0;line-height:1.7">${esc(verdict)}</div>`;
-  }
   if (deviceView === 'reboot') {
     return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Restart this radar</div>
       <div class="sp-sub" style="padding:10px 0;line-height:1.7">
@@ -4572,11 +5042,6 @@ function renderDeviceSetup() {
   // than warning: say what a restart costs, since on an appliance with no
   // keyboard "restart" can sound scarier than it is.
   const rebootNow = 'Takes about a minute — settings and history are kept';
-  const scoreNow = !alertSettings.networkCompare
-    ? 'Turn on Network comparison in Map overlays to measure this antenna'
-    : (networkStats && networkStats.ready
-        ? `Hearing ${networkStats.coveragePct}% of the traffic in range`
-        : 'Collecting — check back in a few minutes');
   const rem = d.remote || {};
   const remNow = rem.state === 'Running'
     ? (rem.publicUrl ? `Public page at ${rem.publicUrl}` : `Connected as ${rem.magicDnsName || 'this device'}`)
@@ -4595,8 +5060,6 @@ function renderDeviceSetup() {
       <div class="sp-sub">${esc(pwNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-act="hotspot-toggle"><div><div class="sp-label">Setup network</div>
       <div class="sp-sub">${esc(hsNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
-    <div class="sp-menu-row" data-dev="scorecard"><div><div class="sp-label">Receiver scorecard</div>
-      <div class="sp-sub">${esc(scoreNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="reboot"><div><div class="sp-label">Restart this radar</div>
       <div class="sp-sub">${esc(rebootNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="reset"><div><div class="sp-label" style="color:#ff6b6b">Erase everything</div>
@@ -4813,6 +5276,7 @@ function showSettingsPanel() {
   hideDetailPanel();
   settingsSection = null; // always open at the top level
   deviceView = null; deviceMsg = ''; deviceBusy = false;
+  statsView = null;
   renderSettingsPanel();
   settingsPanelEl.classList.add('show');
   settingsBackdropEl.classList.add('show');
@@ -4918,6 +5382,8 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   if (e.target.closest('.sp-back')) {
     if (settingsSection === 'device' && deviceView) {
       deviceView = null; deviceMsg = '';   // step back within device setup
+    } else if (settingsSection === 'stats' && statsView) {
+      statsView = null;                    // step back within statistics
     } else {
       settingsSection = null;
     }
@@ -4925,6 +5391,23 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     return;
   }
   const menuRow = e.target.closest('.sp-menu-row');
+  if (menuRow && menuRow.dataset.group === 'stats') {
+    settingsSection = 'stats';
+    statsView = null;
+    settingsPanelEl.scrollTop = 0;
+    renderSettingsPanel();
+    // Re-read rather than trust whatever was loaded at startup: this page may
+    // have been open for days, and other viewers have been adding to the same
+    // store the whole time.
+    loadFlightStats().then(renderSettingsPanel);
+    return;
+  }
+  if (menuRow && menuRow.dataset.stat) {
+    statsView = menuRow.dataset.stat;
+    settingsPanelEl.scrollTop = 0;
+    renderSettingsPanel();
+    return;
+  }
   if (menuRow && menuRow.dataset.group === 'device') {
     settingsSection = 'device';
     settingsPanelEl.scrollTop = 0;
@@ -5032,6 +5515,8 @@ async function start() {
   discoverDatabaseFolder().then(loadTypeCodeTable); // non-blocking; type labels fill in once ready
   loadApproachPoints(); // non-blocking; heatmap fills in once ready (or once initApproachLayer adds the source, whichever comes second)
   loadSightingCounts(); // non-blocking; counts fill in once ready, same reasoning
+  loadFlightStats();    // the standing records, so a first plane cannot look like one
+  setTimeout(backfillClassifications, BACKFILL_START_DELAY_MS); // fill in history that predates classification
   await loadHome();
   if (!home) {
     // keep retrying receiver info in the background until it succeeds
