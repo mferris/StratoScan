@@ -90,6 +90,17 @@ too.
   connection; viewed remotely it falls back to whether data is still flowing
 - **Restart from the screen** — a Restart row under Device setup, so a stuck
   unit does not need someone to find and pull the plug
+- **Statistics** — a Settings section that reads the accumulated flight
+  history back: how many distinct aircraft have been heard and how many
+  separate passes they made, how many came within two miles, and how much
+  of it the antenna heard versus only saw through the network comparison.
+  Broken down by operator (commercial / private / military — military
+  recognised from the address block, so a military aircraft flying a
+  civil-looking callsign still counts) and by airframe (heavy jets, jets,
+  propeller, helicopters), using the same type database that decides each
+  blip's shape. Plus all-time records — farthest contact, closest approach,
+  highest, fastest — the busiest hour of the day, and the most frequent
+  visitors. The receiver scorecard lives here too
 - **Network comparison** (on by default, and switchable off) — outlines the aircraft a public
   ADS-B network can see in your ring that your antenna did not hear, and
   keeps a scorecard of how you compare: overall coverage, which altitude
@@ -302,10 +313,12 @@ before you do:
   and it has to be true: it is the only way back in for someone who has
   forgotten the admin password. The web route, which *is* reachable across
   the LAN, still requires it.
-- **Erasing a unit removes the accumulated data too.** The sighting counts
+- **Erasing a unit removes the accumulated data too.** The flight history
   and approach heatmap are a record of which aircraft passed over the
-  previous owner's house, so a full reset clears them along with the
-  credentials and coordinates. A settings-only reset keeps them, and keeps
+  previous owner's house — and the history now carries each aircraft's
+  callsign and classification alongside its counts, which makes it more
+  identifying than a bare tally, not less — so a full reset clears them
+  along with the credentials and coordinates. A settings-only reset keeps them, and keeps
   the network, so it is safe to run remotely.
 - **The network comparison is on by default and sends only a rounded
   position.** It can be switched off in Settings, and switching it off stops
