@@ -1080,6 +1080,24 @@ const PRIVATE_COLOR = '#44494e';
 const ACQUIRING_LABEL = 'Identifying…';
 const ACQUIRING_COLOR = '#33393e';
 
+// scheduled/charter flights are 3 letters + a number (e.g. DAL1234); GA tail
+// numbers (N1182D) correctly don't match and get labeled "Private Aircraft".
+// Shared by local contacts and network ghosts: the callsign means the same
+// thing whichever receiver decoded it, and a ghost badged "the network"
+// while the identical flight from our own antenna reads "Delta Air Lines"
+// makes the two look like different kinds of object rather than the same
+// aircraft seen two ways.
+function airlineFor(cs, hasCallsign) {
+  const m = hasCallsign ? /^([A-Z]{3})\d/.exec(cs) : null;
+  const icao = m ? m[1] : null;
+  const airline = icao ? (AIRLINES[icao] || null) : null;
+  return {
+    icao,
+    label: airline ? airline.name : (hasCallsign ? PRIVATE_LABEL : ACQUIRING_LABEL),
+    color: airline ? airline.color : (hasCallsign ? PRIVATE_COLOR : ACQUIRING_COLOR),
+  };
+}
+
 // ---- State -----------------------------------------------------
 let home = null;                 // { lat, lon } of the receiver
 let planes = new Map();          // hex -> plane record
@@ -2598,6 +2616,8 @@ async function refreshNetworkCompare() {
         hex: a.hex,
         flight: a.flight, type: a.type, reg: a.reg, alt: a.alt,
         gs: a.gs, track: a.track, seenPos: a.seen_pos,
+        squawk: a.squawk ?? null, vrate: typeof a.vrate === 'number' ? a.vrate : null,
+        emergency: a.emergency && a.emergency !== 'none' ? a.emergency : null,
         fixLat: a.lat, fixLon: a.lon, fixAt: now,
         lastSeenAt: now,
         // identity is what makes a trail possible: carry it across the poll
@@ -2608,6 +2628,7 @@ async function refreshNetworkCompare() {
         typeLabel: prev ? prev.typeLabel : null,
         registration: prev ? prev.registration : null,
         typeDesc: prev ? prev.typeDesc : null,
+        typeCode: prev ? prev.typeCode : null,
       });
       enrichGhost(ghostTracks.get(a.hex));
     }
@@ -2633,6 +2654,7 @@ function enrichGhost(t) {
     t.typeLabel = info.type;
     t.registration = info.reg;
     t.typeDesc = info.desc;
+    t.typeCode = info.typeCode;
     // if the panel is open on this ghost, fill it in rather than making the
     // user close and reopen to see the answer arrive
     if (detailPanelHex === t.hex && detailPanelEl.classList.contains('show')) showGhostPanel(t);
@@ -2784,7 +2806,11 @@ function showGhostPanel(g) {
   detailPanelHex = g.hex;
   const alt = g.alt === 'ground' ? 'On the ground' : formatAltitude(g.alt);
   const spd = typeof g.gs === 'number' ? Math.round(g.gs) + ' kt' : '—';
-  const trk = typeof g.track === 'number' ? Math.round(g.track) + '°' : '—';
+  // The network reports `track` and nothing else heading-shaped, which is
+  // exactly the field a local contact's "Heading" is read from too -- see
+  // normalizeAircraft, where realHdg prefers a.track. Same quantity, so it
+  // gets the same label rather than a second name for one number.
+  const hdg = typeof g.track === 'number' ? Math.round(g.track) + '°' : '—';
   // How stale the underlying fix is NOW -- their reported age plus however
   // long ago we fetched it. The plain seen_pos would freeze at fetch time and
   // claim a 40-second-old position was fresh.
@@ -2792,32 +2818,49 @@ function showGhostPanel(g) {
   const age = ageS.toFixed(0) + 's ago' + (ageS >= GHOST_DR_MAX_S ? ' (estimate held)' : '');
   // On GA traffic the callsign IS the registration, so listing both just
   // prints the same string twice under itself.
-  const title = g.flight || g.hex.toUpperCase();
+  const hasCallsign = !!(g.flight && g.flight.trim());
+  const title = hasCallsign ? g.flight.trim() : g.hex.toUpperCase();
   // Prefer the aircraft database's human-readable name over the network's
   // bare ICAO code: "Bombardier Regional Jet CRJ-900" beats "CRJ9".
   const typeTxt = g.typeLabel || g.type || null;
   const regRaw = g.registration || g.reg;
   const reg = (regRaw && regRaw.toUpperCase() !== title.toUpperCase()) ? regRaw : null;
-  const subtitle = [typeTxt, reg].filter(Boolean).join(' · ') || 'Type unknown';
-  const route = g.flight ? routeCache.get(g.flight) : null;
+  const subtitle = [typeTxt || 'Unknown type', reg].filter(Boolean).join(' · ');
+  const route = hasCallsign ? routeCache.get(title) : null;
   const routeTxt = route ? (route.plausible ? route.text : `${route.text} (unconfirmed)`) : null;
   const src = (networkStats && networkStats.source) || 'the network';
+  // Same badge a local contact gets. The source is named in the note below
+  // and by the tag above, so spending the badge on it too would cost the one
+  // line that says who is flying.
+  const { label: airlineLabel, color: badgeColor } = airlineFor(title, hasCallsign);
+  const isPrivate = airlineLabel === PRIVATE_LABEL;
+  // Sightings are this receiver's own history, keyed by hex. A ghost being
+  // absent right now says nothing about whether we have logged it before,
+  // and "Never seen here before" is a genuinely different statement from
+  // "not hearing it at this moment" -- both are worth showing.
+  const counts = sightingCounts.get(g.hex) || { total: 0, nearby: 0 };
+  const rare = rarityOf({ hex: g.hex, typeCode: g.typeCode || g.type, priorTotal: counts.total });
   detailPanelEl.innerHTML = `
     <div class="dp-close">&times;</div>
     <div class="dp-ghost-tag">\u25cc NOT HEARD HERE</div>
     <div class="dp-photo" style="display:none"></div>
     <div class="dp-cs" style="color:${COLORS.ghost}">${esc(title)}</div>
-    <div class="dp-badge" style="background:${COLORS.ghost};color:#0b0f12">${esc(src)}</div>
+    <div class="dp-badge" style="background:${badgeColor}">${esc(airlineLabel)}</div>
     <div class="dp-type">${esc(subtitle)}</div>
+    ${isPrivate ? `<div class="dp-owner" style="display:none"></div>` : ''}
     ${routeTxt ? `<div class="dp-route${route.plausible ? '' : ' implausible'}">${esc(routeTxt)}</div>` : ''}
     <div class="dp-ghost-note">Your antenna is not receiving this aircraft. Everything below is what ${esc(src)} reports.</div>
     <div class="dp-grid">
       <div class="dp-field"><div class="dp-label">Altitude</div><div class="dp-value">${esc(alt)}</div></div>
       <div class="dp-field"><div class="dp-label">Speed</div><div class="dp-value">${esc(spd)}</div></div>
-      <div class="dp-field"><div class="dp-label">Track</div><div class="dp-value">${esc(trk)}</div></div>
-      <div class="dp-field"><div class="dp-label">Their fix</div><div class="dp-value">${esc(age)}</div></div>
+      <div class="dp-field"><div class="dp-label">Heading</div><div class="dp-value">${esc(hdg)}</div></div>
+      <div class="dp-field"><div class="dp-label">Vert. rate</div><div class="dp-value">${esc(vrateLabel(g.vrate ?? null))}</div></div>
+      <div class="dp-field"><div class="dp-label">Squawk</div><div class="dp-value">${esc(g.squawk ?? '—')}</div></div>
       <div class="dp-field"><div class="dp-label">Range / Brg</div><div class="dp-value">${g.range.toFixed(1)} nm · ${Math.round(g.bearing)}°</div></div>
-      <div class="dp-field"><div class="dp-label">Mode S</div><div class="dp-value">${esc(g.hex.toUpperCase())}</div></div>
+      ${!rare ? '' : `<div class="dp-field dp-rare"><div class="dp-label">Notable</div><div class="dp-value">${esc(rare.label)}</div></div>`}
+      <div class="dp-field"><div class="dp-label">Sightings</div><div class="dp-value">${counts.total}</div></div>
+      <div class="dp-field"><div class="dp-label">Within 2mi</div><div class="dp-value">${counts.nearby}</div></div>
+      <div class="dp-field"><div class="dp-label">Their fix</div><div class="dp-value">${esc(age)}</div></div>
     </div>
   `;
   detailPanelEl.classList.add('show');
@@ -2826,7 +2869,9 @@ function showGhostPanel(g) {
   clearTimeout(detailDismissTimer);
   detailDismissTimer = setTimeout(hideDetailPanel, 18000);
   loadDetailPhoto(g.hex);   // same aircraft, same photo source as any other
+  if (isPrivate) loadOwner(g.hex);   // and the same registry lookup
 }
+
 
 // ---- Connectivity status -------------------------------------------------
 // Answers one question at a glance: is this thing working? Two independent
@@ -3362,13 +3407,7 @@ function normalizeAircraft(a) {
   const hasCallsign = !!(a.flight && a.flight.trim());
   const cs = hasCallsign ? a.flight.trim() : a.hex.toUpperCase();
 
-  // scheduled/charter flights are 3 letters + a number (e.g. DAL1234); GA tail
-  // numbers (N1182D) correctly don't match and get labeled "Private Aircraft"
-  const airlineMatch = hasCallsign ? /^([A-Z]{3})\d/.exec(cs) : null;
-  const airlineIcao = airlineMatch ? airlineMatch[1] : null;
-  const airline = airlineIcao ? (AIRLINES[airlineIcao] || null) : null;
-  const airlineLabel = airline ? airline.name : (hasCallsign ? PRIVATE_LABEL : ACQUIRING_LABEL);
-  const badgeColor = airline ? airline.color : (hasCallsign ? PRIVATE_COLOR : ACQUIRING_COLOR);
+  const { icao: airlineIcao, label: airlineLabel, color: badgeColor } = airlineFor(cs, hasCallsign);
 
   return {
     hex: a.hex, cs, hasCallsign, bearing, range, alt, hdg, realHdg, speed: a.gs ?? null,
