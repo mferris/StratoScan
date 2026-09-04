@@ -2625,10 +2625,6 @@ function applyNightDim() {
 function wakeScreenForAlert() {
   if (!alertSettings.alertWake) return;
   nightWakeUntil = Date.now() + NIGHT_WAKE_MS;
-  refreshNetStatus();
-  setInterval(refreshNetStatus, NET_STATUS_POLL_MS);
-  refreshNetworkCompare();
-  setInterval(refreshNetworkCompare, NETWORK_POLL_MS);
   applyNightDim();
   fetch('/wake', { method: 'POST' }).catch(() => {});
 }
@@ -5618,6 +5614,20 @@ async function start() {
   loadSightingCounts(); // non-blocking; counts fill in once ready, same reasoning
   loadFlightStats();    // the standing records, so a first plane cannot look like one
   setTimeout(backfillClassifications, BACKFILL_START_DELAY_MS); // fill in history that predates classification
+
+  // Both of these belong here, once, for the life of the page. They were
+  // registered inside wakeScreenForAlert instead, which got them exactly
+  // backwards in two ways: neither polled at all until the first alert fired
+  // -- so on a quiet receiver the connectivity pill's network half never
+  // refreshed and no ghost ever appeared -- and every alert after that added
+  // another permanent pair. On a receiver that sees a couple of hundred close
+  // passes, /onboard would end up being hit a couple of hundred times per
+  // cycle, and that endpoint shells out to about six nmcli processes per call
+  // on a Pi already sitting near its thermal limit.
+  refreshNetStatus();
+  setInterval(refreshNetStatus, NET_STATUS_POLL_MS);
+  refreshNetworkCompare();
+  setInterval(refreshNetworkCompare, NETWORK_POLL_MS);
   await loadHome();
   if (!home) {
     // keep retrying receiver info in the background until it succeeds
