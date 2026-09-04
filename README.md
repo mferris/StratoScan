@@ -99,8 +99,8 @@ too.
   civil-looking callsign still counts) and by airframe (heavy jets, jets,
   propeller, helicopters), using the same type database that decides each
   blip's shape. Plus all-time records — farthest contact, closest approach,
-  highest, fastest — the busiest hour of the day, and the most frequent
-  visitors. The receiver scorecard lives here too
+  highest, fastest — the busiest hour of the day and the busiest day of the
+  week, and the most frequent visitors. The receiver scorecard lives here too
 - **Network comparison** (on by default, and switchable off) — outlines the aircraft a public
   ADS-B network can see in your ring that your antenna did not hear, and
   keeps a scorecard of how you compare: overall coverage, which altitude

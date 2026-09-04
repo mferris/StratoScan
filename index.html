@@ -714,6 +714,33 @@
     background: var(--mid);
   }
   #settingsPanel .sp-hours > i.peak { background: var(--airport-highlight); }
+  /* The weekday chart is the hour chart's sibling but needs its labels under
+     each bar rather than at the ends -- seven columns is few enough to name
+     every one, and "which day" is unreadable without them. */
+  #settingsPanel .sp-week {
+    display: flex;
+    align-items: flex-end;
+    gap: 5px;
+    height: 52px;
+    margin-top: 10px;
+  }
+  #settingsPanel .sp-week > i {
+    flex: 1;
+    min-height: 1px;
+    border-radius: 2px;
+    background: var(--mid);
+  }
+  #settingsPanel .sp-week > i.peak { background: var(--airport-highlight); }
+  #settingsPanel .sp-week-axis {
+    display: flex;
+    gap: 5px;
+    margin-top: 5px;
+    font-size: 0.52rem;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+  }
+  #settingsPanel .sp-week-axis > span { flex: 1; text-align: center; }
+  #settingsPanel .sp-week-axis > span.peak { color: var(--airport-highlight); }
   #settingsPanel .sp-hours-axis {
     display: flex;
     justify-content: space-between;
@@ -4747,7 +4774,7 @@ const STATS_SCREENS = [
   { key: 'operators', label: 'Who flies over', sub: () => 'Commercial, private and military' },
   { key: 'kinds',     label: 'What flies over', sub: () => 'Jets, propeller aircraft, helicopters' },
   { key: 'nearby',    label: 'Close encounters', sub: () => `Everything that came within ${ALERT_RADIUS_MI} miles` },
-  { key: 'records',   label: 'Records',       sub: () => 'Farthest, closest, highest, fastest, busiest hour' },
+  { key: 'records',   label: 'Records',       sub: () => 'Farthest, closest, highest, fastest, busiest times' },
   { key: 'scorecard', label: 'Receiver scorecard', sub: scorecardSubtitle },
 ];
 
@@ -4928,6 +4955,8 @@ function renderStatsScreen(key, st) {
       ${peak >= 0 && hours[peak] > 0
         ? `<div class="sp-sub" style="padding:6px 0">Most arrivals overhead between ${fmtHour(peak)} and ${fmtHour((peak + 1) % 24)}</div>${hourBars}`
         : '<div class="sp-sub" style="padding:10px 0">Not enough traffic recorded yet.</div>'}
+      <div class="sp-section-title">Busiest day of the week</div>
+      ${weekChart(st.dows)}
       <div class="sp-section-title">Most frequent visitors</div>
       ${(st.top || []).length
         ? (st.top || []).map(t => `<div class="sp-stat"><div>
@@ -4938,6 +4967,32 @@ function renderStatsScreen(key, st) {
   }
 
   return `${back}${title}`;
+}
+
+// Indexed by ISO weekday, Monday first, matching what the store records --
+// see sighting-store.py. Kept in that order rather than shuffled to a
+// Sunday-first calendar, so the chart and the stored array cannot drift.
+const DOW_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function weekChart(dows) {
+  const week = Array.isArray(dows) && dows.length === 7 ? dows : null;
+  if (!week || !week.some(v => v > 0)) {
+    return `<div class="sp-sub" style="padding:10px 0;line-height:1.7">
+      Nothing recorded yet. This starts from the day the radar was updated —
+      the visits counted before then were never dated.</div>`;
+  }
+  const max = Math.max(...week);
+  const peak = week.indexOf(max);
+  const total = week.reduce((a, b) => a + b, 0);
+  // Comparing days only means something once every day has had a turn.
+  const partial = week.some(v => v === 0);
+  return `<div class="sp-sub" style="padding:6px 0;line-height:1.6">
+      Busiest on ${['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'][peak]},
+      with ${sharePct(max, total)} of the passes so far${partial ? ' — but not every day has been recorded yet' : ''}</div>
+    <div class="sp-week">${week.map((v, i) =>
+      `<i class="${i === peak ? 'peak' : ''}" style="height:${Math.max(1, Math.round(100 * v / max))}%"></i>`).join('')}</div>
+    <div class="sp-week-axis">${DOW_LABELS.map((d, i) =>
+      `<span class="${i === peak ? 'peak' : ''}">${d}</span>`).join('')}</div>`;
 }
 
 function fmtHour(h) {

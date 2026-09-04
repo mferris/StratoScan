@@ -24,7 +24,9 @@ resolved; this end only stores and aggregates what it is told.
                             The original shape, kept exactly: it is what the
                             radar reads on load to fill in per-plane counts,
                             and an older cached page must keep working.
-  GET  /sightings/stats  -> the aggregate the Statistics screens render.
+  GET  /sightings/stats  -> the aggregate the Statistics screens render,
+                            including hour-of-day and day-of-week histograms
+                            of when aircraft actually arrive overhead.
   GET  /sightings/unclassified
                          -> {"hexes": [...]} -- aircraft with no airframe
                             recorded yet. The page can work out an airframe
@@ -94,7 +96,11 @@ lock = threading.Lock()
 
 
 def fresh_store():
-    return {"v": 2, "ac": {}, "hours": [0] * 24, "rec": {}, "since": int(time.time())}
+    # `hours` is indexed by local hour, `dows` by ISO weekday (Monday = 0).
+    # Both are local, deliberately: "when is it busy here" is a question about
+    # this house's week, not about UTC.
+    return {"v": 2, "ac": {}, "hours": [0] * 24, "dows": [0] * 7,
+            "rec": {}, "since": int(time.time())}
 
 
 def migrate(data):
@@ -114,6 +120,11 @@ def migrate(data):
         # a truncated or hand-edited file should not take the service down
         if not isinstance(store.get("hours"), list) or len(store["hours"]) != 24:
             store["hours"] = [0] * 24
+        # Absent on any store written before day-of-week tracking existed --
+        # not corrupt, just older. It starts empty and fills from live traffic,
+        # exactly as `hours` did.
+        if not isinstance(store.get("dows"), list) or len(store["dows"]) != 7:
+            store["dows"] = [0] * 7
         if not isinstance(store.get("rec"), dict):
             store["rec"] = {}
         return store
@@ -213,6 +224,7 @@ def summarise(store):
         "byOp": by_op,
         "byKind": by_kind,
         "hours": store.get("hours", [0] * 24),
+        "dows": store.get("dows", [0] * 7),
         "records": store.get("rec", {}),
         "top": top,
     }
@@ -372,9 +384,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 entry.setdefault("f", now)
                 entry["l"] = now
                 if kind == "total":
-                    # local hour, deliberately: "when is it busy here" is a
-                    # question about this house's day, not about UTC
-                    store["hours"][time.localtime(now).tm_hour] += 1
+                    local = time.localtime(now)
+                    store["hours"][local.tm_hour] += 1
+                    store["dows"][local.tm_wday] += 1
             if classification is not None:
                 apply_class(entry, classification)
             store["ac"][hexcode] = entry
