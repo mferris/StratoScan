@@ -77,6 +77,8 @@ with tempfile.TemporaryDirectory() as tmp:
         json.dump({"v": 2, "ac": {"a145b7": {"t": 4}}, "hours": "nope"}, f)
     repaired = m.load_store()
     check("mangled hours are repaired", len(repaired["hours"]) == 24)
+    check("a store predating day-of-week gets an empty week",
+          repaired["dows"] == [0] * 7)
     check("mangled file keeps its counts", repaired["ac"]["a145b7"]["t"] == 4)
 
     # ---- classification is a closed set ----------------------------------
@@ -149,6 +151,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check("the top list excludes never-heard aircraft",
           all(r["hex"] != "ddd444" for r in summary["top"]))
     check("days is at least one", summary["days"] >= 1)
+    check("the week histogram is reported", len(summary["dows"]) == 7)
     check("undated aircraft are counted", summary["undated"] == 5)
 
     # ---- a migrated store must not claim its history started today -------
@@ -175,6 +178,23 @@ with tempfile.TemporaryDirectory() as tmp:
     m.apply_class(store["ac"]["aaa111"], {"k": "heli"})
     still = [h for h, e in store["ac"].items() if not e.get("k")]
     check("a classified aircraft leaves the list", still == ["bbb222"])
+
+    # ---- an increment lands in the right hour and weekday ----------------
+    import time as _time
+    with open(store_path, "w") as f:
+        json.dump(m.fresh_store(), f)
+    before = m.load_store()
+    entry = before["ac"].setdefault("aaa111", {"t": 0, "n": 0})
+    now = int(_time.time())
+    local = _time.localtime(now)
+    entry["t"] += 1
+    before["hours"][local.tm_hour] += 1
+    before["dows"][local.tm_wday] += 1
+    check("an hour bucket moves", sum(before["hours"]) == 1)
+    check("a weekday bucket moves", sum(before["dows"]) == 1)
+    check("the weekday bucket is the local one",
+          before["dows"][local.tm_wday] == 1)
+    check("Monday is index 0 (ISO weekday)", _time.strptime("2026-09-07", "%Y-%m-%d").tm_wday == 0)
 
 print(f"{checks - len(failures)}/{checks} sighting store checks passed")
 for f in failures:
