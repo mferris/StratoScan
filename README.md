@@ -90,7 +90,7 @@ too.
   connection; viewed remotely it falls back to whether data is still flowing
 - **Restart from the screen** — a Restart row under Device setup, so a stuck
   unit does not need someone to find and pull the plug
-- **Network comparison** (off by default) — outlines the aircraft a public
+- **Network comparison** (on by default, and switchable off) — outlines the aircraft a public
   ADS-B network can see in your ring that your antenna did not hear, and
   keeps a scorecard of how you compare: overall coverage, which altitude
   bands and which bearings you are blind in, and position freshness against
@@ -245,7 +245,7 @@ these choices, though no code is shared — its license is unclear):
 - **[LiveATC.net](https://www.liveatc.net/)** — ATC audio for the configured airport, opened as a link to their own player (see [Security](#security) below for why it's a link, not an embed)
 - **[SSEC RealEarth](https://realearth.ssec.wisc.edu/)** (UW-Madison) — satellite-observed lightning strike density (GOES-East GLM)
 - **[OurAirports](https://ourairports.com/data/)** (public domain) — the bundled airport table in [`deploy/airports.json`](deploy/airports.json)
-- **[adsb.lol](https://adsb.lol/)** — community-run ADS-B aggregation, used only by the optional network comparison (off by default). Queried at most once every 15s no matter how many people are viewing, with coordinates rounded to ~1.1km
+- **[adsb.lol](https://adsb.lol/)** — community-run ADS-B aggregation, used only by the network comparison, which can be switched off. Queried at most once every 15s no matter how many people are viewing, with coordinates rounded to ~1.1km
 
 Please respect each service's own terms of use if you build on this.
 
@@ -307,9 +307,9 @@ before you do:
   previous owner's house, so a full reset clears them along with the
   credentials and coordinates. A settings-only reset keeps them, and keeps
   the network, so it is safe to run remotely.
-- **The network comparison is opt-in and sends only a rounded position.**
-  It is off by default, because a unit given to someone else should not
-  contact a third party unless they choose it. The device-side proxy makes
+- **The network comparison is on by default and sends only a rounded
+  position.** It can be switched off in Settings, and switching it off stops
+  the device contacting adsb.lol at all. The device-side proxy makes
   no request of its own — it only fetches when a page with the setting on
   asks it to — and it queries with coordinates rounded to 2dp, the same
   precision the public gateway already exposes. Asking a stranger "what is
