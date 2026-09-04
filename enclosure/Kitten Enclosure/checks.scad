@@ -49,11 +49,23 @@ else if (check=="head_in_cradle") {
     translate([0,0,arm_lift]) rotate([90-stand_angle,0,0]) translate([0,0,-shell_depth/2]) shell();
   }
 }
-// The tail sweeps past the right paw and curls in front of both. It must
-// pass OUTBOARD of the paw rather than through it -- merging into one lump
-// is what the earlier, shorter tail did. Empty = it stays clear.
-else if (check=="tail_vs_paws") {
-  intersection() { tail(); union() { paw(44); paw(-44); } }
+// The tail now rests ON the right paw on purpose, so "must not touch" is
+// the wrong assertion. What must not happen is the tail passing THROUGH the
+// foot at pad height, which reads as one fused lump instead of a tail
+// draped over a paw. So: it may meet the paw's upper half, but must not
+// intrude into the lower half at all.
+else if (check=="tail_over_paw") {
+  intersection() {
+    tail();
+    intersection() {
+      union() { paw(44); paw(-44); }
+      translate([-200,-200,-50]) cube([400,400,61]);   // everything below z=11
+    }
+  }
+}
+// It should still be nowhere near the LEFT paw.
+else if (check=="tail_vs_left_paw") {
+  intersection() { tail(); paw(-44); }
 }
 // The tail must also stay under the cradled head, whose underside comes
 // down to about z=27.

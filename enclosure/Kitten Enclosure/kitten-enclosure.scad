@@ -172,26 +172,31 @@ toe_splay  = 23;    // degrees between toe centres, fanned across the front
 cleft_w    = 2.6;   // width of the groove between toes
 cleft_d    = 5;     // how deep the groove cuts
 
-// TAIL. Thicker at the root and tapering to a rounded tip, sweeping around
-// the right side and curling IN FRONT OF the paws -- the pose a sitting cat
-// actually adopts. Two hard constraints:
-//   - it stays low. The cradled head's underside comes down to about z=27,
-//     so a tail that swept upward would collide with it.
-//   - it passes OUTBOARD of the right paw (x >= 66 alongside it) and only
-//     turns inward once it is clear of the paw's front edge. An earlier
-//     version cut the corner at x=36 and merged into the paw, reading as
-//     one lump rather than a tail wrapped around a foot.
+// TAIL. Thicker at the root and tapering to a rounded tip. It hugs the
+// plinth around the right side, then climbs the right paw's outboard flank
+// and comes to rest DRAPED OVER the foot -- which is what a sitting cat
+// actually does with its tail, and reads far better than a tail held out at
+// arm's length in front.
+//
+// Resting on the paw means tail and paw deliberately meet. The thing that
+// must not happen is the tail passing THROUGH the foot at pad height, which
+// reads as one fused lump; it has to cross over the top. tail_over_paw in
+// checks.scad pins exactly that -- the tail must not intrude below z=11,
+// the paw's lower half.
+//
+// It still has to stay clear of the cradled head, whose underside comes
+// down to about z=27.
 tail_pts = [
-    [ 58,  60,  10, 25],   // root, buried in the plinth
-    [ 86,  52,  10, 24],
-    [106,  28,  10, 22],
-    [114,  -2,  10, 20],
-    [110, -36,   9, 18],
-    [ 98, -68,   9, 16],
-    [ 84, -96,   9, 14],
-    [ 66, -118,  9, 12],
-    [ 42, -126, 11, 10],   // curling in across the front of the paws
-    [ 20, -123, 13,  8],   // tip lifts slightly, the way a real tail finishes
+    [ 56,  58,  10, 25],   // root, buried in the plinth
+    [ 84,  48,  10, 24],
+    [ 99,  22,  10, 22],   // hugging the plinth edge (x=96) rather than
+    [103, -10,  10, 20],   // standing off it
+    [ 99, -40,  10, 18],
+    [ 90, -66,  11, 16],
+    [ 79, -85,  14, 14],   // starts climbing as it reaches the right paw
+    [ 65, -97,  19, 12],   // up the paw's outboard flank
+    [ 49, -101, 23,  10],  // draped over the pad
+    [ 33, -97,  23,   8],  // tip resting across the top of the foot
 ];
 
 // ============================================================
