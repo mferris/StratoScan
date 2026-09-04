@@ -2390,7 +2390,7 @@ const ALERT_CLEAR_RADIUS_NM = 2.0;  // slightly wider exit threshold, so a
 // -- this is a personal display preference for whoever's looking at this
 // particular screen, not data that should be the same for every viewer.
 const ALERT_SETTINGS_KEY = 'flightradar_alert_settings_v1';
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: false, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true };
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true };
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -4221,7 +4221,13 @@ async function lookupStockPhoto(typeLabel) {
 // fine. Per planespotters.net's terms of use, attribution (photographer
 // credit + naming the source) is still given either way.
 async function tryStockPhoto(hex, photoEl) {
-  const typeLabel = planes.get(hex)?.typeLabel;
+  // `planes` holds only what THIS antenna heard, so reading the type from it
+  // alone meant every network ghost -- which by definition is not in that map
+  // -- fell straight through to the placeholder, even when its type was known
+  // and sitting right there in the panel above the empty photo frame. GA tails
+  // feel this hardest: they rarely have a planespotters photo of the specific
+  // airframe, so the representative-photo path is the only one they ever get.
+  const typeLabel = planes.get(hex)?.typeLabel || ghostTracks.get(hex)?.typeLabel;
   if (!typeLabel) { showPlaceholderPhoto(photoEl); return; }
   const stock = await lookupStockPhoto(typeLabel);
   if (detailPanelHex !== hex || !detailPanelEl.classList.contains('show')) return; // stale by the time this resolved

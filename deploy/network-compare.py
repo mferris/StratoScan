@@ -28,6 +28,7 @@ import http.server
 import json
 import math
 import os
+import re
 import threading
 import time
 import urllib.error
@@ -42,6 +43,10 @@ LOCAL_RECEIVER = "http://127.0.0.1/tar1090/data/receiver.json"
 # Community-run and free. Identify ourselves rather than arriving anonymous,
 # and never poll faster than MIN_UPSTREAM_S -- this is somebody's donated
 # bandwidth, and the page has no reason to want fresher than this.
+# A real Mode S address is 24 bits, i.e. exactly six hex digits. Anything else
+# in the feed is a placeholder, not an identity -- see the ghost loop below.
+ICAO_HEX = re.compile(r"[0-9a-fA-F]{6}")
+
 SOURCE_NAME = "adsb.lol"
 SOURCE_URL = "https://api.adsb.lol/v2/point/{lat}/{lon}/{radius}"
 USER_AGENT = "FlightWall/1.0 (+hobby ADS-B receiver; coverage self-comparison)"
@@ -226,6 +231,16 @@ def build_payload():
     ghosts = []
     for hexid, (a, r, b) in theirs.items():
         if hexid in mine:
+            continue
+        # A ghost is keyed by hex for its whole life -- the track that carries
+        # its trail, its photo, its owner lookup and its sighting count. The
+        # feed occasionally carries a target with a placeholder address rather
+        # than a real 24-bit ICAO one, and every such target collapses into a
+        # single track: one card on the radar reading "00000000 / SEEN x3",
+        # merging unrelated aircraft and attributing a real registered owner
+        # to an address that identifies nobody. Drop them rather than show a
+        # confident answer assembled from several different aeroplanes.
+        if not ICAO_HEX.fullmatch(hexid or ""):
             continue
         ghosts.append({
             "hex": hexid,
