@@ -440,19 +440,22 @@
   }
   #detailPanel .dp-photo {
     position: relative;
-    margin: -18px -20px 14px;
+    margin: 0 -20px 14px;
     border-radius: 10px 10px 0 0;
     overflow: hidden;
   }
-  /* The -18px top bleed above assumes the photo is the first thing in the
-     panel, flush with its top edge -- true normally, but the alert tag
-     (see .dp-alert-tag) renders above it when this is an auto-popped
-     nearby-aircraft alert, and the negative margin was pulling the photo
-     up over that text instead of past it. Drop just the top bleed there;
-     the left/right/bottom bleed (and rounded top corners) still look fine
-     sitting a little lower instead of flush with the panel edge. */
-  #detailPanel.alert .dp-photo {
-    margin-top: 0;
+  /* The top bleed makes the photo sit flush with the panel's top edge, which
+     only works when nothing is above it. A tag line -- the nearby-aircraft
+     alert, or a ghost's "NOT HEARD HERE" -- renders first, and the negative
+     margin then pulls the photo up over that text instead of past it.
+     .dp-close is absolutely positioned and always first, so the photo is the
+     second child exactly when no tag precedes it: that is the condition, and
+     stating it structurally covers every tag rather than the one alert case
+     that was patched here before (which left the ghost panel covering its own
+     label by 10 of its 14 pixels). The left/right/bottom bleed and rounded
+     top corners still look right sitting a little lower. */
+  #detailPanel .dp-photo:nth-child(2) {
+    margin-top: -18px;
   }
   #detailPanel .dp-photo img,
   #detailPanel .dp-photo svg {
@@ -1155,6 +1158,23 @@ const ACQUIRING_COLOR = '#33393e';
 // while the identical flight from our own antenna reads "Delta Air Lines"
 // makes the two look like different kinds of object rather than the same
 // aircraft seen two ways.
+// A transponder can be configured with a placeholder instead of a callsign,
+// and this receiver regularly sees "00000000" over the house. It is not blank,
+// so every "is there a callsign?" test passed it, and it was then badged
+// "Private Aircraft", looked up as a flight number -- which came back Nantes
+// to Paris, at which point a screen full of real information was carrying a
+// fabricated route -- and filed under private traffic in the statistics.
+//
+// Every real callsign and every real registration contains at least one
+// letter: airline callsigns are three letters plus a number, registrations
+// carry a country prefix. An all-digit or all-punctuation "callsign" is a
+// placeholder, and is treated exactly as a missing one -- the aircraft shows
+// its hex and "Identifying…" until a real callsign arrives.
+function realCallsign(flight) {
+  const cs = (flight || '').trim();
+  return /[A-Za-z]/.test(cs) ? cs : null;
+}
+
 function airlineFor(cs, hasCallsign) {
   const m = hasCallsign ? /^([A-Z]{3})\d/.exec(cs) : null;
   const icao = m ? m[1] : null;
@@ -2897,8 +2917,9 @@ function enrichGhost(t) {
 // once here rather than teaching classifySighting about two record layouts.
 function classifyGhost(t) {
   if (!t) return;
-  const hasCallsign = !!(t.flight && t.flight.trim());
-  const cs = hasCallsign ? t.flight.trim() : t.hex.toUpperCase();
+  const cs0 = realCallsign(t.flight);
+  const hasCallsign = !!cs0;
+  const cs = cs0 || t.hex.toUpperCase();
   const airline = airlineFor(cs, hasCallsign);
   classifySighting({
     hex: t.hex, cs, hasCallsign,
@@ -3061,8 +3082,9 @@ function showGhostPanel(g) {
   const age = ageS.toFixed(0) + 's ago' + (ageS >= GHOST_DR_MAX_S ? ' (estimate held)' : '');
   // On GA traffic the callsign IS the registration, so listing both just
   // prints the same string twice under itself.
-  const hasCallsign = !!(g.flight && g.flight.trim());
-  const title = hasCallsign ? g.flight.trim() : g.hex.toUpperCase();
+  const ghostCallsign = realCallsign(g.flight);
+  const hasCallsign = !!ghostCallsign;
+  const title = ghostCallsign || g.hex.toUpperCase();
   // Prefer the aircraft database's human-readable name over the network's
   // bare ICAO code: "Bombardier Regional Jet CRJ-900" beats "CRJ9".
   const typeTxt = g.typeLabel || g.type || null;
@@ -3647,8 +3669,9 @@ function normalizeAircraft(a) {
   // arrives, no special handling needed there). Track hasCallsign so the two
   // "no airline" cases -- genuinely unknown yet vs. a real GA tail number
   // that will never match -- don't get conflated under one label.
-  const hasCallsign = !!(a.flight && a.flight.trim());
-  const cs = hasCallsign ? a.flight.trim() : a.hex.toUpperCase();
+  const callsign = realCallsign(a.flight);
+  const hasCallsign = !!callsign;
+  const cs = callsign || a.hex.toUpperCase();
 
   const { icao: airlineIcao, label: airlineLabel, color: badgeColor } = airlineFor(cs, hasCallsign);
 
@@ -4728,6 +4751,15 @@ const STATS_SCREENS = [
   { key: 'scorecard', label: 'Receiver scorecard', sub: scorecardSubtitle },
 ];
 
+// Rounding a share to whole numbers prints "100%" next to a line saying ten
+// aircraft went unheard. A decimal appears only when the value is not exactly
+// whole, so a genuine 100% still reads as 100%.
+function sharePct(part, whole) {
+  if (!whole) return '—';
+  const pct = 100 * part / whole;
+  return (Number.isInteger(pct) ? pct : Math.round(pct * 10) / 10) + '%';
+}
+
 function statNum(n) {
   return typeof n === 'number' ? n.toLocaleString() : '—';
 }
@@ -4796,26 +4828,40 @@ function renderStatsScreen(key, st) {
       ${statRow(`Came within ${ALERT_RADIUS_MI} miles`, statNum(st.nearby), 'Passes that triggered the nearby alert')}
       <div class="sp-section-title">With the network comparison</div>
       ${statRow('Seen but not heard', statNum(st.networkOnly), 'Aircraft only ever seen because adsb.lol reported them')}
-      ${statRow('Aircraft in range, all sources', statNum(inRing), inRing ? `This antenna accounted for ${Math.round(100 * st.heard / inRing)}% of them` : '')}
+      ${statRow('Aircraft in range, all sources', statNum(inRing), inRing ? `This antenna accounted for ${sharePct(st.heard, inRing)} of them` : '')}
       <div class="sp-sub" style="padding:12px 0;line-height:1.7">
         The second group is only counted while Network comparison is on, so it
         undercounts any period it was off.</div>`;
   }
 
   if (key === 'operators') {
-    const rows = ['com', 'pri', 'mil', 'unk'].map(k => ({
+    // Only the three real classes are drawn as bars. Operator class could not
+    // be recovered for aircraft recorded before it was tracked -- that needs a
+    // callsign the old store never kept -- so "not identified" is a backlog
+    // that shrinks over time, not a finding about the traffic. Scaling the
+    // bars against it would crush the three categories that carry the answer
+    // into stubs for months, so it is stated as a plain figure underneath.
+    const rows = ['com', 'pri', 'mil'].map(k => ({
       label: OP_LABELS[k],
       value: st.byOp[k] ? st.byOp[k].visits : 0,
       note: `${statNum(st.byOp[k] ? st.byOp[k].ac : 0)} aircraft`,
     }));
+    const unk = st.byOp.unk || { ac: 0, visits: 0 };
     return `${back}${title}
       <div class="sp-sub" style="padding:6px 0">Visits by operator, with distinct aircraft alongside</div>
       ${statBars(rows)}
       <div class="sp-sub" style="padding:12px 0;line-height:1.7">
         Military is recognised from the aircraft's address block rather than
         its callsign, so a military aircraft flying a civil-looking callsign
-        still lands here. "Not identified" is traffic whose callsign this
-        receiver never decoded — usually a brief, distant contact.</div>`;
+        still lands here.</div>
+      ${!unk.visits ? '' : `
+      <div class="sp-section-title">Not yet identified</div>
+      ${statRow('Visits', statNum(unk.visits), `${statNum(unk.ac)} aircraft`)}
+      <div class="sp-sub" style="padding:10px 0;line-height:1.7">
+        Operator needs a callsign, and the history collected before this
+        screen existed never stored one — so most of the backlog sits here
+        and will not move. Aircraft seen from now on are identified as they
+        fly over, and each one that comes back is counted properly.</div>`}`;
   }
 
   if (key === 'kinds') {
@@ -4839,10 +4885,10 @@ function renderStatsScreen(key, st) {
       label: OP_LABELS[k], value: st.byOp[k] ? st.byOp[k].nearby : 0 }));
     const kindRows = ['heavy', 'jet', 'prop', 'heli', 'lta', 'unknown'].map(k => ({
       label: KIND_LABELS[k], value: st.byKind[k] ? st.byKind[k].nearby : 0 }));
-    const share = st.visits ? Math.round(1000 * st.nearby / st.visits) / 10 : null;
+    const share = st.visits ? sharePct(st.nearby, st.visits) : null;
     return `${back}${title}
       ${statRow(`Passes within ${ALERT_RADIUS_MI} miles`, statNum(st.nearby),
-                share === null ? '' : `${share}% of everything that has flown over`)}
+                share === null ? '' : `${share} of everything that has flown over`)}
       <div class="sp-section-title">Who came close</div>
       ${statBars(opRows)}
       <div class="sp-section-title">What came close</div>
