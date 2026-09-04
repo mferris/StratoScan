@@ -1,4 +1,10 @@
-# Build output: regenerate with openscad -D 'part="..."' -o <name>.stl
-*.stl
+# The parent enclosure/.gitignore excludes *.stl as build output. For this
+# design the exported meshes ARE committed, so the folder is self-contained:
+# the sliceable files sit beside the source that produced them and can be
+# downloaded without needing OpenSCAD installed.
+#
+# They are still generated, not authored. If you change the .scad, re-export
+# and commit both together, or the mesh silently stops matching the source.
+!*.stl
 *.3mf
 *.bak*
