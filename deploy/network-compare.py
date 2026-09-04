@@ -235,6 +235,16 @@ def build_payload():
             "gs": a.get("gs"), "track": a.get("track"),
             "seen_pos": a.get("seen_pos"),
             "type": a.get("t"), "reg": a.get("r"),
+            # The panel shows a ghost the same fields it shows a local
+            # contact, so the same fields have to survive this projection.
+            # baro_rate is the primary vertical rate for the same reason
+            # readsb prefers it; geom_rate is the fallback when a transponder
+            # only reports the GNSS-derived one.
+            "squawk": a.get("squawk"),
+            "vrate": a.get("baro_rate") if a.get("baro_rate") is not None
+                     else a.get("geom_rate"),
+            "emergency": a.get("emergency"),
+            "category": a.get("category"),
         })
     return {"ac": ghosts, "mine": len(mine), "network": len(theirs),
             "stats": card, "source": SOURCE_NAME, "at": time.time()}
