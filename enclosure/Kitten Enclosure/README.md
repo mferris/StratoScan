@@ -55,8 +55,13 @@ weight; ask before printing if that matters to you.
 ## Rendering and exporting
 
 ```bash
-openscad -D 'part="shell"' -o shell.stl kitten-enclosure.scad
+openscad --backend=manifold --export-format binstl \
+         -D 'part="shell"' -o shell.stl kitten-enclosure.scad
 ```
+
+Binary STL, because at this resolution the stand is 172,000 facets: 52MB as
+ascii against 8.2MB as binary, byte-identical geometry. Every slicer reads
+both.
 
 Exporting already forces a full geometry evaluation. Check OpenSCAD's stderr
 for `Status: NoError` and `Top level object is a 3D object (manifold)` before
@@ -83,8 +88,14 @@ must come out **empty**:
 | `paws_vs_head` | so do the paws |
 
 ```bash
-openscad -D 'check="ear_vs_post"' -o /tmp/x.stl checks.scad
+sh run-checks.sh                                    # all of them
+openscad -D 'check="ear_vs_post"' -o /tmp/x.stl checks.scad   # just one
 ```
+
+`run-checks.sh` reports the **volume** each target produces rather than
+whether it produced anything: a boolean between parts that touch can leave a
+zero-thickness film with many facets and no volume, and counting facets would
+call that a failure.
 
 There is also `check="canary"`, which must produce geometry. **Run it.** It
 exists because `use <>` resolves relative to the file containing it: a check
@@ -120,3 +131,35 @@ Mistakes actually made and fixed on this design, kept as warnings:
   them behind the pad's front sphere, so every toe was swallowed by the hull
   and the paws rendered as plain teardrops. Toe tips now define `y_front`
   and the pad is held back behind them.
+
+## Smoothness
+
+Curve resolution is set by `$fs` (0.4mm) and `$fa` (0.5°), not by a fixed
+facet count.
+
+A fixed count makes the flats grow with the feature, so the biggest, most
+looked-at surfaces come out roughest. At the old `$fn = 96` the head's 223mm
+rim carried **7.3mm flats** and the cradle 8.2mm, while every 3mm screw hole
+also got 96 sides it had no use for. `$fs` caps the chord — the width of one
+flat, which is what the eye reads as faceting — so a big curve gets the
+facets and a small hole does not. The head is now at 0.97mm and every sphere
+in the paws, toes and tail at 0.4mm, one extrusion width.
+
+It is cheaper than raising `$fn` would have been: the savings on small holes
+pay for the big surfaces.
+
+`tail_smooth_steps` is the other half. The tail is hulls between consecutive
+spheres, so every sphere leaves a crease around the tube. Those creases were
+masked by the general faceting before; once the circumference was smooth
+they read as rings, so the interpolation went from 6 points per control
+segment to 14 — a joint every 2.4mm instead of 5.6mm.
+
+Meshes are exported as **binary STL**: the stand is 172,000 facets, which is
+52MB as ascii and 8.2MB as binary for byte-identical geometry.
+
+**`use <>` does not carry `$fa`/`$fs`.** It imports modules and functions
+only, so `checks.scad` and `preview-assembly.scad` set them again at the top.
+Miss that and they silently work at OpenSCAD's defaults — rendering a
+faceting the mesh does not have, or validating geometry that is not what
+gets printed.
+
