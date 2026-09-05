@@ -20,6 +20,7 @@ $fs = 0.4;
 $fa = 0.5;
 outer_dia=223.34; shell_depth=56; wall=3; lip_height=6; shelf_h=2;
 screw_r=106.67; n_screws=8; post_od=9;
+screw_clear_dia=3.4; nose_angle=270;
 speaker_bracket_depth=15; speaker_d=45;
 cradle_id=outer_dia+2; cradle_od=cradle_id+26; arm_gap=26; arm_w=16;
 base_h=16; stand_angle=18;
@@ -129,6 +130,39 @@ else if (check=="paws_vs_toes")     { intersection() { part_stand_paws(); part_s
 else if (check=="paws_vs_tail")     { intersection() { part_stand_paws(); part_stand_tail(); } }
 else if (check=="body_vs_paws")     { intersection() { part_stand_body(); part_stand_paws(); } }
 else if (check=="tail_vs_tip")      { intersection() { part_stand_tail(); part_stand_tail_tip(); } }
+// The whiskers have to sit in the band between the nose and the screw holes
+// either side of it. The first version of them missed by ninety degrees and
+// printed before anyone noticed, so both ends of that band are now pinned.
+else if (check=="whisker_vs_screws") {
+  intersection() {
+    whisker_grooves();
+    for (i=[0:n_screws-1]) { a=i*360/n_screws;
+      translate([screw_r*cos(a), screw_r*sin(a), -5])
+        cylinder(d=screw_clear_dia, h=20); }
+  }
+}
+else if (check=="whisker_vs_nose") {
+  intersection() { whisker_grooves(); nose(); }
+}
+// ...and that they are actually beside the NOSE. An intersection can only
+// prove two things do not touch; it cannot prove a feature is in the right
+// place, which is exactly how six grooves reached a printed part on the
+// wrong side of the face. This one is a difference: the grooves must lie
+// entirely within a wedge centred on the nose, so it comes out empty only
+// while every one of them is where it belongs.
+else if (check=="whisker_off_nose") {
+  // 270 is written out rather than taken from nose_angle on purpose. Sharing
+  // the variable makes this vacuous: move nose_angle and the wedge follows
+  // the grooves, so the two stay aligned and the check passes wherever they
+  // both went. This number is where nose() actually puts itself --
+  // translate([0, -screw_r, ..]), straight down -- so if the whiskers ever
+  // leave the nose again, they leave the wedge too.
+  difference() {
+    whisker_grooves();
+    rotate([0,0,270-45]) rotate_extrude(angle=90)
+      translate([0,-10]) square([200,30]);
+  }
+}
 // sanity: this MUST produce geometry. If it comes out empty the modules
 // are not being found and every other result here is worthless.
 else if (check=="canary") { shell(); }

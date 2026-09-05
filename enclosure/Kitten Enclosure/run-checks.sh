@@ -18,7 +18,8 @@ trap 'rm -rf "$TMP"' EXIT
 # Must come out with no real volume: a real interference, or a region of the
 # stand that no coloured part claims, which would print as a hole.
 EMPTY="ear_vs_post recess_vs_post whisker_through head_in_cradle
-       tail_over_paw tail_vs_left_paw tail_vs_head paws_vs_head ears_vs_cradle"
+       tail_over_paw tail_vs_left_paw tail_vs_head paws_vs_head ears_vs_cradle
+       whisker_vs_screws whisker_vs_nose whisker_off_nose"
 
 # Must come out SMALL but non-zero. These are the colour seams, and they
 # overlap on purpose -- see colour_overlap in the .scad. Cutting each part
