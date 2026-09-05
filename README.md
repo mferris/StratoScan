@@ -219,7 +219,7 @@ stranding the device.
 
 **The enclosure**: [`enclosure/`](enclosure/) has two printable cases for the
 same hardware — the original ship's-instrument look, and one shaped like a
-sitting cat with the round display as its face. Both are parametric OpenSCAD,
+sitting cat with the round display as its face, printed in two colours. Both are parametric OpenSCAD,
 everything deriving from the measured values at the top of each file. Each
 folder's README covers how to export the parts, the interference checks, and
 the dimensional mistakes that are easy to repeat.
