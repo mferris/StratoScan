@@ -23,7 +23,7 @@ The head is one colour and prints as before:
 | part | colour | what it is |
 |---|---|---|
 | `shell` | black | the head — body cylinder plus two ears, and all the internals |
-| `front_trim` | black | the face — bezel ring with a nose |
+| `front_trim` | black | the face — bezel ring with a nose and whisker grooves |
 | `retainer` | — | ring behind the glass (identical to the retro part) |
 
 The stand is split into five bodies, one per colour region:
@@ -82,15 +82,22 @@ and an overlap of identical skin is the very coincidence being avoided.
 There the tip is grown rather than the body shrunk, so over the shared
 stretch the white tip sits 0.15mm proud of the black tail it continues.
 
-## The whisker grooves are gone
+## The whisker grooves
 
-The bezel had six short arcs engraved into its face, meant to read as
-whiskers either side of the nose. The nose sits at −y, the bottom of the
-face; the grooves were placed around 0°, the right-hand side. All six landed
-90° from the nose they were supposed to flank. Found on a printed faceplate
-as six unexplained indentations down one side, and removed from both kitten
-designs. To reinstate them properly they would need rotating to sit about
-the nose's own angle.
+Three short arcs engraved into the bezel face either side of the nose.
+
+They were briefly in the wrong place, and it is worth recording how. The
+nose sits at −y, the bottom of the face; the grooves were rotated about 0°
+instead — the right-hand side — so all six landed 90° from the nose they
+were meant to flank. That printed before anyone noticed, as six unexplained
+indentations down one side of a faceplate.
+
+They are now placed off `nose_angle` rather than a literal, and each sweeps
+away from the nose so the two sides mirror. `whisker_off_nose` in
+`checks.scad` pins it: the grooves must lie entirely within a 90° wedge
+centred on where `nose()` actually puts itself. That wedge is written as a
+literal 270 on purpose — deriving it from `nose_angle` would make the check
+vacuous, since moving the angle would move the wedge along with the grooves.
 
 ## Where the colour goes, and why
 

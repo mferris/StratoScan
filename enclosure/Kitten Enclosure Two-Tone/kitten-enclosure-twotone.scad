@@ -165,6 +165,21 @@ whisker_droop     = 1.6;  // each step outboard drops this far, giving the curve
 // a muzzle bulging past outer_dia would foul the front cradle arm,
 // which reaches to z=57, a millimetre past the shell's front face.
 nose_w = 17; nose_h = 11; nose_proud = 2.6; nose_r = 3;
+// Where nose() puts itself: translate([0, -screw_r, ..]) is straight down.
+// The whiskers are placed off this rather than off a literal, because the
+// first version of them was rotated about 0 degrees instead and all six
+// landed on the right-hand side of the face, ninety degrees from the nose
+// they were supposed to flank. It printed that way before anyone noticed.
+nose_angle = 270;
+whisker_groove_w = 1.6;
+whisker_groove_d = 0.9;
+whisker_arc      = 9;     // degrees swept by each groove
+// Offsets from the nose. Bounded at both ends: the nose is 17mm wide at this
+// radius, which is +-4.6 degrees, and the neighbouring screw holes sit at
+// +-45. So the usable band is roughly 6 to 42 degrees, and these three sit
+// inside it with clearance at both ends -- see whisker_vs_screws and
+// whisker_vs_nose in checks.scad.
+whisker_offsets  = [7, 18, 29];
 
 // STAND — a sitting cat. Plinth is rounded rather than a slab.
 base_w = outer_dia*0.86; base_d = 150; base_h = 16;
@@ -458,6 +473,27 @@ module nose() {
             }
 }
 
+// Short arcs either side of the nose, engraved into the bezel face.
+//
+// Each groove sweeps AWAY from the nose, so the two sides mirror properly.
+// rotate_extrude always sweeps counter-clockwise from where it starts, so
+// the clockwise side has to start a full arc further round and sweep back
+// toward its offset -- without that the two sides are not mirror images,
+// which is subtle enough on a render to miss and obvious on the part.
+module whisker_grooves() {
+    for (s = [-1, 1])
+        for (i = [0 : len(whisker_offsets) - 1]) {
+            off   = whisker_offsets[i];
+            start = (s > 0) ? nose_angle + off
+                            : nose_angle - off - whisker_arc;
+            rotate([0, 0, start])
+                translate([0, 0, front_trim_h - whisker_groove_d])
+                    rotate_extrude(angle = whisker_arc)
+                        translate([screw_r - 3 + i*2.5, 0])
+                            square([whisker_groove_w, whisker_groove_d + 1]);
+        }
+}
+
 module front_trim() {
     total_h = front_trim_h + rabbet_depth;
     difference() {
@@ -476,6 +512,7 @@ module front_trim() {
             translate([screw_r*cos(a), screw_r*sin(a), -rabbet_depth-1])
                 cylinder(d=screw_clear_dia, h=total_h+2);
         }
+        whisker_grooves();
     }
 }
 

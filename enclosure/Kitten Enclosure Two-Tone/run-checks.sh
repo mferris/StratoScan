@@ -22,6 +22,7 @@ trap 'rm -rf "$TMP"' EXIT
 # stand that no coloured part claims, which would print as a hole.
 EMPTY="ear_vs_post recess_vs_post whisker_through head_in_cradle
        tail_over_paw tail_vs_left_paw tail_vs_head paws_vs_head ears_vs_cradle
+       whisker_vs_screws whisker_vs_nose whisker_off_nose
        material_lost paws_vs_tail"
 
 # Must come out SMALL but non-zero. These are the colour seams, and they
