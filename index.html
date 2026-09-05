@@ -2237,13 +2237,33 @@ const RAINVIEWER_OPTIONS = '1_1'; // smooth interpolation, snow shown distinctly
 // called after the layer is (re)created in refreshStorms, and directly from
 // the settings panel's row handler so toggling it is instant rather than
 // waiting up to RAINVIEWER_REFRESH_MS for the next refresh to notice.
+// Switching an overlay off tears its source down rather than just hiding it.
+// Hiding leaves every tile MapLibre has fetched sitting in GPU memory, and --
+// worse -- left the refresher below still re-tiling a layer nobody could see.
+// Measured on the device: the raster overlays were leaking about 550MB/hour
+// of Chromium shared memory, which is what eventually killed the GPU context
+// and froze the display. Removing the source releases the textures; the
+// refresher recreates it from scratch when the overlay is switched back on.
 function applyStormsVisibility() {
-  if (!map || !map.getLayer('storms')) return;
-  map.setLayoutProperty('storms', 'visibility', alertSettings.storms ? 'visible' : 'none');
+  if (!map) return;
+  if (alertSettings.storms) {
+    if (map.getLayer('storms')) {
+      map.setLayoutProperty('storms', 'visibility', 'visible');
+    } else {
+      refreshStorms();   // gone because it was switched off; build it again
+    }
+    return;
+  }
+  if (map.getLayer('storms')) map.removeLayer('storms');
+  if (map.getSource('storms')) map.removeSource('storms');
 }
 
 async function refreshStorms() {
-  if (!map) return;
+  // An overlay that is switched off must cost nothing: no request to
+  // RainViewer, no tiles decoded, no textures uploaded. This ran on its timer
+  // regardless before, so a radar with storms off was still pulling a fresh
+  // radar mosaic every five minutes and throwing it away.
+  if (!map || !alertSettings.storms) return;
   try {
     const res = await fetch(RAINVIEWER_API_URL, { cache: 'no-store' });
     if (!res.ok) return;
@@ -2253,9 +2273,18 @@ async function refreshStorms() {
     const latest = frames[frames.length - 1];
     const url = `${data.host}${latest.path}/256/{z}/{x}/{y}/${RAINVIEWER_COLOR}/${RAINVIEWER_OPTIONS}.png`;
 
+    // Rebuilt, not re-pointed. setTiles() swaps the URL but leaves the tiles
+    // fetched under the old one held in GPU memory: measured on the device,
+    // refreshing this way cost about 400MB of Chromium shared memory per hour
+    // -- roughly 36MB every five minutes -- until the GPU context could no
+    // longer allocate and the display stopped painting at all. Dropping the
+    // layer and source first releases those textures, and each refresh has to
+    // load new tiles either way, so it costs nothing extra in bandwidth.
     if (map.getSource('storms')) {
-      map.getSource('storms').setTiles([url]);
-    } else {
+      if (map.getLayer('storms')) map.removeLayer('storms');
+      map.removeSource('storms');
+    }
+    {
       // RainViewer's 256px radar tiles top out at z7 -- capping maxzoom here
       // makes MapLibre overzoom (upsample) that real data at our much closer
       // zoom instead of requesting tiles that don't exist, which otherwise
@@ -2292,9 +2321,22 @@ async function refreshStorms() {
 const LIGHTNING_TILE_URL = 'https://realearth.ssec.wisc.edu/tiles/GOESEastGLMFEDRadC/{z}/{x}/{y}.png';
 const LIGHTNING_REFRESH_MS = 2 * 60 * 1000;
 
+// See applyStormsVisibility. This one mattered more: lightning ships OFF, so
+// every unit was re-tiling an invisible layer every two minutes for its whole
+// uptime -- thirty pointless tile loads an hour on a device with no spare
+// thermal headroom, and the larger half of the leak.
 function applyLightningVisibility() {
-  if (!map || !map.getLayer('lightning')) return;
-  map.setLayoutProperty('lightning', 'visibility', alertSettings.lightning ? 'visible' : 'none');
+  if (!map) return;
+  if (alertSettings.lightning) {
+    if (map.getLayer('lightning')) {
+      map.setLayoutProperty('lightning', 'visibility', 'visible');
+    } else {
+      refreshLightning();
+    }
+    return;
+  }
+  if (map.getLayer('lightning')) map.removeLayer('lightning');
+  if (map.getSource('lightning')) map.removeSource('lightning');
 }
 
 // The tile URL always points at RealEarth's "latest" alias for this
@@ -2304,11 +2346,14 @@ function applyLightningVisibility() {
 // stale cached tile indefinitely, same problem RainViewer's storms layer
 // avoids by baking a real timestamp into its own tile path instead.
 function refreshLightning() {
-  if (!map) return;
+  if (!map || !alertSettings.lightning) return;
   const url = `${LIGHTNING_TILE_URL}?t=${Date.now()}`;
+  // Same teardown as refreshStorms -- see the note there.
   if (map.getSource('lightning')) {
-    map.getSource('lightning').setTiles([url]);
-  } else {
+    if (map.getLayer('lightning')) map.removeLayer('lightning');
+    map.removeSource('lightning');
+  }
+  {
     map.addSource('lightning', { type: 'raster', tiles: [url], tileSize: 256, maxzoom: 7 });
     map.addLayer({
       id: 'lightning',
