@@ -218,6 +218,12 @@ tail_pts = [
 // background from every angle, and a flicked tail tip is what a sitting cat
 // does anyway. tail_vs_head in checks.scad is what bounds how far it can go.
 
+// How much the coloured bodies deliberately interfere along every seam.
+// See the colour separation section: this is what stops two parts sharing a
+// surface at identical coordinates, which is what makes a slicer stipple a
+// white paw with black.
+colour_overlap = 0.3;
+
 // Where the black tail becomes the white tip, as a fraction of the path
 // measured back from the end. A cat's tail tip is a short dip, not a
 // gradient: too long and it reads as a two-tone tail rather than a black
@@ -572,17 +578,19 @@ function toe_pos(i, y_front) = [
     y_front + toe_dia * 0.62 + (1 - cos(toe_a(i))) * 6,   // outer toes sit back
     toe_dia * 0.46
 ];
-module toe(i, y_front) {
+// `shrink` insets the toe slightly. It exists for the colour split: see
+// colour_overlap below.
+module toe(i, y_front, shrink = 0) {
     translate(toe_pos(i, y_front))
         rotate([0, 0, -toe_a(i)])
             scale([1, 1.35, 0.85])
-                sphere(d = toe_dia, $fn = 40);
+                sphere(d = max(toe_dia - shrink, 0.2), $fn = 40);
 }
 
 // The pad without its toes. paw() below is still the whole foot, because the
 // fit checks care about the foot as an object; the split exists so the toes
 // can be printed in a different filament from the pad they sit in.
-module paw_pad(x) {
+module paw_pad(x, shrink = 0) {
     y_back  = -base_d/2 + 10;                 // buried in the plinth
     y_front = -base_d/2 - paw_reach;
     translate([x, 0, 0]) {
@@ -590,20 +598,20 @@ module paw_pad(x) {
         // wide and low at the toes
         hull() {
             translate([0, y_back, paw_h * 0.46])
-                scale([1, 1, 0.95]) sphere(d = paw_w * paw_ankle_w, $fn = 40);
+                scale([1, 1, 0.95]) sphere(d = paw_w * paw_ankle_w - shrink, $fn = 40);
             translate([0, (y_back + y_front) / 2, paw_h * 0.40])
-                scale([1.04, 1, 0.80]) sphere(d = paw_w * 0.84, $fn = 44);
+                scale([1.04, 1, 0.80]) sphere(d = paw_w * 0.84 - shrink, $fn = 44);
             // pad front, held BACK so the toes lead it
             translate([0, y_front + toe_dia * 1.95, paw_h * 0.33])
-                scale([1.10, 1, 0.68]) sphere(d = paw_w * 0.92, $fn = 44);
+                scale([1.10, 1, 0.68]) sphere(d = paw_w * 0.92 - shrink, $fn = 44);
         }
     }
 }
 
-module paw_toes(x) {
+module paw_toes(x, shrink = 0) {
     y_front = -base_d/2 - paw_reach;
     translate([x, 0, 0])
-        for (i = [0 : n_toes - 1]) toe(i, y_front);
+        for (i = [0 : n_toes - 1]) toe(i, y_front, shrink);
 }
 
 module paw(x) { paw_pad(x); paw_toes(x); }
@@ -657,25 +665,25 @@ function tail_curve() = concat(
 // square to the tail's own axis: a plane cut would slice it at whatever
 // angle the tail happened to be travelling, which on a curve that is still
 // turning at the tip reads as a chipped end rather than a marking.
-module tail_run(i0, i1) {
+module tail_run(i0, i1, shrink = 0) {
     pts = tail_curve();
     for (i = [i0 : i1 - 1])
         hull() {
-            translate([pts[i][0],   pts[i][1],   pts[i][2]])   sphere(d = max(pts[i][3],   1), $fn = 28);
-            translate([pts[i+1][0], pts[i+1][1], pts[i+1][2]]) sphere(d = max(pts[i+1][3], 1), $fn = 28);
+            translate([pts[i][0],   pts[i][1],   pts[i][2]])   sphere(d = max(pts[i][3]   - shrink, 0.5), $fn = 28);
+            translate([pts[i+1][0], pts[i+1][1], pts[i+1][2]]) sphere(d = max(pts[i+1][3] - shrink, 0.5), $fn = 28);
         }
 }
 
 function tail_split_i() = len(tail_curve()) - 1
                         - max(1, round((len(tail_curve()) - 1) * tail_tip_frac));
 
-module tail()     { tail_run(0, len(tail_curve()) - 1); }
-module tail_tip() { tail_run(tail_split_i(), len(tail_curve()) - 1); }
+module tail(shrink = 0)     { tail_run(0, len(tail_curve()) - 1, shrink); }
+module tail_tip(shrink = 0) { tail_run(tail_split_i(), len(tail_curve()) - 1, shrink); }
 // The two runs share the sphere at the split index, so the black part has
 // the tip cut out of it rather than merely stopping short. Overlapping
 // bodies are a coin toss in a slicer -- whichever is assigned last wins,
 // and the seam moves depending on load order.
-module tail_body() { difference() { tail_run(0, tail_split_i() + 1); tail_tip(); } }
+module tail_body() { difference() { tail_run(0, tail_split_i() + 1); tail_tip(colour_overlap); } }
 
 module cradle_arm(depth_offset) {
     arm_t = (cradle_od - cradle_id) / 2;
@@ -741,34 +749,45 @@ module stand_solid() {
 }
 
 // ---- Colour separation ---------------------------------------------
-// Five bodies in one coordinate frame, mutually exclusive, and unioning
-// back to exactly stand(). Load them together in the slicer and assign a
-// filament each; on a single-extruder printer they are also printable
-// separately and glued, since every split is along a real seam in the
-// shape rather than an arbitrary plane.
+// Five bodies in one coordinate frame. Load them together in the slicer and
+// assign a filament each; on a single-extruder printer they are also
+// printable separately and glued, since every split is along a real seam in
+// the shape rather than an arbitrary plane.
 //
-// Exclusivity is the point. Overlapping bodies are resolved differently by
-// different slicers -- usually "last one loaded wins" -- so an overlap of
-// even a millimetre puts the seam somewhere that depends on load order.
-// stand_colour_union in checks.scad pins that the five parts add back up.
+// The parts deliberately INTERFERE by colour_overlap along every boundary,
+// and getting this wrong is what the first version got wrong. Cutting each
+// part with the exact shape of its neighbour is the tidy-looking answer and
+// it is the broken one: it leaves the two bodies sharing a surface at
+// identical coordinates. Mathematically that is a perfect partition -- zero
+// volume in common, which is exactly what the volume checks reported -- but
+// a renderer cannot decide which of two coincident faces is in front, so
+// the slicer preview stipples the seam with the other colour and a white
+// paw comes out speckled black. The buried half of the paw, sunk into the
+// plinth, is a large coincident area and stipples worst of all.
 //
-// Where the tail lies across the paw, the TAIL wins: it is the thing on top
-// in the real shape, so it keeps its full section and the paw is cut away
-// underneath it.
+// So each part is cut with a slightly INSET copy of whatever takes
+// precedence over it, leaving a thin shell of shared material instead of a
+// shared surface. Nothing is coplanar, nothing z-fights, and the colour
+// boundary moves by at most colour_overlap/2 -- far below a nozzle width,
+// so which body a slicer awards the shell to cannot be seen in the print.
+//
+// Precedence, outermost first: tail, then toes, then pads, then the body.
+// Where the tail lies across the paw the TAIL wins, because it is the thing
+// on top in the real shape.
 module part_stand_body() {                      // BLACK
     difference() {
         intersection() { desk_clip(); stand_frame(); }
-        paw_pad( paw_x); paw_pad(-paw_x);
-        paw_toes( paw_x); paw_toes(-paw_x);
-        tail();
+        paw_pad(  paw_x, colour_overlap); paw_pad( -paw_x, colour_overlap);
+        paw_toes( paw_x, colour_overlap); paw_toes(-paw_x, colour_overlap);
+        tail(colour_overlap);
     }
 }
 
 module part_stand_paws() {                      // WHITE
     difference() {
         intersection() { desk_clip(); union() { paw_pad(paw_x); paw_pad(-paw_x); } }
-        paw_toes( paw_x); paw_toes(-paw_x);
-        tail();
+        paw_toes( paw_x, colour_overlap); paw_toes(-paw_x, colour_overlap);
+        tail(colour_overlap);
         paw_clefts( paw_x); paw_clefts(-paw_x);
     }
 }
@@ -776,17 +795,29 @@ module part_stand_paws() {                      // WHITE
 module part_stand_toes() {                      // BLACK
     difference() {
         intersection() { desk_clip(); union() { paw_toes(paw_x); paw_toes(-paw_x); } }
-        tail();
+        tail(colour_overlap);
         paw_clefts( paw_x); paw_clefts(-paw_x);
     }
 }
 
+// The tail seam needs the opposite treatment to the others, and it is worth
+// saying why. Everywhere else, two parts meet across a boundary and an inset
+// cut leaves them overlapping with no shared surface. Here they are two runs
+// of the SAME tapering tube, so wherever they overlap they carry the same
+// outer skin -- and an overlap of identical skin is exactly the coincidence
+// being avoided. Insetting the cut just moved the stipple from the joint to
+// a band beside it.
+//
+// So the tip is grown instead of the body being shrunk: over the shared
+// stretch the white tip is colour_overlap/2 proud of the black tail it
+// continues, which is 0.15mm on a tail 10mm thick. Nothing coincides, and
+// the step is a fifth of a nozzle width.
 module part_stand_tail() {                      // BLACK
     intersection() { desk_clip(); tail_body(); }
 }
 
 module part_stand_tail_tip() {                  // WHITE
-    intersection() { desk_clip(); tail_tip(); }
+    intersection() { desk_clip(); tail_tip(-colour_overlap); }
 }
 
 module stand_colour_parts() {
