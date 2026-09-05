@@ -114,6 +114,13 @@ The meshes are exported as **binary STL**. At this resolution the stand is
 173,000 facets, which is 52MB as ascii and 8.3MB as binary for byte-identical
 geometry. Every slicer reads both.
 
+`tail_smooth_steps` is the other half of it. The tail is hulls between
+consecutive spheres, so every sphere leaves a crease running around the
+tube. At the old resolution those creases were masked by the general
+faceting; once the circumference was smooth they read as rings. 14 points
+per control segment puts a joint every 2.4mm instead of 5.6mm, for about a
+megabyte.
+
 To go finer, lower `$fs` — but check the file sizes, because sphere cost
 grows as the square.
 

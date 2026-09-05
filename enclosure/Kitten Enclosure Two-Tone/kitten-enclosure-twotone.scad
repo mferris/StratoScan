@@ -664,7 +664,13 @@ function cr(p0, p1, p2, p3, t) =
          + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t
          + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
 
-tail_smooth_steps = 6;   // interpolated points per control segment
+// Interpolated points per control segment. The tail is hulls between
+// consecutive spheres, so every sphere leaves a crease running around the
+// tube -- and once the circumference was smoothed those creases stopped
+// being masked by the general faceting and read as rings. More points means
+// a smaller direction change at each, so the creases shallow out: 6 put a
+// joint every 5.6mm, 14 puts one every 2.4mm, for about a megabyte.
+tail_smooth_steps = 14;
 
 function tail_curve() = concat(
     [ for (i = [0 : len(tail_pts) - 2])
