@@ -21,6 +21,7 @@ $fa = 0.5;
 outer_dia=223.34; shell_depth=56; wall=3; lip_height=6; shelf_h=2;
 screw_r=106.67; n_screws=8; post_od=9;
 screw_clear_dia=3.4; nose_angle=270; front_trim_h=4;
+back_plate_t=3; ant_mount_y=88; ant_mount_standoff=26; ant_socket_dia=33;
 speaker_bracket_depth=15; speaker_d=45;
 cradle_id=outer_dia+2; cradle_od=cradle_id+26; arm_gap=26; arm_w=16;
 base_h=16; stand_angle=18;
@@ -187,6 +188,55 @@ else if (check=="other_screws_present") {
     translate([screw_r*cos(225), screw_r*sin(225), 0.2])
       cylinder(d=screw_clear_dia - 0.2, h=front_trim_h - 0.4);
     front_trim();
+  }
+}
+// ---- Removable back plate --------------------------------------------
+// The antenna must clear the head. This is the check the mount was sized
+// from rather than styled to: an envelope the diameter of the antenna,
+// swept from the socket, intersected with the head and its ears. At a 12mm
+// standoff it fouls the top rim by 876mm3 and at 18mm by 205mm3; it comes
+// clear at 24, and the mount stands off 26.
+else if (check=="antenna_clears_head") {
+  intersection() {
+    translate([0, ant_mount_y, -back_plate_t - ant_mount_standoff])
+      rotate([stand_angle,0,0]) rotate([-90,0,0])
+        translate([0,0,-6]) cylinder(d=ant_socket_dia, h=220);
+    union() { shell(); ears_solid(); }
+  }
+}
+// The mount must not show from the front. Anything of it outside the head's
+// own outline would appear around the edge of the face.
+else if (check=="mount_hidden") {
+  intersection() {
+    antenna_mount();
+    difference() {
+      cylinder(d=400, h=300, center=true);
+      cylinder(d=outer_dia, h=300, center=true);
+    }
+  }
+}
+// The plate must meet the shell without either intruding on the other.
+else if (check=="plate_vs_shell") {
+  intersection() { back_plate(); shell(); }
+}
+// ...and must not foul the cradle once the head is seated in it.
+else if (check=="mount_vs_stand") {
+  arm_lift = base_h + cradle_od/2 - 3;
+  intersection() {
+    stand();
+    translate([0,0,arm_lift]) rotate([90-stand_angle,0,0])
+      translate([0,0,-shell_depth/2]) back_plate();
+  }
+}
+// All eight insert holes must be open bores. The speaker brackets reach the
+// wall at 0 and 180 degrees, right where two of the posts are, so a hole
+// subtracted inside the post module gets unioned shut again -- this is the
+// check that caught it needing to be drilled after the union instead.
+else if (check=="back_inserts_open") {
+  difference() {
+    for (i=[0:n_screws-1]) { a=i*360/n_screws;
+      translate([screw_r*cos(a), screw_r*sin(a), 0.5]) cylinder(d=3.6, h=6); }
+    shell();
   }
 }
 // sanity: this MUST produce geometry. If it comes out empty the modules

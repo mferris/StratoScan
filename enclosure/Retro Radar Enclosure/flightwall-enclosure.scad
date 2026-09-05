@@ -102,6 +102,23 @@ shelf_h = lip_height - retainer_h;
 // to one side, close together, out of the way of the PCB standoffs.
 usbc_hole_dia      = 23;   // Adafruit #4218 round panel-mount USB-C: needs 21.5-27mm, ~29.5mm OD barrel/nut
 antenna_hole_dia   = 6.5;  // generic SMA-F/F bulkhead panel jack: 1/4-36 thread, ~6.3mm hole, ~9.5mm hex nut
+// ---- Removable back plate --------------------------------------------
+// The back was a fixed floor with the electronics standing on it, which
+// meant the only way to a Pi was through the glass. It is now a separate
+// screwed plate, and everything that stood on the floor went with it: the
+// PCB standoffs, the fan mount, the intake and fan grilles, and the two
+// cable glands. Undo eight screws and the whole tray lifts out as one
+// assembly rather than the case having to be opened from the front.
+//
+// No locating spigot. A ring into the bore is the obvious way to register a
+// plate like this, and it lands exactly where the eight screw posts already
+// are -- the posts straddle the bore wall, so any ring thick enough to
+// locate would have to be notched eight times to clear them. Eight screws
+// on a 213mm circle locate it perfectly well on their own.
+back_plate_t   = 3;    // same as the floor it replaces
+back_post_h    = 9;    // insert post standing inside the case
+back_insert_d  = 8;    // how deep the heat-set insert hole is drilled
+
 back_holes_x       = 60;   // shared X position, tucked toward one side
 back_holes_y1      = -20;  // USB-C
 back_holes_y2      = 6;    // antenna, spaced just enough to clear both nuts
@@ -715,39 +732,97 @@ module stand() {
 // slots around the side wall. Two keyhole slots for wall mount
 // (or the separate stand accessory, for desk use).
 // ============================================================
+// Eight insert posts standing inside the case at the back, mirroring the
+// front's. They straddle the bore wall -- centred on screw_r, which is 2mm
+// outboard of the inner face -- so each one merges into the wall rather
+// than standing free.
+module back_posts() {
+    for (i = [0:n_screws-1]) {
+        a = i * 360/n_screws;
+        translate([screw_r*cos(a), screw_r*sin(a), 0])
+            cylinder(d=post_od, h=back_post_h);
+    }
+}
+
+// Drilled in shell()'s difference stage, NOT inside back_posts(). The
+// speaker brackets reach the wall at 0 and 180 degrees, exactly where two of
+// these posts are, and at z 5.5 upward -- so a hole subtracted inside the
+// post module gets unioned shut again by the bracket landing on top of it.
+// Subtracting after everything is unioned is the only order that guarantees
+// eight open holes. back_inserts_open in the checks proves it.
+module back_post_holes() {
+    for (i = [0:n_screws-1]) {
+        a = i * 360/n_screws;
+        translate([screw_r*cos(a), screw_r*sin(a), -0.01])
+            cylinder(d=insert_hole_dia, h=back_insert_d);
+    }
+}
+
+// ============================================================
+// BACK PLATE — the electronics tray, screwed on like the faceplate
+// ============================================================
+module back_plate() {
+    difference() {
+        union() {
+            translate([0,0,-back_plate_t])
+                cylinder(d=outer_dia, h=back_plate_t);
+
+            // Everything that used to stand on the floor. Their own
+            // geometry is unchanged; it is only shifted down so what used
+            // to sit on the floor's top face now sits on the plate's.
+            for (x = [-mount_hole_x/2, mount_hole_x/2])
+                for (y = [-mount_hole_y/2, mount_hole_y/2])
+                    translate([x, y, 0])
+                        difference() {
+                            cylinder(d=7, h=8);
+                            cylinder(d=2.5, h=9);
+                        }
+            translate([0,0,-wall]) fan_mount();
+        }
+        // Clearance for the eight screws into the shell's back posts.
+        for (i = [0:n_screws-1]) {
+            a = i * 360/n_screws;
+            translate([screw_r*cos(a), screw_r*sin(a), -back_plate_t-1])
+                cylinder(d=screw_clear_dia, h=back_plate_t+2);
+        }
+        // USB-C power + antenna cable glands, off to one side and clear of
+        // the standoffs, as they were on the floor.
+        translate([back_holes_x, back_holes_y1, -back_plate_t-1])
+            cylinder(d=usbc_hole_dia, h=back_plate_t+2);
+        translate([back_holes_x, back_holes_y2, -back_plate_t-1])
+            cylinder(d=antenna_hole_dia, h=back_plate_t+2);
+        // The grilles cut a band from z=-1 to wall+1; shifted down by the
+        // plate thickness that band covers the plate exactly.
+        translate([0,0,-back_plate_t]) intake_grille();
+        translate([0,0,-back_plate_t]) fan_grille();
+    }
+}
+
 module shell() {
     difference() {
         union() {
+            // Bored straight through: the back is a separate plate now.
             difference() {
                 cylinder(d=outer_dia, h=shell_depth);
-                translate([0,0,wall])
-                    cylinder(d=outer_dia - 2*wall, h=shell_depth);
+                translate([0,0,-1])
+                    cylinder(d=outer_dia - 2*wall, h=shell_depth + 2);
             }
+            back_posts();
             // keyhole_pads();  // wall-mount removed -- see keyholes() below
             rivets();
             ribs();
             cradle_rails();
-            fan_mount();
             for (a = speaker_angles) speaker_bracket(a);
             antenna_turret_solid();
         }
-        // USB-C power + antenna pass-throughs, through the back floor
-        // disc (desk-stand build now, not primarily wall-hung -- the
-        // back faces away from the viewer either way), close together
-        // off to one side, clear of the standoffs
-        translate([back_holes_x, back_holes_y1, -1])
-            cylinder(d=usbc_hole_dia, h=wall+2);
-        translate([back_holes_x, back_holes_y2, -1])
-            cylinder(d=antenna_hole_dia, h=wall+2);
         // keyholes();  // wall-mount removed: this is a desk-cradle build now,
         // and the back is a clean flat disc. The keyhole_*/keyholes()/
         // keyhole_pads() definitions above are left intact (unused) so
         // wall-mounting is a two-line change if it's ever wanted back.
-        intake_grille();
-        fan_grille();
         exhaust_slots();
         for (a = speaker_angles) speaker_grille(a);
         antenna_turret_cuts();
+        back_post_holes();
     }
 
     // Continuous shelf for retainer to seat on -- replaces relying on the
@@ -781,16 +856,6 @@ module shell() {
             }
     }
 
-    // standoffs for the panel's rear PCB
-    for (x = [-mount_hole_x/2, mount_hole_x/2]) {
-        for (y = [-mount_hole_y/2, mount_hole_y/2]) {
-            translate([x, y, 0])
-                difference() {
-                    cylinder(d=7, h=8);
-                    cylinder(d=2.5, h=9);
-                }
-        }
-    }
 
     // No dongle pocket. There was a fitted open-topped tray on the floor
     // here; it did not work in practice -- the dongle plus its USB lead and
@@ -803,6 +868,7 @@ module shell() {
 if (part == "front_trim") front_trim();
 else if (part == "retainer") retainer();
 else if (part == "shell") shell();
+else if (part == "back_plate") back_plate();
 else if (part == "stand") stand();
 else if (part == "test_antenna") {
     // small coupon around the antenna turret -- real shell() geometry,

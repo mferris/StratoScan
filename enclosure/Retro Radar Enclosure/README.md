@@ -13,6 +13,7 @@ the rest follows.
 | `front_trim` | bezel in front of the glass, rabbeted so it seats flush |
 | `retainer` | ring behind the glass; the glass rests on its front face |
 | `stand` | desk cradle — two ring-arc arms on a plinth |
+| `back_plate` | removable back — the electronics tray: PCB standoffs, fan mount, intake and fan grilles, and the USB-C and antenna glands |
 
 Two extra targets, `test_antenna` and `test_speaker`, clip the real shell
 geometry to a small box so a fit test prints in minutes instead of hours.
@@ -57,6 +58,34 @@ warnings rather than as history:
   slabs across a curved wall, so their corners otherwise punch through it.
 - **Grille holes have to cut through the bracket as well as the wall**, or
   they dead-end in solid plastic and no sound gets out.
+
+## The back comes off
+
+The back used to be a fixed floor with the electronics standing on it, which
+meant the only way to a Pi was through the glass. It is a separate plate now,
+screwed to eight insert posts exactly as the faceplate is, and everything
+that stood on the floor went with it: the standoffs, the fan mount, both
+grilles, and the two cable glands. Undo eight screws and the tray lifts out
+as one assembly.
+
+The insert holes are drilled in `shell()`'s difference stage rather than
+inside the post module. The speaker brackets reach the wall at 0° and 180°,
+exactly where two of the posts stand, so a hole subtracted inside the module
+gets unioned shut again by the bracket landing on top of it — two of the
+eight would have printed solid. `back_inserts_open` is the check that holds
+this, and it is a positive control: it has to *find* eight open bores.
+
+No locating spigot. A ring into the bore is the obvious way to register a
+plate like this, and it lands exactly where the screw posts already are,
+since those straddle the bore wall. Eight screws on a 213mm circle locate it
+well enough on their own.
+
+## Checks
+
+`sh run-checks.sh`. Every target must come out with no real volume except
+`back_inserts_open`, which must find geometry, and `canary`, which proves
+the modules are being found at all — without it a typo in the `use <>` path
+makes every other check pass against nothing.
 
 ## Smoothness
 

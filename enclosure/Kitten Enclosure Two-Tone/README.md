@@ -29,6 +29,7 @@ The head is one colour and prints as before:
 | `shell` | black | the head — body cylinder plus two ears, and all the internals |
 | `front_trim` | black | the face — bezel ring with a nose, whisker grooves and seven screw holes |
 | `retainer` | — | ring behind the glass (identical to the retro part) |
+| `back_plate` | black | removable back — the electronics tray, and the antenna mount |
 
 The stand is split into five bodies, one per colour region:
 
@@ -43,6 +44,35 @@ The stand is split into five bodies, one per colour region:
 `stand` is the whole stand as one piece, the same shape in a single
 filament — useful if you are not printing in two colours, and it is also the
 reference the five coloured parts are checked against.
+
+## The back comes off, and carries the antenna
+
+The back used to be a fixed floor with the electronics standing on it, so the
+only way in was through the glass. It is a separate plate now, screwed to
+eight insert posts exactly as the faceplate is, and everything that stood on
+the floor went with it: the standoffs, the fan mount, both grilles, and the
+two cable glands.
+
+The Pi is mounted to the LCD panel rather than to those standoffs, so taking
+the plate off exposes the back of the Pi and its cabling rather than removing
+it.
+
+The retro build carries its antenna on a turret out of the top of the case.
+There is no turret here — it would be a spike out of a cat's skull — so the
+antenna mounts on the back plate, behind the head, with the cable routed
+straight through into the case. Only the antenna shows, rising between the
+ears; the mount itself sits inside the head's outline and cannot be seen from
+the front.
+
+**The 26mm standoff is the whole trick, and it was measured rather than
+styled.** A vertical antenna rising from a plate the same diameter as the
+head has to travel outward past a 111.7mm radius to clear it, and it gains
+height toward the head the whole way — so mounted flat against the plate it
+converges on the head and cuts through the top rim. Standing the socket back
+buys the height to clear behind the head instead. Swept against the antenna's
+own 33mm envelope: 12mm fouls the rim by 876mm³, 18mm by 205mm³, and it comes
+clear at 24mm. At 26mm the antenna passes with about 3mm of radial margin,
+found by growing the envelope until it touched.
 
 ## Printing it in two colours
 
