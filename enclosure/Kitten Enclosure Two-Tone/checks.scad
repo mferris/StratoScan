@@ -21,7 +21,7 @@ $fa = 0.5;
 outer_dia=223.34; shell_depth=56; wall=3; lip_height=6; shelf_h=2;
 screw_r=106.67; n_screws=8; post_od=9;
 screw_clear_dia=3.4; nose_angle=270; front_trim_h=4;
-back_plate_t=3; ant_mount_y=88; ant_mount_standoff=26; ant_socket_dia=33;
+back_plate_t=3; ant_mount_y=88; ant_stub_len=30; ant_barrel_len=14; ant_socket_dia=33; ant_socket_depth=6;
 speaker_bracket_depth=15; speaker_d=45;
 cradle_id=outer_dia+2; cradle_od=cradle_id+26; arm_gap=26; arm_w=16;
 base_h=16; stand_angle=18;
@@ -198,9 +198,10 @@ else if (check=="other_screws_present") {
 // clear at 24, and the mount stands off 26.
 else if (check=="antenna_clears_head") {
   intersection() {
-    translate([0, ant_mount_y, -back_plate_t - ant_mount_standoff])
+    translate([0, ant_mount_y, -back_plate_t - ant_stub_len])
       rotate([stand_angle,0,0]) rotate([-90,0,0])
-        translate([0,0,-6]) cylinder(d=ant_socket_dia, h=220);
+        translate([0,0,ant_barrel_len - ant_socket_depth])
+          cylinder(d=ant_socket_dia, h=220);
     union() { shell(); ears_solid(); }
   }
 }
@@ -238,6 +239,11 @@ else if (check=="back_inserts_open") {
       translate([screw_r*cos(a), screw_r*sin(a), 0.5]) cylinder(d=3.6, h=6); }
     shell();
   }
+}
+// The bolt-on mount must sit flat on the plate without either intruding on
+// the other, and its bolt pattern must line up with the plate's.
+else if (check=="mount_vs_plate") {
+  intersection() { antenna_mount(); back_plate(); }
 }
 // sanity: this MUST produce geometry. If it comes out empty the modules
 // are not being found and every other result here is worthless.

@@ -29,7 +29,8 @@ The head is one colour and prints as before:
 | `shell` | black | the head — body cylinder plus two ears, and all the internals |
 | `front_trim` | black | the face — bezel ring with a nose, whisker grooves and seven screw holes |
 | `retainer` | — | ring behind the glass (identical to the retro part) |
-| `back_plate` | black | removable back — the electronics tray, and the antenna mount |
+| `back_plate` | black | removable back — standoffs, vents and the cable glands |
+| `antenna_mount` | black | bolt-on arm carrying the antenna socket |
 
 The stand is split into five bodies, one per colour region:
 
@@ -49,30 +50,40 @@ reference the five coloured parts are checked against.
 
 The back used to be a fixed floor with the electronics standing on it, so the
 only way in was through the glass. It is a separate plate now, screwed to
-eight insert posts exactly as the faceplate is, and everything that stood on
-the floor went with it: the standoffs, the fan mount, both grilles, and the
-two cable glands.
+eight insert posts exactly as the faceplate is, with the standoffs, the vents
+and the two cable glands on it.
 
 The Pi is mounted to the LCD panel rather than to those standoffs, so taking
 the plate off exposes the back of the Pi and its cabling rather than removing
-it.
+it. **There is no fan mount** — the fan goes on the Pi. The two grille
+patterns stay as plain vents.
 
-The retro build carries its antenna on a turret out of the top of the case.
-There is no turret here — it would be a spike out of a cat's skull — so the
-antenna mounts on the back plate, behind the head, with the cable routed
-straight through into the case. Only the antenna shows, rising between the
-ears; the mount itself sits inside the head's outline and cannot be seen from
-the front.
+The antenna mounts on the back of the plate rather than on a turret, since a
+turret out of a cat's skull is a spike. It is a **bolt-on**: three M3 bolts
+on a 30mm circle. That keeps both parts flat and support-free on the bed, and
+lets the antenna angle change later without reprinting the tray. The cable
+drops out of the socket and runs straight through the arm, the flange and the
+plate into the case.
 
-**The 26mm standoff is the whole trick, and it was measured rather than
-styled.** A vertical antenna rising from a plate the same diameter as the
-head has to travel outward past a 111.7mm radius to clear it, and it gains
-height toward the head the whole way — so mounted flat against the plate it
-converges on the head and cuts through the top rim. Standing the socket back
-buys the height to clear behind the head instead. Swept against the antenna's
-own 33mm envelope: 12mm fouls the rim by 876mm³, 18mm by 205mm³, and it comes
-clear at 24mm. At 26mm the antenna passes with about 3mm of radial margin,
-found by growing the envelope until it touched.
+The mount sits inside the head's outline and cannot be seen from the front;
+only the antenna shows, rising between the ears.
+
+### Why the arm reaches straight back before the barrel rises
+
+The arm goes **back** from the plate, and only then does a barrel rise from
+its end along the antenna's own axis. That two-stage shape is forced, not
+styled. A barrel coaxial with the antenna and rooted on the plate would have
+to climb toward the head the whole way and would run into it.
+
+The first attempt avoided that by hulling a pad on the plate to a disc at the
+socket — which produced a *cone* with the socket bored into its flank, so the
+antenna pointed sideways and down rather than up. A stub plus a barrel gives
+a real cylindrical socket with a flat face square to the antenna.
+
+The arm is 30mm because that is what the clearance costs. Swept against the
+antenna's own envelope: at 22mm it fouls the head's top rim even at nominal
+diameter, at 26mm it clears nominal but not +2mm, and at 30mm it still clears
+with 6mm of radial slack. `antenna_clears_head` holds it.
 
 ## Printing it in two colours
 

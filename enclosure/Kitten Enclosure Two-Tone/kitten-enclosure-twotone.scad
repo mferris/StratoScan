@@ -110,6 +110,25 @@ back_plate_t   = 3;    // same as the floor it replaces
 // it needs to clear: at 12mm the antenna's 33mm envelope passes the rim with
 // room to spare, at 0mm it cuts straight through it. antenna_clears_head in
 // checks.scad is what holds that.
+// Bolted on rather than moulded into the plate: it prints flat and
+// support-free on its own, the plate does too, and the antenna angle can be
+// changed later without reprinting the tray.
+ant_stub_dia   = 26;   // the arm reaching back from the plate
+ant_stub_len   = 30;   // how far back it reaches
+// 30 is measured, not chosen. A vertical antenna rising from a plate the
+// diameter of the head must travel out past a 111.7mm radius to clear it,
+// gaining height toward the head the whole way -- so the arm is what buys
+// the room to do that behind the head rather than through it. Swept against
+// the antenna's own envelope: at 22mm it fouls the top rim even at nominal
+// diameter, at 26mm it clears nominal but not +2mm, and at 30mm it still
+// clears with 6mm of radial slack. antenna_clears_head holds it.
+ant_barrel_len = 14;   // socket barrel, along the antenna's own axis
+ant_flange_d   = 40;
+ant_flange_t   = 4;
+ant_bolt_pcd   = 30;
+ant_bolt_d     = 3.4;
+n_ant_bolts    = 3;
+
 ant_mount_y        = 88;   // up the plate, still well inside its rim
 ant_mount_standoff = 26;   // how far the socket sits back from the plate
 // 26 is not a guess. Swept against the antenna's own 33mm envelope: 12mm
@@ -602,6 +621,15 @@ module retainer() {
 // Eight insert posts standing inside the case at the back, mirroring the
 // front's. They straddle the bore wall, so each merges into it rather than
 // standing free.
+// Solid band around the back rim, deep enough to cover the posts. Nothing
+// may be cut out of this.
+module back_collar() {
+    difference() {
+        cylinder(d=outer_dia, h=back_post_h + 2);
+        translate([0,0,-1]) cylinder(d=outer_dia - 2*wall, h=back_post_h + 4);
+    }
+}
+
 module back_posts() {
     for (i = [0:n_screws-1]) {
         a = i * 360/n_screws;
@@ -628,40 +656,68 @@ module back_post_holes() {
 // carrying the antenna mount on its outer face
 // ============================================================
 
-// Where the socket mouth sits, and which way it looks. rotate([-90,0,0])
-// lays a +Z cylinder along +Y; rotate([stand_angle,0,0]) then tilts it back
-// by exactly what the cradle tilts the case forward, so the two cancel and
-// the antenna stands vertical on the desk. Same construction as the retro
-// turret, for the same reason.
-function ant_mouth() = [0, ant_mount_y, -back_plate_t - ant_mount_standoff];
+// Where the socket mouth sits, and which way it looks.
+//
+// The arm reaches STRAIGHT BACK from the plate, and only then does a barrel
+// rise from its end along the antenna's own axis. That two-stage shape is
+// forced: a barrel coaxial with the antenna and rooted on the plate would
+// have to climb toward the head the whole way and would run into it, which
+// is why the first attempt hulled a pad on the plate to a disc at the mouth
+// instead -- and that produced a cone with the socket bored into its flank,
+// opening sideways-and-down rather than up. A stub plus a barrel gives a
+// real cylindrical socket with a flat face square to the antenna.
+//
+// rotate([-90,0,0]) lays a +Z cylinder along +Y; rotate([stand_angle,0,0])
+// then tilts it back by exactly what the cradle tilts the case forward, so
+// the two cancel and the antenna stands vertical on the desk.
+function ant_barrel_base() = [0, ant_mount_y, -back_plate_t - ant_stub_len];
 
 module ant_axis_frame() {
-    translate(ant_mouth())
+    translate(ant_barrel_base())
         rotate([stand_angle, 0, 0])
             rotate([-90, 0, 0])
                 children();
 }
 
+// Bolt positions, shared by the mount's flange and the plate it lands on so
+// the two cannot drift apart.
+module ant_bolt_holes(h, z0) {
+    for (i = [0 : n_ant_bolts - 1]) {
+        a = i * 360/n_ant_bolts + 90;
+        translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a), z0])
+            cylinder(d=ant_bolt_d, h=h);
+    }
+}
+
+// The cable drops out of the socket and runs straight forward through the
+// stub, the flange and the plate into the case.
+module ant_cable_bore(z_top) {
+    translate([0, ant_mount_y, -back_plate_t - ant_stub_len - 2])
+        cylinder(d=ant_cable_dia, h=ant_stub_len + z_top + 2);
+}
+
+// ---- the bolt-on part itself ----
 module antenna_mount() {
     difference() {
-        // A slanted bracket from a pad on the plate out to the socket face.
-        // hull() rather than a coaxial stub: the socket sits back from the
-        // plate AND up it, so nothing along the socket's own axis reaches
-        // the plate to grow from.
-        hull() {
-            translate([0, ant_mount_y, -back_plate_t])
-                cylinder(d=ant_boss_dia, h=0.8);
-            ant_axis_frame() cylinder(d=ant_boss_dia, h=0.8, center=true);
+        union() {
+            // flange against the plate's outer face
+            translate([0, ant_mount_y, -back_plate_t - ant_flange_t])
+                cylinder(d=ant_flange_d, h=ant_flange_t);
+            // arm reaching back
+            translate([0, ant_mount_y, -back_plate_t - ant_stub_len])
+                cylinder(d=ant_stub_dia, h=ant_stub_len);
+            // socket barrel, rooted 6mm inside the arm so the joint is solid
+            ant_axis_frame() translate([0,0,-6])
+                cylinder(d=ant_boss_dia, h=ant_barrel_len + 6);
         }
-        // the socket the antenna's base drops into
+        // the socket the antenna's base drops into, square to its axis
         ant_axis_frame()
-            translate([0,0,-ant_socket_depth])
-                cylinder(d=ant_socket_dia, h=ant_socket_depth + 0.02);
-        // and the cable, straight forward through the bracket and the plate
-        // into the case -- the reason for mounting on the plate at all
-        translate([0, ant_mount_y - ant_socket_dia*0.17,
-                   -back_plate_t - ant_mount_standoff - 4])
-            cylinder(d=ant_cable_dia, h=ant_mount_standoff + 8);
+            translate([0, 0, ant_barrel_len - ant_socket_depth])
+                cylinder(d=ant_socket_dia, h=ant_socket_depth + 1);
+        ant_cable_bore(0);
+        ant_bolt_holes(ant_flange_t + 2, -back_plate_t - ant_flange_t - 1);
+        // nothing may stand proud of the plate's outer face
+        translate([-300, -300, -back_plate_t]) cube([600, 600, 600]);
     }
 }
 
@@ -679,8 +735,6 @@ module back_plate() {
                             cylinder(d=7, h=8);
                             cylinder(d=2.5, h=9);
                         }
-            translate([0,0,-wall]) fan_mount();
-            antenna_mount();
         }
         for (i = [0:n_screws-1]) {
             a = i * 360/n_screws;
@@ -691,16 +745,14 @@ module back_plate() {
             cylinder(d=usbc_hole_dia, h=back_plate_t+2);
         translate([back_holes_x, back_holes_y2, -back_plate_t-1])
             cylinder(d=antenna_hole_dia, h=back_plate_t+2);
+        // Kept as plain vents. There is no fan mount on the plate any
+        // more -- the fan goes on the Pi -- but the openings still help.
         translate([0,0,-back_plate_t]) intake_grille();
         translate([0,0,-back_plate_t]) fan_grille();
-        // re-cut the socket and cable after the union, so the plate cannot
-        // fill them back in where the bracket meets it
-        ant_axis_frame()
-            translate([0,0,-ant_socket_depth])
-                cylinder(d=ant_socket_dia, h=ant_socket_depth + 0.02);
-        translate([0, ant_mount_y - ant_socket_dia*0.17,
-                   -back_plate_t - ant_mount_standoff - 4])
-            cylinder(d=ant_cable_dia, h=ant_mount_standoff + 12);
+        // the antenna mount bolts on here, and its cable passes through
+        ant_bolt_holes(back_plate_t + 2, -back_plate_t - 1);
+        translate([0, ant_mount_y, -back_plate_t - 1])
+            cylinder(d=ant_cable_dia, h=back_plate_t + 2);
     }
 }
 
@@ -714,7 +766,13 @@ module shell() {
                 }
                 // Bored straight through: the back is a separate plate now.
                 translate([0,0,-1]) cylinder(d=outer_dia - 2*wall, h=shell_depth + 2);
-                ears_hollow();
+                // The ear cavities open into the case, and at 45 and 135
+                // degrees they were eating the wall exactly where two back
+                // posts attach -- leaving those two as loose islands in the
+                // mesh, unprintable and unnoticed until the shell was
+                // checked for connected components. Protect a collar around
+                // the back rim so every post has wall to hold on to.
+                difference() { ears_hollow(); back_collar(); }
             }
             back_posts();
             cradle_rails();
@@ -1038,6 +1096,7 @@ else if (part == "retainer") retainer();
 else if (part == "shell") shell();
 else if (part == "stand") stand();
 else if (part == "back_plate") back_plate();
+else if (part == "antenna_mount") antenna_mount();
 else if (part == "stand_body")     part_stand_body();
 else if (part == "stand_paws")     part_stand_paws();
 else if (part == "stand_toes")     part_stand_toes();
