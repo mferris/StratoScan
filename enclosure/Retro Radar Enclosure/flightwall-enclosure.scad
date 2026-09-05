@@ -777,7 +777,11 @@ module back_plate() {
                             cylinder(d=7, h=8);
                             cylinder(d=2.5, h=9);
                         }
-            translate([0,0,-wall]) fan_mount();
+            // No fan mount. There was a plate here standing perpendicular
+            // to the tray, carrying a 30mm fan; the fan goes on the Pi
+            // instead. fan_mount() and its fan_plate_* variables are left
+            // defined but unused, the same way the wall-mount keyhole code
+            // above is, so putting it back is a one-line change.
         }
         // Clearance for the eight screws into the shell's back posts.
         for (i = [0:n_screws-1]) {

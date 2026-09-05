@@ -13,7 +13,7 @@ the rest follows.
 | `front_trim` | bezel in front of the glass, rabbeted so it seats flush |
 | `retainer` | ring behind the glass; the glass rests on its front face |
 | `stand` | desk cradle — two ring-arc arms on a plinth |
-| `back_plate` | removable back — the electronics tray: PCB standoffs, fan mount, intake and fan grilles, and the USB-C and antenna glands |
+| `back_plate` | removable back — PCB standoffs, both vent grilles, and the USB-C and antenna glands |
 
 Two extra targets, `test_antenna` and `test_speaker`, clip the real shell
 geometry to a small box so a fit test prints in minutes instead of hours.
@@ -64,9 +64,14 @@ warnings rather than as history:
 The back used to be a fixed floor with the electronics standing on it, which
 meant the only way to a Pi was through the glass. It is a separate plate now,
 screwed to eight insert posts exactly as the faceplate is, and everything
-that stood on the floor went with it: the standoffs, the fan mount, both
-grilles, and the two cable glands. Undo eight screws and the tray lifts out
-as one assembly.
+that stood on the floor went with it: the standoffs, both grilles, and the
+two cable glands. Undo eight screws and the tray lifts out as one assembly.
+
+**There is no fan mount.** There was a plate standing perpendicular to the
+tray carrying a 30mm fan; the fan goes on the Pi instead. `fan_mount()` and
+its variables are left defined but unused — the same treatment the wall-mount
+keyhole code above gets — so putting it back is a one-line change. Both
+grille patterns stay as plain vents.
 
 The insert holes are drilled in `shell()`'s difference stage rather than
 inside the post module. The speaker brackets reach the wall at 0° and 180°,
