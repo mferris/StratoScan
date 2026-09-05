@@ -24,7 +24,23 @@
 // ============================================================
 
 part = "preview";  // front_trim | retainer | shell | stand | preview | exploded | test_ear
-$fn = 96;
+// ---- Curve resolution ------------------------------------------------
+// $fa/$fs rather than a fixed $fn, which is what this was before.
+//
+// A fixed count makes the flats grow with the feature, so the biggest, most
+// looked-at surfaces come out roughest: at $fn=96 the head's 223mm rim had
+// 7.3mm flats and the cradle 8.2mm, while every 3mm screw hole also got 96
+// sides it had no use for. $fs caps the chord -- the width of one flat,
+// which is what the eye reads as faceting -- so a big curve gets the facets
+// and a small hole does not.
+//
+// 0.4mm is one extrusion width: below that the printer cannot reproduce the
+// difference. $fa then bounds the count on very large radii. Together these
+// give the head 0.97mm flats for about a quarter more mesh than $fn=96 --
+// cheaper than raising $fn would have been, because the savings on small
+// holes pay for the big surfaces.
+$fs = 0.4;   // max chord in mm
+$fa = 0.5;   // max degrees per fragment
 
 // ============================================================
 // HARDWARE CONTRACT — do not change these to suit the styling.
@@ -378,7 +394,7 @@ module cradle_rails() {
     for (seg = retain_segs)
         for (z = [arm_a_inner + retain_clear, arm_b_inner - retain_clear - retain_w])
             translate([0,0,z]) rotate([0,0,seg[0]])
-                rotate_extrude(angle=seg[1], $fn=96)
+                rotate_extrude(angle=seg[1])
                     translate([outer_dia/2, 0]) square([retain_h, retain_w]);
 }
 
@@ -584,7 +600,7 @@ module toe(i, y_front, shrink = 0) {
     translate(toe_pos(i, y_front))
         rotate([0, 0, -toe_a(i)])
             scale([1, 1.35, 0.85])
-                sphere(d = max(toe_dia - shrink, 0.2), $fn = 40);
+                sphere(d = max(toe_dia - shrink, 0.2));
 }
 
 // The pad without its toes. paw() below is still the whole foot, because the
@@ -598,12 +614,12 @@ module paw_pad(x, shrink = 0) {
         // wide and low at the toes
         hull() {
             translate([0, y_back, paw_h * 0.46])
-                scale([1, 1, 0.95]) sphere(d = paw_w * paw_ankle_w - shrink, $fn = 40);
+                scale([1, 1, 0.95]) sphere(d = paw_w * paw_ankle_w - shrink);
             translate([0, (y_back + y_front) / 2, paw_h * 0.40])
-                scale([1.04, 1, 0.80]) sphere(d = paw_w * 0.84 - shrink, $fn = 44);
+                scale([1.04, 1, 0.80]) sphere(d = paw_w * 0.84 - shrink);
             // pad front, held BACK so the toes lead it
             translate([0, y_front + toe_dia * 1.95, paw_h * 0.33])
-                scale([1.10, 1, 0.68]) sphere(d = paw_w * 0.92 - shrink, $fn = 44);
+                scale([1.10, 1, 0.68]) sphere(d = paw_w * 0.92 - shrink);
         }
     }
 }
@@ -632,8 +648,8 @@ module paw_clefts(x) {
             translate([mid[0], mid[1], mid[2] + cleft_d * 0.5])
                 rotate([0, 0, -ang])
                     hull() {
-                        translate([0, -toe_dia * 0.75, 0]) sphere(d = cleft_w, $fn = 20);
-                        translate([0,  toe_dia * 0.85, cleft_d * 0.5]) sphere(d = cleft_w * 1.6, $fn = 20);
+                        translate([0, -toe_dia * 0.75, 0]) sphere(d = cleft_w);
+                        translate([0,  toe_dia * 0.85, cleft_d * 0.5]) sphere(d = cleft_w * 1.6);
                     }
         }
 }
@@ -669,8 +685,8 @@ module tail_run(i0, i1, shrink = 0) {
     pts = tail_curve();
     for (i = [i0 : i1 - 1])
         hull() {
-            translate([pts[i][0],   pts[i][1],   pts[i][2]])   sphere(d = max(pts[i][3]   - shrink, 0.5), $fn = 28);
-            translate([pts[i+1][0], pts[i+1][1], pts[i+1][2]]) sphere(d = max(pts[i+1][3] - shrink, 0.5), $fn = 28);
+            translate([pts[i][0],   pts[i][1],   pts[i][2]])   sphere(d = max(pts[i][3]   - shrink, 0.5));
+            translate([pts[i+1][0], pts[i+1][1], pts[i+1][2]]) sphere(d = max(pts[i+1][3] - shrink, 0.5));
         }
 }
 
@@ -690,10 +706,10 @@ module cradle_arm(depth_offset) {
     r_mid = (cradle_id + cradle_od) / 4;
     translate([0, 0, depth_offset]) {
         rotate([0,0, 270 - cradle_arc/2])
-            rotate_extrude(angle = cradle_arc, $fn=96)
+            rotate_extrude(angle = cradle_arc)
                 translate([cradle_id/2, 0]) square([arm_t, arm_w]);
         for (a = [270 - cradle_arc/2, 270 + cradle_arc/2])
-            translate([r_mid*cos(a), r_mid*sin(a), 0]) cylinder(d=arm_t, h=arm_w, $fn=48);
+            translate([r_mid*cos(a), r_mid*sin(a), 0]) cylinder(d=arm_t, h=arm_w);
     }
 }
 
@@ -726,7 +742,7 @@ module stand_frame() {
                     // into the space the head occupies
                     translate([0, 0, -(arm_gap/2 + arm_w)])
                         rotate([0, 0, 270 - keel_arc/2])
-                            rotate_extrude(angle = keel_arc, $fn=96)
+                            rotate_extrude(angle = keel_arc)
                                 translate([cradle_id/2, 0])
                                     square([keel_reach, arm_gap + 2*arm_w]);
             }

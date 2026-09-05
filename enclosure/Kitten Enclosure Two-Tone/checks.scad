@@ -12,7 +12,12 @@
 // nothing and every check "passes" against empty geometry.
 use <kitten-enclosure-twotone.scad>
 check = "none";
-$fn = 96;   // match the design's resolution, or small interferences hide
+// Must match the design's resolution or the checks validate different
+// geometry from what gets exported. This said $fn=96 while the design moved
+// to adaptive $fa/$fs, and the giveaway was the canary reporting volume to
+// the milligram across a resolution change that should have moved it.
+$fs = 0.4;
+$fa = 0.5;
 outer_dia=223.34; shell_depth=56; wall=3; lip_height=6; shelf_h=2;
 screw_r=106.67; n_screws=8; post_od=9;
 speaker_bracket_depth=15; speaker_d=45;

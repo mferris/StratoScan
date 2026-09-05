@@ -19,6 +19,7 @@ Usage:  python3 check-coincident.py stand_paws.stl stand_toes.stl ...
 """
 import itertools
 import os
+import struct
 import sys
 
 PARTS = ["stand_body.stl", "stand_paws.stl", "stand_toes.stl",
@@ -26,18 +27,40 @@ PARTS = ["stand_body.stl", "stand_paws.stl", "stand_toes.stl",
 PLACES = 3          # 0.001mm -- finer than any boolean's rounding error
 
 
+def _triangles(path):
+    """Yield triangles from an STL, ascii or binary.
+
+    Detected by content, not by extension: the meshes here are exported as
+    binary (six times smaller for identical geometry) while OpenSCAD writes
+    ascii for the check targets, and a reader that assumed one would silently
+    return nothing for the other -- which reads exactly like a pass.
+    """
+    with open(path, "rb") as f:
+        head = f.read(5)
+        f.seek(0)
+        if head == b"solid":
+            v = []
+            for raw in f:
+                line = raw.decode("utf-8", "replace").strip()
+                if line.startswith("vertex"):
+                    v.append(tuple(float(x) for x in line.split()[1:4]))
+                    if len(v) == 3:
+                        yield tuple(v); v = []
+            return
+        f.seek(80)
+        (count,) = struct.unpack("<I", f.read(4))
+        for _ in range(count):
+            d = f.read(50)
+            if len(d) < 50:
+                return
+            n = struct.unpack("<12f", d[:48])
+            yield (n[3:6], n[6:9], n[9:12])
+
+
 def faces(path):
     """Canonical, order-independent key per triangle."""
-    out, v = set(), []
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith("vertex"):
-                v.append(tuple(round(float(x), PLACES) for x in line.split()[1:4]))
-                if len(v) == 3:
-                    out.add(tuple(sorted(v)))   # sorted: winding must not matter
-                    v = []
-    return out
+    return {tuple(sorted(tuple(round(c, PLACES) for c in vert) for vert in tri))
+            for tri in _triangles(path)}
 
 
 def main(argv):

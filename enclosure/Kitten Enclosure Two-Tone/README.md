@@ -95,6 +95,34 @@ stretch the white tip sits 0.15mm proud of the black tail it continues.
   silhouetted from every angle, and a flicked tail tip is cat-like anyway.
   This was caught by rendering it and looking, not by any check.
 
+## Smoothness
+
+Curve resolution is set by `$fs` (0.4mm) and `$fa` (0.5°) in the `.scad`,
+not by a fixed facet count.
+
+A fixed count was what this had, and it makes the flats grow with the
+feature — so the biggest, most looked-at surfaces come out roughest. At the
+old `$fn = 96` the head's 223mm rim carried **7.3mm flats** and the cradle
+8.2mm, while every 3mm screw hole also got 96 sides it had no use for. `$fs`
+caps the chord — the width of one flat, which is what the eye reads as
+faceting — so a large curve gets the facets and a small hole does not. The
+head is now at 0.97mm and every sphere in the paws, toes and tail at 0.4mm,
+which is one extrusion width: below that a 0.4mm nozzle cannot reproduce the
+difference.
+
+The meshes are exported as **binary STL**. At this resolution the stand is
+173,000 facets, which is 52MB as ascii and 8.3MB as binary for byte-identical
+geometry. Every slicer reads both.
+
+To go finer, lower `$fs` — but check the file sizes, because sphere cost
+grows as the square.
+
+**`use <>` does not carry `$fa`/`$fs`.** It imports modules and functions
+only, so `checks.scad` and the preview files set them again at the top. Miss
+that and they silently render at OpenSCAD's defaults, showing a faceting the
+exported mesh does not have — or, worse, validating geometry that is not what
+gets printed.
+
 ## Checks
 
 `sh run-checks.sh` runs every target in `checks.scad` and reports the
@@ -140,7 +168,8 @@ check.
 ```sh
 for p in shell front_trim retainer stand \
          stand_body stand_paws stand_toes stand_tail stand_tail_tip; do
-  openscad --backend=manifold -D "part=\"$p\"" -o "$p.stl" kitten-enclosure-twotone.scad
+  openscad --backend=manifold --export-format binstl \
+           -D "part=\"$p\"" -o "$p.stl" kitten-enclosure-twotone.scad
 done
 ```
 
