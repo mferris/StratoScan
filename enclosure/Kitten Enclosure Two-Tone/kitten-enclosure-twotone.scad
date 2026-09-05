@@ -181,6 +181,12 @@ whisker_arc      = 9;     // degrees swept by each groove
 // whisker_vs_nose in checks.scad.
 whisker_offsets  = [7, 18, 29];
 
+// Smallest angle between two bearings, in degrees. Used to find which screw
+// position the nose is sitting on, so the answer tracks nose_angle instead
+// of being written out as an index that stops being right the moment the
+// nose moves.
+function ang_gap(a, b) = abs(((a - b + 180) % 360 + 360) % 360 - 180);
+
 // STAND — a sitting cat. Plinth is rounded rather than a slab.
 base_w = outer_dia*0.86; base_d = 150; base_h = 16;
 base_corner_r = 18;
@@ -507,10 +513,18 @@ module front_trim() {
             nose();
         }
         translate([0,0,-rabbet_depth-1]) cylinder(d=retention_opening, h=total_h+2);
+        // Seven screws, not eight. The nose stands on the screw ring at
+        // nose_angle and caps that hole with 2.6mm of solid, so the screw
+        // could never be fitted -- and a hole that cannot take a screw is
+        // worse than no hole, because it reads as a moulding defect under
+        // the nose. The eighth is not cut at all. The shell keeps all eight
+        // posts: an unused boss is invisible and keeps that part identical
+        // to the retro build it was copied from.
         for (i = [0:n_screws-1]) {
             a = i * 360/n_screws;
-            translate([screw_r*cos(a), screw_r*sin(a), -rabbet_depth-1])
-                cylinder(d=screw_clear_dia, h=total_h+2);
+            if (ang_gap(a, nose_angle) > 1)
+                translate([screw_r*cos(a), screw_r*sin(a), -rabbet_depth-1])
+                    cylinder(d=screw_clear_dia, h=total_h+2);
         }
         whisker_grooves();
     }
