@@ -57,10 +57,30 @@ land where the eye already expects a line. Print `stand_body` flat on its
 base; the paws, toes and tail parts are all small and sit stably on their cut
 faces.
 
-Whichever route, the bodies are **mutually exclusive** — no overlaps. That
-matters more than it sounds: slicers resolve overlapping bodies differently,
-usually "last one loaded wins", so an overlap of even a millimetre puts the
-colour seam somewhere that depends on the order you happened to load them.
+### Why the parts overlap slightly
+
+The bodies deliberately interfere by 0.3mm (`colour_overlap`) along every
+seam, and the first version of this design got that exactly backwards.
+
+Cutting each part with the precise shape of its neighbour is the tidy answer
+and it is the broken one. It produces a perfect partition — zero shared
+volume — while leaving the two bodies sharing a *surface* at identical
+coordinates. No renderer can decide which of two faces at the same depth is
+in front, so the slicer stipples the seam with the other colour: a white paw
+arrives speckled black, worst over the buried half of the paw where the
+shared area is largest.
+
+So each part is cut with a slightly inset copy of whatever takes precedence
+over it, leaving a thin shell of shared material instead of a shared surface.
+Nothing is coplanar, and the colour boundary moves by at most 0.15mm — a
+fifth of a nozzle width, so which body a slicer awards the shell to cannot be
+seen in the print.
+
+The tail needed the opposite treatment. Its two parts are runs of the same
+tapering tube, so wherever they overlap they carry the same outer skin —
+and an overlap of identical skin is the very coincidence being avoided.
+There the tip is grown rather than the body shrunk, so over the shared
+stretch the white tip sits 0.15mm proud of the black tail it continues.
 
 ## Where the colour goes, and why
 
@@ -80,29 +100,40 @@ colour seam somewhere that depends on the order you happened to load them.
 `sh run-checks.sh` runs every target in `checks.scad` and reports the
 **volume** each produces.
 
-Volume, not "is it empty". Wherever two parts share a surface — which is the
-entire point of the colour split, since the toes sit in the pads and the tip
-continues the tail — a boolean leaves a zero-thickness film along that
-boundary, with thousands of facets and no volume. Judging by facet count
-calls a correct model broken. The threshold is 1mm³ against a paw of roughly
-10,000mm³, so a real interference has nowhere to hide.
+Volume, not facet count. A boolean between parts that touch leaves
+zero-thickness films along the boundary — thousands of facets and no volume —
+so counting facets calls a correct model broken. The threshold is 1mm³
+against a paw of roughly 27,000mm³, and a real interference has nowhere to
+hide in that gap.
+
+Volume alone is not enough either, which is what the speckled first version
+proved: a shared surface has no volume at all. That is what
+`check-coincident.py` below is for.
 
 Alongside the fit checks inherited from the single-colour design, the split
 adds:
 
-- `material_lost` — a region of the one-piece stand that no coloured part
-  claims. That would print as a hole.
-- `material_gained` — a region two parts both claim. That is where the slicer
-  gets to pick a colour for you.
-- `paws_vs_toes`, `paws_vs_tail`, `body_vs_paws`, `tail_vs_tip` — pairwise
-  overlap, checked pairwise because a mutual overlap hides inside a union.
+- `material_lost` — must be **zero**: a region of the one-piece stand that no
+  coloured part claims. That would print as a hole.
+- `material_gained`, `paws_vs_toes`, `body_vs_paws`, `tail_vs_tip` — must be
+  **small but non-zero**: these are the colour seams, and zero here means the
+  parts share surfaces instead of overlapping, which is the speckling bug.
+  Bounded at 1500mm³, which is 0.15mm of thickness over 10,000mm² of shared
+  surface — far more than these parts have.
 - `canary` — must produce geometry. Without it, a typo in the `use <>` path
   makes every check above pass against nothing, which has happened here
   before.
 
-As an independent confirmation that does not rely on OpenSCAD's own booleans,
-the exported meshes were measured: the five parts sum to 750,877.9mm³ against
-the one-piece stand's 750,877.9mm³, a difference of 0.000%.
+`check-coincident.py` makes the check the volume tests cannot: it compares
+the exported meshes face by face and counts triangles two parts have at
+identical coordinates. Two parts sharing a surface have zero shared volume
+and still stipple, so nothing about that bug is visible in a volume
+measurement. All ten pairs must come out at zero. With the overlap disabled
+(`-D colour_overlap=0`) the same check reports 3,502 shared faces between the
+paws and the toes, which is precisely the speckling.
+
+Run everything with `sh run-checks.sh`, which also runs the coincidence
+check.
 
 ## Regenerating
 

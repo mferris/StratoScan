@@ -18,17 +18,30 @@ DIR=$(cd "$(dirname "$0")" && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
-# Must come out with no real volume.
+# Must come out with no real volume: a real interference, or a region of the
+# stand that no coloured part claims, which would print as a hole.
 EMPTY="ear_vs_post recess_vs_post whisker_through head_in_cradle
        tail_over_paw tail_vs_left_paw tail_vs_head paws_vs_head ears_vs_cradle
-       material_lost material_gained paws_vs_toes paws_vs_tail body_vs_paws
-       tail_vs_tip"
+       material_lost paws_vs_tail"
+
+# Must come out SMALL but non-zero. These are the colour seams, and they
+# overlap on purpose -- see colour_overlap in the .scad. Cutting each part
+# with the exact shape of its neighbour gives zero here and a speckled
+# preview, because the two bodies then share a surface at identical
+# coordinates and no renderer can order them. So the interesting question is
+# not "is it zero" but "is it still only a seam".
+SEAM="material_gained paws_vs_toes body_vs_paws tail_vs_tip"
 # Must come out WITH volume: proof the modules are being found at all. Without
 # this, a typo in the `use <>` path makes every check above pass against
 # nothing, which has happened on this project before.
 CANARY="canary"
 
-MAX_MM3=1.0    # a film is 0.0; a paw is ~10000. Anything between is real.
+MAX_MM3=1.0    # a film is 0.0; a paw is ~27000. Anything between is real.
+# A seam is the shared area times colour_overlap/2, i.e. 0.15mm of thickness.
+# Even 10,000mm2 of shared surface -- far more than these parts have -- comes
+# to 1500mm3. Past that it is not a seam, it is two parts genuinely occupying
+# the same space, and which colour wins stops being invisible.
+MAX_SEAM_MM3=1500
 
 vol_of() {
     python3 - "$1" <<'PY'
@@ -67,6 +80,18 @@ for c in $EMPTY; do
     fi
 done
 
+echo "Colour seams — must be present but thin (under ${MAX_SEAM_MM3} mm3):"
+for c in $SEAM; do
+    out="$TMP/$c.stl"
+    "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
+    v=$(vol_of "$out")
+    if [ "$(echo "$v > 0 && $v < $MAX_SEAM_MM3" | bc -l)" = "1" ]; then
+        printf "  PASS  %-18s %8s mm3\n" "$c" "$v"
+    else
+        printf "  FAIL  %-18s %8s mm3\n" "$c" "$v"; fail=1
+    fi
+done
+
 echo "Canary — must produce real geometry, or nothing above means anything:"
 for c in $CANARY; do
     out="$TMP/$c.stl"
@@ -78,6 +103,16 @@ for c in $CANARY; do
         printf "  FAIL  %-18s %8s mm3  (modules not found?)\n" "$c" "$v"; fail=1
     fi
 done
+
+# The check the volume tests cannot make: two parts sharing a surface have
+# zero shared volume and still stipple the preview. Compared face by face.
+echo "Coincident faces between colour bodies — must be none:"
+if python3 "$DIR/check-coincident.py" >"$TMP/coin.txt" 2>&1; then
+    grep -c PASS "$TMP/coin.txt" | sed 's/^/  all /;s/$/ pairs clean/'
+else
+    grep FAIL "$TMP/coin.txt" | sed 's/^/  /'
+    fail=1
+fi
 
 [ "$fail" = "0" ] && echo "All checks passed." || echo "SOME CHECKS FAILED."
 exit "$fail"
