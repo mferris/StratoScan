@@ -1,0 +1,8 @@
+[Unit]
+Description=FlightRadar kiosk memory probe (temporary instrumentation)
+Documentation=https://github.com/mferris/FlightRadar
+
+[Service]
+Type=oneshot
+StateDirectory=flightradar-memprobe
+ExecStart=/opt/flightradar/mem-probe.sh 5min
