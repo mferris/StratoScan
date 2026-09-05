@@ -19,7 +19,7 @@ trap 'rm -rf "$TMP"' EXIT
 # stand that no coloured part claims, which would print as a hole.
 EMPTY="ear_vs_post recess_vs_post whisker_through head_in_cradle
        tail_over_paw tail_vs_left_paw tail_vs_head paws_vs_head ears_vs_cradle
-       whisker_vs_screws whisker_vs_nose whisker_off_nose"
+       whisker_vs_screws whisker_vs_nose whisker_off_nose nose_screw_removed"
 
 # Must come out SMALL but non-zero. These are the colour seams, and they
 # overlap on purpose -- see colour_overlap in the .scad. Cutting each part
@@ -69,6 +69,23 @@ for c in $EMPTY; do
         printf "  PASS  %-18s %8s mm3\n" "$c" "$v"
     else
         printf "  FAIL  %-18s %8s mm3\n" "$c" "$v"; fail=1
+    fi
+done
+
+# Paired positive control for nose_screw_removed. An empty result there is
+# also what a probe in the wrong place, or a front_trim() that failed to
+# evaluate, would produce -- so a probe at a NORMAL screw position has to
+# find a real hole. A 3.2mm probe through the bezel is about 56mm3; the
+# threshold only has to separate that from nothing.
+echo "Positive controls — must find real geometry:"
+for c in other_screws_present; do
+    out="$TMP/$c.stl"
+    "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
+    v=$(vol_of "$out")
+    if [ "$(echo "$v > 10" | bc -l)" = "1" ]; then
+        printf "  PASS  %-18s %8s mm3\n" "$c" "$v"
+    else
+        printf "  FAIL  %-18s %8s mm3  (probe found no hole)\n" "$c" "$v"; fail=1
     fi
 done
 

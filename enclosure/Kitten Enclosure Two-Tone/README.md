@@ -23,7 +23,7 @@ The head is one colour and prints as before:
 | part | colour | what it is |
 |---|---|---|
 | `shell` | black | the head — body cylinder plus two ears, and all the internals |
-| `front_trim` | black | the face — bezel ring with a nose and whisker grooves |
+| `front_trim` | black | the face — bezel ring with a nose, whisker grooves and seven screw holes |
 | `retainer` | — | ring behind the glass (identical to the retro part) |
 
 The stand is split into five bodies, one per colour region:
@@ -146,6 +146,23 @@ only, so `checks.scad` and the preview files set them again at the top. Miss
 that and they silently render at OpenSCAD's defaults, showing a faceting the
 exported mesh does not have — or, worse, validating geometry that is not what
 gets printed.
+
+## Seven screws, not eight
+
+The bezel has seven screw holes. There is an eighth insert post in the shell
+at the same angle as the nose, and the nose stands on top of it — 2.6mm of
+solid capping the hole, so that screw could never have been fitted. Rather
+than leave a hole that cannot take a screw and reads as a moulding defect
+under the chin, it is not cut at all.
+
+The shell keeps all eight posts. An unused boss is invisible from outside and
+keeps that part identical to the retro build it was copied from.
+
+Found by probing the screw ring after a faceplate had already been printed.
+`nose_screw_removed` now proves the hole is absent, and `other_screws_present`
+is its paired positive control — an empty result from the first would also be
+what a probe in the wrong place produces, so a probe at a normal position has
+to find a real hole for the pair to mean anything.
 
 ## Checks
 

@@ -11,7 +11,7 @@ $fs = 0.4;
 $fa = 0.5;
 outer_dia=223.34; shell_depth=56; wall=3; lip_height=6; shelf_h=2;
 screw_r=106.67; n_screws=8; post_od=9;
-screw_clear_dia=3.4; nose_angle=270;
+screw_clear_dia=3.4; nose_angle=270; front_trim_h=4;
 speaker_bracket_depth=15; speaker_d=45;
 cradle_id=outer_dia+2; cradle_od=cradle_id+26; arm_gap=26; arm_w=16;
 base_h=16; stand_angle=18;
@@ -127,6 +127,32 @@ else if (check=="whisker_off_nose") {
     whisker_grooves();
     rotate([0,0,270-45]) rotate_extrude(angle=90)
       translate([0,-10]) square([200,30]);
+  }
+}
+// The hole under the nose must not be cut at all. Proving a hole is ABSENT
+// needs a difference, not an intersection: a probe filling the hole's
+// footprint through the bezel, minus the trim, must come out empty -- there
+// is no void for it to find.
+else if (check=="nose_screw_removed") {
+  // Kept strictly inside the bezel's own thickness. A probe that overhangs
+  // the part finds the air beyond it and reports that as a hole -- the first
+  // version of this reached 1mm below the rabbet and "failed" on 11mm3 of
+  // nothing.
+  difference() {
+    translate([screw_r*cos(270), screw_r*sin(270), 0.2])
+      cylinder(d=screw_clear_dia - 0.2, h=front_trim_h - 0.4);
+    front_trim();
+  }
+}
+// ...and the paired positive control, in the canary group below, because an
+// empty result above would also be what a probe in the wrong place, or a
+// front_trim() that failed to evaluate, produces. This one must find a real
+// hole at a normal position.
+else if (check=="other_screws_present") {
+  difference() {
+    translate([screw_r*cos(225), screw_r*sin(225), 0.2])
+      cylinder(d=screw_clear_dia - 0.2, h=front_trim_h - 0.4);
+    front_trim();
   }
 }
 // sanity: this MUST produce geometry. If it comes out empty the modules

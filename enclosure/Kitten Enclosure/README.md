@@ -16,7 +16,7 @@ follows from it.
 | part | what it is |
 |---|---|
 | `shell` | the head — body cylinder plus two ears, and all the internals |
-| `front_trim` | the face — bezel ring with a nose and whisker grooves |
+| `front_trim` | the face — bezel ring with a nose, whisker grooves and seven screw holes |
 | `retainer` | ring behind the glass (identical to the retro part) |
 | `stand` | the body — plinth, cradle, two front paws, a curled tail |
 
@@ -108,6 +108,23 @@ exists because `use <>` resolves relative to the file containing it: a check
 file kept anywhere other than beside the design silently finds no modules, and
 then every intersection test "passes" against nothing. That happened here, and
 five green results turned out to be meaningless.
+
+## Seven screws, not eight
+
+The bezel has seven screw holes. There is an eighth insert post in the shell
+at the same angle as the nose, and the nose stands on top of it — 2.6mm of
+solid capping the hole, so that screw could never have been fitted. Rather
+than leave a hole that cannot take a screw and reads as a moulding defect
+under the chin, it is not cut at all.
+
+The shell keeps all eight posts. An unused boss is invisible from outside and
+keeps that part identical to the retro build it was copied from.
+
+Found by probing the screw ring after a faceplate had already been printed.
+`nose_screw_removed` now proves the hole is absent, and `other_screws_present`
+is its paired positive control — an empty result from the first would also be
+what a probe in the wrong place produces, so a probe at a normal position has
+to find a real hole for the pair to mean anything.
 
 ## Things that are easy to get wrong
 
