@@ -164,8 +164,6 @@ whisker_droop     = 1.6;  // each step outboard drops this far, giving the curve
 // a muzzle bulging past outer_dia would foul the front cradle arm,
 // which reaches to z=57, a millimetre past the shell's front face.
 nose_w = 17; nose_h = 11; nose_proud = 2.6; nose_r = 3;
-whisker_groove_w = 1.6;
-whisker_groove_d = 0.9;
 
 // STAND — a sitting cat. Plinth is rounded rather than a slab.
 base_w = outer_dia*0.86; base_d = 150; base_h = 16;
@@ -428,17 +426,6 @@ module nose() {
             }
 }
 
-module whisker_grooves() {
-    // Short arcs either side of the nose, engraved into the bezel face.
-    for (s = [-1, 1])
-        for (i = [0:2])
-            rotate([0, 0, s * (18 + i*11)])
-                translate([0, 0, front_trim_h - whisker_groove_d])
-                    rotate_extrude(angle = 9, $fn=120)
-                        translate([screw_r - 3 + i*2.5, 0])
-                            square([whisker_groove_w, whisker_groove_d + 1]);
-}
-
 module front_trim() {
     total_h = front_trim_h + rabbet_depth;
     difference() {
@@ -457,7 +444,6 @@ module front_trim() {
             translate([screw_r*cos(a), screw_r*sin(a), -rabbet_depth-1])
                 cylinder(d=screw_clear_dia, h=total_h+2);
         }
-        whisker_grooves();
     }
 }
 

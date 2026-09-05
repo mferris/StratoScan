@@ -16,7 +16,7 @@ follows from it.
 | part | what it is |
 |---|---|
 | `shell` | the head — body cylinder plus two ears, and all the internals |
-| `front_trim` | the face — bezel ring with a nose and whisker grooves |
+| `front_trim` | the face — bezel ring with a nose |
 | `retainer` | ring behind the glass (identical to the retro part) |
 | `stand` | the body — plinth, cradle, two front paws, a curled tail |
 
@@ -30,8 +30,12 @@ an appearance/fit test prints in minutes rather than hours.
 - **Whiskers are the speaker grilles.** The speakers keep their exact bracket
   and footprint; only the hole pattern changed, from a rectangular mesh to
   three drooping rows of dots on each cheek.
-- **Nose** is a rounded triangle standing proud of the bezel at the chin, with
-  short engraved whisker grooves either side.
+- **Nose** is a rounded triangle standing proud of the bezel at the chin.
+  There were engraved whisker grooves either side of it; they are gone. The
+  nose sits at −y, the bottom of the face, and the grooves were placed around
+  0° — the right-hand side — so all six landed 90° from the nose they were
+  meant to flank. Found on a printed faceplate, as six unexplained arcs down
+  one side.
 - **Paws** stretch forward from the plinth: a domed pad that tapers from a
   taller, narrower ankle to a wide, low front, with four splayed toe lobes
   leading it and a cleft cut between each pair.
