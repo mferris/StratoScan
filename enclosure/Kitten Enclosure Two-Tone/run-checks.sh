@@ -20,7 +20,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 # Must come out with no real volume: a real interference, or a region of the
 # stand that no coloured part claims, which would print as a hole.
-EMPTY="ear_vs_post recess_vs_post whisker_through head_in_cradle
+EMPTY="mount_vs_plate ear_vs_post recess_vs_post whisker_through head_in_cradle
        tail_over_paw tail_vs_left_paw tail_vs_head paws_vs_head ears_vs_cradle
        whisker_vs_screws whisker_vs_nose whisker_off_nose nose_screw_removed
        antenna_clears_head mount_hidden plate_vs_shell mount_vs_stand
