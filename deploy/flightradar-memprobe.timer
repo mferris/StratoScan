@@ -1,0 +1,10 @@
+[Unit]
+Description=Sample the kiosk's memory footprint every five minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
