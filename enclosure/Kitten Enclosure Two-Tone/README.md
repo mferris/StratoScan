@@ -1,20 +1,24 @@
 # Kitten enclosure — two-tone
 
-A tuxedo version of the [Kitten Enclosure](../Kitten%20Enclosure/): black
-stand, **white paws with black toes**, and a **black tail with a white tip**.
-The paws and tail are also about 15% larger, because at two colours they stop
-being a silhouette detail and become the thing the eye lands on.
+The round display as a cat's face, in two colours: black stand, **white paws
+with black toes**, and a **black tail with a white tip**. Ears, whisker-dot
+speaker grilles, a nose on the bezel, and a stand with paws and a curled
+tail.
 
 ![two-tone stand](two-tone-preview.png)
 
-The original is untouched and still printable — this is a fork, not a
-replacement. Every dimension that touches a physical part is unchanged from
-it, and therefore from the
-[Retro Radar Enclosure](../Retro%20Radar%20Enclosure/) it inherited them from:
-the 203.34mm round panel, the Pi's 58×49 standoff pattern, the two 100×45mm
-speakers, the 30mm fan, the M3 screw ring, the USB-C and SMA bulkheads. The
-head is identical. **Only the stand differs**, so a head printed from either
-design sits in either stand.
+Every dimension that touches a physical part comes verbatim from the
+[Retro Radar Enclosure](../Retro%20Radar%20Enclosure/), which is printed and
+validated: the 203.34mm round panel, the Pi's 58×49 standoff pattern, the two
+100×45mm speakers, the 30mm fan, the M3 screw ring, the USB-C and SMA
+bulkheads. Only the shape is new, so the two cases are interchangeable on the
+same hardware.
+
+This began as a fork of a single-colour kitten design, which has since been
+removed — the paws and tail here are about 15% larger than they were in it,
+because at two colours they stop being a silhouette detail and become the
+thing the eye lands on. `stand.stl` is the whole stand as one piece if you
+want it in a single filament.
 
 ## Parts
 
@@ -36,9 +40,9 @@ The stand is split into five bodies, one per colour region:
 | `stand_tail` | **black** | the tail from root to the white tip |
 | `stand_tail_tip` | **white** | the flicked-up end |
 
-`stand` is still there as a single-piece, single-colour version of exactly the
-same shape — useful as a fallback, and as the reference the five parts are
-checked against.
+`stand` is the whole stand as one piece, the same shape in a single
+filament — useful if you are not printing in two colours, and it is also the
+reference the five coloured parts are checked against.
 
 ## Printing it in two colours
 
@@ -179,8 +183,7 @@ Volume alone is not enough either, which is what the speckled first version
 proved: a shared surface has no volume at all. That is what
 `check-coincident.py` below is for.
 
-Alongside the fit checks inherited from the single-colour design, the split
-adds:
+Alongside the fit checks on the head and cradle, the colour split adds:
 
 - `material_lost` — must be **zero**: a region of the one-piece stand that no
   coloured part claims. That would print as a hole.
