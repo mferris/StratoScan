@@ -17,7 +17,21 @@
 
 part = "preview"; // "front_trim" | "retainer" | "shell" | "preview" | "exploded"
 
-$fn = 96;
+// ---- Curve resolution ------------------------------------------------
+// $fa/$fs rather than a fixed $fn. A fixed count makes the flats grow with
+// the feature, so the biggest, most looked-at surfaces come out roughest: at
+// $fn=96 this shell's 223mm rim carried 7.3mm flats and the cradle 8.2mm,
+// while every 3mm screw hole also got 96 sides it had no use for. $fs caps
+// the chord -- the width of one flat, which is what the eye reads as
+// faceting -- so a big curve gets the facets and a small hole does not.
+//
+// This is the one design here that has actually been printed, so the small
+// fit-critical features keep their own explicit $fn below and are untouched.
+// What changes is the geometry without an explicit setting, and the four
+// wide arcs. The effect on a 3.4mm clearance hole is 0.02mm on diameter --
+// two hundredths, against a printer tolerance an order of magnitude larger.
+$fs = 0.4;   // max chord in mm
+$fa = 0.5;   // max degrees per fragment
 
 // ---------- MEASURED VALUES ----------
 panel_diameter    = 203.34;
@@ -424,7 +438,7 @@ module ribs() {
     for (z = rib_z_list) {
         translate([0,0,z])
             rotate([0,0,rib_a0])
-                rotate_extrude(angle=rib_arc, $fn=96)
+                rotate_extrude(angle=rib_arc)
                     translate([outer_dia/2, 0])
                         square([rib_h, rib_w]);
     }
@@ -458,7 +472,7 @@ module fan_mount() {
         // the throat
         translate([0, fan_plate_y - 1, fan_axis_z])
             rotate([-90,0,0])
-                cylinder(d=fan_open_dia, h=fan_plate_t + 2, $fn=48);
+                cylinder(d=fan_open_dia, h=fan_plate_t + 2);
         // screw pilots, right through plate and bosses
         for (dx = [-fan_hole_pitch/2, fan_hole_pitch/2])
             for (dz = [-fan_hole_pitch/2, fan_hole_pitch/2])
@@ -495,7 +509,7 @@ module cradle_rails() {
                   arm_b_inner - retain_clear - retain_w])
             translate([0,0,z])
                 rotate([0,0,seg[0]])
-                    rotate_extrude(angle=seg[1], $fn=96)
+                    rotate_extrude(angle=seg[1])
                         translate([outer_dia/2, 0])
                             square([retain_h, retain_w]);
 }
@@ -575,7 +589,7 @@ module antenna_turret_solid() {
     translate([0, outer_dia/2 - 1, shell_depth*0.55])
         rotate([stand_angle, 0, 0])
             rotate([-90,0,0])
-                cylinder(d=antenna_turret_dia, h=antenna_turret_len, $fn=64);
+                cylinder(d=antenna_turret_dia, h=antenna_turret_len);
 }
 
 module antenna_turret_cuts() {
@@ -613,7 +627,7 @@ module cradle_arm(depth_offset) {
     // underside and wraps partway up both sides
     translate([0, 0, depth_offset]) {
         rotate([0,0, 270 - cradle_arc/2])
-            rotate_extrude(angle = cradle_arc, $fn=96)
+            rotate_extrude(angle = cradle_arc)
                 translate([cradle_id/2, 0])
                     square([arm_t, arm_w]);
         // Rounded tip caps. Diameter is exactly the arm's own thickness and
@@ -622,7 +636,7 @@ module cradle_arm(depth_offset) {
         // narrowing the bore by a thousandth.
         for (a = [270 - cradle_arc/2, 270 + cradle_arc/2])
             translate([r_mid*cos(a), r_mid*sin(a), 0])
-                cylinder(d=arm_t, h=arm_w, $fn=48);
+                cylinder(d=arm_t, h=arm_w);
     }
 }
 
@@ -686,7 +700,7 @@ module stand() {
                 cradle_front_rivets();
                 translate([0, 0, -(arm_gap/2 + arm_w)])
                     rotate([0, 0, 270 - keel_arc/2])
-                        rotate_extrude(angle = keel_arc, $fn=96)
+                        rotate_extrude(angle = keel_arc)
                             translate([cradle_id/2, 0])
                                 square([keel_reach, arm_gap + 2*arm_w]);
             }

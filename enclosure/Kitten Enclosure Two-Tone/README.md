@@ -23,7 +23,7 @@ The head is one colour and prints as before:
 | part | colour | what it is |
 |---|---|---|
 | `shell` | black | the head — body cylinder plus two ears, and all the internals |
-| `front_trim` | black | the face — bezel ring with a nose and whisker grooves |
+| `front_trim` | black | the face — bezel ring with a nose |
 | `retainer` | — | ring behind the glass (identical to the retro part) |
 
 The stand is split into five bodies, one per colour region:
@@ -81,6 +81,16 @@ tapering tube, so wherever they overlap they carry the same outer skin —
 and an overlap of identical skin is the very coincidence being avoided.
 There the tip is grown rather than the body shrunk, so over the shared
 stretch the white tip sits 0.15mm proud of the black tail it continues.
+
+## The whisker grooves are gone
+
+The bezel had six short arcs engraved into its face, meant to read as
+whiskers either side of the nose. The nose sits at −y, the bottom of the
+face; the grooves were placed around 0°, the right-hand side. All six landed
+90° from the nose they were supposed to flank. Found on a printed faceplate
+as six unexplained indentations down one side, and removed from both kitten
+designs. To reinstate them properly they would need rotating to sit about
+the nose's own angle.
 
 ## Where the colour goes, and why
 
