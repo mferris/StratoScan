@@ -257,6 +257,19 @@ screensaver has blanked the panel, so it would have left the display windowed
 every morning. The guard now wakes the panel, restarts, waits for Chromium to
 take the display, and only then puts the panel back as it found it.
 
+It also **repairs a windowed browser however it happens**, not just when the
+guard itself caused it — that is the failure a recipient would simply live
+with. Every run it grabs the screen and measures the top-left corner:
+fullscreen reads 0 on this panel, windowed reads 232, so the threshold sits
+at 60 with a wide margin. Verified by breaking it deliberately and watching
+the guard put it back.
+
+Reload thresholds are tuned to where a reload still works. It recovered 52%
+of the leak at 151MB and 36% at 124MB, but 0% at 1010MB and 0% at 1404MB — so
+reload starts at 300MB with the panel blanked (invisible) or 700MB with it
+on, and a restart is the last resort at 1400MB. At the original 900/1500
+marks the reload never once did anything useful before escalating.
+
 The reload is requested without any control channel of its own. The page
 already POSTs `/wake/alive` every 20 seconds as the frozen-display heartbeat;
 the guard drops a file in `$XDG_RUNTIME_DIR`, and the listener answers that
