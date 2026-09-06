@@ -245,8 +245,17 @@ stops tracking the leak. Restarts are rate-limited to one per 30 minutes — if
 something other than the leak fills the arena, a guard that restarts forever
 is worse than the freeze it was written to prevent. The 04:00 restart runs
 through the same script (with `SHMGUARD_FORCE=1`) so both share that one rate
-limit: two Chromium instances started within seconds of each other lose kiosk
-mode and leave the browser windowed on the display, tab bar and all.
+limit.
+
+**Chromium must not be restarted while the panel is blanked.** It comes up
+windowed — tab bar, address bar, desktop wallpaper — even with `--kiosk` on
+its command line, because it cannot take an output that is off and does not
+retry when the output returns. Reproduced both ways on the device: panel off
+gives a windowed browser every time, panel on gives fullscreen every time.
+This mattered most for the 04:00 restart, which by design runs when the
+screensaver has blanked the panel, so it would have left the display windowed
+every morning. The guard now wakes the panel, restarts, waits for Chromium to
+take the display, and only then puts the panel back as it found it.
 
 The reload is requested without any control channel of its own. The page
 already POSTs `/wake/alive` every 20 seconds as the frozen-display heartbeat;

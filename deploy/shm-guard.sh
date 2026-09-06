@@ -41,6 +41,10 @@ STAMP="$STATE/last-restart"
 HIGH_MB="${SHMGUARD_HIGH_MB:-1500}"
 IDLE_MB="${SHMGUARD_IDLE_MB:-900}"
 MIN_INTERVAL_S="${SHMGUARD_MIN_INTERVAL_S:-1800}"
+# How long to leave the panel on after a restart before blanking it again.
+# Chromium has to come up and take the display fullscreen; blank it too soon
+# and it lands windowed, which is the whole problem below.
+RESTART_SETTLE_S="${SHMGUARD_RESTART_SETTLE_S:-25}"
 # The nightly 04:00 restart comes through here too, with FORCE=1. Both
 # restart paths must share one rate limit: two Chromium instances started
 # within a few seconds of each other lose kiosk mode and leave the browser
@@ -157,5 +161,35 @@ if [ "$FORCE" != "1" ]; then
     rm -f "$RELOAD_REQUEST" 2>/dev/null || true
 fi
 
+# CHROMIUM MUST NOT BE RESTARTED WHILE THE PANEL IS BLANKED.
+#
+# It comes up WINDOWED -- tab bar, address bar and the desktop behind it --
+# even though --kiosk is on its command line. Reproduced both ways on the
+# device: restart with the panel off gives a windowed browser every time,
+# restart with it on gives fullscreen every time. Chromium cannot take an
+# output that is not on, and it does not retry once the output comes back.
+#
+# This bit twice before it was understood. The first time it was blamed on
+# two restarts landing seconds apart; the real common factor was that the
+# panel happened to be off. It matters most for the 04:00 restart, which by
+# design runs when the screensaver has blanked the panel -- so it would have
+# left the display windowed every single morning.
+#
+# So: wake the panel, restart, give it time to come up fullscreen, and only
+# then put the panel back the way it was found.
 echo "shm-guard: restarting kiosk -- ${reason} (shm=${df_mb}MB maps=${map_mb}MB panel=${panel})"
+panel_was_off=0
+if [ "$panel" = "off" ] && [ -n "${WD:-}" ]; then
+    panel_was_off=1
+    echo "shm-guard: panel is off -- waking it first, or Chromium restarts windowed"
+    WAYLAND_DISPLAY="$WD" wlopm --on HDMI-A-1 >/dev/null 2>&1 || true
+    sleep 2
+fi
+
 systemctl --user restart flightradar-kiosk.service
+
+if [ "$panel_was_off" = "1" ]; then
+    sleep "$RESTART_SETTLE_S"
+    WAYLAND_DISPLAY="$WD" wlopm --off HDMI-A-1 >/dev/null 2>&1 || true
+    echo "shm-guard: panel blanked again after ${RESTART_SETTLE_S}s"
+fi
