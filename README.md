@@ -239,7 +239,10 @@ larger, because the two diverge: `/etc/chromium.d/dev-shm` adds
 after one bad day Chromium moves its backing to `/tmp` and the `df` number
 stops tracking the leak. Restarts are rate-limited to one per 30 minutes — if
 something other than the leak fills the arena, a guard that restarts forever
-is worse than the freeze it was written to prevent.
+is worse than the freeze it was written to prevent. The 04:00 restart runs
+through the same script (with `SHMGUARD_FORCE=1`) so both share that one rate
+limit: two Chromium instances started within seconds of each other lose kiosk
+mode and leave the browser windowed on the display, tab bar and all.
 
 It is a workaround and not a fix, because the cause is not in this codebase:
 a blank page leaks the same way, the mappings are invisible to Chromium's own
