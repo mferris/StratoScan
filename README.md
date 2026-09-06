@@ -217,6 +217,24 @@ unconfirmed network change at boot and raises the hotspot when there is no
 usable connection — so a mistyped WiFi password reverts itself rather than
 stranding the device.
 
+**The 4am restart, and why it is a workaround.** Chromium on this platform
+leaks unlinked `/dev/shm` mappings at roughly 200–300 MB/h of daytime
+rendering. Left alone it fills the 4GB tmpfs in five to twelve hours, GPU
+allocations start failing with `TransferBuffer::Initialize() failed`, and the
+panel freezes on a stale frame — twice in one 34-hour stretch here.
+`flightradar-kiosk-restart.timer` restarts the kiosk at 04:00, when the panel
+is already blanked and the sky is empty, returning `/dev/shm` from ~2GB to
+~200MB. The frozen-display watchdog in `wake-listener.py` stays as the
+backstop.
+
+It is a workaround and not a fix, because the cause is not in this codebase:
+a blank page leaks the same way, the mappings are invisible to Chromium's own
+`memory-infra` accounting, and a critical memory-pressure signal reclaims
+none of them. Removing the map, the weather overlays and the canvas render
+loop each failed to stop it. One caveat worth keeping in view: the observed
+time-to-freeze was as short as 5.2 hours, so a single daily restart is not
+guaranteed to cover a long, busy day on its own.
+
 **The enclosure**: [`enclosure/`](enclosure/) has two printable cases for the
 same hardware — the original ship's-instrument look, and one shaped like a
 sitting cat with the round display as its face, printed in two colours. Both are parametric OpenSCAD,

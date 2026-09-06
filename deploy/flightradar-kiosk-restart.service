@@ -1,0 +1,17 @@
+[Unit]
+Description=FlightRadar nightly kiosk restart (bounds the Chromium shm leak)
+Documentation=https://github.com/mferris/FlightRadar
+
+[Service]
+Type=oneshot
+# Chromium leaks unlinked /dev/shm mappings on this platform at roughly
+# 200-300 MB/h of daytime rendering, until an allocation fails and the panel
+# freezes on a stale frame. It is not the page: a blank page leaks too, the
+# mappings are invisible to Chromium's own accounting, and a critical
+# memory-pressure signal reclaims none of it. Restarting returns /dev/shm
+# from ~2GB to ~200MB.
+#
+# This does not fix the leak. It resets the clock once a day, at an hour when
+# the panel is already blanked and the sky is empty, so the restart costs
+# nothing anyone can see.
+ExecStart=/usr/bin/systemctl --user restart flightradar-kiosk.service
