@@ -145,12 +145,50 @@ ant_cable_dia      = 9;
 back_post_h    = 9;    // insert post standing inside the case
 back_insert_d  = 8;    // depth of the heat-set insert hole
 
-// back-panel bulkheads
-usbc_hole_dia    = 23;
-antenna_hole_dia = 6.5;
-back_holes_x  = 60;
-back_holes_y1 = -20;
-back_holes_y2 = 6;
+// ---- Back plate: locating lip ----------------------------------------
+// A rib standing off the plate's inner face that drops into the shell bore,
+// so the plate lands centred and square and stays there while the screws go
+// in -- rather than being juggled against eight holes at once.
+//
+// It cannot be a continuous ring. The eight insert posts straddle the bore
+// wall (they span r=102.2..111.2, the wall is r=108.7..111.7), so a full
+// ring at bore diameter would run straight through every one of them. It is
+// eight arcs instead, one per gap between posts. That is also plenty: three
+// points locate a circle, and this has eight.
+back_lip_h    = 4;      // how far it stands into the bore
+back_lip_t    = 2;      // radial thickness
+back_lip_gap  = 0.35;   // radial clearance into the bore, per side
+back_lip_lead = 1.2;    // chamfer on the outer top edge, so it self-guides
+back_lip_skip = 9;      // degrees of clearance either side of each post
+
+// ---- USB-C pass-through ----------------------------------------------
+// ONE opening, replacing the separate USB-C power gland and SMA antenna
+// gland that used to sit side by side here. The antenna no longer needs a
+// bulkhead on the plate at all: its coax comes in through the antenna
+// mount's own cable bore.
+//
+// !!! THESE NUMBERS ARE A PLACEHOLDER AND MUST BE MEASURED !!!
+// The listing for the panel-mount USB-C cable this is cut for publishes no
+// cutout dimensions, so these are the common values for that style of part,
+// not measured ones. Print part="usbc_gauge" -- a 5-minute coupon carrying
+// this cutout plus four neighbouring sizes -- and fit the connector to it
+// BEFORE committing a whole back plate. Then set the three numbers below to
+// whichever window fits and re-export.
+usbc_cut_w       = 11.0;   // window width  (across the connector body)
+usbc_cut_h       = 6.5;    // window height (through the connector body)
+usbc_cut_r       = 1.2;    // corner radius
+usbc_screw_pitch = 24.0;   // centre-to-centre of the two mounting screws
+usbc_screw_dia   = 2.3;    // M2 clearance
+usbc_cut_pos     = [60, -14];
+
+// ---- Antenna-mount inserts (inside face) -----------------------------
+// The mount used to bolt through bare clearance holes, which needs a nut
+// held inside the case while the bolt is turned outside. These are bosses
+// on the INNER face taking M3 heat-set inserts instead, so the mount screws
+// into the plate and can be taken off one-handed.
+ant_insert_boss_od = 7.5;
+ant_insert_bore    = 4.0;   // pilot for a standard M3 heat-set insert
+ant_insert_h       = back_insert_d + 1;
 
 // speakers — the cheeks
 speaker_w = 100; speaker_d = 45; speaker_h = 21;
@@ -167,7 +205,13 @@ fan_plate_y = 50; fan_plate_t = 3; fan_plate_z0 = wall;
 fan_plate_h = 35; fan_plate_w = 36;
 fan_open_dia = 28; fan_axis_z = 21;
 fan_boss_dia = 6; fan_boss_h = 4; fan_screw_pilot = 2.5;
-fan_grille_dia = 26; fan_grille_pos = [0, 68];
+fan_grille_dia = 26;
+// Moved from [0, 68] to the opposite side. The antenna mount's flange is a
+// 40mm disc centred at y=ant_mount_y (88), so it covered this grille from
+// y=68 to y=81 -- the vent was underneath the mount, which is no use to
+// anybody. Directly opposite it is clear of the flange, the standoffs, the
+// USB-C window and the screw ring.
+fan_grille_pos = [0, -68];
 
 // floor intake
 intake_dia = 54; intake_hole = 3; intake_pitch = 6;
@@ -683,7 +727,11 @@ module ant_axis_frame() {
 // the two cannot drift apart.
 module ant_bolt_holes(h, z0) {
     for (i = [0 : n_ant_bolts - 1]) {
-        a = i * 360/n_ant_bolts + 90;
+        // +30, not +90. At +90 one bolt points straight up the plate, putting
+        // its insert boss at y=103 with an outer edge at 106.5 -- into the
+        // locating lip, whose inner face is at 106.3. Clocking the circle by
+        // 30 degrees puts two bolts at y=95.5 and one at y=73, all clear.
+        a = i * 360/n_ant_bolts + 30;
         translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a), z0])
             cylinder(d=ant_bolt_d, h=h);
     }
@@ -721,6 +769,77 @@ module antenna_mount() {
     }
 }
 
+// Eight arcs at bore diameter, one per gap between the insert posts, with a
+// lead-in chamfer on the outer top edge so the plate finds its own centre
+// as it goes on rather than catching square.
+module back_lip() {
+    ri = outer_dia/2 - wall - back_lip_gap - back_lip_t;
+    ro = outer_dia/2 - wall - back_lip_gap;
+    span = 360/n_screws - 2*back_lip_skip;
+    for (i = [0 : n_screws - 1])
+        rotate([0, 0, i*360/n_screws + back_lip_skip])
+            rotate_extrude(angle = span)
+                polygon([[ri, 0],
+                         [ro, 0],
+                         [ro, back_lip_h - back_lip_lead],
+                         [ro - back_lip_lead, back_lip_h],
+                         [ri, back_lip_h]]);
+}
+
+// The single pass-through: a rounded window for the connector body plus its
+// two mounting screws. Cut through the plate from below.
+module usbc_cutout() {
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1]) {
+        linear_extrude(height = back_plate_t + 2)
+            offset(r = usbc_cut_r) offset(delta = -usbc_cut_r)
+                square([usbc_cut_w, usbc_cut_h], center = true);
+        for (sx = [-1, 1])
+            translate([sx * usbc_screw_pitch/2, 0, 0])
+                cylinder(d = usbc_screw_dia, h = back_plate_t + 2);
+    }
+}
+
+// Bosses on the INNER face at the antenna bolt circle, each taking an M3
+// heat-set insert.
+module ant_insert_bosses() {
+    for (i = [0 : n_ant_bolts - 1]) {
+        a = i * 360/n_ant_bolts + 30;
+        translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a), 0])
+            cylinder(d = ant_insert_boss_od, h = ant_insert_h);
+    }
+}
+
+// The matching bores. Two diameters on purpose: the insert pocket stops on a
+// shoulder 1mm above the plate rather than running out through it, so the
+// insert cannot be pressed too deep and the bolt still passes freely from
+// the outside.
+module ant_insert_bores() {
+    for (i = [0 : n_ant_bolts - 1]) {
+        a = i * 360/n_ant_bolts + 30;
+        translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a), 0]) {
+            translate([0, 0, 1])
+                cylinder(d = ant_insert_bore, h = ant_insert_h);      // insert pocket
+            translate([0, 0, -back_plate_t - 1])
+                cylinder(d = ant_bolt_d, h = back_plate_t + 2);       // bolt clearance
+        }
+    }
+}
+
+// A 5-minute test coupon: the real cutout, flanked by four neighbours at
+// +/-0.5 and +/-1.0mm on both dimensions. Fit the connector to it before
+// printing a whole back plate, then set usbc_cut_w/h to the window that
+// worked. Cutting one of these is minutes; a back plate is hours.
+module usbc_gauge() {
+    difference() {
+        translate([-70, -18, 0]) cube([140, 36, back_plate_t]);
+        for (i = [-2 : 2])
+            translate([i * 28, 0, -1])
+                linear_extrude(height = back_plate_t + 2)
+                    offset(r = usbc_cut_r) offset(delta = -usbc_cut_r)
+                        square([usbc_cut_w + i*0.5, usbc_cut_h + i*0.5], center = true);
+    }
+}
+
 module back_plate() {
     difference() {
         union() {
@@ -735,22 +854,21 @@ module back_plate() {
                             cylinder(d=7, h=8);
                             cylinder(d=2.5, h=9);
                         }
+            back_lip();
+            ant_insert_bosses();
         }
         for (i = [0:n_screws-1]) {
             a = i * 360/n_screws;
             translate([screw_r*cos(a), screw_r*sin(a), -back_plate_t-1])
                 cylinder(d=screw_clear_dia, h=back_plate_t+2);
         }
-        translate([back_holes_x, back_holes_y1, -back_plate_t-1])
-            cylinder(d=usbc_hole_dia, h=back_plate_t+2);
-        translate([back_holes_x, back_holes_y2, -back_plate_t-1])
-            cylinder(d=antenna_hole_dia, h=back_plate_t+2);
+        usbc_cutout();
         // Kept as plain vents. There is no fan mount on the plate any
         // more -- the fan goes on the Pi -- but the openings still help.
         translate([0,0,-back_plate_t]) intake_grille();
         translate([0,0,-back_plate_t]) fan_grille();
-        // the antenna mount bolts on here, and its cable passes through
-        ant_bolt_holes(back_plate_t + 2, -back_plate_t - 1);
+        // the antenna mount screws into inserts here, and its cable passes through
+        ant_insert_bores();
         translate([0, ant_mount_y, -back_plate_t - 1])
             cylinder(d=ant_cable_dia, h=back_plate_t + 2);
     }
@@ -1097,6 +1215,7 @@ else if (part == "shell") shell();
 else if (part == "stand") stand();
 else if (part == "back_plate") back_plate();
 else if (part == "antenna_mount") antenna_mount();
+else if (part == "usbc_gauge") usbc_gauge();
 else if (part == "stand_body")     part_stand_body();
 else if (part == "stand_paws")     part_stand_paws();
 else if (part == "stand_toes")     part_stand_toes();
