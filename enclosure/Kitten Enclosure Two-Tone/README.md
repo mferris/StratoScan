@@ -40,6 +40,7 @@ The stand is split into five bodies, one per colour region:
 | `stand_body` | **black** | plinth, cradle arms, keel |
 | `stand_paws` | **white** | both foot pads |
 | `stand_toes` | **black** | the eight toe lobes |
+| `stand_claws` | **white** | eight real claws, one per toe |
 | `stand_tail` | **black** | the tail from root to the white tip |
 | `stand_tail_tip` | **white** | the flicked-up end |
 
@@ -185,6 +186,20 @@ vacuous, since moving the angle would move the wedge along with the grooves.
   as a paw, and they are small — they need the contrast more than the pad
   does. The clefts between them grew with the toes; the groove is the only
   thing making four toes read as four rather than one lumpy pad.
+- **Claws are their own body, and they are real geometry.** The grooves
+  between the toes were being read as the nails; they were never that — they
+  are the only thing making four toes read as four. There are now eight
+  actual claws, one off the front of each toe, following that toe's splay and
+  drooping toward the desk the way a cat's does. Their base sits *inside* the
+  toe rather than butted against it: a spike joined at a tangent point is a
+  weak spot in the print, and a butted joint would share a surface with the
+  toe, which is the coincidence that stipples the preview. The tip stops
+  clear of the desk on purpose — claws that reached z=0 would carry the
+  stand's weight on eight little points and rock, which `claws_off_the_desk`
+  holds. `claws_stand_proud` is the paired positive control: a claw entirely
+  buried in its toe passes every seam and volume check while being invisible
+  on the print, which is exactly what the grooves-as-nails problem looked
+  like.
 - **Tail black, tip white, and the tip lifts.** The first version had the tip
   resting flat on the pad, which is what a sitting cat does — but that put a
   white tip on top of a white paw, where it vanished. The whole point of a
@@ -287,7 +302,7 @@ check.
 
 ```sh
 for p in shell front_trim retainer stand back_plate antenna_mount usbc_gauge \
-         stand_body stand_paws stand_toes stand_tail stand_tail_tip; do
+         stand_body stand_paws stand_toes stand_claws stand_tail stand_tail_tip; do
   openscad --backend=manifold --export-format binstl \
            -D "part=\"$p\"" -o "$p.stl" kitten-enclosure-twotone.scad
 done
@@ -307,3 +322,25 @@ The `.stl` files are committed alongside the source so the folder is
 self-contained, but they are generated. Change the `.scad` and both must be
 re-exported and committed together, or the mesh quietly stops matching the
 source it claims to come from.
+
+### The connector has to fit through, not just the cable
+
+The bore was 9mm and the coax **connector** is 9.15mm across its widest
+point, so it did not pass at all. Worse, the straight bore is cut along the
+plate's normal while the socket above it is tilted by `stand_angle`, so the
+two were not coaxial and the socket floor met the bore at an angle — leaving
+a shoulder across the opening for the antenna's base to land on. Widening the
+bore alone would not have removed that; it is a consequence of the two axes
+disagreeing.
+
+The socket floor is now opened square to the **antenna's** axis and hulled
+down onto the straight run, so there is one continuous passage with no step
+anywhere across it. `connector_passes` sweeps a 9.15mm plug gauge along that
+path and must touch nothing; `connector_gauge_works` is its paired control,
+an oversized gauge that must be caught. Swept by hand the passage clears
+10.5mm and blocks at 11.0mm, so the connector has 1.35mm of margin.
+
+Note for anyone tuning this: `-D` on the command line reaches `echo` but not
+the CSG tree for these files, so a gauge sweep driven by `-D` silently
+measures the file's own value at every step and reports that everything
+passes. Edit the number instead.

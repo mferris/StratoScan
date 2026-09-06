@@ -141,7 +141,11 @@ ant_mount_standoff = 26;   // how far the socket sits back from the plate
 ant_socket_dia     = 33;   // as the retro turret
 ant_socket_depth   = 6;
 ant_boss_dia       = 42;
-ant_cable_dia      = 9;
+// The coax CONNECTOR has to pass through here, not just the cable. Measured
+// at 9.15mm across its widest point, so the bore is that plus clearance --
+// a 9mm bore (what this was) will not pass a 9.15mm connector at all.
+ant_conn_dia       = 9.15;
+ant_cable_dia      = ant_conn_dia + 1.85;   // 11.0
 back_post_h    = 9;    // insert post standing inside the case
 back_insert_d  = 8;    // depth of the heat-set insert hole
 
@@ -327,6 +331,23 @@ toe_splay  = 21;    // degrees between toe centres, fanned across the front
 // the groove is the only thing making four toes read as four.
 cleft_w    = 3.0;   // width of the groove between toes
 cleft_d    = 6;     // how deep the groove cuts
+
+// ---- Claws ------------------------------------------------------------
+// Real claws standing off the front of each toe, not the grooves between
+// them. The grooves were being read as the nails, which they were never
+// meant to be -- they are only what makes four toes read as four.
+//
+// Their own colour body, so they can be a third filament (white claws on
+// black toes reads best, since the toes are already black on white pads).
+//
+// Slightly down as well as forward: a cat's claw curves toward the ground.
+// The tip stays clear of the desk plane on purpose -- a claw that reached
+// z=0 would carry the stand's weight on four little points and rock.
+claw_len     = 6.5;   // how far it stands off the toe
+claw_base_d  = 3.6;   // where it leaves the toe
+claw_tip_d   = 1.2;   // rounded rather than needle-sharp: printable, and safe
+claw_base_dz = -1.8;  // relative to the toe centre
+claw_tip_dz  = -4.4;  // tip drops this far: the droop
 
 // TAIL. Thicker at the root and tapering to a rounded tip. It hugs the
 // plinth around the right side, then climbs the right paw's outboard flank
@@ -739,9 +760,28 @@ module ant_bolt_holes(h, z0) {
 
 // The cable drops out of the socket and runs straight forward through the
 // stub, the flange and the plate into the case.
+// The passage the connector travels, in two pieces that are hulled into one.
+//
+// The straight run alone was the bug. It is bored along the PLATE's normal,
+// while the socket above it is tilted by stand_angle -- so the socket floor
+// met the bore at an angle and left a shoulder across the opening. That
+// shoulder is the lip the antenna's base lands on, and no amount of widening
+// the straight bore removes it, because the two are not coaxial.
+//
+// So the socket floor is opened along the ANTENNA's own axis and hulled down
+// to the straight run: one continuous passage, no step anywhere across it.
 module ant_cable_bore(z_top) {
+    // straight run, out through the arm and the plate
     translate([0, ant_mount_y, -back_plate_t - ant_stub_len - 2])
         cylinder(d=ant_cable_dia, h=ant_stub_len + z_top + 2);
+    // socket floor, opened square to the antenna and swept onto that run
+    hull() {
+        translate([0, ant_mount_y, -back_plate_t - ant_stub_len])
+            cylinder(d=ant_cable_dia, h=0.01);
+        ant_axis_frame()
+            translate([0, 0, ant_barrel_len - ant_socket_depth - 0.01])
+                cylinder(d=ant_cable_dia, h=0.02);
+    }
 }
 
 // ---- the bolt-on part itself ----
@@ -988,7 +1028,32 @@ module paw_toes(x, shrink = 0) {
         for (i = [0 : n_toes - 1]) toe(i, y_front, shrink);
 }
 
-module paw(x) { paw_pad(x); paw_toes(x); }
+// One claw off the front of toe i, following that toe's splay so the fan
+// carries through, and drooping toward the desk.
+//
+// The base sits INSIDE the toe (at 0.5*toe_dia, against a toe half-length of
+// 0.675*toe_dia) rather than on its surface. Two reasons: a claw butted
+// against the toe would share a surface with it, which is the coincidence
+// that stipples the slicer preview -- see the colour-split notes below -- and
+// a spike joined only at a tangent point is a weak spot in the print.
+module claw(i, y_front, shrink = 0) {
+    translate(toe_pos(i, y_front))
+        rotate([0, 0, -toe_a(i)])
+            hull() {
+                translate([0, -toe_dia * 0.50, claw_base_dz])
+                    sphere(d = max(claw_base_d - shrink, 0.2));
+                translate([0, -toe_dia * 0.50 - claw_len, claw_tip_dz])
+                    sphere(d = max(claw_tip_d - shrink, 0.2));
+            }
+}
+
+module paw_claws(x, shrink = 0) {
+    y_front = -base_d/2 - paw_reach;
+    translate([x, 0, 0])
+        for (i = [0 : n_toes - 1]) claw(i, y_front, shrink);
+}
+
+module paw(x) { paw_pad(x); paw_toes(x); paw_claws(x); }
 
 // Clefts between the toes. Cut at stand level rather than unioned away
 // here, because a difference inside a module that is later intersected with
@@ -1177,6 +1242,14 @@ module part_stand_toes() {                      // BLACK
         intersection() { desk_clip(); union() { paw_toes(paw_x); paw_toes(-paw_x); } }
         tail(colour_overlap);
         paw_clefts( paw_x); paw_clefts(-paw_x);
+        paw_claws( paw_x, colour_overlap); paw_claws(-paw_x, colour_overlap);
+    }
+}
+
+module part_stand_claws() {                     // WHITE (or whatever you like)
+    difference() {
+        intersection() { desk_clip(); union() { paw_claws(paw_x); paw_claws(-paw_x); } }
+        paw_clefts( paw_x); paw_clefts(-paw_x);
     }
 }
 
@@ -1204,6 +1277,7 @@ module stand_colour_parts() {
     part_stand_body();
     part_stand_paws();
     part_stand_toes();
+    part_stand_claws();
     part_stand_tail();
     part_stand_tail_tip();
 }
@@ -1219,6 +1293,7 @@ else if (part == "usbc_gauge") usbc_gauge();
 else if (part == "stand_body")     part_stand_body();
 else if (part == "stand_paws")     part_stand_paws();
 else if (part == "stand_toes")     part_stand_toes();
+else if (part == "stand_claws")    part_stand_claws();
 else if (part == "stand_tail")     part_stand_tail();
 else if (part == "stand_tail_tip") part_stand_tail_tip();
 else if (part == "test_ear") {

@@ -837,7 +837,11 @@ ant_mount_y        = 88;
 ant_socket_dia     = 33;   // as the turret it replaces
 ant_socket_depth   = 6;
 ant_boss_dia       = 42;
-ant_cable_dia      = 9;
+// The coax CONNECTOR has to pass through here, not just the cable. Measured
+// at 9.15mm across its widest point, so the bore is that plus clearance --
+// a 9mm bore (what this was) will not pass a 9.15mm connector at all.
+ant_conn_dia       = 9.15;
+ant_cable_dia      = ant_conn_dia + 1.85;   // 11.0
 
 function ant_barrel_base() = [0, ant_mount_y, -back_plate_t - ant_stub_len];
 
@@ -862,9 +866,28 @@ module ant_bolt_holes(h, z0) {
     }
 }
 
+// The passage the connector travels, in two pieces that are hulled into one.
+//
+// The straight run alone was the bug. It is bored along the PLATE's normal,
+// while the socket above it is tilted by stand_angle -- so the socket floor
+// met the bore at an angle and left a shoulder across the opening. That
+// shoulder is the lip the antenna's base lands on, and no amount of widening
+// the straight bore removes it, because the two are not coaxial.
+//
+// So the socket floor is opened along the ANTENNA's own axis and hulled down
+// to the straight run: one continuous passage, no step anywhere across it.
 module ant_cable_bore(z_top) {
+    // straight run, out through the arm and the plate
     translate([0, ant_mount_y, -back_plate_t - ant_stub_len - 2])
         cylinder(d=ant_cable_dia, h=ant_stub_len + z_top + 2);
+    // socket floor, opened square to the antenna and swept onto that run
+    hull() {
+        translate([0, ant_mount_y, -back_plate_t - ant_stub_len])
+            cylinder(d=ant_cable_dia, h=0.01);
+        ant_axis_frame()
+            translate([0, 0, ant_barrel_len - ant_socket_depth - 0.01])
+                cylinder(d=ant_cable_dia, h=0.02);
+    }
 }
 
 module antenna_mount() {

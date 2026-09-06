@@ -197,3 +197,25 @@ Committed alongside the source so the folder is self-contained, but they are
 generated. Change the `.scad` and both must be re-exported and committed
 together, or the mesh quietly stops matching the source it claims to come
 from.
+
+### The connector has to fit through, not just the cable
+
+The bore was 9mm and the coax **connector** is 9.15mm across its widest
+point, so it did not pass at all. Worse, the straight bore is cut along the
+plate's normal while the socket above it is tilted by `stand_angle`, so the
+two were not coaxial and the socket floor met the bore at an angle — leaving
+a shoulder across the opening for the antenna's base to land on. Widening the
+bore alone would not have removed that; it is a consequence of the two axes
+disagreeing.
+
+The socket floor is now opened square to the **antenna's** axis and hulled
+down onto the straight run, so there is one continuous passage with no step
+anywhere across it. `connector_passes` sweeps a 9.15mm plug gauge along that
+path and must touch nothing; `connector_gauge_works` is its paired control,
+an oversized gauge that must be caught. Swept by hand the passage clears
+10.5mm and blocks at 11.0mm, so the connector has 1.35mm of margin.
+
+Note for anyone tuning this: `-D` on the command line reaches `echo` but not
+the CSG tree for these files, so a gauge sweep driven by `-D` silently
+measures the file's own value at every step and reports that everything
+passes. Edit the number instead.
