@@ -58,8 +58,17 @@ def load_points():
 
 
 def save_points(points):
-    with open(STORE_PATH, "w") as f:
+    # Written whole and renamed into place, for the same reason
+    # sighting-store.py does it: `open(path, "w")` truncates first, so a power
+    # cut mid-write leaves a half-written file. load_points() tolerates that
+    # without crashing -- it returns [] on a JSONDecodeError -- which is worse
+    # than a crash here, because it silently discards the entire accumulated
+    # approach heatmap and nobody notices until they wonder where it went.
+    # os.replace is atomic: the file is either the old one or the new one.
+    tmp = STORE_PATH + ".tmp"
+    with open(tmp, "w") as f:
         json.dump(points, f)
+    os.replace(tmp, STORE_PATH)
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
