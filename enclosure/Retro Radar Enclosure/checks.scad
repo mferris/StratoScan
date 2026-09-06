@@ -23,6 +23,7 @@ ant_bolt_d=3.4; usbc_cut_pos=[60,-14]; usbc_screw_pitch=24.0;
 mount_hole_x=58; mount_hole_y=49; stand_angle=18;
 ant_stub_len=30; ant_barrel_len=14; ant_socket_dia=33; ant_socket_depth=6;
 cradle_id=outer_dia+2; cradle_od=cradle_id+26; base_h=16;
+ant_conn_dia=9.15; ant_flange_t=4; back_insert_d=8;
 
 // The plate and the shell meet at a butt joint; neither may intrude on the
 // other.
@@ -173,5 +174,37 @@ else if (check=="mount_vs_stand") {
     stand();
     translate([0,0,arm_lift]) rotate([90-stand_angle,0,0])
       translate([0,0,-shell_depth/2]) union() { back_plate(); antenna_mount(); }
+  }
+}
+
+// ---- can the connector actually get through? --------------------------
+// A 9.15mm plug gauge swept along the passage: down the antenna's axis from
+// the socket floor, then straight out through the arm and the plate. It must
+// touch nothing. This is the check the old design would have failed -- its
+// bore was 9.0mm, and the socket floor met it at an angle besides.
+else if (check=="connector_passes") {
+  intersection() {
+    union() {
+      translate([0, ant_mount_y, -back_plate_t - ant_stub_len - 1])
+        cylinder(d=ant_conn_dia, h=ant_stub_len + back_plate_t + 2);
+      hull() {
+        translate([0, ant_mount_y, -back_plate_t - ant_stub_len])
+          cylinder(d=ant_conn_dia, h=0.01);
+        ant_axis_frame()
+          translate([0, 0, ant_barrel_len - ant_socket_depth - 0.01])
+            cylinder(d=ant_conn_dia, h=0.02);
+      }
+    }
+    union() { antenna_mount(); back_plate(); }
+  }
+}
+// Paired positive control: the SAME gauge oversized to 13mm -- wider than the
+// 11mm bore -- must be caught. An empty result above is otherwise also what a
+// gauge swept down the wrong axis produces.
+else if (check=="connector_gauge_works") {
+  intersection() {
+    translate([0, ant_mount_y, -back_plate_t - ant_stub_len - 1])
+      cylinder(d=13, h=ant_stub_len + back_plate_t + 2);
+    union() { antenna_mount(); back_plate(); }
   }
 }

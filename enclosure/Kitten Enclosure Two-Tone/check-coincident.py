@@ -23,7 +23,7 @@ import struct
 import sys
 
 PARTS = ["stand_body.stl", "stand_paws.stl", "stand_toes.stl",
-         "stand_tail.stl", "stand_tail_tip.stl"]
+         "stand_claws.stl", "stand_tail.stl", "stand_tail_tip.stl"]
 PLACES = 3          # 0.001mm -- finer than any boolean's rounding error
 
 

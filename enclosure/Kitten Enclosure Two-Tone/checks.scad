@@ -30,6 +30,8 @@ base_h=16; stand_angle=18;
 // the single-colour version, and a stale value here would check the old
 // geometry and pass.
 paw_x=46; paw_h=18;
+n_toes=4; toe_dia=13.5; toe_splay=21; claw_len=6.5;
+ant_conn_dia=9.15; ant_flange_t=4;
 // The back-plate features added with the locating lip. Restated here for the
 // same reason as everything above: `use <>` brings in modules, never values.
 back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9;
@@ -134,6 +136,28 @@ else if (check=="material_gained") {
 // against the whole, since a body cannot overlap itself and the union above
 // would hide a mutual overlap inside the total.
 else if (check=="paws_vs_toes")     { intersection() { part_stand_paws(); part_stand_toes(); } }
+// The claws are a colour body like any other, so they overlap the toes they
+// grow out of by colour_overlap and must not share a surface with them.
+else if (check=="claws_vs_toes")    { intersection() { part_stand_toes(); part_stand_claws(); } }
+// ...and they must actually STAND OFF the toes. A claw entirely buried in
+// its toe still passes every seam and volume check above while being
+// invisible on the print -- which is exactly what the grooves-as-nails
+// problem looked like. Positive control: material must exist forward of the
+// toes' own envelope.
+else if (check=="claws_stand_proud") {
+  difference() {
+    union() { part_stand_claws(); }
+    union() { paw_toes(paw_x); paw_toes(-paw_x); paw_pad(paw_x); paw_pad(-paw_x); }
+  }
+}
+// A claw that reaches the desk plane would carry the stand's weight on four
+// points per paw and rock. Nothing below z=0.6.
+else if (check=="claws_off_the_desk") {
+  intersection() {
+    part_stand_claws();
+    translate([-300,-300,-300]) cube([600,600,300.6]);
+  }
+}
 else if (check=="paws_vs_tail")     { intersection() { part_stand_paws(); part_stand_tail(); } }
 else if (check=="body_vs_paws")     { intersection() { part_stand_body(); part_stand_paws(); } }
 else if (check=="tail_vs_tip")      { intersection() { part_stand_tail(); part_stand_tail_tip(); } }
@@ -363,3 +387,35 @@ if (check=="ant_inserts_open") {
   }
 }
 function ant_bolt_d_probe() = 3.0;
+
+// ---- can the connector actually get through? --------------------------
+// A 9.15mm plug gauge swept along the passage: down the antenna's axis from
+// the socket floor, then straight out through the arm and the plate. It must
+// touch nothing. This is the check the old design would have failed -- its
+// bore was 9.0mm, and the socket floor met it at an angle besides.
+if (check=="connector_passes") {
+  intersection() {
+    union() {
+      translate([0, ant_mount_y, -back_plate_t - ant_stub_len - 1])
+        cylinder(d=ant_conn_dia, h=ant_stub_len + back_plate_t + 2);
+      hull() {
+        translate([0, ant_mount_y, -back_plate_t - ant_stub_len])
+          cylinder(d=ant_conn_dia, h=0.01);
+        ant_axis_frame()
+          translate([0, 0, ant_barrel_len - ant_socket_depth - 0.01])
+            cylinder(d=ant_conn_dia, h=0.02);
+      }
+    }
+    union() { antenna_mount(); back_plate(); }
+  }
+}
+// Paired positive control: the SAME gauge oversized to 13mm -- wider than the
+// 11mm bore -- must be caught. An empty result above is otherwise also what a
+// gauge swept down the wrong axis produces.
+if (check=="connector_gauge_works") {
+  intersection() {
+    translate([0, ant_mount_y, -back_plate_t - ant_stub_len - 1])
+      cylinder(d=13, h=ant_stub_len + back_plate_t + 2);
+    union() { antenna_mount(); back_plate(); }
+  }
+}
