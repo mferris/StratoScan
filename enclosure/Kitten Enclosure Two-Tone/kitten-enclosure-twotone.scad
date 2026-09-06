@@ -1036,15 +1036,23 @@ module paw_toes(x, shrink = 0) {
 // against the toe would share a surface with it, which is the coincidence
 // that stipples the slicer preview -- see the colour-split notes below -- and
 // a spike joined only at a tangent point is a weak spot in the print.
+// The base is offset in GLOBAL -y and only then is the claw's direction
+// rotated to the toe's splay. Rotating first and offsetting along the toe's
+// OWN axis is the obvious way round and it is wrong: moving forward along a
+// splayed toe also moves inward, so the four bases converge from 5.9mm apart
+// at the toe centres to 3.56mm at the claw bases -- closer together than a
+// 3.6mm base is wide. They then merge in pairs, and eight claws export as
+// four lumps. Caught by counting connected components, not by any volume or
+// seam check, all of which passed.
 module claw(i, y_front, shrink = 0) {
     translate(toe_pos(i, y_front))
-        rotate([0, 0, -toe_a(i)])
-            hull() {
-                translate([0, -toe_dia * 0.50, claw_base_dz])
+        translate([0, -toe_dia * 0.50, claw_base_dz])
+            rotate([0, 0, -toe_a(i)])
+                hull() {
                     sphere(d = max(claw_base_d - shrink, 0.2));
-                translate([0, -toe_dia * 0.50 - claw_len, claw_tip_dz])
-                    sphere(d = max(claw_tip_d - shrink, 0.2));
-            }
+                    translate([0, -claw_len, claw_tip_dz - claw_base_dz])
+                        sphere(d = max(claw_tip_d - shrink, 0.2));
+                }
 }
 
 module paw_claws(x, shrink = 0) {

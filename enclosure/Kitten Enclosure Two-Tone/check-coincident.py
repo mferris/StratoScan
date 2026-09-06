@@ -24,6 +24,42 @@ import sys
 
 PARTS = ["stand_body.stl", "stand_paws.stl", "stand_toes.stl",
          "stand_claws.stl", "stand_tail.stl", "stand_tail_tip.stl"]
+
+# How many separate lumps each body must export as. This is not pedantry: the
+# claws were placed by offsetting along each toe's OWN axis, which also moves
+# inward on a splayed toe, so their bases converged from 5.9mm apart to 3.56
+# -- closer than a 3.6mm base is wide. Adjacent claws merged in pairs and
+# eight claws exported as four. Every volume, seam and coincidence check
+# passed while half the claws did not exist, because none of them can see
+# topology. Two paws, two clumps of toes (one per paw), eight claws.
+EXPECTED_LUMPS = {
+    "stand_body.stl": 1, "stand_paws.stl": 2, "stand_toes.stl": 2,
+    "stand_claws.stl": 8, "stand_tail.stl": 1, "stand_tail_tip.stl": 1,
+}
+
+
+def lump_count(path):
+    """Connected components, by shared vertices."""
+    parent = {}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    for tri in _triangles(path):
+        vs = [tuple(round(c, 3) for c in v) for v in tri]
+        for v in vs:
+            parent.setdefault(v, v)
+        union(vs[0], vs[1])
+        union(vs[1], vs[2])
+    return len({find(v) for v in parent})
 PLACES = 3          # 0.001mm -- finer than any boolean's rounding error
 
 
@@ -90,8 +126,23 @@ def main(argv):
             print(f"  PASS  {label:28} {0:6} coincident faces")
 
     print()
+    print("Separate lumps per body — a merged or missing lump is invisible to"
+          " every volume check:")
+    for n in names:
+        want = EXPECTED_LUMPS.get(n)
+        if want is None:
+            continue
+        got = lump_count(paths[n])
+        label = n.replace(".stl", "")
+        if got == want:
+            print(f"  PASS  {label:22} {got} lump(s)")
+        else:
+            print(f"  FAIL  {label:22} {got} lump(s), expected {want}")
+            fail = 1
+
+    print()
     print("No coincident faces: the preview will not stipple." if not fail
-          else "Coincident faces found: these seams will z-fight in the slicer.")
+          else "Problems found: see FAIL lines above.")
     return fail
 
 
