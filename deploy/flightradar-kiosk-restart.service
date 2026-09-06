@@ -14,4 +14,10 @@ Type=oneshot
 # This does not fix the leak. It resets the clock once a day, at an hour when
 # the panel is already blanked and the sky is empty, so the restart costs
 # nothing anyone can see.
-ExecStart=/usr/bin/systemctl --user restart flightradar-kiosk.service
+# Goes through shm-guard.sh rather than restarting directly, so this and the
+# threshold guard share one rate limit and cannot restart Chromium twice
+# within seconds of each other -- which loses kiosk mode and leaves the
+# browser windowed on the display.
+Environment=SHMGUARD_FORCE=1
+StateDirectory=flightradar-shmguard
+ExecStart=/opt/flightradar/shm-guard.sh

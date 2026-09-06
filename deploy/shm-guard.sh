@@ -33,6 +33,12 @@ STAMP="$STATE/last-restart"
 HIGH_MB="${SHMGUARD_HIGH_MB:-1500}"
 IDLE_MB="${SHMGUARD_IDLE_MB:-900}"
 MIN_INTERVAL_S="${SHMGUARD_MIN_INTERVAL_S:-1800}"
+# The nightly 04:00 restart comes through here too, with FORCE=1. Both
+# restart paths must share one rate limit: two Chromium instances started
+# within a few seconds of each other lose kiosk mode and leave the browser
+# windowed, with tab bar and address bar on the display. Observed, not
+# theorised -- it happened while testing this script.
+FORCE="${SHMGUARD_FORCE:-0}"
 
 mkdir -p "$STATE"
 
@@ -81,7 +87,9 @@ if [ -n "${WD:-}" ]; then
 fi
 
 reason=""
-if [ "$mb" -ge "$HIGH_MB" ]; then
+if [ "$FORCE" = "1" ]; then
+    reason="scheduled restart"
+elif [ "$mb" -ge "$HIGH_MB" ]; then
     reason="high mark: ${mb}MB >= ${HIGH_MB}MB"
 elif [ "$mb" -ge "$IDLE_MB" ] && [ "$panel" = "off" ]; then
     reason="idle mark: ${mb}MB >= ${IDLE_MB}MB and panel is off"
