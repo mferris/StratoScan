@@ -1,0 +1,14 @@
+[Unit]
+Description=Restart the kiosk at 04:00, before the shm leak reaches the failure point
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+AccuracySec=1min
+# Deliberately NOT Persistent. A missed 04:00 (device powered off, or simply
+# unplugged overnight) must not fire a catch-up restart at boot: the kiosk
+# would then be restarted seconds after it started, which is pure disruption
+# for a leak that has had no time to accumulate.
+Persistent=false
+
+[Install]
+WantedBy=timers.target
