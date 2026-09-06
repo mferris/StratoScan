@@ -227,6 +227,20 @@ is already blanked and the sky is empty, returning `/dev/shm` from ~2GB to
 ~200MB. The frozen-display watchdog in `wake-listener.py` stays as the
 backstop.
 
+A second timer, `flightradar-shmguard`, closes the gap the daily restart
+leaves: it samples every five minutes and restarts on the measurement rather
+than the clock. Two marks, because a restart is only free when nobody is
+looking — at **900MB it restarts only while the panel is blanked**, so most
+restarts happen invisibly, and at **1500MB it restarts regardless**, which is
+the one that actually prevents the freeze. It measures both `/dev/shm` usage
+and the sum of Chromium's renderer shm mappings and acts on whichever is
+larger, because the two diverge: `/etc/chromium.d/dev-shm` adds
+`--disable-dev-shm-usage` when `/dev/shm` has under 3.8GB free at launch, so
+after one bad day Chromium moves its backing to `/tmp` and the `df` number
+stops tracking the leak. Restarts are rate-limited to one per 30 minutes — if
+something other than the leak fills the arena, a guard that restarts forever
+is worse than the freeze it was written to prevent.
+
 It is a workaround and not a fix, because the cause is not in this codebase:
 a blank page leaks the same way, the mappings are invisible to Chromium's own
 `memory-infra` accounting, and a critical memory-pressure signal reclaims
