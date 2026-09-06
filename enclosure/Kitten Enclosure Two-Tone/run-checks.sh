@@ -24,7 +24,8 @@ EMPTY="mount_vs_plate ear_vs_post recess_vs_post whisker_through head_in_cradle
        tail_over_paw tail_vs_left_paw tail_vs_head paws_vs_head ears_vs_cradle
        whisker_vs_screws whisker_vs_nose whisker_off_nose nose_screw_removed
        antenna_clears_head mount_hidden plate_vs_shell mount_vs_stand
-       material_lost paws_vs_tail"
+       material_lost paws_vs_tail lip_clears_posts lip_inside_bore
+       vents_clear_of_mount usbc_clears_standoffs"
 
 # Must come out SMALL but non-zero. These are the colour seams, and they
 # overlap on purpose -- see colour_overlap in the .scad. Cutting each part
@@ -100,7 +101,7 @@ done
 # find a real hole. A 3.2mm probe through the bezel is about 56mm3; the
 # threshold only has to separate that from nothing.
 echo "Positive controls — must find real geometry:"
-for c in other_screws_present back_inserts_open; do
+for c in other_screws_present back_inserts_open lip_present usbc_open ant_inserts_open vents_were_under_mount; do
     out="$TMP/$c.stl"
     "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
     v=$(vol_of "$out")

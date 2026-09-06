@@ -30,6 +30,12 @@ base_h=16; stand_angle=18;
 // the single-colour version, and a stale value here would check the old
 // geometry and pass.
 paw_x=46; paw_h=18;
+// The back-plate features added with the locating lip. Restated here for the
+// same reason as everything above: `use <>` brings in modules, never values.
+back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9;
+back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40;
+usbc_cut_pos=[60,-14]; usbc_cut_w=11.0; usbc_cut_h=6.5; usbc_screw_pitch=24.0;
+mount_hole_x=58; mount_hole_y=49;
 
 if (check=="ear_vs_post") {
   intersection() {
@@ -248,3 +254,112 @@ else if (check=="mount_vs_plate") {
 // sanity: this MUST produce geometry. If it comes out empty the modules
 // are not being found and every other result here is worthless.
 else if (check=="canary") { shell(); }
+
+// ---- the locating lip -------------------------------------------------
+// The lip must do three things, and each is checked separately because a
+// single "does the plate fit" test passes just as happily when the lip is
+// missing altogether.
+
+// 1. It must EXIST. Positive control: without this, the two tests below
+//    both pass against nothing, which is what a deleted lip looks like.
+if (check=="lip_present") {
+  intersection() {
+    back_plate();
+    difference() {
+      cylinder(d=outer_dia, h=back_lip_h);          // above the plate's inner face
+      cylinder(d=outer_dia - 2*wall - 2*back_lip_gap - 2*back_lip_t - 1,
+               h=back_lip_h*3, center=true);
+    }
+  }
+}
+
+// 2. It must not touch the eight insert posts. A continuous ring at bore
+//    diameter runs straight through all eight of them.
+if (check=="lip_clears_posts") {
+  intersection() {
+    back_plate();
+    for (i=[0:n_screws-1]) { a=i*360/n_screws;
+      translate([screw_r*cos(a), screw_r*sin(a), 0])
+        cylinder(d=post_od, h=back_post_h); }
+  }
+}
+
+// 3. It must sit INSIDE the bore, not proud of it -- a lip larger than the
+//    bore does not locate anything, it just stops the plate seating.
+if (check=="lip_inside_bore") {
+  difference() {
+    intersection() {
+      back_plate();
+      translate([0,0,0.1]) cylinder(d=outer_dia, h=back_lip_h - 0.2);
+    }
+    translate([0,0,-1]) cylinder(d=outer_dia - 2*wall - 2*back_lip_gap + 0.01,
+                                 h=back_lip_h + 2);
+  }
+}
+
+// ---- vents clear of the antenna mount ---------------------------------
+// The whole point of moving the grille: no vent may lie under the mount's
+// flange, where it vents into the back of a solid disc.
+// Testing "every hole under the flange" is wrong and the first version of
+// this did exactly that: it counted the antenna cable bore and the three
+// bolt holes -- 297mm3 of openings that are meant to be under the mount,
+// since that is how the coax and the screws get through. The question is
+// only whether GRILLE holes are under it, so the probe is the grilles
+// themselves and nothing else.
+if (check=="vents_clear_of_mount") {
+  intersection() {
+    translate([0,0,-back_plate_t]) { intake_grille(); fan_grille(); }
+    translate([0, ant_mount_y, -back_plate_t - 1])
+      cylinder(d=ant_flange_d, h=back_plate_t + 2);
+  }
+}
+
+// Paired positive control. An empty result above is also what a mistyped
+// grille module or a flange in the wrong place produces, so the SAME probe
+// at the grille's OLD position has to find the overlap that was reported.
+if (check=="vents_were_under_mount") {
+  intersection() {
+    translate([0, 68 - (-68), 0])         // shift the moved grille back to y=+68
+      translate([0,0,-back_plate_t]) fan_grille();
+    translate([0, ant_mount_y, -back_plate_t - 1])
+      cylinder(d=ant_flange_d, h=back_plate_t + 2);
+  }
+}
+
+// ---- the single USB-C window ------------------------------------------
+// Positive control: the window must actually be cut. An empty result here is
+// also what a mistyped position produces.
+if (check=="usbc_open") {
+  intersection() {
+    difference() {
+      translate([0,0,-back_plate_t]) cylinder(d=outer_dia, h=back_plate_t);
+      back_plate();
+    }
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
+      cylinder(d=usbc_screw_pitch + 6, h=back_plate_t + 2);
+  }
+}
+
+// ...and it must not run into the Pi standoffs on the same face.
+if (check=="usbc_clears_standoffs") {
+  intersection() {
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
+      cylinder(d=usbc_screw_pitch + 6, h=back_plate_t + 20);
+    for (x=[-mount_hole_x/2, mount_hole_x/2])
+      for (y=[-mount_hole_y/2, mount_hole_y/2])
+        translate([x,y,0]) cylinder(d=7, h=8);
+  }
+}
+
+// ---- antenna insert bosses --------------------------------------------
+// Positive control: each boss must be bored for its insert. Solid bosses
+// would look identical from outside and take no insert at all.
+if (check=="ant_inserts_open") {
+  difference() {
+    for (i=[0:n_ant_bolts-1]) { a=i*360/n_ant_bolts + 30;
+      translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a), 0])
+        cylinder(d=ant_bolt_d_probe(), h=back_post_h); }
+    back_plate();
+  }
+}
+function ant_bolt_d_probe() = 3.0;

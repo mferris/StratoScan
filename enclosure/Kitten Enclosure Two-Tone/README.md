@@ -29,8 +29,9 @@ The head is one colour and prints as before:
 | `shell` | black | the head — body cylinder plus two ears, and all the internals |
 | `front_trim` | black | the face — bezel ring with a nose, whisker grooves and seven screw holes |
 | `retainer` | — | ring behind the glass (identical to the retro part) |
-| `back_plate` | black | removable back — standoffs, vents and the cable glands |
+| `back_plate` | black | removable back — locating lip, standoffs, vents, one USB-C pass-through, antenna-mount inserts |
 | `antenna_mount` | black | bolt-on arm carrying the antenna socket |
+| `usbc_gauge` | — | test coupon: five candidate USB-C cutouts, to fit the connector before printing a plate |
 
 The stand is split into five bodies, one per colour region:
 
@@ -50,8 +51,42 @@ reference the five coloured parts are checked against.
 
 The back used to be a fixed floor with the electronics standing on it, so the
 only way in was through the glass. It is a separate plate now, screwed to
-eight insert posts exactly as the faceplate is, with the standoffs, the vents
-and the two cable glands on it.
+eight insert posts exactly as the faceplate is.
+
+**This plate is the same part as the retro build's**, and so is the antenna
+mount. Both cases are the same 223.34mm diameter, use the same eight-post
+ring, and lean back by the same 18°. That is checked rather than asserted:
+exported from each design, the two back plates are 15,410 facets that compare
+equal as sets — the same solid, differing only in triangle order.
+
+A rib on the inner face drops into the bore so the plate lands centred and
+square and holds itself there while the screws go in, with a 1.2mm chamfer on
+its outer top edge so it finds its own centre. It is eight arcs rather than a
+ring: the insert posts span r=102.2–111.2 against a bore wall at
+r=108.7–111.7, so they straddle the wall and a continuous ring would run
+through all eight. Three checks hold it — `lip_present` as a positive
+control, `lip_clears_posts`, and `lip_inside_bore`, since a lip larger than
+the bore does not locate anything, it just stops the plate seating.
+
+The two cable glands are gone, replaced by a single opening for a panel-mount
+USB-C cable; the antenna's coax comes in through the mount's own bore
+instead. **The cutout dimensions are a placeholder** — the connector's
+listing publishes no cutout size — so print `usbc_gauge`, a coupon carrying
+the nominal cutout plus four neighbours at ±0.5 and ±1.0mm, and fit the
+connector before committing a plate.
+
+The mount screws into three M3 heat-set inserts on the plate's inner face
+rather than through bare holes, so it can be removed without holding a nut
+inside the case. The insert pocket stops on a shoulder 1mm above the plate so
+the insert cannot be pressed too deep. The bolt circle is clocked 30° off
+vertical for clearance, not looks: at 0° one boss reaches y=106.5, into the
+locating lip at 106.3.
+
+The upper vent moved from y=+68 to y=−68. The mount's flange is a 40mm disc
+centred at y=88, so at +68 the grille sat underneath it from y=68 to y=81,
+venting into the back of a solid disc — which is what prompted this.
+`vents_clear_of_mount` holds the new position, and `vents_were_under_mount`
+is its paired control, finding the 257mm³ overlap the old one had.
 
 The Pi is mounted to the LCD panel rather than to those standoffs, so taking
 the plate off exposes the back of the Pi and its cabling rather than removing
@@ -251,12 +286,22 @@ check.
 ## Regenerating
 
 ```sh
-for p in shell front_trim retainer stand \
+for p in shell front_trim retainer stand back_plate antenna_mount usbc_gauge \
          stand_body stand_paws stand_toes stand_tail stand_tail_tip; do
   openscad --backend=manifold --export-format binstl \
            -D "part=\"$p\"" -o "$p.stl" kitten-enclosure-twotone.scad
 done
 ```
+
+**The exporter is not deterministic.** Two consecutive exports of unchanged
+source differ — 135 facets out of 210,448 on the stand, and even the facet
+count moves (210,758 vs 210,448 across runs). It shows up on the stand and
+not on the simple parts, which is consistent with it coming from the hundreds
+of hulls the paws and tail are built from. Two consequences: re-exporting
+everything makes the stand files show as modified whether or not anything
+changed, so only re-export what actually changed; and comparing two STLs byte
+for byte is not a test of whether they are the same shape — compare the
+triangle sets instead.
 
 The `.stl` files are committed alongside the source so the folder is
 self-contained, but they are generated. Change the `.scad` and both must be
