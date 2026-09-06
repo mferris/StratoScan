@@ -228,8 +228,12 @@ is already blanked and the sky is empty, returning `/dev/shm` from ~2GB to
 backstop.
 
 A second timer, `flightradar-shmguard`, closes the gap the daily restart
-leaves: it samples every five minutes and restarts on the measurement rather
-than the clock. Two marks, because a restart is only free when nobody is
+leaves: it samples every five minutes and acts on the measurement rather than
+the clock. **It reloads the page before it restarts the browser.** Tearing
+down the document releases a third to a half of the accumulated shared memory
+(151MB → 72MB and 124MB → 79MB, measured) without killing Chromium — no black
+screen, no risk of coming back windowed — and the restart is kept as the
+escalation for when a reload is not enough. Two marks, because a restart is only free when nobody is
 looking — at **900MB it restarts only while the panel is blanked**, so most
 restarts happen invisibly, and at **1500MB it restarts regardless**, which is
 the one that actually prevents the freeze. It measures both `/dev/shm` usage
@@ -243,6 +247,15 @@ is worse than the freeze it was written to prevent. The 04:00 restart runs
 through the same script (with `SHMGUARD_FORCE=1`) so both share that one rate
 limit: two Chromium instances started within seconds of each other lose kiosk
 mode and leave the browser windowed on the display, tab bar and all.
+
+The reload is requested without any control channel of its own. The page
+already POSTs `/wake/alive` every 20 seconds as the frozen-display heartbeat;
+the guard drops a file in `$XDG_RUNTIME_DIR`, and the listener answers that
+next heartbeat with `{"reload":1}` instead of `204`. So there is no debug
+port, no key-injection helper and no new listener: only a local process
+running as the kiosk user can ask for a reload. Nothing is lost by reloading —
+sightings, statistics and the approach heatmap all live in the server-side
+stores — beyond trails and ghost tracks, which rebuild within a sweep.
 
 It is a workaround and not a fix, because the cause is not in this codebase:
 a blank page leaks the same way, the mappings are invisible to Chromium's own

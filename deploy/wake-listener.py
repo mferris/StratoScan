@@ -27,6 +27,7 @@ blanks again IDLE_MINUTES after the alert, which is the behaviour you'd
 expect.
 """
 import http.server
+import os
 import subprocess
 import threading
 import time
@@ -121,6 +122,33 @@ def _wake():
     )
 
 
+# The shm guard asks for a page reload by creating this file. A reload frees
+# roughly half the shared memory Chromium accumulates per document (measured:
+# 151MB -> 72MB) without restarting the browser, so it is the cheap first move
+# before a restart -- no black screen, no risk of coming back windowed.
+#
+# It is a FILE rather than an HTTP call so nothing new listens on the network:
+# only a local process running as this user can request a reload, and the flag
+# is delivered on the heartbeat the page already sends every 20 seconds.
+RELOAD_REQUEST = os.path.join(
+    os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "flightradar-reload-request")
+
+
+def _take_reload_request():
+    """True at most once per request file: the flag is consumed, not polled.
+
+    Removed before answering rather than after, so a page that reloads and
+    never comes back cannot leave a request that reloads its replacement too.
+    """
+    try:
+        os.unlink(RELOAD_REQUEST)
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return False
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def version_string(self):
         return "FlightRadar"
@@ -138,6 +166,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                       f"{time.monotonic() - _started_at:.0f}s after start",
                       flush=True)
             _last_beat = time.monotonic()
+            if _take_reload_request():
+                print("reload: instructing the page to reload", flush=True)
+                body = b'{"reload":1}'
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             self.send_response(204)
             self.end_headers()
             return

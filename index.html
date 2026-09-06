@@ -4322,7 +4322,21 @@ let lastHeartbeatAt = 0;
 function reportPainted(now) {
   if (now - lastHeartbeatAt < HEARTBEAT_MS) return;
   lastHeartbeatAt = now;
-  fetch('/wake/alive', { method: 'POST' }).catch(() => {});  // absent off-device; harmless
+  // The heartbeat doubles as the reload channel. Chromium on this hardware
+  // accumulates shared memory per document -- ~200MB/h, until allocations
+  // fail and the panel freezes -- and tearing the document down releases
+  // about half of it (151MB -> 72MB, measured). So the shm guard asks for a
+  // reload here rather than restarting the browser: no black screen, and no
+  // chance of Chromium coming back windowed instead of in kiosk mode.
+  //
+  // 204 is the normal answer; a 200 carries {"reload":1}. Nothing is lost by
+  // reloading -- sightings, statistics and the approach heatmap all live in
+  // the server-side stores -- beyond trails and ghost tracks, which rebuild
+  // within a sweep.
+  fetch('/wake/alive', { method: 'POST' })
+    .then(r => (r.status === 200 ? r.json() : null))
+    .then(d => { if (d && d.reload) location.reload(); })
+    .catch(() => {});  // absent off-device; harmless
 }
 
 function tick(ts) {
