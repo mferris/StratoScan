@@ -264,11 +264,21 @@ fullscreen reads 0 on this panel, windowed reads 232, so the threshold sits
 at 60 with a wide margin. Verified by breaking it deliberately and watching
 the guard put it back.
 
-Reload thresholds are tuned to where a reload still works. It recovered 52%
-of the leak at 151MB and 36% at 124MB, but 0% at 1010MB and 0% at 1404MB — so
-reload starts at 300MB with the panel blanked (invisible) or 700MB with it
-on, and a restart is the last resort at 1400MB. At the original 900/1500
-marks the reload never once did anything useful before escalating.
+**A reload cannot be delivered while the panel is blanked**, and that took
+two wrong diagnoses to see. The instruction rides the paint heartbeat, and
+`reportPainted()` is driven by `requestAnimationFrame` — with nothing being
+composited there are no frames, so the page never posts `/wake/alive` and
+never collects the flag. Six attempts told the story cleanly: five with the
+panel off freed 0MB each, with the listener logging no delivery at all, while
+the one with the panel on freed **597MB of 700MB**.
+
+The apparent pattern before that — "reloads stop working above ~600MB" — was
+an artifact: every failed attempt happened to be panel-off. Memory level was
+never the variable.
+
+So the guard reloads only when the panel is on (at 700MB), and when the panel
+is off it restarts outright at 600MB, which is invisible precisely because
+the panel is off. A restart at 1400MB remains the backstop with the panel on.
 
 The reload is requested without any control channel of its own. The page
 already POSTs `/wake/alive` every 20 seconds as the frozen-display heartbeat;

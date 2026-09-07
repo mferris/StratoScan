@@ -23,8 +23,17 @@ RESTART_STAMP="$STATE/last-restart"
 # recovered 52% at 151MB and 36% at 124MB, but 0% at 1010MB and 0% at 1404MB.
 # So reload EARLY, where it still works, rather than as a last resort. These
 # were 900/1500 and reloads were consistently useless by the time they fired.
-RELOAD_IDLE_MB="${SHMGUARD_RELOAD_IDLE_MB:-300}"   # panel blanked: invisible, so act early
-RELOAD_ON_MB="${SHMGUARD_RELOAD_ON_MB:-700}"       # panel on: still cheaper than a restart
+# A RELOAD CANNOT BE DELIVERED WHILE THE PANEL IS BLANKED. The instruction
+# rides the paint heartbeat, and reportPainted() is driven by
+# requestAnimationFrame -- with no compositing there are no frames, so the
+# page never posts /wake/alive and never collects the flag. Measured: five
+# panel-off attempts freed 0MB each and the listener logged no delivery at
+# all, while the one panel-on attempt freed 597MB of 700MB.
+#
+# So with the panel off there is no point asking: restart instead, which is
+# invisible anyway precisely because the panel is off.
+RELOAD_ON_MB="${SHMGUARD_RELOAD_ON_MB:-700}"       # panel on: cheap, and it works
+RESTART_IDLE_MB="${SHMGUARD_RESTART_IDLE_MB:-600}" # panel off: just restart, nobody sees it
 RESTART_MB="${SHMGUARD_RESTART_MB:-1400}"          # last resort; failures start ~2100MB
 RELOAD_MIN_S="${SHMGUARD_RELOAD_MIN_S:-600}"
 RESTART_MIN_S="${SHMGUARD_RESTART_MIN_S:-1800}"
@@ -185,9 +194,20 @@ if [ "$mb" -ge "$RESTART_MB" ]; then
     exit 0
 fi
 
+# Panel off and over the idle mark: restart outright. A reload would not be
+# delivered, and a restart costs nothing anyone can see.
+if [ "$panel" = "off" ] && [ "$mb" -ge "$RESTART_IDLE_MB" ]; then
+    if rate_ok "$RESTART_STAMP" "$RESTART_MIN_S"; then
+        restart_kiosk "idle mark ${mb}MB >= ${RESTART_IDLE_MB}MB, panel off so nobody sees it"
+    else
+        echo "shm-guard: ${mb}MB over the idle mark but a restart is rate-limited -- holding"
+    fi
+    exit 0
+fi
+
 want_reload=0
-if   [ "$panel" = "off" ] && [ "$mb" -ge "$RELOAD_IDLE_MB" ]; then want_reload=1; why="idle mark ${mb}MB >= ${RELOAD_IDLE_MB}MB"
-elif [ "$mb" -ge "$RELOAD_ON_MB" ];                          then want_reload=1; why="${mb}MB >= ${RELOAD_ON_MB}MB"
+if [ "$panel" = "on" ] && [ "$mb" -ge "$RELOAD_ON_MB" ]; then
+    want_reload=1; why="${mb}MB >= ${RELOAD_ON_MB}MB"
 fi
 
 if [ "$want_reload" = "0" ]; then
