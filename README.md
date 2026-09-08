@@ -433,3 +433,41 @@ before you do:
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Setting one up somewhere else
+
+The first build assumed the continental US in more places than was obvious,
+and each one was a hard stop rather than a rough edge:
+
+- **Coordinates were forced into the northern and western hemispheres.** The
+  setup page and the touchscreen both "helpfully" made latitude positive and
+  longitude negative, on the reasoning that a sign left off a US coordinate is
+  unambiguous. It is — and it silently moved a receiver in the Netherlands
+  (4.49°E) to 4.49°W, in the Atlantic, while making the entire southern
+  hemisphere unreachable. `setupd` agreed, rejecting anything outside
+  24–49.5°N and 66.5–125°W as "outside the continental US".
+- **The airport list was 433 US airports.** Now 3,269 worldwide (large and
+  medium fields with scheduled service, from OurAirports), so Schiphol and
+  San Carlos are both a search away.
+- **Time zone and WiFi region were baked into the image** as
+  America/New_York and US, with no way to change either from setup. A unit
+  abroad timestamped every sighting wrongly and ran its radio on the wrong
+  channel set.
+- **The lightning overlay is GOES-East**, which only sees the Americas.
+  Outside that footprint every tile is a 404, so the setting now hides itself
+  and says why rather than offering a toggle that cannot work.
+
+**Location is entered as an address by default.** Nobody knows their
+coordinates; everybody knows their address. The lookup runs on the *device*
+rather than in the browser, because during first-time setup the phone is
+joined to the device's own hotspot and has no route to the internet, while
+the Pi was put on WiFi in the previous step — a browser-side lookup would
+fail exactly when it is needed. The address reaches OpenStreetMap's
+Nominatim and nothing else, the position it returns stays on the device, and
+typing coordinates by hand remains one tap away for anyone who would rather
+not send an address anywhere.
+
+Picking the home airport sets the country, which seeds the time-zone step
+with the one or two zones that country actually uses instead of all 485, and
+sets the WiFi regulatory region to match. Both the phone page and the
+touchscreen can complete setup on their own.

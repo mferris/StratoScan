@@ -314,6 +314,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._status(st)
         if path == "/setup/api/airports":
             return self._airports()
+        if path == "/setup/api/locale":
+            return self._locale()
+        if path == "/setup/api/geocode":
+            from urllib.parse import parse_qs, urlparse
+            q = (parse_qs(urlparse(self.path).query).get("q") or [""])[0]
+            return self._send(200, call_setupd("geocode", {"query": q})["result"])
         if path == "/setup/api/wifi/scan":
             return self._proxy_verb("wifi_scan")
         if path == "/setup/api/wifi/connect" and self.command == "POST":
@@ -326,6 +332,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._location(st)
         if path == "/setup/api/airport" and self.command == "POST":
             return self._airport(st)
+        if path == "/setup/api/locale" and self.command == "POST":
+            return self._set_locale(st)
         if path == "/setup/api/tailscale/status":
             return self._proxy_verb("tailscale_status")
         if path == "/setup/api/tailscale/up" and self.command == "POST":
@@ -504,6 +512,42 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "pendingChange": pend.get("result") if pend.get("ok") else None,
         })
 
+    def _locale(self):
+        """Current timezone/WiFi country, plus the zones for a country.
+
+        The country comes from the chosen home airport, so a recipient never
+        scrolls 485 timezones: they see the handful their country actually
+        uses, with the full list still available.
+        """
+        cc = ""
+        if "?" in self.path:
+            from urllib.parse import parse_qs, urlparse
+            cc = (parse_qs(urlparse(self.path).query).get("country") or [""])[0]
+        cur = call_setupd("get_locale", {})["result"]
+        zones = call_setupd("list_timezones", {"country": cc})["result"]
+        return self._send(200, {
+            "current": cur,
+            "forCountry": zones.get("forCountry", []),
+            "all": zones.get("timezones", []),
+            "country": cc.upper(),
+        })
+
+    def _set_locale(self, st):
+        b = self._body()
+        out = {}
+        if b.get("timezone"):
+            out.update(call_setupd("set_timezone",
+                                   {"timezone": b["timezone"]})["result"])
+        if b.get("country"):
+            out.update(call_setupd("set_wifi_country",
+                                   {"country": b["country"]})["result"])
+        if not out:
+            return self._err(400, "nothing_to_set", "No timezone or country given.")
+        st.setdefault("steps", {})["locale"] = True
+        st["locale"] = out
+        save_state(st)
+        return self._send(200, out)
+
     def _airports(self):
         try:
             with open(AIRPORTS_JSON) as f:
@@ -547,6 +591,9 @@ FRIENDLY = {
     "lat_out_of_range": "That looks like it is outside the continental United States.",
     "lon_out_of_range": "That looks like it is outside the continental United States.",
     "unknown_airport": "That airport is not in the built-in list.",
+    "geocode_unreachable": "Could not reach the address lookup service. Check the WiFi step, or enter coordinates instead.",
+    "geocode_bad_reply": "The address lookup service returned something unusable.",
+    "bad_query": "Type at least three characters of an address.",
     "readsb_did_not_recover": "The receiver did not restart, so the previous location was restored.",
     "funnel_guard_failed": "Refusing to publish: the privacy filter is not working.",
     "bad_authkey": "That does not look like a Tailscale auth key.",
@@ -620,6 +667,20 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
         if path == "/onboard/location":
             return self._verb("set_location", {"lat": body.get("lat"),
                                                "lon": body.get("lon")}, timeout=90)
+        if path == "/onboard/locale":
+            # Same locale step as the phone page, for a recipient who only
+            # ever uses the touchscreen. Both surfaces must be able to finish
+            # setup on their own.
+            out = {}
+            if body.get("timezone"):
+                out.update(call_setupd("set_timezone",
+                                       {"timezone": body["timezone"]})["result"])
+            if body.get("country"):
+                out.update(call_setupd("set_wifi_country",
+                                       {"country": body["country"]})["result"])
+            if not out:
+                return self._json(400, {"error": {"message": "No timezone or country given."}})
+            return self._json(200, {"ok": True, "result": out})
         if path == "/onboard/airport":
             return self._verb("set_airport", {"code": body.get("code"),
                                               "atcMount": body.get("atcMount", "")})
@@ -718,6 +779,26 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         p = self.path.split("?", 1)[0].rstrip("/")
+        if p == "/onboard/geocode":
+            from urllib.parse import parse_qs, urlparse
+            q = (parse_qs(urlparse(self.path).query).get("q") or [""])[0]
+            r = call_setupd("geocode", {"query": q})
+            if not r.get("ok"):
+                return self._json(502, {"error": {"message": FRIENDLY.get(
+                    r.get("code"), "Address lookup failed.")}})
+            return self._json(200, r["result"])
+        if p == "/onboard/locale":
+            from urllib.parse import parse_qs, urlparse
+            cc = (parse_qs(urlparse(self.path).query).get("country") or [""])[0]
+            cur = call_setupd("get_locale", {})
+            z = call_setupd("list_timezones", {"country": cc})
+            if not (cur.get("ok") and z.get("ok")):
+                return self._json(502, {"error": {"message": "Could not read the time zone."}})
+            return self._json(200, {
+                "current": cur["result"],
+                "forCountry": z["result"].get("forCountry", []),
+                "all": z["result"].get("timezones", []),
+            })
         if p == "/onboard/airports":
             try:
                 with open(AIRPORTS_JSON) as f:

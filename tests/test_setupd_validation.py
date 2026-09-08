@@ -44,20 +44,37 @@ SAMPLE_READSB = (
 REJECT = [
     ("ssid", d.v_ssid, ["-injected", "a" * 33, "x\x00y", "l\nb", 123, ""]),
     ("psk", d.v_psk, ["short", "pass\nword", "a" * 100]),
-    ("lat", d.v_lat, [0.0, 51.5, 19.0, "35.8", True, float("nan"), float("inf")]),
-    ("lon", d.v_lon, [0.1, -130.0, -60.0, None, True]),
+    # Coordinates are global now -- the device is gifted abroad. Only
+    # genuinely impossible values are rejected; 51.5N/0.1E is London, not an
+    # error, and it used to be one.
+    ("lat", d.v_lat, ["35.8", True, float("nan"), float("inf"), 90.1, -90.1]),
+    ("lon", d.v_lon, [None, True, 180.1, -180.1, "0"]),
     ("hostname", d.v_ts_hostname, ["UPPER", "-lead", "trail-", "has space", "a" * 40]),
     ("authkey", d.v_authkey, ["nope", "tskey-short", "; rm -rf /", ""]),
     ("atc_mount", d.v_atc_mount, ["../etc", "UPPER", "a", "x" * 50, "semi;colon"]),
+    # The address goes into a URL query for the geocoder, and the timezone
+    # string reaches timedatectl, so both are bounded before they travel.
+    ("query", d.v_query, ["", "ab", "x" * 201, None, 123]),
+    ("timezone", d.v_timezone, ["../etc/passwd", "Not/A/Real/Zone/Here",
+                                "Europe/Amsterdam; rm -rf /", "", None, 7]),
+    ("country", d.v_country, ["USA", "u", "1A", "", None, "N L"]),
 ]
 
 ACCEPT = [
     (d.v_ssid, "MyNetwork"), (d.v_ssid, "café wifi"),
     (d.v_psk, "goodpass123"), (d.v_psk, "0" * 64), (d.v_psk, None),
     (d.v_lat, 35.8776), (d.v_lon, -78.7875),
+    # Leiden, Menlo Park, Sydney, and the extremes -- all must be accepted.
+    (d.v_lat, 52.1601), (d.v_lon, 4.4970),
+    (d.v_lat, 37.4530), (d.v_lon, -122.1817),
+    (d.v_lat, -33.8688), (d.v_lon, 151.2093),
+    (d.v_lat, 90.0), (d.v_lat, -90.0), (d.v_lon, 180.0), (d.v_lon, -180.0),
     (d.v_ts_hostname, "flightradar-1"),
     (d.v_authkey, "tskey-auth-" + "x" * 20),
     (d.v_atc_mount, "krdu_app2"), (d.v_atc_mount, ""),
+    (d.v_query, "Rapenburg 70, Leiden, Netherlands"),
+    (d.v_query, "1 Hacker Way, Menlo Park, CA"),
+    (d.v_country, "NL"), (d.v_country, "us"),
 ]
 
 

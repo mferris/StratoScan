@@ -63,8 +63,12 @@ SYSTEMCTL = "/usr/bin/systemctl"
 # Continental US. Deliberately not global: the airport table is CONUS-only,
 # and a coordinate outside it means the user mistyped rather than that they
 # are genuinely in Alaska.
-LAT_MIN, LAT_MAX = 24.0, 49.5
-LON_MIN, LON_MAX = -125.0, -66.5
+# Global. These were 24..49.5 and -125..-66.5 -- the continental US -- which
+# made the device unconfigurable anywhere else on Earth: a receiver in the
+# Netherlands (52.16N, 4.49E) was rejected outright as "outside the
+# continental US". A gifted unit has no reason to be US-only.
+LAT_MIN, LAT_MAX = -90.0, 90.0
+LON_MIN, LON_MAX = -180.0, 180.0
 
 RE_TS_HOSTNAME = re.compile(r"^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$")
 RE_TS_AUTHKEY = re.compile(r"^tskey-[A-Za-z0-9_-]{10,200}$")
@@ -155,7 +159,7 @@ def v_lat(v):
     if v != v or v in (float("inf"), float("-inf")):
         raise Err("bad_lat", "not finite")
     if not (LAT_MIN <= v <= LAT_MAX):
-        raise Err("lat_out_of_range", f"{v} outside the continental US")
+        raise Err("lat_out_of_range", f"{v} is not a latitude")
     return float(v)
 
 
@@ -165,7 +169,7 @@ def v_lon(v):
     if v != v or v in (float("inf"), float("-inf")):
         raise Err("bad_lon", "not finite")
     if not (LON_MIN <= v <= LON_MAX):
-        raise Err("lon_out_of_range", f"{v} outside the continental US")
+        raise Err("lon_out_of_range", f"{v} is not a longitude")
     return float(v)
 
 
@@ -569,7 +573,156 @@ def hotspot_stop():
 
 # --------------------------------------------------------- location/airport
 
+
+# ---- Locale: timezone and WiFi regulatory domain ---------------------------
+# Both were baked into the image (America/New_York, wifi country US). A unit
+# gifted abroad showed the wrong clock on every timestamp and ran its radio on
+# the wrong channel set, and neither was reachable from the setup page.
+TZ_RE = re.compile(r"\A[A-Za-z][A-Za-z0-9+_-]*(?:/[A-Za-z0-9+_-]+){0,2}\Z")
+COUNTRY_RE = re.compile(r"\A[A-Z]{2}\Z")
+
+
+def v_timezone(v):
+    if not isinstance(v, str) or not TZ_RE.match(v):
+        raise Err("bad_timezone", "not a timezone name")
+    # Must be one systemd actually knows: this string reaches timedatectl.
+    if v not in list_timezones():
+        raise Err("unknown_timezone", f"{v} is not a known timezone")
+    return v
+
+
+def v_country(v):
+    if not isinstance(v, str) or not COUNTRY_RE.match(v.upper()):
+        raise Err("bad_country", "not a 2-letter country code")
+    return v.upper()
+
+
+def list_timezones():
+    # run() returns BYTES. Forgetting that produced a list of b"..." here and
+    # a dict of bytes in get_locale(), which json.dumps cannot serialise -- so
+    # the handler raised while building its reply and the caller saw an empty
+    # response with nothing in the journal to explain it.
+    out = run(["timedatectl", "list-timezones"], timeout=15)
+    text = out.stdout.decode("utf-8", "replace") if isinstance(out.stdout, bytes) else out.stdout
+    return [ln.strip() for ln in text.splitlines() if ln.strip()]
+
+
+def timezones_for_country(cc):
+    """Zones tzdata associates with a country, from zone.tab."""
+    cc = (cc or "").upper()
+    zones = []
+    try:
+        with open("/usr/share/zoneinfo/zone.tab") as f:
+            for line in f:
+                if line.startswith("#"):
+                    continue
+                parts = line.split("\t")
+                if len(parts) >= 3 and parts[0].strip().upper() == cc:
+                    zones.append(parts[2].strip())
+    except OSError:
+        pass
+    return zones
+
+
+def _text(out):
+    v = getattr(out, "stdout", b"") or b""
+    return v.decode("utf-8", "replace") if isinstance(v, bytes) else v
+
+
+def get_locale():
+    tz = run(["timedatectl", "show", "-p", "Timezone", "--value"], timeout=10)
+    country = ""
+    try:
+        country = _text(run(["raspi-config", "nonint", "get_wifi_country"],
+                            timeout=15)).strip().upper()
+    except Exception:
+        country = ""
+    return {"timezone": _text(tz).strip(), "wifiCountry": country}
+
+
+def set_timezone(tz):
+    tz = v_timezone(tz)
+    run(["timedatectl", "set-timezone", tz], timeout=20, check=True)
+    return {"timezone": tz}
+
+
+def set_wifi_country(cc):
+    cc = v_country(cc)
+    # raspi-config owns this on Raspberry Pi OS: it writes the wpa_supplicant
+    # country AND the kernel regulatory domain, which have to agree.
+    run(["raspi-config", "nonint", "do_wifi_country", cc], timeout=30, check=True)
+    return {"wifiCountry": cc}
+
+
+
+# ---- Address lookup --------------------------------------------------------
+# Typing coordinates is the reliable way in and the unfriendly one. This turns
+# an address into a position using OpenStreetMap's Nominatim.
+#
+# Done HERE, on the device, not in the browser: during first-time setup the
+# phone is joined to this device's own hotspot, which has no route to the
+# internet, while the Pi has already been put on WiFi in the previous step.
+# A browser-side lookup would simply fail at exactly the moment it is needed.
+#
+# The address is the owner's home, so it is worth being precise about where it
+# goes: the query string reaches Nominatim and nothing else, it is not logged
+# here, and the coordinates it returns stay on the device the same way typed
+# ones do. Entering coordinates by hand remains available for anyone who would
+# rather not send an address anywhere.
+NOMINATIM = "https://nominatim.openstreetmap.org/search"
+GEOCODE_UA = "FlightRadar-kiosk/1.0 (+https://github.com/mferris/FlightRadar)"
+
+
+def v_query(v):
+    if not isinstance(v, str):
+        raise Err("bad_query", "not a string")
+    q = v.strip()
+    if not (3 <= len(q) <= 200):
+        raise Err("bad_query", "between 3 and 200 characters")
+    return q
+
+
+def geocode(query):
+    import json as _json
+    import urllib.parse
+    import urllib.request
+    q = v_query(query)
+    url = NOMINATIM + "?" + urllib.parse.urlencode({
+        "q": q, "format": "jsonv2", "limit": "6", "addressdetails": "1",
+    })
+    req = urllib.request.Request(url, headers={"User-Agent": GEOCODE_UA})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            # Cap the read: this is untrusted remote input parsed as root.
+            raw = r.read(400_000)
+    except Exception as e:
+        raise Err("geocode_unreachable", type(e).__name__)
+    try:
+        rows = _json.loads(raw.decode("utf-8", "replace"))
+    except ValueError:
+        raise Err("geocode_bad_reply", "not JSON")
+    out = []
+    for row in rows if isinstance(rows, list) else []:
+        try:
+            lat = float(row["lat"]); lon = float(row["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            continue
+        cc = ((row.get("address") or {}).get("country_code") or "").upper()
+        out.append({
+            "label": str(row.get("display_name", ""))[:180],
+            "lat": round(lat, 6), "lon": round(lon, 6),
+            "country": cc,
+        })
+    return {"results": out, "query": q}
+
+
 def set_location(lat, lon):
+    # Null Island. A real receiver is never at exactly 0,0, and accepting it
+    # silently centres the radar in the Gulf of Guinea with no clue why.
+    if v_lat(lat) == 0.0 and v_lon(lon) == 0.0:
+        raise Err("lat_out_of_range", "0,0 looks like an unset location")
     lat, lon = v_lat(lat), v_lon(lon)
     previous = rewrite_readsb_location(lat, lon)
     restart_readsb_or_rollback(previous)
@@ -592,6 +745,9 @@ def set_airport(code, atc_mount=""):
     cfg = {"airport": {
         "code": a["code"], "lat": a["lat"], "lon": a["lon"],
         "elevFt": a["elevFt"], "atcMount": v_atc_mount(atc_mount),
+        # Carried so the time-zone step can offer that country's zones
+        # instead of all 485, and so the WiFi region follows automatically.
+        "country": a.get("country", ""),
     }}
     atomic_write(CONFIG_JSON, json.dumps(cfg, indent=1) + "\n", mode=0o644)
     os.chown(CONFIG_JSON, 0, 0)
@@ -859,6 +1015,12 @@ VERBS = {
                                "active": hotspot_active(),
                                "address": hotspot_address()},
     "set_location": lambda p: set_location(p.get("lat"), p.get("lon")),
+    "geocode": lambda p: geocode(p.get("query")),
+    "get_locale": lambda p: get_locale(),
+    "list_timezones": lambda p: {"timezones": list_timezones(),
+                                 "forCountry": timezones_for_country(p.get("country", ""))},
+    "set_timezone": lambda p: set_timezone(p.get("timezone")),
+    "set_wifi_country": lambda p: set_wifi_country(p.get("country")),
     "set_airport": lambda p: set_airport(p.get("code"), p.get("atcMount", "")),
     "tailscale_status": lambda p: tailscale_status(),
     "tailscale_login_start": lambda p: tailscale_login_start(p.get("hostname")),
@@ -877,6 +1039,11 @@ VERBS = {
 
 MUTATING = {"wifi_connect", "wifi_confirm", "wifi_rollback", "hotspot_start",
             "hotspot_stop", "set_location", "set_airport", "tailscale_up",
+            # Only the two that change state. get_locale, list_timezones and
+            # geocode are reads, and geocode in particular does up to 20s of
+            # network I/O -- holding the state lock across that would block
+            # WiFi operations behind an address lookup.
+            "set_timezone", "set_wifi_country",
             "tailscale_funnel", "reboot", "reset_settings", "reset_full",
             "tailscale_login_start"}
 
