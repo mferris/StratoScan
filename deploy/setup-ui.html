@@ -35,6 +35,9 @@
   .net small{color:var(--dim)}
   .hide{display:none}
   .note{font-size:.8rem;color:var(--dim);margin-top:8px}
+  .coordrow { display: flex; gap: 8px; align-items: stretch; }
+  .coordrow input { flex: 1 1 auto; min-width: 0; }
+  .coordrow select { flex: 0 0 auto; width: 4.5em; }
 </style>
 </head>
 <body>
@@ -77,16 +80,43 @@
     <p class="note">Where the antenna physically is. Used to centre the radar.
       Kept on the device; if you later publish a public page, the position it
       shows is rounded to about half a mile.</p>
-    <label>Latitude (north)</label>
-    <input id="lat" inputmode="decimal" placeholder="35.8776">
-    <label>Longitude (west)</label>
-    <!-- inputmode="decimal" gives iOS a keypad with NO minus key, which made
-         this field impossible to fill in on a phone: every longitude in the
-         continental US is negative. "text" keeps the minus available, and
-         the code below adds the sign anyway if it is left off. -->
-    <input id="lon" inputmode="text" placeholder="-78.7875 (or just 78.7875)">
-    <div class="note">In the US, longitude is west, so it is negative. If you
-      leave the minus off, it is added for you.</div>
+    <!-- Hemisphere pickers rather than a typed minus sign. iOS's decimal
+         keypad has no minus key, which is why this used to guess the sign --
+         it forced longitude negative and latitude positive, on the assumption
+         that every unit lived in the continental US. That silently moved a
+         receiver in the Netherlands (4.49E) into the Atlantic at 4.49W, and
+         made the whole southern hemisphere unreachable. A picker is
+         unambiguous everywhere and still needs no minus key. -->
+    <!-- Address first. Typing coordinates is exact but nobody knows theirs;
+         an address is what people can actually answer. The lookup runs on the
+         DEVICE, not in this browser, because during first-time setup this
+         phone is joined to the device's own hotspot and has no route out --
+         the Pi, however, was put on WiFi in the step above. -->
+    <div id="addrMode">
+      <label>Address</label>
+      <input id="addr" placeholder="street, town, country" autocapitalize="words">
+      <div class="note">Looked up via OpenStreetMap. The address is sent to
+        their geocoder and nowhere else; the position it returns stays on the
+        device. Prefer not to? <a href="#" id="toCoords">Enter coordinates instead</a>.</div>
+      <button id="addrBtn">Find address</button>
+      <select id="addrSel" size="5" class="hide"></select>
+    </div>
+
+    <div id="coordMode" class="hide">
+      <label>Latitude</label>
+      <div class="coordrow">
+        <input id="lat" inputmode="decimal" placeholder="35.8776">
+        <select id="latHemi"><option value="N">N</option><option value="S">S</option></select>
+      </div>
+      <label>Longitude</label>
+      <div class="coordrow">
+        <input id="lon" inputmode="decimal" placeholder="78.7875">
+        <select id="lonHemi"><option value="W">W</option><option value="E">E</option></select>
+      </div>
+      <div class="note">Type the number without a sign and pick the hemisphere.
+        Pasting a signed value works too. <a href="#" id="toAddr">Look up an address instead</a>.</div>
+    </div>
+
     <button id="locBtn">Save location</button>
     <div class="msg" id="locMsg"></div>
   </div>
@@ -105,6 +135,23 @@
       <b>mount</b> value. Blank simply turns the ATC feature off.</div>
     <button id="airBtn">Save airport</button>
     <div class="msg" id="airMsg"></div>
+  </div>
+
+  <!-- locale -->
+  <div class="card">
+    <h2>Time zone and region <span class="tick hide" id="tickLoc2">✓</span></h2>
+    <p class="note">Sets the clock the radar timestamps everything with, and the
+      WiFi regulatory region the radio is allowed to use. Both were fixed to the
+      United States before; a unit used anywhere else showed the wrong time on
+      every sighting.</p>
+    <label>Time zone</label>
+    <select id="tzSel"></select>
+    <label><input type="checkbox" id="tzAll"> show all time zones</label>
+    <label>WiFi region</label>
+    <input id="wifiCc" maxlength="2" placeholder="NL" autocapitalize="characters" style="text-transform:uppercase">
+    <div class="note" id="localeNow"></div>
+    <button id="localeBtn">Save time zone and region</button>
+    <div class="msg" id="localeMsg"></div>
   </div>
 
   <!-- remote -->
@@ -260,38 +307,58 @@ $('joinBtn').onclick = async () => {
   $('joinBtn').disabled = false; $('joinBtn').textContent = 'Join network';
 };
 
-// Every continental-US longitude is negative and every latitude positive, so
-// a sign typed the wrong way (or left off entirely, which iOS's numeric
-// keypad forces) is unambiguous rather than a guess. Correct it and say so,
-// instead of rejecting input the phone keyboard could not have produced.
-function normaliseCoords(latRaw, lonRaw) {
-  let lat = parseFloat(String(latRaw).trim().replace(/[^\d.+-]/g, ''));
-  let lon = parseFloat(String(lonRaw).trim().replace(/[^\d.+-]/g, ''));
+// The sign comes from the hemisphere picker, never from a guess. A typed
+// minus is still honoured -- someone pasting "-78.7875" gets what they meant
+// -- by moving the picker to match, so the field and the picker never
+// disagree about what is being sent.
+function syncHemi(inputId, selId, negLetter) {
+  const el = document.getElementById(inputId), sel = document.getElementById(selId);
+  const raw = el.value.trim();
+  if (raw.startsWith('-')) {
+    sel.value = negLetter;
+    el.value = raw.slice(1);
+  }
+}
+['lat', 'lon'].forEach(id => {
+  const neg = id === 'lat' ? 'S' : 'W';
+  document.getElementById(id).addEventListener('input',
+    () => syncHemi(id, id + 'Hemi', neg));
+});
+
+function normaliseCoords() {
+  const num = id => parseFloat(String(document.getElementById(id).value)
+                                 .trim().replace(/[^\d.]/g, ''));
+  let lat = num('lat'), lon = num('lon');
+  if (Number.isFinite(lat) && $('latHemi').value === 'S') lat = -lat;
+  if (Number.isFinite(lon) && $('lonHemi').value === 'W') lon = -lon;
   const notes = [];
-  if (Number.isFinite(lat) && lat < 0) { lat = -lat; notes.push('latitude made positive (north)'); }
-  if (Number.isFinite(lon) && lon > 0) { lon = -lon; notes.push('longitude made negative (west)'); }
+  if (Number.isFinite(lat) && Math.abs(lat) > 90) notes.push('latitude must be 0-90');
+  if (Number.isFinite(lon) && Math.abs(lon) > 180) notes.push('longitude must be 0-180');
   return { lat, lon, notes };
 }
 
 $('locBtn').onclick = async () => {
   hide($('locMsg'));
-  const { lat, lon, notes } = normaliseCoords($('lat').value, $('lon').value);
+  const { lat, lon, notes } = normaliseCoords();
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
     return show($('locMsg'), 'err', 'Enter both a latitude and a longitude.');
   }
-  $('lat').value = lat; $('lon').value = lon;   // show what will actually be sent
+  if (notes.length) return show($('locMsg'), 'err', notes.join('; '));
+  if (lat === 0 && lon === 0) {
+    return show($('locMsg'), 'err', '0, 0 is in the Gulf of Guinea — check the numbers.');
+  }
   try {
     const r = await api('location', { method: 'POST',
       body: JSON.stringify({ lat, lon }) });
     show($('locMsg'), 'ok', 'Saved. Receiver restarted.' +
-      (notes.length ? ' (' + notes.join(', ') + ')' : ''));
+      ` (${Math.abs(lat).toFixed(4)}°${lat < 0 ? 'S' : 'N'}, ${Math.abs(lon).toFixed(4)}°${lon < 0 ? 'W' : 'E'})`);
     $('tickLoc').classList.remove('hide');
     if (r.nearestAirports?.length) {
       const sel = $('airSel'); sel.textContent = '';
       r.nearestAirports.forEach(a => {
         const o = document.createElement('option');
         o.value = a.code;
-        o.textContent = `${a.code} — ${a.name} (${a.distanceNm} nm)`;
+        o.textContent = `${a.code} — ${a.name} (${a.distanceNm} nm, ${a.country || ''})`;
         sel.appendChild(o);
       });
     }
@@ -309,7 +376,7 @@ async function searchAirports() {
     r.airports.forEach(a => {
       const o = document.createElement('option');
       o.value = a.code;
-      o.textContent = `${a.code} — ${a.name} (${a.city || ''}, ${a.state || ''})`;
+      o.textContent = `${a.code} — ${a.name} (${[a.city, a.state, a.country].filter(Boolean).join(', ')})`;
       sel.appendChild(o);
     });
   } catch (e) {}
@@ -323,6 +390,10 @@ $('airBtn').onclick = async () => {
     await api('airport', { method: 'POST',
       body: JSON.stringify({ code, atcMount: $('atcMount').value.trim() }) });
     show($('airMsg'), 'ok', 'Home airport set to ' + code + '.');
+    // Seed the time-zone step from where that airport actually is.
+    const picked = ($('airSel').selectedOptions[0]?.textContent || '');
+    const cc = (picked.match(/,\s*([A-Z]{2})\)\s*$/) || [])[1];
+    if (cc) loadLocale(cc);
     $('tickAir').classList.remove('hide');
   } catch (e) { show($('airMsg'), 'err', e.message); }
 };
@@ -393,6 +464,92 @@ $('rsBtn').onclick = async () => {
 };
 
 boot();
+
+// ---- time zone and WiFi region ----
+// Seeded from the home airport's country, so the list is the two or three
+// zones that country actually uses rather than all 485.
+let LOCALE = { forCountry: [], all: [], current: {} };
+async function loadLocale(country) {
+  try {
+    LOCALE = await api('locale' + (country ? '?country=' + encodeURIComponent(country) : ''));
+    if (LOCALE.current) {
+      $('localeNow').textContent =
+        `Currently ${LOCALE.current.timezone || 'unset'}, WiFi region ${LOCALE.current.wifiCountry || 'unset'}.`;
+    }
+    if (country && !$('wifiCc').value) $('wifiCc').value = country;
+    renderTz();
+  } catch (e) {}
+}
+function renderTz() {
+  const sel = $('tzSel'); sel.textContent = '';
+  const list = ($('tzAll').checked || !LOCALE.forCountry.length)
+    ? LOCALE.all : LOCALE.forCountry;
+  list.forEach(z => {
+    const o = document.createElement('option');
+    o.value = z; o.textContent = z;
+    if (z === LOCALE.current?.timezone) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+$('tzAll').onchange = renderTz;
+$('localeBtn').onclick = async () => {
+  hide($('localeMsg'));
+  const body = { timezone: $('tzSel').value, country: $('wifiCc').value.trim().toUpperCase() };
+  if (!body.timezone && !body.country) return show($('localeMsg'), 'err', 'Pick a time zone.');
+  $('localeBtn').disabled = true;
+  try {
+    const r = await api('locale', { method: 'POST', body: JSON.stringify(body) });
+    show($('localeMsg'), 'ok', `Set to ${r.timezone || body.timezone}` +
+      (r.wifiCountry ? `, WiFi region ${r.wifiCountry}` : '') + '.');
+    $('tickLoc2').classList.remove('hide');
+    loadLocale(body.country);
+  } catch (e) { show($('localeMsg'), 'err', e.message); }
+  $('localeBtn').disabled = false;
+};
+loadLocale('');
+
+
+// ---- address lookup ----
+// Fills the coordinate fields rather than bypassing them: whatever is about
+// to be saved stays visible and correctable, and the manual path is never
+// second-class.
+$('toCoords').onclick = (e) => { e.preventDefault();
+  $('addrMode').classList.add('hide'); $('coordMode').classList.remove('hide'); };
+$('toAddr').onclick = (e) => { e.preventDefault();
+  $('coordMode').classList.add('hide'); $('addrMode').classList.remove('hide'); };
+
+let addrPicked = null;
+$('addrBtn').onclick = async () => {
+  hide($('locMsg'));
+  const q = $('addr').value.trim();
+  if (q.length < 3) return show($('locMsg'), 'err', 'Type at least three characters.');
+  $('addrBtn').disabled = true; $('addrBtn').textContent = 'Searching…';
+  try {
+    const r = await api('geocode?q=' + encodeURIComponent(q));
+    const sel = $('addrSel'); sel.textContent = '';
+    if (!r.results.length) { show($('locMsg'), 'err', 'No match. Try adding the town and country.'); }
+    r.results.forEach((m, i) => {
+      const o = document.createElement('option');
+      o.value = String(i); o.textContent = m.label;
+      sel.appendChild(o);
+    });
+    sel.classList.toggle('hide', !r.results.length);
+    sel.size = Math.min(5, Math.max(2, r.results.length));
+    sel.onchange = () => {
+      addrPicked = r.results[Number(sel.value)];
+      if (!addrPicked) return;
+      // Mirror into the coordinate fields so the number being saved is shown.
+      $('lat').value = Math.abs(addrPicked.lat).toFixed(5);
+      $('latHemi').value = addrPicked.lat < 0 ? 'S' : 'N';
+      $('lon').value = Math.abs(addrPicked.lon).toFixed(5);
+      $('lonHemi').value = addrPicked.lon < 0 ? 'W' : 'E';
+      show($('locMsg'), 'ok', `Will use ${addrPicked.lat.toFixed(5)}, ${addrPicked.lon.toFixed(5)}`);
+    };
+    if (r.results.length) { sel.value = '0'; sel.onchange(); }
+  } catch (e) { show($('locMsg'), 'err', e.message); }
+  $('addrBtn').disabled = false; $('addrBtn').textContent = 'Find address';
+};
+
 </script>
 </body>
 </html>

@@ -1540,6 +1540,7 @@ async function loadAirportConfig() {
     if (typeof a.lat === 'number' && typeof a.lon === 'number') {
       AIRPORT = {
         code: typeof a.code === 'string' ? a.code : AIRPORT.code,
+        country: typeof a.country === 'string' ? a.country : '',
         lat: a.lat,
         lon: a.lon,
         elevFt: typeof a.elevFt === 'number' ? a.elevFt : 0,
@@ -2319,6 +2320,17 @@ async function refreshStorms() {
 // live, and NOAA nowCOAST's own lightning layer, discontinued in their
 // 2023 platform migration -- this is the one that actually works.
 const LIGHTNING_TILE_URL = 'https://realearth.ssec.wisc.edu/tiles/GOESEastGLMFEDRadC/{z}/{x}/{y}.png';
+// GOES-East is a geostationary satellite parked over the Americas: its
+// lightning mapper sees roughly 15W to 135W. Outside that footprint the
+// layer is not "empty", it is unavailable -- every tile is a 404 -- so a unit
+// in Europe would show a permanently blank overlay and a setting that does
+// nothing. The setting hides itself instead, and says why.
+const LIGHTNING_LON_MIN = -135, LIGHTNING_LON_MAX = -15;
+const LIGHTNING_LAT_MIN = -60,  LIGHTNING_LAT_MAX = 60;
+function lightningCovers(h) {
+  return !!h && h.lon >= LIGHTNING_LON_MIN && h.lon <= LIGHTNING_LON_MAX
+             && h.lat >= LIGHTNING_LAT_MIN && h.lat <= LIGHTNING_LAT_MAX;
+}
 const LIGHTNING_REFRESH_MS = 2 * 60 * 1000;
 
 // See applyStormsVisibility. This one mattered more: lightning ships OFF, so
@@ -2327,7 +2339,7 @@ const LIGHTNING_REFRESH_MS = 2 * 60 * 1000;
 // thermal headroom, and the larger half of the leak.
 function applyLightningVisibility() {
   if (!map) return;
-  if (alertSettings.lightning) {
+  if (alertSettings.lightning && lightningCovers(home)) {
     if (map.getLayer('lightning')) {
       map.setLayoutProperty('lightning', 'visibility', 'visible');
     } else {
@@ -2347,6 +2359,10 @@ function applyLightningVisibility() {
 // avoids by baking a real timestamp into its own tile path instead.
 function refreshLightning() {
   if (!map || !alertSettings.lightning) return;
+  // A unit relocated out of GOES-East's footprint keeps whatever setting it
+  // had, so the guard belongs here too, not only on the settings row: every
+  // tile outside the footprint is a 404, forever, on a timer.
+  if (!lightningCovers(home)) return;
   const url = `${LIGHTNING_TILE_URL}?t=${Date.now()}`;
   // Same teardown as refreshStorms -- see the note there.
   if (map.getSource('lightning')) {
@@ -4689,7 +4705,7 @@ function alertSettingsMeta() { return [
   },
   { group: 'overlays', key: 'storms', label: 'Storm radar overlay', sub: 'Live weather radar over the map (RainViewer)' },
   { group: 'overlays', key: 'heatmap', label: `${AIRPORT.code} approach heatmap`, sub: `Density pattern built from actually observed ${AIRPORT.code} landings` },
-  { group: 'overlays', key: 'lightning', label: 'Lightning overlay', sub: 'Satellite-observed strike density (GOES-East GLM, via SSEC RealEarth)' },
+  { group: 'overlays', key: 'lightning', label: 'Lightning overlay', sub: 'Satellite-observed strike density (GOES-East GLM, via SSEC RealEarth)', available: () => lightningCovers(home), unavailableNote: 'Not available here — GOES-East only covers the Americas' },
   {
     group: 'overlays', key: 'networkCompare', label: 'Network comparison',
     sub: 'Outlines aircraft a public ADS-B network sees that this antenna cannot hear, and scores your coverage. Sends this radar\u2019s approximate location to adsb.lol',
@@ -4715,13 +4731,19 @@ function renderSettingsPanel() {
     <div class="sp-close">&times;</div>
     <div class="sp-back">&#8592; Settings</div>
     <div class="sp-title">${esc(group ? group.label : 'Settings')}</div>
-    ${rows.map(({ key, label, sub, kioskSub }) => {
-      const disabled = key === 'atc' && IS_KIOSK;
+    ${rows.map(({ key, label, sub, kioskSub, available, unavailableNote }) => {
+      // A row can be unavailable for where this receiver actually is -- the
+      // lightning overlay's satellite only sees the Americas. Show it greyed
+      // with the reason rather than hiding it, so a toggle that does nothing
+      // is never offered and its absence is never a mystery.
+      const unavailable = typeof available === 'function' && !available();
+      const disabled = unavailable || (key === 'atc' && IS_KIOSK);
+      const note = unavailable ? unavailableNote : (disabled ? kioskSub : sub);
       return `
-      <div class="sp-row${disabled ? ' disabled' : ''}" data-key="${key}">
+      <div class="sp-row${disabled ? ' disabled' : ''}" data-key="${key}"${unavailable ? ' data-unavailable="1"' : ''}>
         <div>
           <div class="sp-label">${esc(label)}</div>
-          <div class="sp-sub">${esc(disabled ? kioskSub : sub)}</div>
+          <div class="sp-sub">${esc(note)}</div>
         </div>
         <div class="sp-switch${!disabled && alertSettings[key] ? ' on' : ''}"></div>
       </div>
@@ -4761,6 +4783,7 @@ let deviceMsg = '';
 let deviceBusy = false;
 let wifiNets = [];
 let airportRows = [];
+let tzRows = [], tzCurrent = '', addrRows = [];
 
 function renderScorecard() {
   const st = networkStats;
@@ -5113,6 +5136,31 @@ function renderDeviceSetup() {
               <div><div class="sp-label">Scan for networks</div></div><div class="sp-chevron">&#8250;</div>
             </div>${busy}${msg}${list}`;
   }
+  if (deviceView === 'address') {
+    const list = addrRows.map((m, i) => `
+      <div class="sp-menu-row" data-addr="${i}">
+        <div><div class="sp-label">${esc(m.label.split(',').slice(0, 3).join(','))}</div>
+             <div class="sp-sub">${m.lat.toFixed(4)}, ${m.lon.toFixed(4)} · ${esc(m.country || '')}</div></div>
+        <div class="sp-chevron">&#8250;</div>
+      </div>`).join('')
+      || '<div class="sp-sub" style="padding:10px 0">Nothing found.</div>';
+    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Pick your address</div>${busy}${msg}${list}`;
+  }
+  if (deviceView === 'timezone') {
+    const list = (tzRows.length ? tzRows : []).map(z => `
+      <div class="sp-menu-row" data-tz="${esc(z)}">
+        <div><div class="sp-label">${esc(z)}</div></div>
+        <div class="sp-chevron">&#8250;</div>
+      </div>`).join('')
+      || '<div class="sp-sub" style="padding:10px 0">No zones found.</div>';
+    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Time zone</div>
+            <div class="sp-sub" style="padding:6px 0">Currently <b>${esc(tzCurrent || 'unset')}</b></div>
+            <div class="sp-menu-row" data-act="tz-all">
+              <div><div class="sp-label">Show all time zones</div>
+                   <div class="sp-sub">Instead of just the ones for this country</div></div>
+              <div class="sp-chevron">&#8250;</div>
+            </div>${busy}${msg}${list}`;
+  }
   if (deviceView === 'airport') {
     const list = airportRows.map(a => `
       <div class="sp-menu-row" data-airport="${esc(a.code)}">
@@ -5227,7 +5275,13 @@ function renderDeviceSetup() {
   return `<div class="sp-back">&#8592; Settings</div><div class="sp-title">Device setup</div>${busy}${msg}
     <div class="sp-menu-row" data-dev="wifi"><div><div class="sp-label">WiFi</div>
       <div class="sp-sub">${esc(wifiNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
-    <div class="sp-menu-row" data-act="set-location"><div><div class="sp-label">Receiver location</div>
+    <div class="sp-menu-row" data-act="set-timezone"><div><div class="sp-label">Time zone and region</div>
+      <div class="sp-sub">Clock used on every timestamp, and the WiFi region</div></div>
+      <div class="sp-chevron">&#8250;</div></div>
+    <div class="sp-menu-row" data-act="set-address"><div><div class="sp-label">Receiver location</div>
+      <div class="sp-sub">Look up an address</div></div>
+      <div class="sp-chevron">&#8250;</div></div>
+    <div class="sp-menu-row" data-act="set-location"><div><div class="sp-label">…or enter coordinates</div>
       <div class="sp-sub">${esc(locNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="airport"><div><div class="sp-label">Home airport</div>
       <div class="sp-sub">${esc(airNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
@@ -5250,8 +5304,38 @@ async function loadDeviceStatus() {
 }
 
 async function handleDeviceTap(row) {
-  const { dev, act, wifi, airport } = row.dataset;
+  const { dev, act, wifi, airport, tz, addr } = row.dataset;
   deviceMsg = '';
+
+  if (addr !== undefined && addr !== null && addr !== '') {
+    const m = addrRows[Number(addr)];
+    if (!m) return;
+    deviceBusy = true; renderSettingsPanel();
+    try {
+      await deviceApi('/onboard/location', { method: 'POST',
+        body: JSON.stringify({ lat: m.lat, lon: m.lon }) });
+      deviceMsg = `Location set to ${m.lat.toFixed(4)}, ${m.lon.toFixed(4)}.`;
+      deviceView = null;
+    } catch (e) { deviceMsg = e.message; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (tz) {
+    deviceBusy = true; renderSettingsPanel();
+    try {
+      // The WiFi regulatory region is set from the same country as the
+      // timezone, so a recipient never has to know what a regulatory domain
+      // is -- getting it wrong is a radio-compliance problem, not a
+      // preference.
+      const cc = (AIRPORT.country || '').toUpperCase();
+      await deviceApi('/onboard/locale', { method: 'POST',
+        body: JSON.stringify({ timezone: tz, country: cc || undefined }) });
+      tzCurrent = tz;
+      deviceMsg = `Time zone set to ${tz}` + (cc ? `, WiFi region ${cc}.` : '.');
+      deviceView = null;
+    } catch (e) { deviceMsg = e.message; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
 
   if (dev) { deviceView = dev; wifiNets = []; airportRows = []; return renderSettingsPanel(); }
 
@@ -5288,17 +5372,56 @@ async function handleDeviceTap(row) {
     deviceBusy = false; return renderSettingsPanel();
   }
 
+  if (act === 'set-timezone' || act === 'tz-all') {
+    deviceBusy = true; deviceView = 'timezone'; renderSettingsPanel();
+    try {
+      // Seeded from the configured airport's country, so the list is the one
+      // or two zones that country uses rather than all 485.
+      const cc = act === 'tz-all' ? '' : (AIRPORT.country || '');
+      const res = await deviceApi('/onboard/locale?country=' + encodeURIComponent(cc)) || {};
+      tzCurrent = res.current?.timezone || '';
+      tzRows = (act === 'tz-all' || !(res.forCountry || []).length)
+        ? (res.all || []) : res.forCountry;
+      deviceMsg = '';
+    } catch (e) { deviceMsg = e.message; tzRows = []; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (act === 'set-address') {
+    // Address first here too. The lookup runs on the device, so it works from
+    // the touchscreen with no phone involved at all.
+    const q = await openKeyboard('ADDRESS  (street, town, country)', '');
+    if (q === null || q.trim().length < 3) return;
+    deviceBusy = true; renderSettingsPanel();
+    try {
+      const r = await deviceApi('/onboard/geocode?q=' + encodeURIComponent(q.trim()));
+      addrRows = (r && r.results) || [];
+      deviceMsg = addrRows.length ? '' : 'No match. Try adding the town and country.';
+      deviceView = 'address';
+    } catch (e) { deviceMsg = e.message; addrRows = []; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
+
   if (act === 'set-location') {
-    const latS = await openKeyboard('LATITUDE  (e.g. 35.8776)', '', { mode: 'num' });
+    // The numeric layout carries a minus key, so the sign can simply be
+    // typed. It used to be guessed instead -- latitude forced positive and
+    // longitude forced negative, because every unit was assumed to be in the
+    // continental US. That put a receiver in the Netherlands (4.49E) into the
+    // Atlantic and made the southern hemisphere unreachable.
+    const latS = await openKeyboard('LATITUDE  (minus for south, e.g. 35.8776)', '', { mode: 'num' });
     if (latS === null) return;
-    const lonS = await openKeyboard('LONGITUDE  (west, e.g. -78.7875)', '-', { mode: 'num' });
+    const lonS = await openKeyboard('LONGITUDE  (minus for west, e.g. -78.7875)', '', { mode: 'num' });
     if (lonS === null) return;
-    let lat = parseFloat(latS), lon = parseFloat(lonS);
-    // Same forgiving normalisation as the phone page: in the continental US
-    // latitude is always positive and longitude always negative, so a sign
-    // left off is unambiguous rather than a guess.
-    if (Number.isFinite(lat) && lat < 0) lat = -lat;
-    if (Number.isFinite(lon) && lon > 0) lon = -lon;
+    const lat = parseFloat(latS), lon = parseFloat(lonS);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)
+        || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+      deviceMsg = 'Latitude must be 0-90, longitude 0-180.';
+      return renderSettingsPanel();
+    }
+    if (lat === 0 && lon === 0) {
+      deviceMsg = '0, 0 is in the Gulf of Guinea - check the numbers.';
+      return renderSettingsPanel();
+    }
     deviceBusy = true; renderSettingsPanel();
     try {
       await deviceApi('/onboard/location', { method: 'POST',
@@ -5593,7 +5716,8 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     return;
   }
   if (menuRow && (menuRow.dataset.dev || menuRow.dataset.act ||
-                  menuRow.dataset.wifi || menuRow.dataset.airport)) {
+                  menuRow.dataset.wifi || menuRow.dataset.airport ||
+                  menuRow.dataset.tz || menuRow.dataset.addr)) {
     handleDeviceTap(menuRow);
     return;
   }
