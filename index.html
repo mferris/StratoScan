@@ -5331,7 +5331,8 @@ async function handleDeviceTap(row) {
       await deviceApi('/onboard/locale', { method: 'POST',
         body: JSON.stringify({ timezone: tz, country: cc || undefined }) });
       tzCurrent = tz;
-      deviceMsg = `Time zone set to ${tz}` + (cc ? `, WiFi region ${cc}.` : '.');
+      deviceMsg = `Time zone set to ${tz}` +
+        (cc ? `, WiFi region ${cc} (applies after a restart).` : '.');
       deviceView = null;
     } catch (e) { deviceMsg = e.message; }
     deviceBusy = false; return renderSettingsPanel();

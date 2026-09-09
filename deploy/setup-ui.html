@@ -149,6 +149,8 @@
     <label><input type="checkbox" id="tzAll"> show all time zones</label>
     <label>WiFi region</label>
     <input id="wifiCc" maxlength="2" placeholder="NL" autocapitalize="characters" style="text-transform:uppercase">
+    <div class="note">The time zone applies immediately. The WiFi region is a
+      radio setting and only takes effect after the device restarts.</div>
     <div class="note" id="localeNow"></div>
     <button id="localeBtn">Save time zone and region</button>
     <div class="msg" id="localeMsg"></div>
@@ -500,7 +502,8 @@ $('localeBtn').onclick = async () => {
   try {
     const r = await api('locale', { method: 'POST', body: JSON.stringify(body) });
     show($('localeMsg'), 'ok', `Set to ${r.timezone || body.timezone}` +
-      (r.wifiCountry ? `, WiFi region ${r.wifiCountry}` : '') + '.');
+      (r.wifiCountry ? `, WiFi region ${r.wifiCountry}` : '') + '.' +
+      (r.appliesAfterReboot ? ' The WiFi region takes effect after a restart.' : ''));
     $('tickLoc2').classList.remove('hide');
     loadLocale(body.country);
   } catch (e) { show($('localeMsg'), 'err', e.message); }

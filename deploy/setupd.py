@@ -647,11 +647,33 @@ def set_timezone(tz):
 
 
 def set_wifi_country(cc):
+    """Set the WiFi regulatory country. Takes effect on the next boot.
+
+    raspi-config is the right tool -- it writes cfg80211.ieee80211_regdom into
+    the kernel command line, which is what actually survives -- but two things
+    about it matter here, both found by running it on the device:
+
+    1. IT EXITS NON-ZERO ON SUCCESS. Its NetworkManager/wpa_cli steps try to
+       reach a session message bus, which does not exist when this runs from a
+       daemon, so it prints "Failed to open connection to session message bus"
+       and returns 1 having already written the setting. check=True would
+       report failure for a change that worked, so the result is judged by
+       READING THE VALUE BACK instead of by the exit code.
+
+    2. THE RUNNING REGULATORY DOMAIN DOES NOT CHANGE. The Pi's Broadcom radio
+       registers a custom regulatory table (phy#0 reports country 99), so the
+       driver overrides `iw reg set` and the global domain reads 98 rather
+       than the country asked for. Only a reboot applies it. Saying "done"
+       here without saying that would be a lie the recipient discovers later,
+       so the caller is told.
+    """
     cc = v_country(cc)
-    # raspi-config owns this on Raspberry Pi OS: it writes the wpa_supplicant
-    # country AND the kernel regulatory domain, which have to agree.
-    run(["raspi-config", "nonint", "do_wifi_country", cc], timeout=30, check=True)
-    return {"wifiCountry": cc}
+    run(["raspi-config", "nonint", "do_wifi_country", cc], timeout=45)
+    stored = _text(run(["raspi-config", "nonint", "get_wifi_country"],
+                       timeout=20)).strip().upper()
+    if stored != cc:
+        raise Err("wifi_country_failed", f"asked for {cc}, device reports {stored}")
+    return {"wifiCountry": cc, "appliesAfterReboot": True}
 
 
 
