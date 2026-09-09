@@ -494,6 +494,18 @@ function renderTz() {
   });
 }
 $('tzAll').onchange = renderTz;
+$('rebootNowBtn').onclick = async () => {
+  $('rebootNowBtn').disabled = true;
+  try {
+    await api('reboot', { method: 'POST', body: JSON.stringify({ confirm: 'REBOOT' }) });
+    show($('localeMsg'), 'ok', 'Restarting. This page will lose contact for a minute or two.');
+    $('rebootPrompt').classList.add('hide');
+  } catch (e) {
+    show($('localeMsg'), 'err', e.message);
+    $('rebootNowBtn').disabled = false;
+  }
+};
+
 $('localeBtn').onclick = async () => {
   hide($('localeMsg'));
   const body = { timezone: $('tzSel').value, country: $('wifiCc').value.trim().toUpperCase() };
@@ -502,8 +514,10 @@ $('localeBtn').onclick = async () => {
   try {
     const r = await api('locale', { method: 'POST', body: JSON.stringify(body) });
     show($('localeMsg'), 'ok', `Set to ${r.timezone || body.timezone}` +
-      (r.wifiCountry ? `, WiFi region ${r.wifiCountry}` : '') + '.' +
-      (r.appliesAfterReboot ? ' The WiFi region takes effect after a restart.' : ''));
+      (r.wifiCountry ? `, WiFi region ${r.wifiCountry}` : '') + '.');
+    // Only prompt when the region genuinely changed: re-saving the same one
+    // must not send someone to restart a working device for nothing.
+    $('rebootPrompt').classList.toggle('hide', !r.appliesAfterReboot);
     $('tickLoc2').classList.remove('hide');
     loadLocale(body.country);
   } catch (e) { show($('localeMsg'), 'err', e.message); }

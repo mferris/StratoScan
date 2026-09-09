@@ -4783,7 +4783,7 @@ let deviceMsg = '';
 let deviceBusy = false;
 let wifiNets = [];
 let airportRows = [];
-let tzRows = [], tzCurrent = '', addrRows = [];
+let tzRows = [], tzCurrent = '', addrRows = [], rebootPending = false;
 
 function renderScorecard() {
   const st = networkStats;
@@ -5278,6 +5278,11 @@ function renderDeviceSetup() {
     <div class="sp-menu-row" data-act="set-timezone"><div><div class="sp-label">Time zone and region</div>
       <div class="sp-sub">Clock used on every timestamp, and the WiFi region</div></div>
       <div class="sp-chevron">&#8250;</div></div>
+    ${rebootPending ? `
+    <div class="sp-menu-row" data-act="reboot-for-region" style="outline:2px solid var(--airport-highlight)">
+      <div><div class="sp-label">Restart to apply the WiFi region</div>
+           <div class="sp-sub">The region is stored but the radio still follows the old one</div></div>
+      <div class="sp-chevron">&#8250;</div></div>` : ''}
     <div class="sp-menu-row" data-act="set-address"><div><div class="sp-label">Receiver location</div>
       <div class="sp-sub">Look up an address</div></div>
       <div class="sp-chevron">&#8250;</div></div>
@@ -5328,11 +5333,14 @@ async function handleDeviceTap(row) {
       // is -- getting it wrong is a radio-compliance problem, not a
       // preference.
       const cc = (AIRPORT.country || '').toUpperCase();
-      await deviceApi('/onboard/locale', { method: 'POST',
+      const r = await deviceApi('/onboard/locale', { method: 'POST',
         body: JSON.stringify({ timezone: tz, country: cc || undefined }) });
       tzCurrent = tz;
-      deviceMsg = `Time zone set to ${tz}` +
-        (cc ? `, WiFi region ${cc} (applies after a restart).` : '.');
+      // Only when the region actually changed -- re-saving the same one must
+      // not send anyone to restart a device that is working.
+      rebootPending = !!(r && r.result && r.result.appliesAfterReboot);
+      deviceMsg = `Time zone set to ${tz}.` +
+        (rebootPending ? ` WiFi region ${cc} is stored but only applies after a restart.` : '');
       deviceView = null;
     } catch (e) { deviceMsg = e.message; }
     deviceBusy = false; return renderSettingsPanel();
@@ -5386,6 +5394,20 @@ async function handleDeviceTap(row) {
       deviceMsg = '';
     } catch (e) { deviceMsg = e.message; tzRows = []; }
     deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (act === 'reboot-for-region') {
+    deviceBusy = true; deviceMsg = ''; renderSettingsPanel();
+    try {
+      await deviceApi('/onboard/reboot', { method: 'POST',
+        body: JSON.stringify({ confirm: 'REBOOT' }) });
+      deviceBusy = false;
+      rebootPending = false;
+      deviceMsg = 'Restarting… this screen will go dark shortly.';
+      return renderSettingsPanel();
+    } catch (e) {
+      deviceBusy = false; deviceMsg = e.message; return renderSettingsPanel();
+    }
   }
 
   if (act === 'set-address') {

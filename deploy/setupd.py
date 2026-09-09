@@ -668,12 +668,21 @@ def set_wifi_country(cc):
        so the caller is told.
     """
     cc = v_country(cc)
+    # What it was, so the caller can tell a real change from a no-op and only
+    # ask for a restart when one is actually needed. Setting NL over NL should
+    # not send anyone to power-cycle a working device.
+    before = _text(run(["raspi-config", "nonint", "get_wifi_country"],
+                       timeout=20)).strip().upper()
     run(["raspi-config", "nonint", "do_wifi_country", cc], timeout=45)
     stored = _text(run(["raspi-config", "nonint", "get_wifi_country"],
                        timeout=20)).strip().upper()
     if stored != cc:
         raise Err("wifi_country_failed", f"asked for {cc}, device reports {stored}")
-    return {"wifiCountry": cc, "appliesAfterReboot": True}
+    changed = before != cc
+    return {"wifiCountry": cc, "previous": before,
+            "changed": changed,
+            # Only true when it will actually differ after the restart.
+            "appliesAfterReboot": changed}
 
 
 

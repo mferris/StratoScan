@@ -490,3 +490,11 @@ it on the device rather than reading about it:
 The change is safe to make over WiFi: tested on a live link, the SSID, IP
 address, connectivity, channel and an active SSH session were all unaffected
 throughout.
+
+Because it needs a restart, both surfaces offer one — but **only when the
+region actually changed**. `set_wifi_country` reads the country before and
+after and reports `changed`, so re-saving the same region never sends anyone
+to power-cycle a working device. The prompt says the setting is stored, that
+the radio still follows the old region until then, and that nothing else is
+waiting on it, so leaving it until the next power-on is a legitimate choice
+rather than an unfinished step.
