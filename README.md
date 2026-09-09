@@ -471,3 +471,22 @@ Picking the home airport sets the country, which seeds the time-zone step
 with the one or two zones that country actually uses instead of all 485, and
 sets the WiFi regulatory region to match. Both the phone page and the
 touchscreen can complete setup on their own.
+
+**The WiFi region only takes effect after a restart**, and both UIs say so.
+Two things about `raspi-config nonint do_wifi_country` were found by running
+it on the device rather than reading about it:
+
+- **It exits non-zero on success.** Its NetworkManager and `wpa_cli` steps try
+  to reach a session message bus, which does not exist when the call comes
+  from a daemon, so it prints an error and returns 1 *after* writing the
+  setting. Judging it by its exit code reports failure for a change that
+  worked, so the result is judged by reading the value back instead.
+- **The running regulatory domain does not change.** The Pi's Broadcom radio
+  registers a custom regulatory table — `phy#0` reports `country 99` — so the
+  driver overrides `iw reg set` and the global domain reads `98` until the
+  next boot, when `cfg80211.ieee80211_regdom` on the kernel command line
+  applies it for real.
+
+The change is safe to make over WiFi: tested on a live link, the SSID, IP
+address, connectivity, channel and an active SSH session were all unaffected
+throughout.
