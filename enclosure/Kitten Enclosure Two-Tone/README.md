@@ -41,6 +41,10 @@ The stand is split into five bodies, one per colour region:
 | `stand_paws` | **white** | both foot pads |
 | `stand_toes` | **black** | the eight toe lobes |
 | `stand_claws` | **white** | eight real claws, one per toe |
+
+`kitten-stand-twotone.3mf` is all six of the above in one project file with
+the filaments already assigned — the easiest way in, and the one that avoids
+the multi-lump selection problem described under *Printing it in two colours*.
 | `stand_tail` | **black** | the tail from root to the white tip |
 | `stand_tail_tip` | **white** | the flicked-up end |
 
@@ -126,9 +130,27 @@ with 6mm of radial slack. `antenna_clears_head` holds it.
 The five stand bodies share one coordinate frame, so they occupy their true
 positions relative to each other. That gives you two routes:
 
-**Multi-material (AMS, MMU, tool changer).** Import all five as a single
-object — in most slicers, load the first, then "add part"/"load as part" for
-the rest, which preserves their positions — and assign a filament to each.
+**Multi-material (AMS, MMU, tool changer).** Open
+`kitten-stand-twotone.3mf`. It is the whole stand as one object with the six
+bodies already inside it and a filament already assigned to each — nothing to
+position, nothing to select.
+
+That file exists because loading the STLs separately does not work well, for
+a reason that is not obvious. Three of the bodies are physically several
+disconnected lumps: two paws, two clumps of toes, and eight separate claws,
+because that is what the shapes are. Slicers split a multi-lump mesh into
+separate parts on import, so picking a filament for "the claws" colours **one
+claw** and leaves the other seven — which looks like the tool ignoring you.
+There is no way to fix that from the STL side; eight claws cannot be one
+connected lump. So the assignment lives in the project file instead.
+
+The filament slots are 1 for the black (body, toes, tail), 2 for the white
+(paws, tail tip) and 3 for the claws, kept on their own slot so they can be a
+third colour. Change any of them in the slicer.
+
+If you would rather load the STLs by hand anyway: load the first, then "add
+part"/"load as part" for the rest, which preserves their positions, and
+assign a filament to each.
 No supports needed for the paws or toes; the tail tip lifts off the paw and
 wants a little support under the flick.
 
