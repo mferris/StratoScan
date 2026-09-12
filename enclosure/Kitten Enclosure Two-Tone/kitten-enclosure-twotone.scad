@@ -138,9 +138,24 @@ ant_mount_standoff = 26;   // how far the socket sits back from the plate
 // outward past a 111.7mm radius to clear it, gaining z the whole way -- the
 // standoff is what buys the height to do that behind the head rather than
 // through it.
-ant_socket_dia     = 33;   // as the retro turret
+// The socket the antenna's base sits down into, and the rim around it --
+// "the lip" -- that stops the base falling out sideways once it is in.
+//
+// This was 33, and a printed one showed why that is wrong: the base is a
+// flared cone slightly wider than 33 where it needs to pass, so it never got
+// under the rim at all. It perched on top and tipped over, while the cable
+// underneath ran through perfectly. "Won't QUITE fit" is the useful part of
+// that report -- the miss is small, so the fix is a few millimetres and a way
+// to get the base past the rim rather than a redesign.
+//
+// ant_socket_lead is what makes it leverageable: a chamfer at the mouth, so
+// the base can be tipped in on one side and rolled under the far side instead
+// of having to drop in dead square. Without it a socket only fits a base that
+// is smaller than the hole in every direction at once.
+ant_socket_dia     = 36;   // was 33 -- the printed one would not take the base
 ant_socket_depth   = 6;
-ant_boss_dia       = 42;
+ant_socket_lead    = 2;    // chamfer at the mouth, so the base can be levered in
+ant_boss_dia       = 45;   // 42 before; widened with the socket to keep the rim
 // The coax CONNECTOR has to pass through here, not just the cable. Measured
 // at 9.15mm across its widest point, so the bore is that plus clearance --
 // a 9mm bore (what this was) will not pass a 9.15mm connector at all.
@@ -798,10 +813,17 @@ module antenna_mount() {
             ant_axis_frame() translate([0,0,-6])
                 cylinder(d=ant_boss_dia, h=ant_barrel_len + 6);
         }
-        // the socket the antenna's base drops into, square to its axis
-        ant_axis_frame()
+        // the socket the antenna's base sits in, square to its axis, with a
+        // chamfered mouth so the base can be tipped in and levered under the
+        // rim rather than having to go in perfectly square
+        ant_axis_frame() {
             translate([0, 0, ant_barrel_len - ant_socket_depth])
                 cylinder(d=ant_socket_dia, h=ant_socket_depth + 1);
+            translate([0, 0, ant_barrel_len - ant_socket_lead])
+                cylinder(d1 = ant_socket_dia,
+                         d2 = ant_socket_dia + 2*ant_socket_lead,
+                         h  = ant_socket_lead + 1);
+        }
         ant_cable_bore(0);
         ant_bolt_holes(ant_flange_t + 2, -back_plate_t - ant_flange_t - 1);
         // nothing may stand proud of the plate's outer face
@@ -812,6 +834,37 @@ module antenna_mount() {
 // Eight arcs at bore diameter, one per gap between the insert posts, with a
 // lead-in chamfer on the outer top edge so the plate finds its own centre
 // as it goes on rather than catching square.
+
+// A test coupon for the socket, so the right diameter costs ten minutes
+// instead of a whole mount. Five sockets, 34 to 38mm, each with the real
+// lead-in chamfer, the real depth and the real cable hole underneath, so the
+// antenna base sits exactly as it will on the mount. The rim of each carries
+// a number of notches equal to its position: one notch is 34, five is 38.
+//
+// Print it, find the smallest socket the base will lever into and sit square
+// in, and set ant_socket_dia to that. Smallest, not easiest -- the rim is
+// what stops the base falling sideways, so slack is not free.
+module antenna_socket_gauge() {
+    n = 5; pitch = 52; t = ant_socket_depth + 3;
+    for (i = [0 : n-1]) {
+        d = 34 + i;
+        translate([i*pitch - (n-1)*pitch/2, 0, 0])
+            difference() {
+                cylinder(d = d + 9, h = t);
+                translate([0, 0, t - ant_socket_depth])
+                    cylinder(d = d, h = ant_socket_depth + 1);
+                translate([0, 0, t - ant_socket_lead])
+                    cylinder(d1 = d, d2 = d + 2*ant_socket_lead,
+                             h = ant_socket_lead + 1);
+                translate([0, 0, -1]) cylinder(d = ant_cable_dia, h = t + 2);
+                for (k = [0 : i])
+                    rotate([0, 0, 210 + k*14])
+                        translate([(d+9)/2, 0, t - 0.9])
+                            cube([3, 1.4, 2], center = true);
+            }
+    }
+}
+
 module back_lip() {
     ri = outer_dia/2 - wall - back_lip_gap - back_lip_t;
     ro = outer_dia/2 - wall - back_lip_gap;
@@ -1298,6 +1351,7 @@ else if (part == "stand") stand();
 else if (part == "back_plate") back_plate();
 else if (part == "antenna_mount") antenna_mount();
 else if (part == "usbc_gauge") usbc_gauge();
+else if (part == "antenna_socket_gauge") antenna_socket_gauge();
 else if (part == "stand_body")     part_stand_body();
 else if (part == "stand_paws")     part_stand_paws();
 else if (part == "stand_toes")     part_stand_toes();
