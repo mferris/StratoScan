@@ -31,7 +31,9 @@ base_h=16; stand_angle=18;
 // geometry and pass.
 paw_x=46; paw_h=18;
 n_toes=4; toe_dia=13.5; toe_splay=21; claw_len=6.5;
-ant_conn_dia=9.15; ant_flange_t=4;
+ant_conn_dia=9.15; ant_boss_dia=45; ant_socket_lead=2;
+// The largest antenna base the socket is meant to accept.
+ant_base_dia=35; ant_flange_t=4;
 // The back-plate features added with the locating lip. Restated here for the
 // same reason as everything above: `use <>` brings in modules, never values.
 back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9;
@@ -417,5 +419,40 @@ if (check=="connector_gauge_works") {
     translate([0, ant_mount_y, -back_plate_t - ant_stub_len - 1])
       cylinder(d=13, h=ant_stub_len + back_plate_t + 2);
     union() { antenna_mount(); back_plate(); }
+  }
+}
+
+// ---- will a base of a given size actually get in? -------------------------
+// The printed mount failed on exactly this and no check noticed, because
+// every existing check asks whether parts COLLIDE. None asked whether the
+// hole the antenna has to pass through is big enough, which is a different
+// question and the one that mattered.
+//
+// A disc the size of the largest base the socket is meant to take, occupying
+// the socket from floor to just past the rim, must touch nothing.
+//
+// Just past the rim, not well above it: the first version ran the disc 12mm
+// into the air above the mouth and failed at 283mm3, which was the arm. A
+// 35mm disc held 12mm above the socket does overlap the arm alongside it --
+// and means nothing, because the antenna's base is a cone that narrows and
+// comes in from outside, not an infinite cylinder lowered down the axis. The
+// question is whether the base fits THE SOCKET.
+if (check=="socket_takes_base") {
+  intersection() {
+    ant_axis_frame()
+      translate([0, 0, ant_barrel_len - ant_socket_depth])
+        cylinder(d=ant_base_dia, h=ant_socket_depth + 1);
+    antenna_mount();
+  }
+}
+// Paired control: the same sweep at a size the socket is NOT meant to take
+// must be caught, or an empty result above would only prove the probe misses
+// the mount entirely.
+if (check=="socket_gauge_works") {
+  intersection() {
+    ant_axis_frame()
+      translate([0, 0, ant_barrel_len - ant_socket_depth])
+        cylinder(d=ant_boss_dia + 2, h=ant_socket_depth + 1);
+    antenna_mount();
   }
 }

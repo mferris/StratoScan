@@ -366,3 +366,29 @@ Note for anyone tuning this: `-D` on the command line reaches `echo` but not
 the CSG tree for these files, so a gauge sweep driven by `-D` silently
 measures the file's own value at every step and reports that everything
 passes. Edit the number instead.
+
+### The antenna socket, and the lip that holds the base
+
+The socket was Ø33 and a printed mount would not take the antenna at all: the
+base is a flared cone slightly wider than that where it has to pass, so it
+never got under the rim. It perched on top and tipped over — while the cable
+underneath ran through perfectly, which is the part that had been checked.
+
+It is Ø36 now in a Ø45 barrel, with a 2mm chamfer at the mouth. The chamfer is
+the point: it lets the base be tipped in on one side and rolled under the far
+side, instead of having to drop in dead square. Swept with discs, the socket
+takes anything up to 36mm and blocks at 37.
+
+**`antenna_socket_gauge` is the cheap way to confirm it** — five sockets from
+34 to 38mm with the real chamfer, the real depth and the real cable hole, each
+rim carrying as many notches as its position (one notch is 34, five is 38).
+Find the smallest one the base levers into and sits square in, and set
+`ant_socket_dia` to that. Smallest, not easiest: the rim is what stops the
+base falling out sideways, so slack is not free.
+
+`socket_takes_base` holds it, with `socket_gauge_works` as its paired control.
+Its first version was wrong in a way worth recording: it ran a full-diameter
+disc 12mm into the air above the mouth and failed at 283mm³, which was the
+arm alongside. A 35mm cylinder held 12mm above the socket really does overlap
+the arm — and means nothing, because the base is a cone that narrows and comes
+in from outside. The question is whether the base fits the socket.
