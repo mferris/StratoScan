@@ -135,8 +135,19 @@ def _wake():
 # painted a frame at least this recently" -- the same signal the frozen-display
 # watchdog uses, reused so an update that blanks the screen is caught by the
 # thing already watching the screen.
-PAINT_STAMP = os.environ.get("FLIGHTRADAR_PAINT_STAMP",
-                             "/run/flightradar/painted")
+# In the USER's runtime directory, not /run/flightradar. That one is setupd's
+# RuntimeDirectory= (root:frsetup, 0750) and systemd recreates it with those
+# owners every time setupd restarts -- so a stamp written there stopped being
+# writable the moment the root helper was restarted, and this service, which
+# runs as the desktop user, silently could not write it again.
+#
+# The cost of that was not a missing file. ota.py reads this to decide whether
+# a new build renders, so a stamp that cannot be written makes every update
+# look like it failed to paint, and roll back a build that was fine.
+PAINT_STAMP = os.environ.get(
+    "FLIGHTRADAR_PAINT_STAMP",
+    os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"),
+                 "flightradar-painted"))
 
 
 def _mark_painted():

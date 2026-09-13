@@ -51,8 +51,21 @@ STATUS = os.path.join(STATE_DIR, "status.json")
 STAGING = os.path.join(STATE_DIR, "staging")
 ROLLBACK = os.path.join(STATE_DIR, "rollback")
 LOCK = os.path.join(STATE_DIR, "ota.lock")
-HEARTBEAT = os.environ.get(
-    "FLIGHTRADAR_PAINT_STAMP", "/run/flightradar/painted")
+def _default_heartbeat():
+    """The kiosk user's runtime directory, resolved from their uid.
+
+    Not /run/flightradar: that belongs to setupd's RuntimeDirectory= and is
+    recreated root-owned on every restart of the root helper.
+    """
+    try:
+        import pwd
+        uid = pwd.getpwnam(os.environ.get("FLIGHTRADAR_KIOSK_USER", "mferris")).pw_uid
+        return f"/run/user/{uid}/flightradar-painted"
+    except (KeyError, ImportError):
+        return "/tmp/flightradar-painted"
+
+
+HEARTBEAT = os.environ.get("FLIGHTRADAR_PAINT_STAMP", _default_heartbeat())
 
 WEB_ROOT = os.environ.get("FLIGHTRADAR_WEB_ROOT", "/var/www/html")
 OPT_ROOT = os.environ.get("FLIGHTRADAR_OPT_ROOT", "/opt/flightradar")
@@ -223,7 +236,10 @@ def stage():
 
     # Every file, against the signed manifest. The bundle hash proved the
     # archive; this proves what came out of it.
-    for name, want_hash in manifest["files"].items():
+    for name, entry in manifest["files"].items():
+        # Accept both shapes: early manifests carried a bare hash string,
+        # current ones carry {"sha256": ..., "exec": ...}.
+        want_hash = entry["sha256"] if isinstance(entry, dict) else entry
         path = os.path.join(STAGING, name)
         if not os.path.isfile(path):
             raise Fail(f"manifest lists {name}, bundle does not contain it")
@@ -271,19 +287,19 @@ def apply():
         raise Fail("staged release is not newer than what is installed")
 
     plan = []
-    for name in manifest["files"]:
+    for name, entry in manifest["files"].items():
         dest = dest_for(name)
         if dest is None:
-            log(f"skipping {name}: not an installable path")
             continue
-        plan.append((os.path.join(STAGING, name), dest))
+        want_exec = bool(entry.get("exec")) if isinstance(entry, dict) else None
+        plan.append((os.path.join(STAGING, name), dest, want_exec))
     if not plan:
         raise Fail("staged release installs nothing")
 
     shutil.rmtree(ROLLBACK, ignore_errors=True)
     os.makedirs(ROLLBACK, exist_ok=True)
     saved = []
-    for _, dest in plan:
+    for _, dest, _ in plan:
         if os.path.exists(dest):
             keep = os.path.join(ROLLBACK, dest.lstrip("/").replace("/", "_"))
             shutil.copy2(dest, keep)
@@ -292,9 +308,25 @@ def apply():
         json.dump({"serial": installed_serial(), "files": saved}, f)
 
     before = paint_stamp()
-    for src, dest in plan:
+    if before == 0.0:
+        # No stamp at all means the paint check cannot answer, and a check that
+        # cannot answer would roll back every update including the good ones.
+        # That is exactly what happened once: the stamp lived in a directory
+        # another service owned, systemd recreated it root-owned, and a
+        # perfectly good release was undone because nothing could write the
+        # file. Refuse to start rather than install something that is
+        # guaranteed to be reverted.
+        raise Fail(f"no paint heartbeat at {HEARTBEAT} -- the display check "
+                   f"cannot run, so an update would be rolled back whatever "
+                   f"happened. Is flightradar-wake.service running?")
+    for src, dest, want_exec in plan:
         tmp = dest + ".ota-tmp"
         shutil.copy2(src, tmp)
+        # The signed manifest decides whether this is a program. Falling back
+        # to whatever mode survived the tar is how a 755 script became 644.
+        if want_exec is None:
+            want_exec = os.access(dest, os.X_OK) if os.path.exists(dest) else False
+        os.chmod(tmp, 0o755 if want_exec else 0o644)
         os.replace(tmp, dest)
     log(f"wrote {len(plan)} files, restarting to verify")
     write_status(state="applying", version=manifest["version"],
