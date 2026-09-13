@@ -24,10 +24,10 @@ mount_hole_x=58; mount_hole_y=49; stand_angle=18;
 ant_stub_len=30; ant_barrel_len=14; ant_socket_dia=33; ant_socket_depth=6;
 cradle_id=outer_dia+2; cradle_od=cradle_id+26; base_h=16;
 ant_conn_dia=9.15; ant_boss_dia=45; ant_socket_lead=2;
-// Measured off the antenna. The seat is stepped, so there are two questions
-// and two probes: does the bottom disc fit the lower bore, and does the flare
-// clear the upper one.
-ant_base_dia=31.25; ant_flare_dia=36.5; ant_socket_lower_h=4; ant_flange_t=4; back_insert_d=8;
+// Measured off the antenna: 31.25mm across the flared bottom, its widest
+// point. ant_relief_* is the clear space under the socket floor for the
+// connector, which is what was actually stopping the base from seating.
+ant_base_dia=31.25; ant_relief_dia=18; ant_relief_h=6; ant_flange_t=4; back_insert_d=8;
 
 // The plate and the shell meet at a butt joint; neither may intrude on the
 // other.
@@ -232,7 +232,7 @@ else if (check=="socket_takes_base") {
   intersection() {
     ant_axis_frame()
       translate([0, 0, ant_barrel_len - ant_socket_depth])
-        cylinder(d=ant_base_dia, h=ant_socket_lower_h);
+        cylinder(d=ant_base_dia, h=ant_socket_depth);
     antenna_mount();
   }
 }
@@ -247,11 +247,15 @@ else if (check=="socket_gauge_works") {
     antenna_mount();
   }
 }
-else if (check=="flare_clears") {
+else if (check=="connector_has_room") {
+  // Room under the socket floor for the connector and its lead. The printed
+  // mount had the base resting on its own cable, tilted, with the connector
+  // wedged in the notch beside it -- and no check asked about the space
+  // underneath, because every check was about the space around.
   intersection() {
     ant_axis_frame()
-      translate([0, 0, ant_barrel_len - ant_socket_depth + ant_socket_lower_h])
-        cylinder(d=ant_flare_dia, h=ant_socket_depth - ant_socket_lower_h);
+      translate([0, 0, ant_barrel_len - ant_socket_depth - ant_relief_h])
+        cylinder(d=ant_relief_dia, h=ant_relief_h);
     antenna_mount();
   }
 }

@@ -152,32 +152,26 @@ ant_mount_standoff = 26;   // how far the socket sits back from the plate
 // the base can be tipped in on one side and rolled under the far side instead
 // of having to drop in dead square. Without it a socket only fits a base that
 // is smaller than the hole in every direction at once.
-// A STEPPED SEAT, because the two things measured about the base disagree
-// unless it is a cone, which it is. The bottom disc mikes 31.25mm; the same
-// base would not pass a 34mm gauge ring. Both are true when the bottom is the
-// narrowest part and the cone flares wider above it -- the calipers caught the
-// bottom, the rim was catching the flare.
+// Sized to the measured base, which is 31.25mm across the flared bottom --
+// its widest point. That is the whole story of this socket: it was 33mm
+// originally, which already had 1.75mm of clearance, so THE BORE WAS NEVER
+// WHAT STOPPED IT. Two guesses said otherwise (a base bigger than the hole,
+// then a cone with a wider flare higher up) and both were wrong.
 //
-// So the socket is two bores, not one:
+// The photograph shows what is actually happening: the skirt is down in the
+// socket on one side, and on the other the coax connector is sitting in the
+// notch where the cable passage breaks through the wall, propping the base up
+// and tilting it. The obstruction is underneath the base, not around it.
 //
-//   lower  locates the 31.25mm bottom disc, snug, so the antenna cannot rock
-//   upper  clears the flare, which is what the old single 33mm bore fouled
-//
-// A single bore cannot do both. Sized for the flare it lets the bottom rattle;
-// sized for the bottom it stops the flare ever getting in, which is exactly
-// the mount that came back with its rim snapped off.
-ant_base_dia       = 31.25;  // MEASURED, bottom disc
-ant_base_clear     = 1.5;    // so it drops in rather than being pressed in
-ant_socket_dia     = ant_base_dia + ant_base_clear;   // 32.75, lower bore
-ant_flare_dia      = 36.5;   // upper bore; the flare is "a little over 34"
-ant_socket_lower_h = 4;      // bottom disc sits in this
-ant_socket_depth   = 8;      // total; the base is held by DEPTH, not by an
-                             // overhang, so there is nothing to lever against
-// The chamfer is a lead-in for a base that is already smaller than the hole,
-// not a ramp to force an oversized one past. It is deliberately small now: at
-// 2mm it left only 2.5mm of wall at the edge, and a printed rim that thin,
-// pried outwards across its layer lines, snapped off. 1.2mm leaves 4.8mm --
-// stiffness goes as thickness cubed, so that is roughly seven times stiffer.
+// Hence ant_relief_*: a clear space below the socket floor for the connector
+// and whatever strain relief comes with it, so the base can come down the
+// last few millimetres instead of resting on its own cable.
+ant_base_dia       = 31.25;  // MEASURED, across the flared bottom
+ant_base_clear     = 1.75;   // drops in; no levering, nothing to snap off
+ant_socket_dia     = ant_base_dia + ant_base_clear;   // 33.0
+ant_socket_depth   = 8;
+ant_relief_dia     = 18;     // room under the floor for the connector
+ant_relief_h       = 6;      // and for the bend its lead needs
 ant_socket_lead    = 1.2;
 ant_boss_dia       = 48;   // 42 -> 45 -> 48; the rim is the part that broke
 // The coax CONNECTOR has to pass through here, not just the cable. Measured
@@ -841,18 +835,19 @@ module antenna_mount() {
         // chamfered mouth so the base can be tipped in and levered under the
         // rim rather than having to go in perfectly square
         ant_axis_frame() {
-            // lower bore: locates the base's bottom disc
+            // the seat itself
             translate([0, 0, ant_barrel_len - ant_socket_depth])
-                cylinder(d=ant_socket_dia, h=ant_socket_lower_h);
-            // upper bore: clearance for the flare above it
-            translate([0, 0, ant_barrel_len - ant_socket_depth + ant_socket_lower_h])
-                cylinder(d=ant_flare_dia,
-                         h=ant_socket_depth - ant_socket_lower_h + 1);
+                cylinder(d=ant_socket_dia, h=ant_socket_depth + 1);
             // lead-in at the mouth
             translate([0, 0, ant_barrel_len - ant_socket_lead])
-                cylinder(d1 = ant_flare_dia,
-                         d2 = ant_flare_dia + 2*ant_socket_lead,
+                cylinder(d1 = ant_socket_dia,
+                         d2 = ant_socket_dia + 2*ant_socket_lead,
                          h  = ant_socket_lead + 1);
+            // relief UNDER the floor, so the connector and its lead have
+            // somewhere to be. Without this the base rests on its own cable
+            // and tips, which is exactly what the printed one did.
+            translate([0, 0, ant_barrel_len - ant_socket_depth - ant_relief_h])
+                cylinder(d=ant_relief_dia, h=ant_relief_h + 0.1);
         }
         ant_cable_bore(0);
         ant_bolt_holes(ant_flange_t + 2, -back_plate_t - ant_flange_t - 1);
