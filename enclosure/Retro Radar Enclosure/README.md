@@ -240,25 +240,30 @@ lead-in for a base that is already smaller than the hole — not a ramp for
 forcing an oversized one past. If it has to be levered, the socket is too
 small; make it bigger rather than pushing harder.
 
-### What was actually stopping it, after two wrong guesses
+### What was actually stopping it, after three wrong guesses
 
-The base measures **31.25mm across its flared bottom**, its widest point. The
-original socket was Ø33 — already 1.75mm of clearance — so **the bore was
-never what stopped it**, and both attempts to fix the bore were fixing the
-wrong thing. The first assumed the base was bigger than the hole. The second
-assumed a cone with a wider flare higher up, which reconciled two numbers
-that only looked contradictory. Neither was true.
+The base measures **31.25mm across its flared bottom**, and **the lead leaves
+the SIDE of the base 7.98mm above it** — both measured. The original socket was
+Ø33, already 1.75mm of clearance, so *the bore was never what stopped it*, and
+three attempts to fix the bore were fixing the wrong thing: that the base was
+wider than the hole, that it was a cone flaring above a narrow bottom, that
+the connector needed room beneath. None of them were true.
 
-The photograph answers it. The skirt is down in the socket on one side, and
-on the other the coax connector is sitting in the notch where the cable
-passage breaks through the wall — propping the base up and tilting it. The
-obstruction is *underneath* the base, not around it.
+With the base seated, the lead is 7.98mm above the socket floor — and it
+cannot go down through that floor, because the base is sitting on it. It has
+to leave sideways. The printed mount gave it nowhere to go, so the connector
+ended up jammed in the notch where the cable passage happens to break through
+the wall, holding the base up at an angle. That notch was an accident of the
+geometry; there is now a deliberate slot, 7mm wide, running from the floor up
+past the rim.
 
-So the socket is Ø33 again, sized to the measurement, and there is a Ø18 × 6mm
-relief under the floor for the connector and the bend its lead needs.
-`connector_has_room` checks it. Every check before this asked about the space
-*around* the antenna; none asked about the space *under* it, which is where
-the part was failing.
+It faces local +Y in the antenna's frame, which works out to world
+(0, +0.309, −0.951) — down and back toward the plate — so the lead drops
+straight into the passage that was already there instead of being led around
+the barrel. `cable_slot_open` checks a rod at the measured exit height passes
+out through the wall, and `cable_slot_other_side` is its control: the same rod
+on the far side must be blocked, or "the slot is open" would be
+indistinguishable from "the probe missed the mount".
 
 `socket_takes_base` holds it, with `socket_gauge_works` as its paired control.
 Its first version was wrong in a way worth recording: it ran a full-diameter

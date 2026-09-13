@@ -170,8 +170,24 @@ ant_base_dia       = 31.25;  // MEASURED, across the flared bottom
 ant_base_clear     = 1.75;   // drops in; no levering, nothing to snap off
 ant_socket_dia     = ant_base_dia + ant_base_clear;   // 33.0
 ant_socket_depth   = 8;
-ant_relief_dia     = 18;     // room under the floor for the connector
-ant_relief_h       = 6;      // and for the bend its lead needs
+ant_relief_dia     = 18;     // a little room under the floor, for the moulding
+ant_relief_h       = 4;      // on the underside of the base
+
+// THE CABLE LEAVES THE SIDE OF THE BASE, 7.98mm above its bottom -- measured.
+// That is the whole problem, and nothing about the bore was ever going to fix
+// it: the lead cannot go down through the socket floor because the base is
+// sitting on the floor. It has to leave sideways.
+//
+// The printed mount had no way out, so the connector ended up jammed in the
+// notch where the cable passage happens to break through the wall, holding
+// the base up at an angle. That notch was an accident of the geometry. This
+// is the same idea done deliberately and made big enough.
+//
+// The slot faces local +Y in the antenna's frame, which points back down
+// toward the plate, so the lead drops straight into the passage that was
+// already there rather than having to be led around the barrel.
+ant_cable_slot_w   = 7;      // the lead is ~4mm; this is not a tight fit
+ant_cable_exit_h   = 7.98;   // MEASURED, base bottom to where the lead leaves
 ant_socket_lead    = 1.2;
 ant_boss_dia       = 48;   // 42 -> 45 -> 48; the rim is the part that broke
 // The coax CONNECTOR has to pass through here, not just the cable. Measured
@@ -843,11 +859,17 @@ module antenna_mount() {
                 cylinder(d1 = ant_socket_dia,
                          d2 = ant_socket_dia + 2*ant_socket_lead,
                          h  = ant_socket_lead + 1);
-            // relief UNDER the floor, so the connector and its lead have
-            // somewhere to be. Without this the base rests on its own cable
-            // and tips, which is exactly what the printed one did.
+            // a little relief under the floor for whatever is moulded into
+            // the underside of the base
             translate([0, 0, ant_barrel_len - ant_socket_depth - ant_relief_h])
                 cylinder(d=ant_relief_dia, h=ant_relief_h + 0.1);
+            // the way out for the lead: a slot through the socket wall, from
+            // the floor up past the rim, facing the plate
+            translate([0, 0, ant_barrel_len - ant_socket_depth])
+                translate([-ant_cable_slot_w/2, 0, 0])
+                    cube([ant_cable_slot_w,
+                          ant_boss_dia/2 + 1,
+                          ant_socket_depth + ant_socket_lead + 1]);
         }
         ant_cable_bore(0);
         ant_bolt_holes(ant_flange_t + 2, -back_plate_t - ant_flange_t - 1);

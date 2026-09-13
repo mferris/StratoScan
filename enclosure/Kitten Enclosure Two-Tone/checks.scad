@@ -35,7 +35,8 @@ ant_conn_dia=9.15; ant_boss_dia=45; ant_socket_lead=2;
 // Measured off the antenna: 31.25mm across the flared bottom, its widest
 // point. ant_relief_* is the clear space under the socket floor for the
 // connector, which is what was actually stopping the base from seating.
-ant_base_dia=31.25; ant_relief_dia=18; ant_relief_h=6; ant_flange_t=4;
+ant_base_dia=31.25; ant_relief_dia=18; ant_relief_h=4;
+ant_cable_slot_w=7; ant_cable_exit_h=7.98; ant_flange_t=4;
 // The back-plate features added with the locating lip. Restated here for the
 // same reason as everything above: `use <>` brings in modules, never values.
 back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9;
@@ -467,6 +468,35 @@ if (check=="connector_has_room") {
     ant_axis_frame()
       translate([0, 0, ant_barrel_len - ant_socket_depth - ant_relief_h])
         cylinder(d=ant_relief_dia, h=ant_relief_h);
+    antenna_mount();
+  }
+}
+
+// ---- can the lead actually get out? ---------------------------------------
+// The antenna's cable leaves the SIDE of its base, 7.98mm above the bottom,
+// so with the base seated it is 7.98mm above the socket floor -- essentially
+// at the rim. It cannot go down through the floor; the base is on the floor.
+// A rod at that height, running radially out through the wall on the slot
+// side, must meet nothing.
+if (check=="cable_slot_open") {
+  intersection() {
+    ant_axis_frame()
+      translate([0, 0, ant_barrel_len - ant_socket_depth + ant_cable_exit_h])
+        rotate([-90, 0, 0])
+          cylinder(d=4, h=ant_boss_dia/2 + 2);
+    antenna_mount();
+  }
+}
+// Paired control: the SAME rod on the opposite side must be blocked. Without
+// it, an empty result above is also what a rod aimed into thin air produces,
+// and "the slot is open" would be indistinguishable from "the probe misses
+// the mount entirely".
+if (check=="cable_slot_other_side") {
+  intersection() {
+    ant_axis_frame()
+      translate([0, 0, ant_barrel_len - ant_socket_depth + ant_cable_exit_h])
+        rotate([90, 0, 0])
+          cylinder(d=4, h=ant_boss_dia/2 + 2);
     antenna_mount();
   }
 }
