@@ -10,3 +10,7 @@
 ios/build/
 ios/**/xcuserdata/
 ios/**/*.xcuserdatad/
+
+# Release build output: bundles, manifests and signatures are published
+# to GitHub Releases, never committed. Signing is a local act.
+dist/
