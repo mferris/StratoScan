@@ -845,10 +845,19 @@ ant_mount_y        = 88;
 // ant_socket_lead is what makes it leverageable: a chamfer at the mouth, so
 // the base can be tipped in on one side and rolled under the far side instead
 // of having to drop in dead square.
-ant_socket_dia     = 36;   // was 33 -- the printed one would not take the base
-ant_socket_depth   = 6;
-ant_socket_lead    = 2;    // chamfer at the mouth, so the base can be levered in
-ant_boss_dia       = 45;   // 42 before; widened with the socket to keep the rim
+// Sized from the printed gauge, not from a guess. MEASURE FIRST: print
+// antenna_socket_gauge, find the smallest ring the base sits square in, and
+// put that number here. 36 is a placeholder pending that measurement.
+ant_socket_dia     = 36;
+ant_socket_depth   = 8;    // 6 before -- the base is held by DEPTH, not by an
+                           // overhang, so there is nothing to lever against
+// The chamfer is a lead-in for a base that is already smaller than the hole,
+// not a ramp to force an oversized one past. It is deliberately small now: at
+// 2mm it left only 2.5mm of wall at the edge, and a printed rim that thin,
+// pried outwards across its layer lines, snapped off. 1.2mm leaves 4.8mm --
+// stiffness goes as thickness cubed, so that is roughly seven times stiffer.
+ant_socket_lead    = 1.2;
+ant_boss_dia       = 48;   // 42 -> 45 -> 48; the rim is the part that broke
 // The coax CONNECTOR has to pass through here, not just the cable. Measured
 // at 9.15mm across its widest point, so the bore is that plus clearance --
 // a 9mm bore (what this was) will not pass a 9.15mm connector at all.
@@ -940,9 +949,14 @@ module antenna_mount() {
 // in, and set ant_socket_dia to that. Smallest, not easiest -- the rim is
 // what stops the base falling sideways, so slack is not free.
 module antenna_socket_gauge() {
+    // Half-millimetre steps, bracketing the answer rather than spanning the
+    // whole plausible range: a base reported as "slightly larger than 34"
+    // needs 34.5 / 35 / 35.5 / 36 / 36.5, not 34 / 35 / 36 / 37 / 38. Change
+    // gauge_from and gauge_step to re-aim it.
+    gauge_from = 34.5; gauge_step = 0.5;
     n = 5; pitch = 52; t = ant_socket_depth + 3;
     for (i = [0 : n-1]) {
-        d = 34 + i;
+        d = gauge_from + i*gauge_step;
         translate([i*pitch - (n-1)*pitch/2, 0, 0])
             difference() {
                 cylinder(d = d + 9, h = t);
