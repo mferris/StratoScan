@@ -75,7 +75,27 @@ DEPLOY_ALLOWED = {
     "network-compare.py", "photo-proxy.py", "funnel-gateway.py",
     "setup-server.py", "setup-ui.html", "shm-guard.sh", "ota.py",
     "airports.json", "net-watchdog.py",
+    # setupd.py is the root helper, and leaving it out looked like caution but
+    # bought nothing: ota.py is on this list and also runs as root, so anyone
+    # who can sign a release can already run code as root. All excluding it
+    # achieved was making a bug in the privileged helper unfixable on a unit
+    # that has been given away. The signature is the protection here, not the
+    # file list.
+    "setupd.py",
 }
+# Deliberately NOT installable, for reasons that are not symmetrical:
+#
+#   allowed_signers      the root of trust. An update must never be able to
+#                        replace the key that vouches for it, or one bad
+#                        release owns the device permanently, with no way back.
+#   *.service, *.timer   systemd units need a daemon-reload and possibly an
+#                        enable to take effect, and ota.py does neither -- so
+#                        writing them would look like it worked and change
+#                        nothing until the next reboot. Better to refuse than
+#                        to half-apply.
+#
+# This list is itself shippable: ota.py can update ota.py, so widening it later
+# is a normal release, not a one-way door.
 
 
 class Fail(Exception):
