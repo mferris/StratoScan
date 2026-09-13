@@ -152,12 +152,27 @@ ant_mount_standoff = 26;   // how far the socket sits back from the plate
 // the base can be tipped in on one side and rolled under the far side instead
 // of having to drop in dead square. Without it a socket only fits a base that
 // is smaller than the hole in every direction at once.
-// Sized from the printed gauge, not from a guess. MEASURE FIRST: print
-// antenna_socket_gauge, find the smallest ring the base sits square in, and
-// put that number here. 36 is a placeholder pending that measurement.
-ant_socket_dia     = 36;
-ant_socket_depth   = 8;    // 6 before -- the base is held by DEPTH, not by an
-                           // overhang, so there is nothing to lever against
+// A STEPPED SEAT, because the two things measured about the base disagree
+// unless it is a cone, which it is. The bottom disc mikes 31.25mm; the same
+// base would not pass a 34mm gauge ring. Both are true when the bottom is the
+// narrowest part and the cone flares wider above it -- the calipers caught the
+// bottom, the rim was catching the flare.
+//
+// So the socket is two bores, not one:
+//
+//   lower  locates the 31.25mm bottom disc, snug, so the antenna cannot rock
+//   upper  clears the flare, which is what the old single 33mm bore fouled
+//
+// A single bore cannot do both. Sized for the flare it lets the bottom rattle;
+// sized for the bottom it stops the flare ever getting in, which is exactly
+// the mount that came back with its rim snapped off.
+ant_base_dia       = 31.25;  // MEASURED, bottom disc
+ant_base_clear     = 1.5;    // so it drops in rather than being pressed in
+ant_socket_dia     = ant_base_dia + ant_base_clear;   // 32.75, lower bore
+ant_flare_dia      = 36.5;   // upper bore; the flare is "a little over 34"
+ant_socket_lower_h = 4;      // bottom disc sits in this
+ant_socket_depth   = 8;      // total; the base is held by DEPTH, not by an
+                             // overhang, so there is nothing to lever against
 // The chamfer is a lead-in for a base that is already smaller than the hole,
 // not a ramp to force an oversized one past. It is deliberately small now: at
 // 2mm it left only 2.5mm of wall at the edge, and a printed rim that thin,
@@ -826,11 +841,17 @@ module antenna_mount() {
         // chamfered mouth so the base can be tipped in and levered under the
         // rim rather than having to go in perfectly square
         ant_axis_frame() {
+            // lower bore: locates the base's bottom disc
             translate([0, 0, ant_barrel_len - ant_socket_depth])
-                cylinder(d=ant_socket_dia, h=ant_socket_depth + 1);
+                cylinder(d=ant_socket_dia, h=ant_socket_lower_h);
+            // upper bore: clearance for the flare above it
+            translate([0, 0, ant_barrel_len - ant_socket_depth + ant_socket_lower_h])
+                cylinder(d=ant_flare_dia,
+                         h=ant_socket_depth - ant_socket_lower_h + 1);
+            // lead-in at the mouth
             translate([0, 0, ant_barrel_len - ant_socket_lead])
-                cylinder(d1 = ant_socket_dia,
-                         d2 = ant_socket_dia + 2*ant_socket_lead,
+                cylinder(d1 = ant_flare_dia,
+                         d2 = ant_flare_dia + 2*ant_socket_lead,
                          h  = ant_socket_lead + 1);
         }
         ant_cable_bore(0);
