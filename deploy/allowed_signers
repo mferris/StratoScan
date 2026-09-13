@@ -1,0 +1,18 @@
+# The trust root for over-the-air updates.
+#
+# This is the PUBLIC half of the release signing key. Its private half lives on
+# the maintainer's machine, passphrase-protected, and never touches this device,
+# GitHub, or CI. A release is accepted only if it carries a signature made by
+# the matching private key, in the "flightradar" namespace.
+#
+# This file must be present on the device BEFORE it ships. Fetching the key
+# over the same channel as the update would make the signature meaningless --
+# whoever could tamper with one could tamper with the other.
+#
+# GitHub is delivery, not trust. A compromised account or token could publish a
+# release; it could not sign one, and the device would refuse it.
+#
+# To rotate: generate a new key, ship an update signed by the OLD key that
+# replaces this file, then start signing with the new one. Rotating in the
+# other order strands every device.
+flightradar-release ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGwjYgspX5EgL4ECYiqh2IZz2lnt/NiVS5QS6ngwf8T/ flightradar release signing
