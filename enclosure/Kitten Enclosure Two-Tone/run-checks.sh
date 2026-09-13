@@ -26,7 +26,7 @@ EMPTY="mount_vs_plate ear_vs_post recess_vs_post whisker_through head_in_cradle
        antenna_clears_head mount_hidden plate_vs_shell mount_vs_stand
        material_lost paws_vs_tail lip_clears_posts lip_inside_bore
        vents_clear_of_mount usbc_clears_standoffs claws_off_the_desk connector_passes
-       socket_takes_base"
+       socket_takes_base flare_clears"
 
 # Must come out SMALL but non-zero. These are the colour seams, and they
 # overlap on purpose -- see colour_overlap in the .scad. Cutting each part

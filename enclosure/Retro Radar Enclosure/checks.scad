@@ -24,8 +24,10 @@ mount_hole_x=58; mount_hole_y=49; stand_angle=18;
 ant_stub_len=30; ant_barrel_len=14; ant_socket_dia=33; ant_socket_depth=6;
 cradle_id=outer_dia+2; cradle_od=cradle_id+26; base_h=16;
 ant_conn_dia=9.15; ant_boss_dia=45; ant_socket_lead=2;
-// The largest antenna base the socket is meant to accept.
-ant_base_dia=35; ant_flange_t=4; back_insert_d=8;
+// Measured off the antenna. The seat is stepped, so there are two questions
+// and two probes: does the bottom disc fit the lower bore, and does the flare
+// clear the upper one.
+ant_base_dia=31.25; ant_flare_dia=36.5; ant_socket_lower_h=4; ant_flange_t=4; back_insert_d=8;
 
 // The plate and the shell meet at a butt joint; neither may intrude on the
 // other.
@@ -230,7 +232,7 @@ else if (check=="socket_takes_base") {
   intersection() {
     ant_axis_frame()
       translate([0, 0, ant_barrel_len - ant_socket_depth])
-        cylinder(d=ant_base_dia, h=ant_socket_depth + 1);
+        cylinder(d=ant_base_dia, h=ant_socket_lower_h);
     antenna_mount();
   }
 }
@@ -242,6 +244,14 @@ else if (check=="socket_gauge_works") {
     ant_axis_frame()
       translate([0, 0, ant_barrel_len - ant_socket_depth])
         cylinder(d=ant_boss_dia + 2, h=ant_socket_depth + 1);
+    antenna_mount();
+  }
+}
+else if (check=="flare_clears") {
+  intersection() {
+    ant_axis_frame()
+      translate([0, 0, ant_barrel_len - ant_socket_depth + ant_socket_lower_h])
+        cylinder(d=ant_flare_dia, h=ant_socket_depth - ant_socket_lower_h);
     antenna_mount();
   }
 }

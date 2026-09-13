@@ -235,10 +235,24 @@ cubed, so the barrel went 45 → 48 and the chamfer 2 → 1.2mm: 4.8mm of wall a
 the edge, roughly seven times stiffer.
 
 The deeper point is that **the base is held by depth, not by an overhang**.
-The socket is 8mm deep now, the antenna sits down inside it, and the chamfer
-is a lead-in for a base that is already smaller than the hole — not a ramp for
+The socket is 8mm deep, the antenna sits down inside it, and the chamfer is a
+lead-in for a base that is already smaller than the hole — not a ramp for
 forcing an oversized one past. If it has to be levered, the socket is too
 small; make it bigger rather than pushing harder.
+
+### Why the seat is stepped
+
+Two measurements of the same base disagreed: it mikes **31.25mm** across the
+bottom, and it would not pass a **34mm** gauge ring. Both are true, because
+the base is a cone — the calipers caught the narrow bottom disc, the rim was
+catching the flare above it.
+
+A single bore cannot serve both. Sized for the flare, the bottom rattles;
+sized for the bottom, the flare never gets in — which is precisely the mount
+that came back with its rim snapped off. So there are two bores: **Ø32.75 for
+4mm** locating the bottom disc with 0.75mm of radial slack, then **Ø36.5**
+clearing the flare, then the chamfer. `socket_takes_base` and `flare_clears`
+check one each, because they are different questions.
 
 **`antenna_socket_gauge` is the cheap way to confirm it** — five sockets in
 half-millimetre steps (34.5 to 36.5 by default; change `gauge_from` and
