@@ -316,6 +316,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._airports()
         if path == "/setup/api/locale":
             return self._locale()
+        if path == "/setup/api/ota":
+            return self._send(200, call_setupd("ota_status", {})["result"])
         if path == "/setup/api/geocode":
             from urllib.parse import parse_qs, urlparse
             q = (parse_qs(urlparse(self.path).query).get("q") or [""])[0]
@@ -334,6 +336,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._airport(st)
         if path == "/setup/api/locale" and self.command == "POST":
             return self._set_locale(st)
+        if path == "/setup/api/ota" and self.command == "POST":
+            b = self._body() or {}
+            verb = {"check": "ota_check", "apply": "ota_apply"}.get(b.get("action"))
+            if not verb:
+                return self._err(400, "bad_action", "Use check or apply.")
+            return self._proxy_verb(verb)
         if path == "/setup/api/tailscale/status":
             return self._proxy_verb("tailscale_status")
         if path == "/setup/api/tailscale/up" and self.command == "POST":
@@ -594,6 +602,7 @@ FRIENDLY = {
     "geocode_unreachable": "Could not reach the address lookup service. Check the WiFi step, or enter coordinates instead.",
     "geocode_bad_reply": "The address lookup service returned something unusable.",
     "bad_query": "Type at least three characters of an address.",
+    "ota_busy": "An update is already running.",
     "readsb_did_not_recover": "The receiver did not restart, so the previous location was restored.",
     "funnel_guard_failed": "Refusing to publish: the privacy filter is not working.",
     "bad_authkey": "That does not look like a Tailscale auth key.",
@@ -667,6 +676,12 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
         if path == "/onboard/location":
             return self._verb("set_location", {"lat": body.get("lat"),
                                                "lon": body.get("lon")}, timeout=90)
+        if path == "/onboard/ota":
+            verb = {"check": "ota_check",
+                    "apply": "ota_apply"}.get(body.get("action"))
+            if not verb:
+                return self._json(400, {"error": {"message": "Use check or apply."}})
+            return self._verb(verb, timeout=180)
         if path == "/onboard/locale":
             # Same locale step as the phone page, for a recipient who only
             # ever uses the touchscreen. Both surfaces must be able to finish
@@ -779,6 +794,9 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         p = self.path.split("?", 1)[0].rstrip("/")
+        if p == "/onboard/ota":
+            r = call_setupd("ota_status", {})
+            return self._json(200, r.get("result", {"state": "unknown"}))
         if p == "/onboard/geocode":
             from urllib.parse import parse_qs, urlparse
             q = (parse_qs(urlparse(self.path).query).get("q") or [""])[0]
