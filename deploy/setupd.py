@@ -772,11 +772,25 @@ def ota_check():
 
 
 def ota_apply():
-    # Long: this downloads, verifies, installs, restarts the kiosk and then
-    # waits to see whether the display actually paints before deciding whether
-    # to keep the update or put the old files back.
-    run([OTA, "apply"], timeout=600)
-    return ota_status()
+    """Start an update and return immediately.
+
+    This cannot be synchronous. Applying restarts the kiosk, and on the
+    touchscreen the kiosk IS the page that asked for the update -- so a
+    blocking call would be killed halfway by the thing it started, leaving the
+    device mid-update with nobody watching. It also takes up to two minutes,
+    because it waits to see whether the new build paints.
+
+    So it runs as a transient unit, outside this process's control group and
+    outside the kiosk's. The caller polls ota_status() instead; ota.py writes
+    every state transition to status.json as it goes.
+    """
+    if ota_status().get("state") == "applying":
+        raise Err("ota_busy", "an update is already running")
+    run(["systemd-run", "--quiet", "--collect",
+         "--unit", "flightradar-ota-apply",
+         "--property=Type=oneshot",
+         OTA, "apply"], timeout=30, check=True)
+    return {"state": "applying", "started": True}
 
 
 def set_location(lat, lon):

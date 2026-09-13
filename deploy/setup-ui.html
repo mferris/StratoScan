@@ -156,6 +156,19 @@
     <div class="msg" id="localeMsg"></div>
   </div>
 
+  <!-- software update -->
+  <div class="card">
+    <h2>Software update <span class="tick hide" id="tickOta">✓</span></h2>
+    <p class="note">Updates are signed. The device will refuse anything that is
+      not signed by the maintainer's key, and anything older than what it
+      already has. If a new version fails to start, the old one is put back
+      automatically — you do not have to be nearby.</p>
+    <div class="note" id="otaNow">Checking…</div>
+    <button id="otaCheckBtn">Check for updates</button>
+    <button id="otaApplyBtn" class="hide">Install update</button>
+    <div class="msg" id="otaMsg"></div>
+  </div>
+
   <!-- remote -->
   <div class="card">
     <h2>Public web address <span class="tick hide" id="tickRem">✓</span></h2>
@@ -566,6 +579,67 @@ $('addrBtn').onclick = async () => {
   } catch (e) { show($('locMsg'), 'err', e.message); }
   $('addrBtn').disabled = false; $('addrBtn').textContent = 'Find address';
 };
+
+
+// ---- software update ----
+let otaTimer = null;
+function otaRender(st) {
+  const now = $('otaNow'), apply = $('otaApplyBtn');
+  apply.classList.add('hide');
+  if (!st || !st.state) { now.textContent = 'Status unavailable.'; return; }
+  switch (st.state) {
+    case 'applying':
+      now.textContent = 'Installing… the device will restart. This page will '
+                      + 'lose contact for a minute.';
+      break;
+    case 'ok':
+      now.textContent = `Up to date (${st.version || ''}).`;
+      $('tickOta').classList.remove('hide');
+      break;
+    case 'rolled_back':
+      now.textContent = `Version ${st.version || ''} failed to start and was `
+                      + 'undone. The device is running the previous version.';
+      break;
+    case 'error':
+      now.textContent = `Last check failed: ${st.message || 'unknown'}`;
+      break;
+    case 'checked':
+      if (st.update_available) {
+        now.textContent = `Version ${st.version || ''} is available.`;
+        apply.classList.remove('hide');
+      } else {
+        now.textContent = 'Up to date.';
+        $('tickOta').classList.remove('hide');
+      }
+      break;
+    default:
+      // Never claim "up to date" for a device that has simply not looked.
+      now.textContent = 'Not checked yet.';
+  }
+}
+async function otaLoad() {
+  try { otaRender(await api('ota')); } catch (e) { otaRender(null); }
+}
+$('otaCheckBtn').onclick = async () => {
+  hide($('otaMsg')); $('otaCheckBtn').disabled = true;
+  $('otaCheckBtn').textContent = 'Checking…';
+  try { await api('ota', { method: 'POST', body: JSON.stringify({ action: 'check' }) }); await otaLoad(); }
+  catch (e) { show($('otaMsg'), 'err', e.message); }
+  $('otaCheckBtn').disabled = false; $('otaCheckBtn').textContent = 'Check for updates';
+};
+$('otaApplyBtn').onclick = async () => {
+  hide($('otaMsg')); $('otaApplyBtn').disabled = true;
+  try {
+    await api('ota', { method: 'POST', body: JSON.stringify({ action: 'apply' }) });
+    show($('otaMsg'), 'ok', 'Installing. The device restarts to verify the new '
+       + 'version; if it does not come up, the old one is restored by itself.');
+    // Poll across the restart -- the interesting answer arrives after the
+    // device comes back, and a rollback is only visible here.
+    clearInterval(otaTimer);
+    otaTimer = setInterval(otaLoad, 5000);
+  } catch (e) { show($('otaMsg'), 'err', e.message); $('otaApplyBtn').disabled = false; }
+};
+otaLoad();
 
 </script>
 </body>

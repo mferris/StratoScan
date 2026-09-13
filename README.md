@@ -498,3 +498,44 @@ to power-cycle a working device. The prompt says the setting is stored, that
 the radio still follows the old region until then, and that nothing else is
 waiting on it, so leaving it until the next power-on is a legitimate choice
 rather than an unfinished step.
+
+## Updating a unit that has been given away
+
+A gifted radar cannot be fixed by SSH, so it can update itself — carefully.
+
+**Signed, or refused.** A release is accepted only if its manifest carries an
+Ed25519 signature (`ssh-keygen -Y`) from the key in
+`deploy/allowed_signers`, which is baked in before a unit ships. The private
+half lives on the maintainer's machine and never touches a device, GitHub, or
+CI. GitHub is delivery, not trust: a compromised account or token could
+publish a release, it could not sign one. `ssh-keygen` rather than minisign or
+gpg because it is already installed — no new dependency on a box nobody can
+log into.
+
+**Newer, or refused.** The device compares an integer serial, not a version
+string. An old release stays correctly signed forever, so without this a unit
+could be walked backwards onto a build whose bugs are already fixed.
+
+**It undoes itself.** After installing, the display must paint a frame within
+90 seconds or the previous files go back and the kiosk restarts again. This
+reuses the heartbeat the frozen-display watchdog already depends on, so an
+update that blanks the screen is caught by the thing already watching the
+screen — with nobody in the room. Verified by signing and applying a build
+that throws before rendering: it was staged, installed, failed to paint, and
+rolled back, and the previous `index.html` came back byte-identical.
+
+**It cannot install anywhere it likes.** Only an allowlisted set of
+destinations is writable, which excludes `allowed_signers` itself — an update
+must not be able to replace the key that vouches for it, or one bad release
+owns the device forever.
+
+Checking is a timer (twice a day, randomised). **Installing is a deliberate
+act** from the settings screen or the setup page: a unit that silently
+replaced its own software overnight would be a different thing to give
+somebody. Neither surface ever claims "up to date" for a device that has
+simply never looked.
+
+To cut a release: `sh scripts/release.sh <version>`. It builds the bundle,
+writes a manifest of per-file hashes, signs it, **verifies its own output with
+the public key the devices carry**, and only then publishes to GitHub
+Releases.

@@ -4784,6 +4784,7 @@ let deviceBusy = false;
 let wifiNets = [];
 let airportRows = [];
 let tzRows = [], tzCurrent = '', addrRows = [], rebootPending = false;
+let otaState = null, otaPoll = null;
 
 function renderScorecard() {
   const st = networkStats;
@@ -5114,6 +5115,55 @@ function renderStatistics() {
       </div>`).join('')}`;
 }
 
+// The update row. It says what it knows and no more: "up to date" only after
+// a check that actually succeeded, never as the default for "we have not
+// looked". A device that claims to be current when it has simply never
+// checked is worse than one that admits it does not know.
+function otaRow() {
+  const st = otaState || {};
+  const label = 'Software update';
+  let sub, cls = '';
+  switch (st.state) {
+    case 'checking': sub = 'Checking…'; break;
+    case 'applying': sub = 'Installing — the screen will restart shortly'; cls = ' disabled'; break;
+    case 'ok':       sub = `Up to date (${esc(st.version || '')})`; break;
+    case 'rolled_back':
+      sub = 'An update failed to start and was undone — this device is unchanged';
+      break;
+    case 'error':    sub = `Could not check: ${esc(st.message || 'unknown')}`; break;
+    case 'checked':
+      sub = st.update_available
+        ? `Version ${esc(st.version || '')} is available — tap to install`
+        : `Up to date (checked just now)`;
+      break;
+    default:         sub = 'Tap to check for an update';
+  }
+  return `
+    <div class="sp-menu-row${cls}" data-act="ota"${st.update_available ? ' style="outline:2px solid var(--airport-highlight)"' : ''}>
+      <div><div class="sp-label">${label}</div><div class="sp-sub">${sub}</div></div>
+      <div class="sp-chevron">&#8250;</div>
+    </div>`;
+}
+
+async function loadOtaStatus() {
+  try { otaState = await deviceApi('/onboard/ota'); } catch (e) { otaState = null; }
+}
+
+// While an update is running the page that started it is about to be killed
+// and reloaded, so the polling exists mainly for the moment AFTER it comes
+// back: the fresh page reads status.json and reports what happened, including
+// a rollback that nobody was present to see.
+function startOtaPolling() {
+  if (otaPoll) return;
+  otaPoll = setInterval(async () => {
+    await loadOtaStatus();
+    if (!otaState || otaState.state !== 'applying') {
+      clearInterval(otaPoll); otaPoll = null;
+    }
+    if (settingsSection === 'device') renderSettingsPanel();
+  }, 4000);
+}
+
 function renderDeviceSetup() {
   const msg = deviceMsg
     ? `<div class="sp-sub" style="padding:8px 0;color:var(--text)">${esc(deviceMsg)}</div>` : '';
@@ -5278,6 +5328,7 @@ function renderDeviceSetup() {
     <div class="sp-menu-row" data-act="set-timezone"><div><div class="sp-label">Time zone and region</div>
       <div class="sp-sub">Clock used on every timestamp, and the WiFi region</div></div>
       <div class="sp-chevron">&#8250;</div></div>
+    ${otaRow()}
     ${rebootPending ? `
     <div class="sp-menu-row" data-act="reboot-for-region" style="outline:2px solid var(--airport-highlight)">
       <div><div class="sp-label">Restart to apply the WiFi region</div>
@@ -5393,6 +5444,34 @@ async function handleDeviceTap(row) {
         ? (res.all || []) : res.forCountry;
       deviceMsg = '';
     } catch (e) { deviceMsg = e.message; tzRows = []; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (act === 'ota') {
+    const st = otaState || {};
+    if (st.state === 'applying') return;
+    // An available update is installed only on a second, explicit tap. The
+    // first tap checks. Nothing installs itself.
+    if (st.state === 'checked' && st.update_available) {
+      deviceBusy = true; deviceMsg = ''; renderSettingsPanel();
+      try {
+        await deviceApi('/onboard/ota', { method: 'POST',
+          body: JSON.stringify({ action: 'apply' }) });
+        deviceMsg = 'Installing. The screen will restart; if the new version '
+                  + 'does not come up, the old one is put back automatically.';
+        await loadOtaStatus();
+        startOtaPolling();
+      } catch (e) { deviceMsg = e.message; }
+      deviceBusy = false; return renderSettingsPanel();
+    }
+    deviceBusy = true; deviceMsg = ''; renderSettingsPanel();
+    try {
+      await deviceApi('/onboard/ota', { method: 'POST',
+        body: JSON.stringify({ action: 'check' }) });
+      await loadOtaStatus();
+      deviceMsg = (otaState && otaState.update_available)
+        ? '' : 'No newer version found.';
+    } catch (e) { deviceMsg = e.message; }
     deviceBusy = false; return renderSettingsPanel();
   }
 
@@ -5736,6 +5815,12 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     settingsPanelEl.scrollTop = 0;
     renderSettingsPanel();
     loadDeviceStatus().then(renderSettingsPanel); // fill in the current values
+    loadOtaStatus().then(() => {
+      // A rollback happens while this page is dead, so the only place anyone
+      // can learn about it is here, on the way back up.
+      if (otaState && otaState.state === 'applying') startOtaPolling();
+      if (settingsSection === 'device') renderSettingsPanel();
+    });
     return;
   }
   if (menuRow && (menuRow.dataset.dev || menuRow.dataset.act ||
