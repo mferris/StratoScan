@@ -130,6 +130,24 @@ def _wake():
 # It is a FILE rather than an HTTP call so nothing new listens on the network:
 # only a local process running as this user can request a reload, and the flag
 # is delivered on the heartbeat the page already sends every 20 seconds.
+# The updater watches this file to decide whether a new build actually
+# renders. It is touched on every heartbeat, so its mtime is "the display
+# painted a frame at least this recently" -- the same signal the frozen-display
+# watchdog uses, reused so an update that blanks the screen is caught by the
+# thing already watching the screen.
+PAINT_STAMP = os.environ.get("FLIGHTRADAR_PAINT_STAMP",
+                             "/run/flightradar/painted")
+
+
+def _mark_painted():
+    try:
+        os.makedirs(os.path.dirname(PAINT_STAMP), exist_ok=True)
+        with open(PAINT_STAMP, "w") as f:
+            f.write(str(time.time()))
+    except OSError:
+        pass   # a missing stamp costs a rollback, never a crash
+
+
 RELOAD_REQUEST = os.path.join(
     os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "flightradar-reload-request")
 
@@ -166,6 +184,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                       f"{time.monotonic() - _started_at:.0f}s after start",
                       flush=True)
             _last_beat = time.monotonic()
+            _mark_painted()
             if _take_reload_request():
                 print("reload: instructing the page to reload", flush=True)
                 body = b'{"reload":1}'

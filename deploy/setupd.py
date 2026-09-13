@@ -749,6 +749,36 @@ def geocode(query):
     return {"results": out, "query": q}
 
 
+
+# ---- Over-the-air updates --------------------------------------------------
+# setupd only shells out to ota.py; the verification, the monotonic serial and
+# the rollback all live there. This keeps the privileged surface small: three
+# verbs that take no arguments at all, so there is nothing here for a caller to
+# steer.
+OTA = "/opt/flightradar/ota.py"
+
+
+def ota_status():
+    r = run([OTA, "status"], timeout=30)
+    try:
+        return json.loads(_text(r).strip() or "{}")
+    except ValueError:
+        return {"state": "unknown"}
+
+
+def ota_check():
+    run([OTA, "check"], timeout=120)
+    return ota_status()
+
+
+def ota_apply():
+    # Long: this downloads, verifies, installs, restarts the kiosk and then
+    # waits to see whether the display actually paints before deciding whether
+    # to keep the update or put the old files back.
+    run([OTA, "apply"], timeout=600)
+    return ota_status()
+
+
 def set_location(lat, lon):
     # Null Island. A real receiver is never at exactly 0,0, and accepting it
     # silently centres the radar in the Gulf of Guinea with no clue why.
@@ -1047,6 +1077,9 @@ VERBS = {
                                "address": hotspot_address()},
     "set_location": lambda p: set_location(p.get("lat"), p.get("lon")),
     "geocode": lambda p: geocode(p.get("query")),
+    "ota_status": lambda p: ota_status(),
+    "ota_check": lambda p: ota_check(),
+    "ota_apply": lambda p: ota_apply(),
     "get_locale": lambda p: get_locale(),
     "list_timezones": lambda p: {"timezones": list_timezones(),
                                  "forCountry": timezones_for_country(p.get("country", ""))},
@@ -1074,7 +1107,7 @@ MUTATING = {"wifi_connect", "wifi_confirm", "wifi_rollback", "hotspot_start",
             # geocode are reads, and geocode in particular does up to 20s of
             # network I/O -- holding the state lock across that would block
             # WiFi operations behind an address lookup.
-            "set_timezone", "set_wifi_country",
+            "set_timezone", "set_wifi_country", "ota_apply",
             "tailscale_funnel", "reboot", "reset_settings", "reset_full",
             "tailscale_login_start"}
 

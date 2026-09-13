@@ -1,0 +1,13 @@
+[Unit]
+Description=Look for FlightRadar updates twice a day
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=12h
+# Spread the load: every unit checking on the hour would arrive at GitHub
+# together, and they are all the same repo.
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
