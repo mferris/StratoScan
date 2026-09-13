@@ -22,7 +22,7 @@ trap 'rm -rf "$TMP"' EXIT
 # stand that no coloured part claims, which would print as a hole.
 EMPTY="plate_vs_shell plate_outside_case lip_clears_posts lip_inside_bore
        vents_clear_of_mount usbc_clears_standoffs no_turret mount_vs_plate connector_passes
-       antenna_clears_case mount_vs_stand socket_takes_base flare_clears"
+       antenna_clears_case mount_vs_stand socket_takes_base connector_has_room"
 
 # Must come out SMALL but non-zero. These are the colour seams, and they
 # overlap on purpose -- see colour_overlap in the .scad. Cutting each part

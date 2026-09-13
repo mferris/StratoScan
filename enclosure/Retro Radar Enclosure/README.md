@@ -240,27 +240,25 @@ lead-in for a base that is already smaller than the hole — not a ramp for
 forcing an oversized one past. If it has to be levered, the socket is too
 small; make it bigger rather than pushing harder.
 
-### Why the seat is stepped
+### What was actually stopping it, after two wrong guesses
 
-Two measurements of the same base disagreed: it mikes **31.25mm** across the
-bottom, and it would not pass a **34mm** gauge ring. Both are true, because
-the base is a cone — the calipers caught the narrow bottom disc, the rim was
-catching the flare above it.
+The base measures **31.25mm across its flared bottom**, its widest point. The
+original socket was Ø33 — already 1.75mm of clearance — so **the bore was
+never what stopped it**, and both attempts to fix the bore were fixing the
+wrong thing. The first assumed the base was bigger than the hole. The second
+assumed a cone with a wider flare higher up, which reconciled two numbers
+that only looked contradictory. Neither was true.
 
-A single bore cannot serve both. Sized for the flare, the bottom rattles;
-sized for the bottom, the flare never gets in — which is precisely the mount
-that came back with its rim snapped off. So there are two bores: **Ø32.75 for
-4mm** locating the bottom disc with 0.75mm of radial slack, then **Ø36.5**
-clearing the flare, then the chamfer. `socket_takes_base` and `flare_clears`
-check one each, because they are different questions.
+The photograph answers it. The skirt is down in the socket on one side, and
+on the other the coax connector is sitting in the notch where the cable
+passage breaks through the wall — propping the base up and tilting it. The
+obstruction is *underneath* the base, not around it.
 
-**`antenna_socket_gauge` is the cheap way to confirm it** — five sockets in
-half-millimetre steps (34.5 to 36.5 by default; change `gauge_from` and
-`gauge_step` to re-aim) with the real chamfer, the real depth and the real
-cable hole, each rim carrying as many notches as its position.
-Find the smallest one the base levers into and sits square in, and set
-`ant_socket_dia` to that. Smallest, not easiest: the rim is what stops the
-base falling out sideways, so slack is not free.
+So the socket is Ø33 again, sized to the measurement, and there is a Ø18 × 6mm
+relief under the floor for the connector and the bend its lead needs.
+`connector_has_room` checks it. Every check before this asked about the space
+*around* the antenna; none asked about the space *under* it, which is where
+the part was failing.
 
 `socket_takes_base` holds it, with `socket_gauge_works` as its paired control.
 Its first version was wrong in a way worth recording: it ran a full-diameter
