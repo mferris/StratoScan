@@ -73,7 +73,10 @@ def build_release(tmp, key, serial=2, version="9.9.9", payload=b"<html>new</html
     with tarfile.open(bundle) as t:
         for m in t.getmembers():
             if m.isfile():
-                files[m.name] = hashlib.sha256(t.extractfile(m).read()).hexdigest()
+                files[m.name] = {
+                    "sha256": hashlib.sha256(t.extractfile(m).read()).hexdigest(),
+                    "exec": bool(m.mode & 0o111),
+                }
     manifest = {
         "version": version, "serial": serial,
         "bundle": {"name": "b.tar.gz", "sha256": hashlib.sha256(blob).hexdigest()},
@@ -204,6 +207,8 @@ def main():
     ok(ota.dest_for("../../etc/passwd") is None, "traversal must not resolve")
     ok(ota.dest_for("deploy/flightradar-kiosk.service") is None,
        "an update must not drop systemd units")
+    ok(ota.dest_for("deploy/setupd.py") is not None,
+       "the root helper must be fixable by an update")
 
     httpd.shutdown()
     shutil.rmtree(tmp, ignore_errors=True)

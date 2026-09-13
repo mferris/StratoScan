@@ -66,11 +66,22 @@ def sha256(path):
 # Per-file hashes as well as the bundle hash. The bundle hash proves the
 # archive arrived intact; the per-file hashes let the device verify what it
 # actually wrote, which is the thing that ends up on disk.
+# Hash AND mode. The mode matters and it was missed the first time: a file
+# installed 644 that needs to be 755 is not a cosmetic difference, it is a
+# script that will not run. The update that found this installed a new ota.py
+# without its executable bit and broke its own updater.
+#
+# Only the executable bit is carried, not the whole mode: a manifest that can
+# set arbitrary permissions on root-owned files is a much larger thing to
+# sign off on than one that can say "this is a program".
 files = {}
 with tarfile.open(os.path.join(out, bundle)) as tf:
     for m in tf.getmembers():
         if m.isfile():
-            files[m.name] = hashlib.sha256(tf.extractfile(m).read()).hexdigest()
+            files[m.name] = {
+                "sha256": hashlib.sha256(tf.extractfile(m).read()).hexdigest(),
+                "exec": bool(m.mode & 0o111),
+            }
 
 manifest = {
     "version": version,

@@ -535,6 +535,22 @@ replaced its own software overnight would be a different thing to give
 somebody. Neither surface ever claims "up to date" for a device that has
 simply never looked.
 
+The manifest carries each file's **executable bit** as well as its hash, and
+only that bit — a manifest that could set arbitrary permissions on root-owned
+files would be a much larger thing to sign off on than one that can say "this
+is a program". It is there because the first real update installed a new
+`ota.py` without its executable bit and broke its own updater; the services
+survived only because their units run `python3 <script>` rather than exec'ing
+it.
+
+The paint check refuses to run at all if the heartbeat file is missing, rather
+than rolling back every update. That, too, is from experience: the stamp
+originally lived in `/run/flightradar`, which is setupd's `RuntimeDirectory=`
+— systemd recreates it root-owned whenever the root helper restarts, so the
+kiosk user silently lost the ability to write it, and a perfectly good release
+was reverted because nothing could record that the screen was painting. It now
+lives in the kiosk user's own runtime directory.
+
 To cut a release: `sh scripts/release.sh <version>`. It builds the bundle,
 writes a manifest of per-file hashes, signs it, **verifies its own output with
 the public key the devices carry**, and only then publishes to GitHub
