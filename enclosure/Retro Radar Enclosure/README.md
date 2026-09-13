@@ -227,14 +227,23 @@ base is a flared cone slightly wider than that where it has to pass, so it
 never got under the rim. It perched on top and tipped over — while the cable
 underneath ran through perfectly, which is the part that had been checked.
 
-It is Ø36 now in a Ø45 barrel, with a 2mm chamfer at the mouth. The chamfer is
-the point: it lets the base be tipped in on one side and rolled under the far
-side, instead of having to drop in dead square. Swept with discs, the socket
-takes anything up to 36mm and blocks at 37.
+Then the second printed one had its **rim snap off** while a base was being
+levered under it, which says the approach was wrong and not just the number.
+A 2mm chamfer left 2.5mm of wall at the edge, and a printed rim that thin,
+pried outwards across its layer lines, is weak. Stiffness goes as thickness
+cubed, so the barrel went 45 → 48 and the chamfer 2 → 1.2mm: 4.8mm of wall at
+the edge, roughly seven times stiffer.
 
-**`antenna_socket_gauge` is the cheap way to confirm it** — five sockets from
-34 to 38mm with the real chamfer, the real depth and the real cable hole, each
-rim carrying as many notches as its position (one notch is 34, five is 38).
+The deeper point is that **the base is held by depth, not by an overhang**.
+The socket is 8mm deep now, the antenna sits down inside it, and the chamfer
+is a lead-in for a base that is already smaller than the hole — not a ramp for
+forcing an oversized one past. If it has to be levered, the socket is too
+small; make it bigger rather than pushing harder.
+
+**`antenna_socket_gauge` is the cheap way to confirm it** — five sockets in
+half-millimetre steps (34.5 to 36.5 by default; change `gauge_from` and
+`gauge_step` to re-aim) with the real chamfer, the real depth and the real
+cable hole, each rim carrying as many notches as its position.
 Find the smallest one the base levers into and sits square in, and set
 `ant_socket_dia` to that. Smallest, not easiest: the rim is what stops the
 base falling out sideways, so slack is not free.
