@@ -609,6 +609,7 @@ FRIENDLY = {
     "busy": "Another change is already in progress.",
     "setupd_unavailable": "The setup service is not running.",
     "ssid_leading_dash": "Network names starting with a dash are not supported.",
+    "psk_leading_dash": "Passwords starting with a dash are not supported.",
     "bad_atc_mount": "That does not look like a LiveATC feed name.",
     "bad_lat": "That latitude is not a number.",
     "bad_lon": "That longitude is not a number.",

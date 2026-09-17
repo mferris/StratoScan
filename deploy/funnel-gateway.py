@@ -54,12 +54,56 @@ READ_ONLY_PUBLIC_PATHS = ("/sightings", "/approaches", "/network")
 assert "/wake" in LOCAL_ONLY_PATHS and "/setup" in LOCAL_ONLY_PATHS, \
     "LOCAL_ONLY_PATHS must keep /wake and /setup off the public tunnel"
 
+# How a listed path is matched. This MUST mirror how lighttpd decides which
+# backend a request reaches, or the two disagree and the gap is an exposure.
+#
+# lighttpd routes on a bare regex prefix -- $HTTP["url"] =~ "^/setup" -- so
+# /setupx, /setup-ui.html and /wakeup all reach the privileged backends.
+# This gateway used to match only the exact path or "<path>/", which is
+# strictly narrower. The difference was live and reachable from the public
+# internet: /setupx returned the setup server's own 401 (its session auth was
+# the only thing left standing), /wakeup reached the wake service, and POST
+# /sightingsx and /networkx sailed past the read-only guard into the stores.
+#
+# Prefix matching is deliberately broader than lighttpd's, not narrower:
+# _normalise() casefolds, so /SETUP is refused here even though lighttpd's
+# regex is case-sensitive and would not have routed it. Over-refusing on the
+# public tunnel costs nothing -- no legitimate public path begins with any of
+# these prefixes.
+def _matches(base, paths):
+    return any(base.startswith(p) for p in paths)
+
+
+def forward_headers(items):
+    """Headers to send upstream: per-hop ones dropped, the public marker set.
+
+    Split out of _proxy() so the security property is testable without a
+    socket -- the marker being set is the whole point, and the previous
+    version's failure was precisely that nobody could see it wasn't.
+    """
+    drop = HOP_BY_HOP | {PUBLIC_MARKER.lower()}
+    out = {k: v for k, v in items if k.lower() not in drop}
+    out[PUBLIC_MARKER] = "1"
+    return out
+
 # Headers that are per-hop or would otherwise be wrong to blindly forward
 # (Content-Length is recomputed for the rewritten path; "server" is excluded
 # so lighttpd's own version banner doesn't leak through this gateway on top
 # of -- see version_string() below -- our own; the rest are transport-level,
 # not meaningful to relay from an internal proxy hop).
 HOP_BY_HOP = {"connection", "keep-alive", "transfer-encoding", "content-length", "host", "server"}
+
+# Marks a request as having arrived from the public tunnel, so a backend can
+# refuse it even if the path filter above has a gap. setup-server.py has
+# checked for this header since it was written -- but nothing ever set it, so
+# the "belt and braces" it documented did not exist. Demonstrated against the
+# live tunnel: /setupx returned 401 (marker absent, request reached the setup
+# server) and 404 only when the CLIENT supplied the header itself.
+#
+# So it is set here, and any client-supplied copy is dropped first: a value
+# that a caller can choose is not evidence of anything. Backends may now treat
+# its presence as trustworthy.
+PUBLIC_MARKER = "X-FR-Public"
 
 # Cheap, zero-risk hardening now that this is reachable from the whole
 # public internet: clickjacking/MIME-sniffing/referrer-leak protections.
@@ -106,9 +150,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     @classmethod
     def _is_read_only_public(cls, path):
-        base = cls._normalise(path)
-        return any(base == p or base.startswith(p + "/")
-                   for p in READ_ONLY_PUBLIC_PATHS)
+        return _matches(cls._normalise(path), READ_ONLY_PUBLIC_PATHS)
 
     def _dispatch(self):
         """Single gate for every HTTP method.
@@ -166,8 +208,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     @classmethod
     def _is_local_only(cls, path):
-        base = cls._normalise(path)
-        return any(base == p or base.startswith(p + "/") for p in LOCAL_ONLY_PATHS)
+        return _matches(cls._normalise(path), LOCAL_ONLY_PATHS)
 
     def _serve_rounded_receiver_json(self):
         try:
@@ -195,7 +236,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0) or 0)
         body = self.rfile.read(length) if length else None
 
-        req_headers = {k: v for k, v in self.headers.items() if k.lower() not in HOP_BY_HOP}
+        req_headers = forward_headers(self.headers.items())
         req = urllib.request.Request(UPSTREAM + self.path, data=body, headers=req_headers, method=self.command)
 
         try:
