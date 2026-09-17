@@ -29,6 +29,13 @@ HEX_RE = re.compile(r"/photo/([0-9a-fA-F]{6})$")
 
 cache = {}  # hex -> (timestamp, response_body_bytes)
 
+# The cache is keyed by a caller-supplied hex code and this service is
+# reachable from the public tunnel (/photo/<hex> is not on the gateway's
+# local-only list, and must not be -- public viewers need aircraft photos).
+# There are 16.7M valid keys and nothing was evicting them, so a stranger
+# walking the keyspace grew this dict without limit. Bounded, oldest-first.
+CACHE_MAX = 4096
+
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def version_string(self):
@@ -48,6 +55,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = cached[1]
         else:
             body = json.dumps(self._fetch(hexcode)).encode()
+            if len(cache) >= CACHE_MAX:
+                # Drop the oldest entries rather than clearing: a full flush
+                # would let a keyspace walk also evict the aircraft the kiosk
+                # is actually showing, turning a memory bound into a way to
+                # force repeated upstream fetches.
+                for k in sorted(cache, key=lambda k: cache[k][0])[:CACHE_MAX // 4]:
+                    cache.pop(k, None)
             cache[hexcode] = (now, body)
 
         self.send_response(200)

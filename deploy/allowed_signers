@@ -1,9 +1,18 @@
 # The trust root for over-the-air updates.
 #
-# This is the PUBLIC half of the release signing key. Its private half lives on
-# the maintainer's machine, passphrase-protected, and never touches this device,
-# GitHub, or CI. A release is accepted only if it carries a signature made by
-# the matching private key, in the "flightradar" namespace.
+# This is the PUBLIC half of the release signing key. Its private half must
+# live on the maintainer's machine, passphrase-protected, and never touch this
+# device, GitHub, or CI. A release is accepted only if it carries a signature
+# made by the matching private key, in the "flightradar" namespace.
+#
+# "Passphrase-protected" is a requirement, not something this file can check.
+# It was briefly untrue: the key was first generated without a passphrase, and
+# releases up to 2026.09.13.3 were signed in that state. It is protected now.
+# Every unit that trusts this key trusts whoever can read that file, so if it
+# is ever regenerated or copied, re-protect it with
+#   ssh-keygen -p -f ~/.ssh/flightradar-signing
+# which re-encrypts the existing key in place -- same key, same public half,
+# nothing to re-sign.
 #
 # This file must be present on the device BEFORE it ships. Fetching the key
 # over the same channel as the update would make the signature meaningless --

@@ -29,12 +29,24 @@ MUST_BLOCK = [
     # The kiosk's paint heartbeat. Reachable publicly it would let a stranger
     # convince the watchdog a frozen display is healthy.
     "/wake/alive",
+    # These used to be asserted as MUST_ALLOW, on the reasoning that a path
+    # merely starting with the same letters is a different path. That is true
+    # of the gateway in isolation and false of the system: lighttpd routes on
+    # a bare regex prefix ($HTTP["url"] =~ "^/setup"), so every one of these
+    # reaches a privileged backend. Verified against the live public tunnel
+    # before the fix -- /setupx returned the setup server's own 401, and
+    # /wakeup reached the wake service. The test agreeing with the bug is why
+    # it survived: 45/45 green with the hole wide open.
+    "/setupx", "/setup-ui.html", "/setup.html", "/setupapi",
+    "/wakeup", "/wake-up", "/wakex", "/wake.json",
 ]
 
-# Paths that merely start with the same letters must NOT be caught.
+# Paths that merely start with the same letters must NOT be caught. Each one
+# here is a path lighttpd would NOT route to a privileged backend either --
+# that is the standard, not a guess about what looks similar.
 MUST_ALLOW = [
-    "/", "/index.html", "/wakeup", "/wake-up", "/awake", "/setupx",
-    "/sightings", "/approaches", "/network", "/network/stats", "/config.json",
+    "/", "/index.html", "/awake", "/config.json",
+    "/sightings", "/approaches", "/network", "/network/stats",
     "/sightings/stats", "/sightings/unclassified",
     "/tar1090/data/receiver.json", "/my/wake/board",
 ]
@@ -50,6 +62,10 @@ MUST_BE_READ_ONLY = [
     # public POST there could rewrite the classification of every aircraft
     # in months of history in one request.
     "/sightings/stats", "/sightings/unclassified",
+    # Same prefix gap as the local-only list. Before the fix, POST
+    # /sightingsx and /networkx went straight past this guard and reached the
+    # stores; only the stores' own routing (404/501) stopped a write.
+    "/sightingsx", "/sightings-x", "/approachesx", "/networkx",
 ]
 
 
@@ -76,9 +92,38 @@ def main():
             failures.append(f"{required} is not treated as read-only "
                             "(public traffic could WRITE to it)")
 
+    # The public marker must actually be SET, and must not be forgeable.
+    # setup-server.py refuses any request carrying it, which is worth nothing
+    # unless both halves hold. Before the fix the gateway set nothing, so the
+    # only way the header ever appeared was a client supplying it -- which
+    # made a defence into a self-inflicted denial of service.
+    marker_checks = 0
+
+    sent = fg.forward_headers([("Host", "x"), ("Accept", "*/*")])
+    marker_checks += 1
+    if sent.get(fg.PUBLIC_MARKER) != "1":
+        failures.append("gateway does not set the public marker upstream "
+                        "(setup-server's second layer is dead code)")
+
+    forged = fg.forward_headers([(fg.PUBLIC_MARKER, "spoofed"),
+                                 ("x-fr-public", "also-spoofed")])
+    marker_checks += 1
+    if forged.get(fg.PUBLIC_MARKER) != "1":
+        failures.append("client-supplied public marker survived into the "
+                        "upstream request; it must be replaced, not trusted")
+    marker_checks += 1
+    if any(v in ("spoofed", "also-spoofed") for v in forged.values()):
+        failures.append("a client-chosen marker value reached the backend")
+
+    # Hop-by-hop headers must still be stripped.
+    marker_checks += 1
+    if "Host" in fg.forward_headers([("Host", "evil")]):
+        failures.append("Host header forwarded upstream")
+
     for f in failures:
         print("FAIL:", f)
-    total = len(MUST_BLOCK) + len(MUST_ALLOW) + len(MUST_BE_READ_ONLY)
+    total = (len(MUST_BLOCK) + len(MUST_ALLOW) + len(MUST_BE_READ_ONLY)
+             + marker_checks)
     print(f"{total - len(failures)}/{total} path checks passed")
     return 1 if failures else 0
 

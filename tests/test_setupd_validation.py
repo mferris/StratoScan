@@ -43,7 +43,10 @@ SAMPLE_READSB = (
 
 REJECT = [
     ("ssid", d.v_ssid, ["-injected", "a" * 33, "x\x00y", "l\nb", 123, ""]),
-    ("psk", d.v_psk, ["short", "pass\nword", "a" * 100]),
+    # "-injected": v_ssid rejected a leading dash to keep nmcli from reading
+    # the value as an option; v_psk did not, though it reaches nmcli the same
+    # way as an argument.
+    ("psk", d.v_psk, ["short", "pass\nword", "a" * 100, "-injected"]),
     # Coordinates are global now -- the device is gifted abroad. Only
     # genuinely impossible values are rejected; 51.5N/0.1E is London, not an
     # error, and it used to be one.

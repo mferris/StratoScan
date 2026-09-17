@@ -196,6 +196,13 @@ def v_psk(v):
         raise Err("bad_psk")
     if any(c in v for c in ("\x00", "\r", "\n")):
         raise Err("bad_psk", "control characters")
+    # Same reasoning as v_ssid's leading-dash rule, which this was missing:
+    # the value is passed to nmcli as an argument, and nmcli has no reliable
+    # "--" terminator across subcommands, so a leading dash risks being read
+    # as an option. WPA allows it; no real network uses it.
+    if v.startswith("-"):
+        raise Err("psk_leading_dash",
+                  "passwords starting with '-' are not supported")
     if re.fullmatch(r"[0-9a-fA-F]{64}", v):
         return v
     if not (8 <= len(v) <= 63):
@@ -472,8 +479,25 @@ def wifi_connect(ssid, psk, hidden=False):
     run(argv, timeout=20, check=True)
 
     if psk:
-        # via stdin-free file indirection: the key never appears in argv,
-        # where any local user could read it out of /proc
+        # NOTE: the PSK *is* in argv for the second call below, and is
+        # readable from /proc/<pid>/cmdline for as long as that nmcli runs.
+        #
+        # This comment used to claim the opposite -- "the key never appears in
+        # argv" -- describing a protection the code did not implement. That is
+        # worse than no comment: it is the same failure as the X-FR-Public
+        # marker, a defence that exists only in prose. secret_file() is real
+        # and is used for the Tailscale auth key (see tailscale_up); it is
+        # NOT usable here, because nmcli takes property values only as
+        # arguments, with no file or stdin form.
+        #
+        # Left as-is deliberately. Closing it means writing the secret into
+        # the keyfile under /etc/NetworkManager/system-connections (already
+        # 0600 root:root) and reloading, which cannot be rehearsed on a
+        # remote device whose only link is the WiFi being reconfigured: a
+        # mistake there strands the unit with no way back in. The exposure it
+        # would buy back is narrow -- a local process running as some other
+        # service user, sampling /proc during a sub-second window, to learn
+        # the WiFi password of the network it is already attached to.
         run([NMCLI, "connection", "modify", CANDIDATE_PROFILE,
              "wifi-sec.key-mgmt", "wpa-psk"], timeout=20, check=True)
         run([NMCLI, "connection", "modify", CANDIDATE_PROFILE,
