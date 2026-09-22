@@ -423,10 +423,8 @@ module intake_grille() {
         x_off = (row % 2 == 0) ? 0 : intake_pitch/2;
         for (col = [-n:n]) {
             x = col * intake_pitch + x_off;
-            if (x*x + y*y < (intake_dia/2)*(intake_dia/2)) {
-                translate([x, y, -1])
-                    cylinder(d=intake_hole, h=wall+2, $fn=10);
-            }
+            if (x*x + y*y < (intake_dia/2)*(intake_dia/2))
+                translate([x, y, -1]) cylinder(d=intake_hole, h=wall+2, $fn=10);
         }
     }
 }
@@ -434,16 +432,15 @@ module intake_grille() {
 module exhaust_slots() {
     for (i = [0:n_exhaust-1]) {
         a = i * 360/n_exhaust;
-        // skip the arc facing the cable exits (around -90deg / 270deg)
         skip = (a > 270 - exhaust_skip_deg/2 && a < 270 + exhaust_skip_deg/2);
-        if (!skip) {
+        if (!skip)
             translate([(outer_dia/2)*cos(a), (outer_dia/2)*sin(a), exhaust_z])
-                rotate([0,0,a])
-                    rotate([90,0,90])
-                        linear_extrude(height=wall+2, center=true)
-                            translate([-wall-1,0,0])
-                                square([wall+2, exhaust_slot_w], center=true);
-        }
+                rotate([0,0,a]) rotate([90,0,90])
+                    linear_extrude(height=wall+2, center=true)
+                        hull() {
+                            translate([0,  exhaust_slot_h/2 - exhaust_slot_w/2]) circle(d=exhaust_slot_w);
+                            translate([0, -exhaust_slot_h/2 + exhaust_slot_w/2]) circle(d=exhaust_slot_w);
+                        }
     }
 }
 
@@ -529,7 +526,7 @@ module fan_mount() {
         // the throat
         translate([0, fan_plate_y - 1, fan_axis_z])
             rotate([-90,0,0])
-                cylinder(d=fan_open_dia, h=fan_plate_t + 2);
+                cylinder(d=fan_open_dia, h=fan_plate_t + 2, $fn=48);
         // screw pilots, right through plate and bosses
         for (dx = [-fan_hole_pitch/2, fan_hole_pitch/2])
             for (dz = [-fan_hole_pitch/2, fan_hole_pitch/2])
@@ -1105,15 +1102,15 @@ module back_plate() {
         }
         // One pass-through, for the panel-mount USB-C cable.
         usbc_cutout();
+        // The grilles cut a band from z=-1 to wall+1; shifted down by the
+        // plate thickness that band covers the plate exactly.
+        translate([0,0,-back_plate_t]) intake_grille();
+        translate([0,0,-back_plate_t]) fan_grille();
         // The antenna mount screws into inserts here; its coax comes through
         // the middle of the bolt circle rather than through its own gland.
         ant_insert_bores();
         translate([0, ant_mount_y, -back_plate_t - 1])
             cylinder(d=ant_cable_dia, h=back_plate_t + 2);
-        // The grilles cut a band from z=-1 to wall+1; shifted down by the
-        // plate thickness that band covers the plate exactly.
-        translate([0,0,-back_plate_t]) intake_grille();
-        translate([0,0,-back_plate_t]) fan_grille();
     }
 }
 
