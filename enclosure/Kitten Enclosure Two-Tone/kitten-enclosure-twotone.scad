@@ -195,6 +195,30 @@ ant_boss_dia       = 48;   // 42 -> 45 -> 48; the rim is the part that broke
 // a 9mm bore (what this was) will not pass a 9.15mm connector at all.
 ant_conn_dia       = 9.15;
 ant_cable_dia      = ant_conn_dia + 1.85;   // 11.0
+
+// ---- the SMA bulkhead variant ----------------------------------------
+// A second antenna mount, sharing this one's bolt circle, arm and
+// counter-tilt, but ending in a panel-mount SMA jack instead of a socket cut
+// to one particular base.
+//
+// The socket above fits exactly one antenna: the FlightAware desktop puck
+// these dimensions were measured from. That was the right call while it was
+// the only antenna in the room, and the wrong shape to ship three units on --
+// it makes the case pick the antenna. A bulkhead inverts that. Anything with
+// an SMA plug screws on: the same puck, a tuned whip standing straight off
+// the back, or coax running to an antenna on a mast, which is where the
+// reception actually is. Measured on this hardware, an indoor puck saw 1
+// aircraft while a properly sited antenna saw 14 of the same sky.
+//
+// The counter-tilt is the part that must not change. ADS-B is vertically
+// polarised, and ant_axis_frame() is what keeps the jack -- and so whatever
+// screws into it -- vertical while the case leans back in its cradle.
+ant_sma_hole    = 6.5;   // 1/4-36 UNS thread measures 6.35mm; this is the panel hole
+ant_sma_panel_t = 3;     // bulkhead jacks are threaded for about 1.5-3mm of panel
+ant_sma_cavity  = 14;    // behind the panel: the nut, and room for the coax to turn
+ant_sma_boss_d  = 22;    // no 33mm base to hold any more, so the boss shrinks
+ant_sma_boss_h  = 10;    // panel sits at 7-10, clear of the cable bore's 6mm top
+
 back_post_h    = 9;    // insert post standing inside the case
 back_insert_d  = 8;    // depth of the heat-set insert hole
 
@@ -878,6 +902,38 @@ module antenna_mount() {
     }
 }
 
+module antenna_mount_sma() {
+    difference() {
+        union() {
+            // flange and arm are the socket mount's, unchanged: same bolt
+            // circle, same inserts, same plate. Only the far end differs.
+            translate([0, ant_mount_y, -back_plate_t - ant_flange_t])
+                cylinder(d=ant_flange_d, h=ant_flange_t);
+            translate([0, ant_mount_y, -back_plate_t - ant_stub_len])
+                cylinder(d=ant_stub_dia, h=ant_stub_len);
+            ant_axis_frame() translate([0,0,-6])
+                cylinder(d=ant_sma_boss_d, h=ant_sma_boss_h + 6);
+        }
+        ant_axis_frame() {
+            // the jack's hole, through the panel at the top of the boss
+            translate([0, 0, ant_sma_boss_h - ant_sma_panel_t - 0.01])
+                cylinder(d=ant_sma_hole, h=ant_sma_panel_t + 0.02, $fn=48);
+            // the space behind it. Deliberately reaches DOWN to -6 so it
+            // meets the cable bore's sweep rather than relying on the two
+            // happening to touch: an unconnected cavity looks identical in
+            // preview and is a solid wall in the print.
+            translate([0, 0, -6])
+                cylinder(d=ant_sma_cavity,
+                         h=ant_sma_boss_h - ant_sma_panel_t + 6);
+        }
+        ant_cable_bore(0);
+        ant_bolt_holes(ant_flange_t + 2, -back_plate_t - ant_flange_t - 1);
+        // nothing may stand proud of the plate's outer face
+        translate([-300, -300, -back_plate_t]) cube([600, 600, 600]);
+    }
+}
+
+
 // Eight arcs at bore diameter, one per gap between the insert posts, with a
 // lead-in chamfer on the outer top edge so the plate finds its own centre
 // as it goes on rather than catching square.
@@ -1402,6 +1458,7 @@ else if (part == "shell") shell();
 else if (part == "stand") stand();
 else if (part == "back_plate") back_plate();
 else if (part == "antenna_mount") antenna_mount();
+else if (part == "antenna_mount_sma") antenna_mount_sma();
 else if (part == "usbc_gauge") usbc_gauge();
 else if (part == "antenna_socket_gauge") antenna_socket_gauge();
 else if (part == "stand_body")     part_stand_body();
