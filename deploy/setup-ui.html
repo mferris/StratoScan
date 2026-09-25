@@ -587,34 +587,41 @@ function otaRender(st) {
   const now = $('otaNow'), apply = $('otaApplyBtn');
   apply.classList.add('hide');
   if (!st || !st.state) { now.textContent = 'Status unavailable.'; return; }
+  // What this device is RUNNING. Not st.version, which is whatever the last
+  // check found -- in the 'checked' state that is the release on GitHub, not
+  // the one installed here. Stated in every branch, because someone helping
+  // over the phone needs it and cannot read it off a file.
+  const running = st.installed_version
+    ? `Running ${st.installed_version}`
+    : 'Running an unknown version';
   switch (st.state) {
     case 'applying':
       now.textContent = 'Installing… the device will restart. This page will '
                       + 'lose contact for a minute.';
       break;
     case 'ok':
-      now.textContent = `Up to date (${st.version || ''}).`;
+      now.textContent = `${running}. Up to date.`;
       $('tickOta').classList.remove('hide');
       break;
     case 'rolled_back':
       now.textContent = `Version ${st.version || ''} failed to start and was `
-                      + 'undone. The device is running the previous version.';
+                      + `undone. ${running}.`;
       break;
     case 'error':
-      now.textContent = `Last check failed: ${st.message || 'unknown'}`;
+      now.textContent = `${running}. Last check failed: ${st.message || 'unknown'}`;
       break;
     case 'checked':
       if (st.update_available) {
-        now.textContent = `Version ${st.version || ''} is available.`;
+        now.textContent = `${running}. Version ${st.version || ''} is available.`;
         apply.classList.remove('hide');
       } else {
-        now.textContent = 'Up to date.';
+        now.textContent = `${running}. Up to date.`;
         $('tickOta').classList.remove('hide');
       }
       break;
     default:
       // Never claim "up to date" for a device that has simply not looked.
-      now.textContent = 'Not checked yet.';
+      now.textContent = `${running}. Not checked yet.`;
   }
 }
 async function otaLoad() {

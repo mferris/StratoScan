@@ -139,6 +139,12 @@ def dest_for(name):
 def write_status(**kw):
     os.makedirs(STATE_DIR, exist_ok=True)
     kw["at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    # Stamped here rather than at each call site. There are eight of them and
+    # "what is this device running" has to be answerable in every state --
+    # including error and rolled_back, which are exactly when someone asks.
+    # setdefault, so a caller that knows better still wins.
+    kw.setdefault("installed_version", installed_version())
+    kw.setdefault("installed_serial", installed_serial())
     tmp = STATUS + ".tmp"
     with open(tmp, "w") as f:
         json.dump(kw, f, indent=1)
@@ -151,6 +157,22 @@ def installed_serial():
             return int(json.load(f).get("serial", 0))
     except (OSError, ValueError, TypeError):
         return 0
+
+
+def installed_version():
+    """The version string this device is actually running.
+
+    Recorded at install time and, until now, never reported: status carried
+    installed_serial, an integer nobody can read off a screen and say out
+    loud. "What version are you on" is the first question of any support call
+    about a unit in someone else's house, and the answer has to be on the
+    device's own settings screen, not in a file only ssh can reach.
+    """
+    try:
+        with open(INSTALLED) as f:
+            return str(json.load(f).get("version") or "")
+    except (OSError, ValueError, TypeError):
+        return ""
 
 
 def fetch(url, limit=MAX_BUNDLE_BYTES):
@@ -371,6 +393,7 @@ def main():
                     print(f.read())
             except OSError:
                 print(json.dumps({"state": "unknown",
+                                  "installed_version": installed_version(),
                                   "installed_serial": installed_serial()}))
             return 0
         if cmd == "check":
