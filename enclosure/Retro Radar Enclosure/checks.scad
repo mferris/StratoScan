@@ -30,6 +30,13 @@ ant_conn_dia=9.15; ant_boss_dia=45; ant_socket_lead=2;
 ant_base_dia=31.25; ant_relief_dia=18; ant_relief_h=4;
 ant_cable_slot_w=7; ant_cable_exit_h=7.98; ant_flange_t=4; back_insert_d=8;
 
+// The SMA bulkhead variant. Restated here for the same reason as everything
+// above: `use <>` brings in modules, not variables, so a check that names one
+// of these directly needs its own copy.
+ant_sma_hole=6.5; ant_sma_panel_t=3; ant_sma_cavity=14;
+ant_sma_boss_d=22; ant_sma_boss_h=10;
+
+
 // The plate and the shell meet at a butt joint; neither may intrude on the
 // other.
 if (check=="plate_vs_shell") {
@@ -181,6 +188,64 @@ else if (check=="mount_vs_stand") {
       translate([0,0,-shell_depth/2]) union() { back_plate(); antenna_mount(); }
   }
 }
+
+// ---- the SMA bulkhead mount -------------------------------------------
+// Same three questions the socket mount has to answer -- does it stay off
+// the plate, does it stay out of the cradle -- plus the one that is specific
+// to this variant and the one most likely to be wrong.
+
+// It must not intrude on the plate it bolts to.
+else if (check=="sma_mount_vs_plate") {
+  intersection() { antenna_mount_sma(); back_plate(); }
+}
+// It must not foul the cradle arms when the case is in its stand.
+else if (check=="sma_mount_vs_stand") {
+  intersection() {
+    antenna_mount_sma();
+    translate([0,0,base_h + cradle_od/2 - 3])
+      rotate([90 - stand_angle,0,0])
+        translate([0,0,-shell_depth/2]) stand();
+  }
+}
+// THE ONE THAT MATTERS. The cavity behind the jack has to actually meet the
+// cable bore, or the coax has nowhere to go: the jack threads into a sealed
+// pocket. In preview that is invisible -- both volumes are cut, the part
+// looks hollow, and the wall between them only exists in the print. This is
+// a POSITIVE control: the two cut volumes must overlap.
+else if (check=="sma_passage_joins") {
+  intersection() {
+    ant_axis_frame() translate([0,0,-6])
+      cylinder(d=ant_sma_cavity, h=ant_sma_boss_h - ant_sma_panel_t + 6);
+    ant_cable_bore(0);
+  }
+}
+// The panel the jack's nut pulls against must still be there. The cable bore
+// sweeps up to 6mm in this frame and the panel starts at 7; get that wrong
+// and the bore eats the panel, leaving the jack nothing to clamp. POSITIVE
+// control: material in the annulus around the hole.
+else if (check=="sma_panel_present") {
+  intersection() {
+    antenna_mount_sma();
+    ant_axis_frame() {
+      difference() {
+        translate([0,0,ant_sma_boss_h - ant_sma_panel_t])
+          cylinder(d=ant_sma_boss_d, h=ant_sma_panel_t);
+        translate([0,0,ant_sma_boss_h - ant_sma_panel_t - 1])
+          cylinder(d=ant_sma_hole, h=ant_sma_panel_t + 2);
+      }
+    }
+  }
+}
+// ...and the hole through it must be clear. POSITIVE control: a probe a
+// little under the hole diameter survives the mount untouched.
+else if (check=="sma_hole_open") {
+  difference() {
+    ant_axis_frame() translate([0,0,ant_sma_boss_h - ant_sma_panel_t - 0.5])
+      cylinder(d=ant_sma_hole - 0.5, h=ant_sma_panel_t + 1);
+    antenna_mount_sma();
+  }
+}
+
 
 // ---- can the connector actually get through? --------------------------
 // A 9.15mm plug gauge swept along the passage: down the antenna's axis from

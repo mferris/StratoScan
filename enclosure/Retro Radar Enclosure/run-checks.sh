@@ -21,8 +21,8 @@ trap 'rm -rf "$TMP"' EXIT
 # Must come out with no real volume: a real interference, or a region of the
 # stand that no coloured part claims, which would print as a hole.
 EMPTY="plate_vs_shell plate_outside_case lip_clears_posts lip_inside_bore
-       vents_clear_of_mount usbc_clears_standoffs no_turret mount_vs_plate connector_passes
-       antenna_clears_case mount_vs_stand socket_takes_base connector_has_room cable_slot_open"
+       vents_clear_of_mount usbc_clears_standoffs no_turret mount_vs_plate sma_mount_vs_plate connector_passes
+       antenna_clears_case mount_vs_stand sma_mount_vs_stand socket_takes_base connector_has_room cable_slot_open"
 
 # Must come out SMALL but non-zero. These are the colour seams, and they
 # overlap on purpose -- see colour_overlap in the .scad. Cutting each part
@@ -81,7 +81,7 @@ done
 # find a real hole. A 3.2mm probe through the bezel is about 56mm3; the
 # threshold only has to separate that from nothing.
 echo "Positive controls — must find real geometry:"
-for c in back_inserts_open lip_present usbc_open ant_inserts_open vents_were_under_mount socket_gauge_works cable_slot_other_side connector_gauge_works turret_probe_works; do
+for c in back_inserts_open lip_present usbc_open ant_inserts_open vents_were_under_mount socket_gauge_works cable_slot_other_side connector_gauge_works turret_probe_works sma_passage_joins sma_panel_present sma_hole_open; do
     out="$TMP/$c.stl"
     "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
     v=$(vol_of "$out")

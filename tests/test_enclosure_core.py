@@ -37,9 +37,12 @@ CORE = {
     "retainer",
     # cooling
     "exhaust_slots",
-    # the antenna mount, all of it
-    "antenna_mount", "antenna_socket_gauge", "ant_axis_frame",
-    "ant_barrel_base", "ant_bolt_holes", "ant_cable_bore",
+    # the antenna mount, all of it -- both variants. They share the flange,
+    # the arm, the bolt circle and the counter-tilt, and differ only at the
+    # far end: a socket cut for one antenna's base, or an SMA bulkhead that
+    # takes any of them.
+    "antenna_mount", "antenna_mount_sma", "antenna_socket_gauge",
+    "ant_axis_frame", "ant_barrel_base", "ant_bolt_holes", "ant_cable_bore",
     "ant_insert_bores", "ant_insert_bosses",
 }
 

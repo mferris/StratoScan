@@ -31,6 +31,7 @@ The head is one colour and prints as before:
 | `retainer` | — | ring behind the glass (identical to the retro part) |
 | `back_plate` | black | removable back — locating lip, standoffs, vents, one USB-C pass-through, antenna-mount inserts |
 | `antenna_mount` | black | bolt-on arm carrying the antenna socket |
+| `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
 | `usbc_gauge` | — | test coupon: five candidate USB-C cutouts, to fit the connector before printing a plate |
 
 The stand is split into five bodies, one per colour region:
@@ -418,3 +419,33 @@ disc 12mm into the air above the mouth and failed at 283mm³, which was the
 arm alongside. A 35mm cylinder held 12mm above the socket really does overlap
 the arm — and means nothing, because the base is a cone that narrows and comes
 in from outside. The question is whether the base fits the socket.
+
+## Two antenna mounts, and which to print
+
+`antenna_mount` holds the antenna itself: a 33mm socket cut around the
+FlightAware desktop puck's 31.25mm base, with a slot for the lead that leaves
+the side 7.98mm up. It fits that antenna beautifully and nothing else, which
+makes the case choose the antenna.
+
+`antenna_mount_sma` inverts that. Same flange, same three bolts into the same
+inserts, same counter-tilt -- only the far end changes, to a panel-mount SMA
+jack. Anything with an SMA plug now works: the same puck, a tuned whip
+standing straight off the back, or coax running to an antenna somewhere with
+a view of the sky. Swapping it is three screws; the back plate and both
+shells are untouched.
+
+Print the SMA one unless you specifically want the puck held on the case.
+Measured on this hardware, an indoor puck saw **1 aircraft** while a properly
+sited antenna saw **14 of the same sky at the same moment** -- so the ability
+to put the antenna somewhere else is worth more than any mount that holds it
+here.
+
+The counter-tilt is the part not to touch. ADS-B is vertically polarised, and
+`ant_axis_frame()` is what keeps the jack vertical while the case leans back
+18 degrees in its cradle.
+
+Four things are checked rather than assumed, and the interesting one is
+`sma_passage_joins`: the cavity behind the jack has to actually meet the
+cable bore, or the jack threads into a sealed pocket and the coax has nowhere
+to go. That failure is invisible in preview -- both volumes are cut, the part
+looks hollow, and the wall between them only exists in the print.
