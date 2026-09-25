@@ -21,6 +21,23 @@ install -m 0644 deploy/funnel-gateway.py   /opt/flightradar/funnel-gateway.py
 
 install -m 0644 deploy/flightradar-setupd.service /etc/systemd/system/
 install -m 0644 deploy/flightradar-setup.service  /etc/systemd/system/
+
+# The updater. These were installed by hand on the first unit and therefore
+# on no others -- the RDU device ran for weeks with no update timer at all,
+# which nobody noticed because checking is silent when it is not happening.
+# A unit that has been given away cannot be updated by hand, so this is the
+# part that must not be left to memory.
+install -m 0755 deploy/ota.py       /opt/flightradar/ota.py
+install -m 0755 deploy/ota-auto.sh  /opt/flightradar/ota-auto.sh
+install -m 0644 deploy/flightradar-ota-check.service /etc/systemd/system/
+install -m 0644 deploy/flightradar-ota-check.timer   /etc/systemd/system/
+install -m 0644 deploy/flightradar-ota-auto.service  /etc/systemd/system/
+install -m 0644 deploy/flightradar-ota-auto.timer    /etc/systemd/system/
+
+# The trust root. Must already be on the device before it ships: fetching the
+# key over the same channel as the update would make the signature pointless.
+# NOT installable by an update, deliberately -- see deploy/allowed_signers.
+install -m 0644 deploy/allowed_signers /opt/flightradar/allowed_signers
 install -m 0644 deploy/98-flightradar-setup.conf  /etc/lighttpd/conf-available/
 ln -sf /etc/lighttpd/conf-available/98-flightradar-setup.conf \
        /etc/lighttpd/conf-enabled/98-flightradar-setup.conf
@@ -32,6 +49,8 @@ echo "== enabling =="
 systemctl daemon-reload
 systemctl enable --now flightradar-setupd.service
 systemctl enable --now flightradar-setup.service
+systemctl enable --now flightradar-ota-check.timer
+systemctl enable --now flightradar-ota-auto.timer
 systemctl restart flightradar-funnel-gateway.service
 systemctl reload lighttpd
 
