@@ -1,0 +1,13 @@
+[Unit]
+Description=FlightRadar unattended update (wakes the display, applies, self-rolls-back)
+Documentation=https://github.com/mferris/FlightRadar
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+StateDirectory=flightradar-ota
+# Deliberately NOT ota.py apply directly. The wrapper wakes the panel and
+# waits for a painted frame first -- applying against a blanked panel rolls
+# back good releases and can leave Chromium windowed. See ota-auto.sh.
+ExecStart=/opt/flightradar/ota-auto.sh
