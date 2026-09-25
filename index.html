@@ -5122,21 +5122,30 @@ function renderStatistics() {
 function otaRow() {
   const st = otaState || {};
   const label = 'Software update';
+  // What this device is RUNNING, which is not the same as st.version -- that
+  // is whatever the last check found, and in the 'checked' state it is the
+  // release on GitHub, not the one installed here. Shown in every state,
+  // because "what version are you on" is the first question of any support
+  // call about a unit in someone else's house, and the answer has to be
+  // readable off the screen by the person holding it.
+  const running = st.installed_version
+    ? `Running ${esc(st.installed_version)}`
+    : 'Version unknown';
   let sub, cls = '';
   switch (st.state) {
-    case 'checking': sub = 'Checking…'; break;
+    case 'checking': sub = `${running} — checking…`; break;
     case 'applying': sub = 'Installing — the screen will restart shortly'; cls = ' disabled'; break;
-    case 'ok':       sub = `Up to date (${esc(st.version || '')})`; break;
+    case 'ok':       sub = `${running} — up to date`; break;
     case 'rolled_back':
-      sub = 'An update failed to start and was undone — this device is unchanged';
+      sub = `${running} — an update failed to start and was undone, so this device is unchanged`;
       break;
-    case 'error':    sub = `Could not check: ${esc(st.message || 'unknown')}`; break;
+    case 'error':    sub = `${running} — could not check: ${esc(st.message || 'unknown')}`; break;
     case 'checked':
       sub = st.update_available
-        ? `Version ${esc(st.version || '')} is available — tap to install`
-        : `Up to date (checked just now)`;
+        ? `${running} — version ${esc(st.version || '')} is available, tap to install`
+        : `${running} — up to date`;
       break;
-    default:         sub = 'Tap to check for an update';
+    default:         sub = `${running} — tap to check for an update`;
   }
   return `
     <div class="sp-menu-row${cls}" data-act="ota"${st.update_available ? ' style="outline:2px solid var(--airport-highlight)"' : ''}>
