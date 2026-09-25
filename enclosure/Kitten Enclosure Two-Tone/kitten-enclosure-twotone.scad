@@ -54,7 +54,21 @@ glass_thickness   = 1.62;   // the glass sheet alone — this is what the rabbet
 pcb_w = 108; pcb_h = 72;
 mount_hole_x = 58; mount_hole_y = 49;
 
-shell_depth = 56;           // front glass face to back of the tallest component
+// ---------- MEASURE ON YOUR ASSEMBLED UNIT, THEN SET ----------
+// 42 -> 56 gave the side-mounted speakers (45mm along this axis) room
+// without touching the Pi/heatsink stack. 56 -> 61 is the FlyCatcher: it
+// is a HAT, so it stacks onto the BACK of the Pi, and the Pi hangs off the
+// LCD panel at the front -- which puts the HAT's pre-amp slide switches
+// facing the back plate. At 56 they fouled it as the plate was screwed
+// down, which is the worst kind of interference: everything appears to fit
+// until the last two turns, and then it is loading the board.
+//
+// Deeper is nearly free here -- a bigger box, more filament, a longer
+// print -- and too shallow is a case that cannot be closed without
+// pressing on a switch. Measure YOUR stack before printing: this is the
+// one number that has had to move every time the internals changed.
+shell_depth_note = "56 -> 61 for the FlyCatcher HAT's pre-amp switches";
+shell_depth = 61;           // front glass face to back of the tallest component
 rim = 10;
 outer_dia = panel_diameter + 2*rim;   // 223.34
 wall = 3;
@@ -254,7 +268,7 @@ back_lip_skip = 9;      // degrees of clearance either side of each post
 usbc_cut_w       = 11.0;   // window width  (across the connector body)
 usbc_cut_h       = 6.5;    // window height (through the connector body)
 usbc_cut_r       = 1.2;    // corner radius
-usbc_screw_pitch = 24.0;   // centre-to-centre of the two mounting screws
+usbc_screw_pitch = 16.5;   // centre-to-centre of the two mounting screws
 usbc_screw_dia   = 2.3;    // M2 clearance
 usbc_cut_pos     = [60, -14];
 

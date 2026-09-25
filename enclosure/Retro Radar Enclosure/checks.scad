@@ -13,13 +13,13 @@ use <flightwall-enclosure.scad>
 $fs = 0.4;
 $fa = 0.5;
 check = "none";
-outer_dia=223.34; wall=3; shell_depth=56; screw_r=106.67; n_screws=8;
+outer_dia=223.34; wall=3; shell_depth=61; screw_r=106.67; n_screws=8;
 speaker_angles=[0,180]; back_plate_t=3;
 // Restated because `use <>` imports modules and functions but NOT variables.
 // A stale value here checks geometry the design no longer has, and passes.
 back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9; post_od=9;
 back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40; ant_mount_y=88;
-ant_bolt_d=3.4; usbc_cut_pos=[60,-14]; usbc_screw_pitch=24.0;
+ant_bolt_d=3.4; usbc_cut_pos=[60,-14]; usbc_screw_pitch=16.5; usbc_screw_dia=2.3; usbc_cut_w=11.0; usbc_cut_h=6.5;
 mount_hole_x=58; mount_hole_y=49; stand_angle=18;
 ant_stub_len=30; ant_barrel_len=14; ant_socket_dia=33; ant_socket_depth=6;
 cradle_id=outer_dia+2; cradle_od=cradle_id+26; base_h=16;
@@ -132,6 +132,44 @@ else if (check=="usbc_clears_standoffs") {
         translate([x,y,0]) cylinder(d=7, h=8);
   }
 }
+
+// The USB-C pass-through screws moved from 24.0mm centres to 16.5mm, to suit
+// a pass-through that mounts from INSIDE the plate. That pulls each screw
+// 3.75mm closer to the window, leaving 1.60mm of plate between them where
+// there used to be 5.35mm -- four perimeters at a 0.4mm nozzle. Still sound,
+// but no longer something to change casually, so it is pinned.
+//
+// Grow the window by 1mm all round and the screw holes must STILL miss it.
+// Empty here means at least 1mm of material survives between them.
+else if (check=="usbc_screws_clear_window") {
+  intersection() {
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
+      linear_extrude(height = back_plate_t + 2)
+        offset(r = 1)
+          square([usbc_cut_w, usbc_cut_h], center = true);
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
+      for (sx = [-1, 1])
+        translate([sx * usbc_screw_pitch/2, 0, 0])
+          cylinder(d = usbc_screw_dia, h = back_plate_t + 2);
+  }
+}
+// Paired positive control: the same probe at the OLD 24.0mm pitch would also
+// come out empty, so an empty result above proves nothing on its own. Grow
+// the window by 4mm instead and the screws must now be caught -- which shows
+// the probe can find them at all, and that they really did move inwards.
+else if (check=="usbc_screw_probe_works") {
+  intersection() {
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
+      linear_extrude(height = back_plate_t + 2)
+        offset(r = 4)
+          square([usbc_cut_w, usbc_cut_h], center = true);
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
+      for (sx = [-1, 1])
+        translate([sx * usbc_screw_pitch/2, 0, 0])
+          cylinder(d = usbc_screw_dia, h = back_plate_t + 2);
+  }
+}
+
 // ---- antenna mount ----------------------------------------------------
 else if (check=="ant_inserts_open") {     // positive control: bosses bored
   difference() {

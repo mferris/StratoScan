@@ -18,7 +18,7 @@ check = "none";
 // the milligram across a resolution change that should have moved it.
 $fs = 0.4;
 $fa = 0.5;
-outer_dia=223.34; shell_depth=56; wall=3; lip_height=6; shelf_h=2;
+outer_dia=223.34; shell_depth=61; wall=3; lip_height=6; shelf_h=2;
 screw_r=106.67; n_screws=8; post_od=9;
 screw_clear_dia=3.4; nose_angle=270; front_trim_h=4;
 back_plate_t=3; ant_mount_y=88; ant_stub_len=30; ant_barrel_len=14; ant_socket_dia=33; ant_socket_depth=6;
@@ -48,7 +48,7 @@ ant_sma_boss_d=22; ant_sma_boss_h=10;
 // same reason as everything above: `use <>` brings in modules, never values.
 back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9;
 back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40;
-usbc_cut_pos=[60,-14]; usbc_cut_w=11.0; usbc_cut_h=6.5; usbc_screw_pitch=24.0;
+usbc_cut_pos=[60,-14]; usbc_cut_w=11.0; usbc_cut_h=6.5; usbc_screw_pitch=16.5; usbc_screw_dia=2.3;
 mount_hole_x=58; mount_hole_y=49;
 
 if (check=="ear_vs_post") {
@@ -442,6 +442,43 @@ if (check=="usbc_clears_standoffs") {
     for (x=[-mount_hole_x/2, mount_hole_x/2])
       for (y=[-mount_hole_y/2, mount_hole_y/2])
         translate([x,y,0]) cylinder(d=7, h=8);
+  }
+}
+
+// The USB-C pass-through screws moved from 24.0mm centres to 16.5mm, to suit
+// a pass-through that mounts from INSIDE the plate. That pulls each screw
+// 3.75mm closer to the window, leaving 1.60mm of plate between them where
+// there used to be 5.35mm -- four perimeters at a 0.4mm nozzle. Still sound,
+// but no longer something to change casually, so it is pinned.
+//
+// Grow the window by 1mm all round and the screw holes must STILL miss it.
+// Empty here means at least 1mm of material survives between them.
+if (check=="usbc_screws_clear_window") {
+  intersection() {
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
+      linear_extrude(height = back_plate_t + 2)
+        offset(r = 1)
+          square([usbc_cut_w, usbc_cut_h], center = true);
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
+      for (sx = [-1, 1])
+        translate([sx * usbc_screw_pitch/2, 0, 0])
+          cylinder(d = usbc_screw_dia, h = back_plate_t + 2);
+  }
+}
+// Paired positive control: the same probe at the OLD 24.0mm pitch would also
+// come out empty, so an empty result above proves nothing on its own. Grow
+// the window by 4mm instead and the screws must now be caught -- which shows
+// the probe can find them at all, and that they really did move inwards.
+if (check=="usbc_screw_probe_works") {
+  intersection() {
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
+      linear_extrude(height = back_plate_t + 2)
+        offset(r = 4)
+          square([usbc_cut_w, usbc_cut_h], center = true);
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
+      for (sx = [-1, 1])
+        translate([sx * usbc_screw_pitch/2, 0, 0])
+          cylinder(d = usbc_screw_dia, h = back_plate_t + 2);
   }
 }
 
