@@ -88,6 +88,12 @@ DEPLOY_ALLOWED = {
     "network-compare.py", "photo-proxy.py", "funnel-gateway.py",
     "setup-server.py", "setup-ui.html", "shm-guard.sh", "ota.py",
     "airports.json", "net-watchdog.py",
+    # ota-auto.sh decides whether an unattended update may proceed, running as
+    # root on a timer on a device in someone else's house. Omitting it would
+    # ship it in the bundle and then refuse to install it -- which is the same
+    # trap setupd.py was in below, and worse here: the one file whose bugs
+    # nobody can reach around is the one that installs the fixes.
+    "ota-auto.sh",
     # setupd.py is the root helper, and leaving it out looked like caution but
     # bought nothing: ota.py is on this list and also runs as root, so anyone
     # who can sign a release can already run code as root. All excluding it
