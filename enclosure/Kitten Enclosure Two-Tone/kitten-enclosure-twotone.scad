@@ -309,7 +309,20 @@ intake_dia = 54; intake_hole = 3; intake_pitch = 6;
 
 // side exhaust
 exhaust_slot_w = 2.2; exhaust_slot_h = 12;
-exhaust_z = shell_depth / 2;
+// Centred in the window between the top of the upper decorative rib and the
+// rear cradle arm, rather than at plain mid-depth. At mid-depth the slots ran
+// from z=24.5 and the upper rib band is 22-27, so every slot cut through the
+// rib and came out the other side -- the rib read as broken rather than as a
+// ridge. Moving rather than shortening keeps the full 12mm of vent: the clear
+// window is 16.5mm and the slot is 12mm, so it fits with ~2mm either side.
+//
+// Derived, not typed, so it follows shell_depth and the rib positions instead
+// of silently becoming wrong the next time either moves. The kitten has no
+// ribs, but exhaust_z is shared core, and the slots stay inside the arm gap
+// there too -- identical part, no reason to fork it.
+rib_top_z      = 27;               // max(rib_z_list) + rib_w, restated for the kitten
+arm_b_inner_z  = shell_depth/2 + 13;   // arm_gap/2 = 13
+exhaust_z      = (rib_top_z + arm_b_inner_z) / 2;
 n_exhaust = 24;
 exhaust_skip_deg = 50;
 
