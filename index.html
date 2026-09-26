@@ -2712,7 +2712,10 @@ const ALERT_CLEAR_RADIUS_NM = 2.0;  // slightly wider exit threshold, so a
 // -- this is a personal display preference for whoever's looking at this
 // particular screen, not data that should be the same for every viewer.
 const ALERT_SETTINGS_KEY = 'flightradar_alert_settings_v1';
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true };
+// volume is a plain 0..1 multiplier on the master gain; muted is kept separate
+// rather than being volume 0, so silencing it for an evening does not throw
+// away the level someone settled on. soundTheme picks the voice alerts speak in.
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic' };
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -2731,6 +2734,15 @@ try {
 } catch (e) {
   // corrupt/unavailable storage -- defaults stand
 }
+// Clamp the volume that came out of storage. A bad value here either silences
+// the device or deafens the room, and neither shows on the settings screen --
+// the row looks perfectly normal while the sound is wrong. soundTheme needs no
+// guard: soundTheme() falls back to classic for anything it does not know,
+// which also covers a theme removed in a later release.
+if (typeof alertSettings.volume !== 'number' || !isFinite(alertSettings.volume)) {
+  alertSettings.volume = DEFAULT_ALERT_SETTINGS.volume;
+}
+alertSettings.volume = Math.min(1, Math.max(0, alertSettings.volume));
 // Force-correct a stored 'atc: true' on the kiosk itself -- this is exactly
 // the value that got left behind by testing the feature directly on the
 // physical hardware before ensureAtcAudio's own IS_KIOSK guard existed.
@@ -2777,6 +2789,16 @@ const THEME_KEY = 'flightradar_theme_v1';
 // value from the [data-theme] CSS blocks (can't read another theme's CSS
 // custom properties while a different one is active, so there's no way to
 // derive these live from the stylesheet itself).
+// Stepped levels rather than a slider. This is a 1080x1080 round panel driven
+// by a fingertip: a thin range input is a poor target and lands wherever the
+// finger did. Three rows reuse the radio pattern already on this screen, and
+// each is a deliberate choice you can hit without looking at it.
+const VOLUME_LEVELS = [
+  { label: 'Low',    sub: 'Just audible in a quiet room', v: 0.3 },
+  { label: 'Medium', sub: 'Normal listening level',       v: 0.7 },
+  { label: 'High',   sub: 'Loud — for a noisy room',      v: 1.0 },
+];
+
 const THEMES = [
   { key: 'classic', label: 'Classic', sub: 'The original look — dark background, warm accent colors', swatchBg: '#0a0d0f', swatchAccent: '#4fd6c8' },
   { key: 'daylight', label: 'Daylight', sub: 'Light background, black text — for a bright room', swatchBg: '#eaf3f1', swatchAccent: '#0f7a6c' },
@@ -2808,9 +2830,38 @@ applyTheme(uiTheme); // set before the first frame renders, not just on a later 
 // instead launched with --autoplay-policy=no-user-gesture-required (see
 // deploy/flightradar-kiosk.service) so it isn't blocked there at all.
 let audioCtx = null;
+let masterGain = null;
 function getAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   return audioCtx;
+}
+// Every sound goes through this one node, so volume and mute live in a single
+// place instead of a multiplier sprinkled through each generator.
+//
+// Until speakers were fitted there was nothing to turn down -- the panel had
+// no output at all -- so each sound carried its own fixed peak gain and that
+// was the end of it. Now that it is audible in someone's room, "off" has to be
+// genuinely reachable by the person living with it, not just by whoever edits
+// the source. Mute is kept separate from volume rather than being volume 0, so
+// silencing it for an evening does not lose the level you had chosen.
+function getMasterGain() {
+  const ctx = getAudioCtx();
+  if (!masterGain) {
+    masterGain = ctx.createGain();
+    masterGain.connect(ctx.destination);
+  }
+  applyVolume();
+  return masterGain;
+}
+// Push the current setting into the live node. getMasterGain() also does this,
+// but only when a sound is about to play -- so muting left the node sitting at
+// its old gain until the next alert happened to arrive. Harmless in practice,
+// since nothing is audible in between, but it meant the node and the setting
+// disagreed for arbitrarily long, and anything that later read the node would
+// have read a lie. Called on every change instead.
+function applyVolume() {
+  if (!masterGain) return;
+  masterGain.gain.value = alertSettings.muted ? 0 : alertSettings.volume;
 }
 stage.addEventListener('pointerdown', () => { getAudioCtx().resume().catch(() => {}); }, { once: true });
 
@@ -2832,7 +2883,7 @@ function playTones(notes) {
       gain.gain.setValueAtTime(0, start);
       gain.gain.linearRampToValueAtTime(peakGain, start + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
-      osc.connect(gain).connect(ctx.destination);
+      osc.connect(gain).connect(getMasterGain());
       osc.start(start);
       osc.stop(start + dur + 0.02);
     }
@@ -2841,19 +2892,119 @@ function playTones(notes) {
   }
 }
 
-// Two-note ascending chime -- unchanged from before the playTones refactor.
+// A pitch-swept, filtered voice -- the second sound primitive, beside
+// playTones' pure sine notes.
+//
+// A meow is not a note. It is a pitch contour with harmonics: up to a peak and
+// back down, brightness falling as the mouth closes. A sine cannot do that,
+// which is why the cat theme needed a new generator rather than a different
+// tune on the old one. Sawtooth for the harmonics, a lowpass sweeping down
+// behind the pitch, and optional vibrato for the wobble.
+//
+// It is an approximation and should be heard as one: it reads as "a cat noise"
+// rather than passing for a recording. Real samples would be better and are a
+// bigger decision -- licensing, plus either bloating index.html with base64 or
+// putting binary assets through the OTA bundle.
+function playVoice({ f0, peakHz, f1, dur, peak = 0.22, bright = 2600, vibrato = 0 }) {
+  try {
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const lp = ctx.createBiquadFilter();
+    osc.type = 'sawtooth';
+    lp.type = 'lowpass';
+    lp.Q.value = 6;
+
+    // pitch: rise to the peak early, fall away over the remainder
+    osc.frequency.setValueAtTime(f0, t);
+    osc.frequency.exponentialRampToValueAtTime(peakHz, t + dur * 0.33);
+    osc.frequency.exponentialRampToValueAtTime(f1, t + dur);
+
+    // brightness tracks the pitch down, which is the closing-mouth sound
+    lp.frequency.setValueAtTime(bright, t);
+    lp.frequency.exponentialRampToValueAtTime(Math.max(300, bright * 0.25), t + dur);
+
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(peak, t + dur * 0.15);
+    gain.gain.setValueAtTime(peak, t + dur * 0.6);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    osc.connect(lp).connect(gain).connect(getMasterGain());
+
+    if (vibrato) {
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      lfo.frequency.value = vibrato;
+      lfoGain.gain.value = peakHz * 0.035;
+      lfo.connect(lfoGain).connect(osc.frequency);
+      lfo.start(t); lfo.stop(t + dur + 0.02);
+    }
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+  } catch (e) {
+    // same contract as playTones: audio is garnish, the visual alert is the alert
+  }
+}
+
+// ---- Sound themes ---------------------------------------------------
+// The same three events, in two voices. Which one plays is a setting, because
+// the device has no way to know what it is wearing: the case is a printed
+// shell with no electrical identity, so a kitten cannot announce itself. The
+// colour theme is a separate choice for the same reason and is left alone --
+// somebody may well want the cat noises with the classic look.
+//
+// Each theme supplies the same three generators, so adding a third is a table
+// entry rather than a change at every call site.
+const SOUND_THEMES = {
+  classic: {
+    label: 'Classic',
+    sub: 'Clean synth tones — the original chimes',
+    nearby:    () => playTones([[880, 0, 0.14, 0.25], [1175, 0.15, 0.18, 0.25]]),
+    emergency: () => playTones([
+      [1300, 0, 0.1, 0.3], [900, 0.14, 0.1, 0.3],
+      [1300, 0.28, 0.1, 0.3], [900, 0.42, 0.1, 0.3],
+    ]),
+    airportPhase: (phase) =>
+      playTones(phase === 'landing' ? [[720, 0, 0.16, 0.14]] : [[1040, 0, 0.16, 0.14]]),
+  },
+  kitten: {
+    label: 'Kitten',
+    sub: 'Meows and chirrups — made for the cat case',
+    // One unhurried meow: the everyday sound, so it must not grate on the
+    // hundredth hearing.
+    nearby: () => playVoice({ f0: 420, peakHz: 860, f1: 480, dur: 0.42, peak: 0.2, vibrato: 11 }),
+    // Three short, rising, insistent yowls. Urgency here comes from repetition
+    // and pitch climbing, the same way the classic theme's four beeps do it --
+    // not from being louder, which only makes people mute the whole thing.
+    emergency: () => {
+      playVoice({ f0: 520, peakHz: 1150, f1: 700, dur: 0.26, peak: 0.28, bright: 3200, vibrato: 16 });
+      setTimeout(() => playVoice({ f0: 560, peakHz: 1250, f1: 760, dur: 0.26, peak: 0.28, bright: 3200, vibrato: 16 }), 300);
+      setTimeout(() => playVoice({ f0: 600, peakHz: 1400, f1: 820, dur: 0.30, peak: 0.3, bright: 3400, vibrato: 18 }), 600);
+    },
+    // A short chirrup, the noise a cat makes at a window. Quietest of the
+    // three, because this one fires on every landing and takeoff.
+    airportPhase: (phase) => playVoice(
+      phase === 'landing'
+        ? { f0: 700, peakHz: 900,  f1: 520, dur: 0.16, peak: 0.13, bright: 2200 }
+        : { f0: 600, peakHz: 1150, f1: 900, dur: 0.16, peak: 0.13, bright: 2800 }),
+  },
+};
+function soundTheme() {
+  return SOUND_THEMES[alertSettings.soundTheme] || SOUND_THEMES.classic;
+}
+
+// Two-note ascending chime in the classic theme; a meow in the kitten one.
 function playAlertSound() {
-  playTones([[880, 0, 0.14, 0.25], [1175, 0.15, 0.18, 0.25]]);
+  soundTheme().nearby();
 }
 
 // Four fast alternating beeps, higher gain and more insistent than the
 // nearby-aircraft chime -- deliberately reads as more urgent, since this
 // fires for actual emergency squawks (7500/7600/7700), not routine traffic.
 function playEmergencySound() {
-  playTones([
-    [1300, 0, 0.1, 0.3], [900, 0.14, 0.1, 0.3],
-    [1300, 0.28, 0.1, 0.3], [900, 0.42, 0.1, 0.3],
-  ]);
+  soundTheme().emergency();
 }
 
 // A single short, quiet note -- deliberately the least intrusive of the
@@ -2862,7 +3013,7 @@ function playEmergencySound() {
 // down, takeoff pitches up, so the two are distinguishable by ear without
 // looking at the screen.
 function playAirportPhaseSound(phase) {
-  playTones(phase === 'landing' ? [[720, 0, 0.16, 0.14]] : [[1040, 0, 0.16, 0.14]]);
+  soundTheme().airportPhase(phase);
 }
 
 // Called once per poll (real GPS-derived range, not the eased per-frame
@@ -4749,6 +4900,30 @@ function renderSettingsPanel() {
       </div>
     `;
     }).join('')}
+    ${settingsSection !== 'alerts' ? '' : `
+    <div class="sp-section-title">Volume</div>
+    <div class="sp-row" data-mute="1">
+      <div>
+        <div class="sp-label">Mute all sounds</div>
+        <div class="sp-sub">Alerts still appear on screen; nothing is heard</div>
+      </div>
+      <div class="sp-switch${alertSettings.muted ? ' on' : ''}"></div>
+    </div>` + VOLUME_LEVELS.map(({ label, sub, v }) => `
+      <div class="sp-theme-row${Math.abs(alertSettings.volume - v) < 0.01 && !alertSettings.muted ? ' selected' : ''}" data-vol="${v}">
+        <div>
+          <div class="sp-label">${esc(label)}</div>
+          <div class="sp-sub">${esc(sub)}</div>
+        </div>
+        <div class="sp-radio${Math.abs(alertSettings.volume - v) < 0.01 && !alertSettings.muted ? ' on' : ''}"></div>
+      </div>`).join('') + `
+    <div class="sp-section-title">Alert sounds</div>` + Object.entries(SOUND_THEMES).map(([k, t]) => `
+      <div class="sp-theme-row${alertSettings.soundTheme === k ? ' selected' : ''}" data-sound-theme="${k}">
+        <div>
+          <div class="sp-label">${esc(t.label)}</div>
+          <div class="sp-sub">${esc(t.sub)} — tap to hear it</div>
+        </div>
+        <div class="sp-radio${alertSettings.soundTheme === k ? ' on' : ''}"></div>
+      </div>`).join('')}
     ${settingsSection !== 'display' ? '' : `
     <div class="sp-section-title">Color theme</div>` + THEMES.map(({ key, label, sub, swatchBg, swatchAccent }) => `
       <div class="sp-theme-row${uiTheme === key ? ' selected' : ''}" data-theme-key="${key}">
@@ -5843,6 +6018,47 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     // nothing on it to toggle, so a tap anywhere on it is unambiguous.
     settingsSection = menuRow.dataset.group;
     settingsPanelEl.scrollTop = 0;
+    renderSettingsPanel();
+    return;
+  }
+  // Volume and sound theme. These MUST be handled before the colour-theme
+  // block below: they reuse .sp-theme-row for its radio styling but carry no
+  // data-theme-key, so falling through would call applyTheme(undefined) and
+  // wipe the colour theme as a side effect of turning the volume up.
+  //
+  // Both play a sound on selection. Choosing a level you cannot hear, or a
+  // voice you have never heard, is otherwise guesswork -- and on a device with
+  // no hardware volume knob that guesswork has nowhere else to go.
+  const volRow = e.target.closest('[data-vol]');
+  if (volRow) {
+    if (!e.target.closest('.sp-radio')) return;   // row body is for scrolling
+    // Reaching for a level while muted means "make it this loud", not
+    // "nothing". Leaving these inert was a dead control: the tap landed, the
+    // row was styled disabled, and nothing happened or explained why.
+    alertSettings.volume = parseFloat(volRow.dataset.vol);
+    alertSettings.muted = false;
+    saveAlertSettings();
+    applyVolume();
+    playAlertSound();
+    renderSettingsPanel();
+    return;
+  }
+  const soundRow = e.target.closest('[data-sound-theme]');
+  if (soundRow) {
+    if (!e.target.closest('.sp-radio')) return;   // row body is for scrolling
+    alertSettings.soundTheme = soundRow.dataset.soundTheme;
+    saveAlertSettings();
+    if (!alertSettings.muted) playAlertSound();
+    renderSettingsPanel();
+    return;
+  }
+  const muteRow = e.target.closest('[data-mute]');
+  if (muteRow) {
+    if (!e.target.closest('.sp-switch')) return;
+    alertSettings.muted = !alertSettings.muted;
+    saveAlertSettings();
+    applyVolume();
+    if (!alertSettings.muted) playAlertSound();   // prove it came back
     renderSettingsPanel();
     return;
   }
