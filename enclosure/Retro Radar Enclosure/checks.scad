@@ -32,7 +32,7 @@ rib_h=4.0; rib_w=5; rib_z_list=[10,22]; rib_a0=340; rib_arc=220;
 grille_hole_dia=2.5; grille_pitch=4.5; grille_w=90; grille_h=40;
 speaker_d=45; speaker_angles=[0,180]; exhaust_slot_w=2.2; exhaust_slot_h=12;
 n_exhaust=24; exhaust_skip_deg=50;
-ant_cable_slot_w=7; ant_cable_exit_h=7.98; ant_flange_t=4; back_insert_d=8;
+ant_cable_slot_w=7; ant_cable_exit_h=7.98; ant_flange_t=7; ant_flange_insert_d=5.5; back_insert_d=8;
 
 // The SMA bulkhead variant. Restated here for the same reason as everything
 // above: `use <>` brings in modules, not variables, so a check that names one
@@ -183,6 +183,55 @@ else if (check=="ant_inserts_open") {     // positive control: bosses bored
     back_plate();
   }
 }
+
+// ---- reversed antenna screws -----------------------------------------
+// ant_inserts_open used to probe the plate's insert posts. Those posts are
+// gone -- the insert moved into the mount's flange -- so that probe now sits
+// in free air and returns its own volume whatever the plate looks like. It
+// passed vacuously for exactly one run before this replaced it.
+
+// The plate must be a plain clearance hole now: a 3mm probe passes through.
+else if (check=="ant_plate_holes_open") {
+  difference() {
+    for (i=[0:n_ant_bolts-1]) { a=i*360/n_ant_bolts + 30;
+      translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a),
+                 -back_plate_t - 1])
+        cylinder(d=3.0, h=back_plate_t + 2); }
+    back_plate();
+  }
+}
+// ...and the flange must now carry the pocket the insert presses into.
+else if (check=="ant_flange_inserts_open") {
+  intersection() {
+    ant_flange_insert_bores();
+    translate([-300,-300,-back_plate_t - ant_flange_insert_d])
+      cube([600,600,ant_flange_insert_d]);
+  }
+}
+
+// THE POINT OF THE WHOLE CHANGE. A driver coming from INSIDE the case, along
+// each screw axis, must reach the plate without meeting the antenna mount.
+else if (check=="driver_path_clear") {
+  intersection() {
+    for (i=[0:n_ant_bolts-1]) { a=i*360/n_ant_bolts + 30;
+      translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a), 0])
+        cylinder(d=6, h=45); }
+    union() { antenna_mount(); antenna_mount_sma(); }
+  }
+}
+// Paired positive control, and the measurement that justified reversing them.
+// The SAME driver approaching from OUTSIDE -- the old direction -- must be
+// caught by the socket mount's boss. Without this, driver_path_clear passes
+// for a probe that was never near anything.
+else if (check=="driver_path_was_blocked") {
+  intersection() {
+    for (i=[0:n_ant_bolts-1]) { a=i*360/n_ant_bolts + 30;
+      translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a), -80])
+        cylinder(d=6, h=80 - back_plate_t); }
+    antenna_mount();
+  }
+}
+
 // The turret is gone. "Nothing proud of outer_dia" is the obvious test and
 // it is wrong: the decorative rivets and the cradle rails deliberately stand
 // proud, out to r=115.7 all the way round, and the first version of this
