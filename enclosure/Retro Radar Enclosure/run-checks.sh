@@ -21,7 +21,7 @@ trap 'rm -rf "$TMP"' EXIT
 # Must come out with no real volume: a real interference, or a region of the
 # stand that no coloured part claims, which would print as a hole.
 EMPTY="plate_vs_shell plate_outside_case lip_clears_posts lip_inside_bore
-       vents_clear_of_mount usbc_clears_standoffs usbc_screws_clear_window no_turret ribs_unbroken mount_vs_plate driver_path_clear sma_mount_vs_plate connector_passes
+       vents_clear_of_mount usbc_clears_standoffs usbc_screws_clear_window no_turret ribs_unbroken mount_vs_plate driver_path_clear sma_mount_vs_plate sma_barrel_fits connector_passes
        antenna_clears_case mount_vs_stand sma_mount_vs_stand socket_takes_base connector_has_room cable_slot_open"
 
 # Must come out SMALL but non-zero. These are the colour seams, and they

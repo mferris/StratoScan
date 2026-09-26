@@ -38,7 +38,7 @@ ant_cable_slot_w=7; ant_cable_exit_h=7.98; ant_flange_t=7; ant_flange_insert_d=5
 // above: `use <>` brings in modules, not variables, so a check that names one
 // of these directly needs its own copy.
 ant_sma_hole=6.5; ant_sma_panel_t=3; ant_sma_cavity=14;
-ant_sma_boss_d=22; ant_sma_boss_h=10;
+ant_sma_boss_d=22; ant_sma_boss_h=10; ant_sma_cavity_d=25;
 
 
 // The plate and the shell meet at a butt joint; neither may intrude on the
@@ -361,6 +361,24 @@ else if (check=="sma_hole_open") {
     antenna_mount_sma();
   }
 }
+
+// The two-piece barrel, as a solid. A Ø13 x 25mm slug hanging off the panel
+// underside stands in for the bulkhead's inner half plus the jumper mated
+// onto it. It must fit in the void without touching the part.
+//
+// Pinned because the 25mm is an ESTIMATE from listings, not a measurement off
+// the parts, and because a cavity a few mm short does not fail loudly -- the
+// plug simply will not seat and the antenna ends up proud and crooked, which
+// is discovered with a printed plate in hand.
+else if (check=="sma_barrel_fits") {
+  intersection() {
+    ant_axis_frame()
+      translate([0, 0, ant_sma_boss_h - ant_sma_panel_t - ant_sma_cavity_d])
+        cylinder(d=13, h=ant_sma_cavity_d);
+    antenna_mount_sma();
+  }
+}
+
 
 
 // ---- can the connector actually get through? --------------------------

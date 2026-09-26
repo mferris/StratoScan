@@ -956,6 +956,17 @@ ant_sma_panel_t = 3;     // bulkhead jacks are threaded for about 1.5-3mm of pan
 ant_sma_cavity  = 14;    // behind the panel: the nut, and room for the coax to turn
 ant_sma_boss_d  = 22;    // no 33mm base to hold any more, so the boss shrinks
 ant_sma_boss_h  = 10;    // panel sits at 7-10, clear of the cable bore's 6mm top
+// How far the cavity runs BELOW the panel, for the two-piece barrel: the
+// bulkhead's inner half plus the jumper plug mated onto it. That length was
+// estimated at ~20mm from listings, not measured off the parts, so this is
+// deliberately generous -- 25mm covers any plausible barrel-and-jumper pair,
+// and the cost of the extra 7mm is 3.8mm more overhang at the back of an
+// arm that already stands 30mm off the plate.
+//
+// Guessing short here is the expensive mistake. The mount is quick to
+// reprint; the back plate it bolts to is not, and a cavity 3mm too shallow
+// means the plug will not seat and the antenna sits proud at an angle.
+ant_sma_cavity_d = 25;
 
 
 function ant_barrel_base() = [0, ant_mount_y, -back_plate_t - ant_stub_len];
@@ -1054,8 +1065,10 @@ module antenna_mount_sma() {
                 cylinder(d=ant_flange_d, h=ant_flange_t);
             translate([0, ant_mount_y, -back_plate_t - ant_stub_len])
                 cylinder(d=ant_stub_dia, h=ant_stub_len);
-            ant_axis_frame() translate([0,0,-6])
-                cylinder(d=ant_sma_boss_d, h=ant_sma_boss_h + 6);
+            ant_axis_frame()
+                translate([0,0,ant_sma_boss_h - ant_sma_panel_t - ant_sma_cavity_d])
+                    cylinder(d=ant_sma_boss_d,
+                             h=ant_sma_cavity_d + ant_sma_panel_t);
         }
         ant_axis_frame() {
             // the jack's hole, through the panel at the top of the boss
@@ -1065,9 +1078,8 @@ module antenna_mount_sma() {
             // meets the cable bore's sweep rather than relying on the two
             // happening to touch: an unconnected cavity looks identical in
             // preview and is a solid wall in the print.
-            translate([0, 0, -6])
-                cylinder(d=ant_sma_cavity,
-                         h=ant_sma_boss_h - ant_sma_panel_t + 6);
+            translate([0, 0, ant_sma_boss_h - ant_sma_panel_t - ant_sma_cavity_d])
+                cylinder(d=ant_sma_cavity, h=ant_sma_cavity_d);
         }
         ant_cable_bore(0);
         ant_flange_insert_bores();
