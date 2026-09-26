@@ -138,7 +138,8 @@ ant_stub_len   = 30;   // how far back it reaches
 // clears with 6mm of radial slack. antenna_clears_head holds it.
 ant_barrel_len = 14;   // socket barrel, along the antenna's own axis
 ant_flange_d   = 40;
-ant_flange_t   = 4;
+ant_flange_t   = 7;   // 4 -> 7: the insert now lives in the FLANGE, not the plate
+ant_flange_insert_d = 5.5;  // heat-set pocket depth, leaving 1.5mm of flange behind it
 ant_bolt_pcd   = 30;
 ant_bolt_d     = 3.4;
 n_ant_bolts    = 3;
@@ -923,7 +924,7 @@ module antenna_mount() {
                           ant_socket_depth + ant_socket_lead + 1]);
         }
         ant_cable_bore(0);
-        ant_bolt_holes(ant_flange_t + 2, -back_plate_t - ant_flange_t - 1);
+        ant_flange_insert_bores();
         // nothing may stand proud of the plate's outer face
         translate([-300, -300, -back_plate_t]) cube([600, 600, 600]);
     }
@@ -954,7 +955,7 @@ module antenna_mount_sma() {
                          h=ant_sma_boss_h - ant_sma_panel_t + 6);
         }
         ant_cable_bore(0);
-        ant_bolt_holes(ant_flange_t + 2, -back_plate_t - ant_flange_t - 1);
+        ant_flange_insert_bores();
         // nothing may stand proud of the plate's outer face
         translate([-300, -300, -back_plate_t]) cube([600, 600, 600]);
     }
@@ -1029,6 +1030,33 @@ module usbc_cutout() {
 
 // Bosses on the INNER face at the antenna bolt circle, each taking an M3
 // heat-set insert.
+
+// The screws come from INSIDE the case now, so the inserts live here in the
+// flange rather than in posts on the plate.
+//
+// The old way could not be assembled. Sighting down a screw's axis, the
+// socket mount's boss is 24mm wide either side of the antenna axis while the
+// bolts sit only 15mm out, so every bolt except the bottom one is directly
+// underneath it -- no driver reaches them at any angle, and no rotation of
+// the bolt circle helps, because nothing on a 30mm circle clears a 48mm
+// shadow. Measured, not guessed; the SMA mount's 22mm boss clears every bolt,
+// which is why only the socket mount felt wrong.
+//
+// Reversing the screws sidesteps the boss entirely: the back plate is
+// removable, so its inner face is open air at assembly time. It also makes
+// the plate simpler -- three clearance holes instead of three posts standing
+// inside the case. The cost is real and worth stating: the mount can no
+// longer be taken off without removing the back plate.
+module ant_flange_insert_bores() {
+    for (i = [0 : n_ant_bolts - 1]) {
+        a = i * 360/n_ant_bolts + 30;
+        translate([ant_bolt_pcd/2*cos(a),
+                   ant_mount_y + ant_bolt_pcd/2*sin(a),
+                   -back_plate_t - ant_flange_insert_d])
+            cylinder(d = ant_insert_bore, h = ant_flange_insert_d + 0.01);
+    }
+}
+
 module ant_insert_bosses() {
     for (i = [0 : n_ant_bolts - 1]) {
         a = i * 360/n_ant_bolts + 30;
@@ -1042,14 +1070,14 @@ module ant_insert_bosses() {
 // insert cannot be pressed too deep and the bolt still passes freely from
 // the outside.
 module ant_insert_bores() {
+    // Just a clearance hole now. The insert moved to the mount's flange, so
+    // the plate no longer carries a pocket or a post -- the screw passes
+    // straight through from the inside and threads into the mount.
     for (i = [0 : n_ant_bolts - 1]) {
         a = i * 360/n_ant_bolts + 30;
-        translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a), 0]) {
-            translate([0, 0, 1])
-                cylinder(d = ant_insert_bore, h = ant_insert_h);      // insert pocket
-            translate([0, 0, -back_plate_t - 1])
-                cylinder(d = ant_bolt_d, h = back_plate_t + 2);       // bolt clearance
-        }
+        translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a),
+                   -back_plate_t - 1])
+            cylinder(d = ant_bolt_d, h = back_plate_t + 2);
     }
 }
 
@@ -1083,7 +1111,6 @@ module back_plate() {
                             cylinder(d=2.5, h=9);
                         }
             back_lip();
-            ant_insert_bosses();
         }
         for (i = [0:n_screws-1]) {
             a = i * 360/n_screws;

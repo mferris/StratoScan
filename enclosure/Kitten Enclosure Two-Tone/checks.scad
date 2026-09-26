@@ -36,7 +36,7 @@ ant_conn_dia=9.15; ant_boss_dia=45; ant_socket_lead=2;
 // point. ant_relief_* is the clear space under the socket floor for the
 // connector, which is what was actually stopping the base from seating.
 ant_base_dia=31.25; ant_relief_dia=18; ant_relief_h=4;
-ant_cable_slot_w=7; ant_cable_exit_h=7.98; ant_flange_t=4;
+ant_cable_slot_w=7; ant_cable_exit_h=7.98; ant_flange_t=7; ant_flange_insert_d=5.5;
 
 // The SMA bulkhead variant. Restated here for the same reason as everything
 // above: `use <>` brings in modules, not variables, so a check that names one
@@ -493,6 +493,55 @@ if (check=="ant_inserts_open") {
     back_plate();
   }
 }
+
+// ---- reversed antenna screws -----------------------------------------
+// ant_inserts_open used to probe the plate's insert posts. Those posts are
+// gone -- the insert moved into the mount's flange -- so that probe now sits
+// in free air and returns its own volume whatever the plate looks like. It
+// passed vacuously for exactly one run before this replaced it.
+
+// The plate must be a plain clearance hole now: a 3mm probe passes through.
+if (check=="ant_plate_holes_open") {
+  difference() {
+    for (i=[0:n_ant_bolts-1]) { a=i*360/n_ant_bolts + 30;
+      translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a),
+                 -back_plate_t - 1])
+        cylinder(d=3.0, h=back_plate_t + 2); }
+    back_plate();
+  }
+}
+// ...and the flange must now carry the pocket the insert presses into.
+if (check=="ant_flange_inserts_open") {
+  intersection() {
+    ant_flange_insert_bores();
+    translate([-300,-300,-back_plate_t - ant_flange_insert_d])
+      cube([600,600,ant_flange_insert_d]);
+  }
+}
+
+// THE POINT OF THE WHOLE CHANGE. A driver coming from INSIDE the case, along
+// each screw axis, must reach the plate without meeting the antenna mount.
+if (check=="driver_path_clear") {
+  intersection() {
+    for (i=[0:n_ant_bolts-1]) { a=i*360/n_ant_bolts + 30;
+      translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a), 0])
+        cylinder(d=6, h=45); }
+    union() { antenna_mount(); antenna_mount_sma(); }
+  }
+}
+// Paired positive control, and the measurement that justified reversing them.
+// The SAME driver approaching from OUTSIDE -- the old direction -- must be
+// caught by the socket mount's boss. Without this, driver_path_clear passes
+// for a probe that was never near anything.
+if (check=="driver_path_was_blocked") {
+  intersection() {
+    for (i=[0:n_ant_bolts-1]) { a=i*360/n_ant_bolts + 30;
+      translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a), -80])
+        cylinder(d=6, h=80 - back_plate_t); }
+    antenna_mount();
+  }
+}
+
 function ant_bolt_d_probe() = 3.0;
 
 // ---- can the connector actually get through? --------------------------
