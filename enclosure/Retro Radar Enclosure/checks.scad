@@ -28,6 +28,10 @@ ant_conn_dia=9.15; ant_boss_dia=45; ant_socket_lead=2;
 // point. ant_relief_* is the clear space under the socket floor for the
 // connector, which is what was actually stopping the base from seating.
 ant_base_dia=31.25; ant_relief_dia=18; ant_relief_h=4;
+rib_h=4.0; rib_w=5; rib_z_list=[10,22]; rib_a0=340; rib_arc=220;
+grille_hole_dia=2.5; grille_pitch=4.5; grille_w=90; grille_h=40;
+speaker_d=45; speaker_angles=[0,180]; exhaust_slot_w=2.2; exhaust_slot_h=12;
+n_exhaust=24; exhaust_skip_deg=50;
 ant_cable_slot_w=7; ant_cable_exit_h=7.98; ant_flange_t=4; back_insert_d=8;
 
 // The SMA bulkhead variant. Restated here for the same reason as everything
@@ -226,6 +230,31 @@ else if (check=="mount_vs_stand") {
       translate([0,0,-shell_depth/2]) union() { back_plate(); antenna_mount(); }
   }
 }
+
+// ---- the decorative ribs must not be perforated ----------------------
+// The ribs sweep 220 degrees, which takes in both speakers and most of the
+// exhaust slots. Before this, every grille hole in the rib band and the
+// bottom 2.5mm of every slot cut straight through the ridge and out the far
+// side: from the outside the rib looked chewed rather than raised.
+//
+// Nothing that is cut from the wall may take material out of a rib.
+else if (check=="ribs_unbroken") {
+  intersection() {
+    ribs();
+    union() {
+      exhaust_slots();
+      for (a = speaker_angles) speaker_grille(a);
+    }
+  }
+}
+// Paired positive control. An empty result above is also what ribs() failing
+// to evaluate produces, or a probe that never reaches the wall -- and this
+// check would then pass for a case with no ribs at all. The ribs must exist
+// and have real volume.
+else if (check=="ribs_present") {
+  ribs();
+}
+
 
 // ---- the SMA bulkhead mount -------------------------------------------
 // Same three questions the socket mount has to answer -- does it stay off

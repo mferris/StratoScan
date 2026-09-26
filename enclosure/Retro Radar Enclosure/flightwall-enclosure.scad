@@ -177,7 +177,11 @@ rivet_dia     = 4;
 rivet_h       = 1.4;
 rivet_z       = shell_depth - lip_height - 6;
 
-rib_h    = 2.2;      // how far each rib stands proud of the wall
+rib_h    = 4.0;      // how far each rib stands proud of the wall.
+// 2.2 -> 4.0: at 2.2 the underside was too small an overhang for
+// BambuStudio to generate support for, so it printed rough. A wider
+// overhang trips the detector. A chamfered underside would remove
+// the need for support altogether, at the cost of the square profile.
 rib_w    = 5;         // width (in Z) of each rib band
 rib_z_list = [10, 22]; // Z positions of the two ribs
 // The ribs stand 2.2mm proud but the cradle bore only clears the case by
@@ -348,7 +352,20 @@ fan_grille_pos = [0, -68];
 
 exhaust_slot_w = 2.2;
 exhaust_slot_h = 12;
-exhaust_z      = shell_depth / 2;  // mid-depth: lands in the 26mm gap BETWEEN the two
+// Centred in the window between the top of the upper decorative rib and the
+// rear cradle arm, rather than at plain mid-depth. At mid-depth the slots ran
+// from z=24.5 and the upper rib band is 22-27, so every slot cut through the
+// rib and came out the other side -- the rib read as broken rather than as a
+// ridge. Moving rather than shortening keeps the full 12mm of vent: the clear
+// window is 16.5mm and the slot is 12mm, so it fits with ~2mm either side.
+//
+// Derived, not typed, so it follows shell_depth and the rib positions instead
+// of silently becoming wrong the next time either moves. The kitten has no
+// ribs, but exhaust_z is shared core, and the slots stay inside the arm gap
+// there too -- identical part, no reason to fork it.
+rib_top_z      = 27;               // max(rib_z_list) + rib_w, restated for the kitten
+arm_b_inner_z  = shell_depth/2 + 13;   // arm_gap/2 = 13
+exhaust_z      = (rib_top_z + arm_b_inner_z) / 2;
                                    // cradle arms, the one part of the lower wall that is
                                    // actually open to air when the case is in the stand
 n_exhaust      = 24;
@@ -615,6 +632,26 @@ module speaker_bracket(angle) {
     }
 }
 
+
+// Clearance between a grille hole and a rib edge. 0.6 is chosen, not
+// arbitrary: it is the largest value that still keeps the row sitting in the
+// 7mm gap BETWEEN the two ribs. At 0.8 that row is dropped too, for 0.05mm,
+// and the grille loses its whole lower half -- 4 rows of 9 -- which is both
+// less speaker aperture and a lopsided look.
+grille_rib_clear = 0.6;
+
+// True when a grille hole at this Z would break into a decorative rib. The
+// ribs sweep 220 degrees, which takes in both speakers at 0 and 180, so
+// without this every rib arrives at the speaker already perforated: the holes
+// cut through the ridge and out the other side, and it reads as broken rather
+// than as a ridge. A round hole cannot be shortened, so these are dropped.
+//
+// Written over rib_z_list rather than two hardcoded bands, so adding a third
+// rib does not silently start drilling through it.
+function z_on_rib(z) =
+    let (c = grille_hole_dia/2 + grille_rib_clear)
+    len([for (rz = rib_z_list) if (z + c > rz && z - c < rz + rib_w) rz]) > 0;
+
 module speaker_grille(angle) {
     // The holes have to clear BOTH solids in the sound path, not just the
     // outer wall: speaker_bracket's hull fills the full
@@ -635,10 +672,11 @@ module speaker_grille(angle) {
             dy = (iy - n_y/2) * grille_pitch;
             for (iz = [0:n_z]) {
                 dz = (iz - n_z/2) * grille_pitch;
-                translate([r_mount, dy, z0 + speaker_d/2 + dz])
-                    rotate([0,90,0])
-                        cylinder(d=grille_hole_dia,
-                                 h=speaker_bracket_depth + wall + 3, $fn=10);
+                if (!z_on_rib(z0 + speaker_d/2 + dz))
+                    translate([r_mount, dy, z0 + speaker_d/2 + dz])
+                        rotate([0,90,0])
+                            cylinder(d=grille_hole_dia,
+                                     h=speaker_bracket_depth + wall + 3, $fn=10);
             }
         }
 }
