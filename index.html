@@ -6027,9 +6027,22 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   // Both play a sound on selection. Choosing a level you cannot hear, or a
   // voice you have never heard, is otherwise guesswork -- and on a device with
   // no hardware volume knob that guesswork has nowhere else to go.
+  // These two accept a tap ANYWHERE on the row, unlike the switch rows and
+  // the colour-theme rows below (which gate on '.sp-radio' or the swatch
+  // graphic). That is not an oversight -- the colour-theme row has its big
+  // swatch circle as an obvious, generous target; these rows have no
+  // equivalent graphic, only the same 18px dot every row carries, and on a
+  // touchscreen a physical tap naturally lands on the label text someone is
+  // reading, not on a small dot beside it. A toggle switch getting fat-
+  // fingered while scrolling is worth guarding against -- it flips a boolean
+  // that may go unnoticed. A radio row like these is the opposite: picking
+  // the wrong one of three visible options is corrected by looking at the
+  // screen and tapping the right one, immediately. The drag-vs-tap slop
+  // check above this already separates "scrolling past this row" from "a
+  // tap that landed on it" -- the row-body restriction on other rows is an
+  // extra safety margin on top of that, one these rows don't need as badly.
   const volRow = e.target.closest('[data-vol]');
   if (volRow) {
-    if (!e.target.closest('.sp-radio')) return;   // row body is for scrolling
     // Reaching for a level while muted means "make it this loud", not
     // "nothing". Leaving these inert was a dead control: the tap landed, the
     // row was styled disabled, and nothing happened or explained why.
@@ -6043,7 +6056,6 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   }
   const soundRow = e.target.closest('[data-sound-theme]');
   if (soundRow) {
-    if (!e.target.closest('.sp-radio')) return;   // row body is for scrolling
     alertSettings.soundTheme = soundRow.dataset.soundTheme;
     saveAlertSettings();
     // Warm every file in the newly-picked theme now, not just the one
