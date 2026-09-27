@@ -123,3 +123,4 @@ phone ──(pairing, notification rules)──▶ relay
 | 4.3 Empty-sky screen | Done: clock, weather (Open-Meteo), today's tally after 30 s of empty sky | — |
 | 4.4 Spoken announcements | Done: Piper + LJSpeech voice on the unit; setting off by default | — |
 | 4.5 Year in review | Done: per-year counters; RDU's history carried over (44,332 visits in 2026) | — |
+| 4.6 FlightAware feeding | Done: opt-in setup-page card; PiAware relays readsb; remote updates off; FR24 linked, not automated | Owner turns it on and claims the feeder |
