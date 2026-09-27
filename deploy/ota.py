@@ -25,6 +25,7 @@ Usage:  ota.py check         look for a newer release, verify it, stage nothing
         ota.py apply         install what is staged, verify paint, roll back
         ota.py status        print what is installed and what is available
 """
+import filecmp
 import hashlib
 import json
 import os
@@ -344,6 +345,65 @@ def restart_kiosk():
         check=False, timeout=30)
 
 
+# Long-running services load their code once at start, so writing a new file
+# changes nothing until the service restarts -- and this used to restart only
+# the kiosk. Found the hard way: a security fix to funnel-gateway.py was
+# "installed" and reported OK while the old, leaking gateway kept running for
+# hours. Timer-driven oneshots (net-watchdog.py, shm-guard.sh, ota-auto.sh)
+# and this file itself pick up a new version on their next run and need
+# nothing here.
+SERVICE_FOR = {
+    "sighting-store.py":  ("system", "flightradar-sighting-store.service"),
+    "approach-store.py":  ("system", "flightradar-approach-store.service"),
+    "network-compare.py": ("system", "flightradar-network.service"),
+    "photo-proxy.py":     ("system", "flightradar-photo-proxy.service"),
+    "funnel-gateway.py":  ("system", "flightradar-funnel-gateway.service"),
+    "setup-server.py":    ("system", "flightradar-setup.service"),
+    "setup-ui.html":      ("system", "flightradar-setup.service"),
+    "setupd.py":          ("system", "flightradar-setupd.service"),
+    "wake-listener.py":   ("user",   "flightradar-wake.service"),
+}
+
+
+def services_to_restart(dests):
+    """The (scope, unit) pairs whose code is among `dests`, deduplicated."""
+    units = []
+    for dest in dests:
+        if os.path.dirname(dest) != OPT_ROOT:
+            continue
+        pair = SERVICE_FOR.get(os.path.basename(dest))
+        if pair and pair not in units:
+            units.append(pair)
+    return units
+
+
+def restart_services(units):
+    """Restart services from a transient unit, like restart_kiosk.
+
+    Never inline: this process may be verifying the update, and a restart must
+    not be able to take it down with it. ota.py always runs in its own unit
+    (setupd starts it via systemd-run; ota-auto has its own service), so even
+    restarting setupd here cannot reach it.
+    """
+    system = [u for scope, u in units if scope == "system"]
+    user = [u for scope, u in units if scope == "user"]
+    if system:
+        subprocess.run(
+            ["systemd-run", "--quiet", "--collect",
+             "--unit", f"flightradar-ota-services-{os.getpid()}",
+             "--on-active=1s", "/usr/bin/systemctl", "restart", *system],
+            check=False, timeout=30)
+    if user:
+        subprocess.run(
+            ["systemd-run", "--quiet", "--collect",
+             "--unit", f"flightradar-ota-userservices-{os.getpid()}",
+             "--on-active=1s", "/usr/bin/systemctl", "--user", "-M",
+             f"{KIOSK_USER}@", "restart", *user],
+            check=False, timeout=30)
+    if units:
+        log("restarting " + ", ".join(u for _, u in units))
+
+
 def apply():
     manifest_path = os.path.join(STAGING, ".manifest.json")
     if not os.path.isfile(manifest_path):
@@ -386,6 +446,11 @@ def apply():
         raise Fail(f"no paint heartbeat at {HEARTBEAT} -- the display check "
                    f"cannot run, so an update would be rolled back whatever "
                    f"happened. Is flightradar-wake.service running?")
+    # Every allowlisted file is rewritten on every release, so "in the plan"
+    # is not "changed" -- compare contents, or every update would bounce every
+    # service, the setup page and remote access included.
+    changed = [dest for src, dest, _ in plan
+               if not os.path.exists(dest) or not filecmp.cmp(src, dest, shallow=False)]
     for src, dest, want_exec in plan:
         # Every existing DEST directory (WEB_ROOT, OPT_ROOT) is already there
         # on a device that has run any prior release. This only matters for a
@@ -404,6 +469,8 @@ def apply():
     log(f"wrote {len(plan)} files, restarting to verify")
     write_status(state="applying", version=manifest["version"],
                  serial=manifest["serial"])
+    services = services_to_restart(changed)
+    restart_services(services)
     restart_kiosk()
 
     deadline = time.time() + RESTART_SETTLE_S + PAINT_TIMEOUT_S
@@ -421,6 +488,9 @@ def apply():
     log("no frame painted after the update -- rolling back")
     for keep, dest in saved:
         shutil.copy2(keep, dest)
+    # The services restarted onto the new code must go back to the old too,
+    # or a rollback would leave them running the build it just rejected.
+    restart_services(services)
     restart_kiosk()
     write_status(state="rolled_back", version=manifest["version"],
                  serial=manifest["serial"],
