@@ -1,0 +1,60 @@
+name: Build factory image
+
+# Manual. Builds the SD-card image a new unit is flashed with (see image/).
+# By default the result is only an artifact for testing. "publish" also puts
+# it on a GitHub release tagged image-<version>, marked prerelease and never
+# "latest" -- units' signed updates read "latest", and must never see this.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Image version (default: today's date)"
+        required: false
+      publish:
+        description: "Publish as a GitHub release (image-<version>)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools and disk space
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q parted zerofree xz-utils
+          # The image is ~9 GB unpacked; reclaim what the runner doesn't need.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache || true
+          df -h /
+      - name: Build
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          [ -n "$VERSION" ] || VERSION=$(date -u +%Y.%m.%d)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          sudo VERSION="$VERSION" OUT="$PWD/image-out" sh image/build.sh
+      - name: Keep the result
+        uses: actions/upload-artifact@v4
+        with:
+          name: flightradar-image-${{ env.VERSION }}
+          path: image-out/
+          retention-days: 14
+          compression-level: 0
+      - name: Publish
+        if: ${{ github.event.inputs.publish == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IMG=image-out/flightradar-$VERSION.img.xz
+          SIZE=$(stat -c %s "$IMG")
+          [ "$SIZE" -lt 2147483648 ] || { echo "image is over GitHub's 2 GiB asset limit"; exit 1; }
+          gh release create "image-$VERSION" --prerelease --latest=false \
+            --title "Factory image $VERSION" \
+            --notes "SD-card image for a new FlightRadar unit. Flash it with Raspberry Pi Imager (\"Use custom\"), and do NOT apply Imager's OS customisation. First boot finishes setup, then raises the FlightRadar-Setup hotspot. The GPL source offer is in SOURCES.md; versions and every package are in MANIFEST.txt. This is not an over-the-air update, and units ignore it." \
+            "$IMG" "$IMG.sha256" image-out/MANIFEST.txt image-out/SOURCES.md image-out/src/*
+          gh api "repos/${{ github.repository }}/releases/latest" -q .tag_name | grep -v "^image-" \
+            || { echo "an image release became 'latest'; units would see it"; exit 1; }
