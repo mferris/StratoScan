@@ -1785,13 +1785,39 @@ const sightingCounts = new Map(); // hex -> { total, nearby }
 // genuinely returning later (next lap, next day) still counts again once
 // the cooldown elapses.
 const SIGHTING_COOLDOWN_MS = 5 * 60 * 1000;
-const lastCountedAt = new Map(); // hex -> { total: ts, nearby: ts }
+// Persisted, in wall-clock ms, because the kiosk reloads itself several times
+// a day (shm-guard, the 04:00 restart) and an in-memory map started empty
+// each time -- counting every aircraft on screen at that moment as a brand
+// new visit.
+const COUNTED_KEY = 'flightradar.lastCounted';
+const lastCountedAt = new Map(); // hex -> { total: ts, nearby: ts, network: ts }
+try {
+  const saved = JSON.parse(localStorage.getItem(COUNTED_KEY) || '{}');
+  const cutoff = Date.now() - SIGHTING_COOLDOWN_MS;
+  for (const [hex, kinds] of Object.entries(saved)) {
+    if (kinds && Object.values(kinds).some(ts => ts > cutoff)) lastCountedAt.set(hex, kinds);
+  }
+} catch (e) {}
+let countedSaveTimer = null;
+function saveLastCounted() {
+  countedSaveTimer = null;
+  // Pruning here also keeps the in-memory map bounded on a busy site.
+  const cutoff = Date.now() - SIGHTING_COOLDOWN_MS;
+  const out = {};
+  for (const [hex, kinds] of lastCountedAt) {
+    if (Object.values(kinds).some(ts => ts > cutoff)) out[hex] = kinds;
+    else lastCountedAt.delete(hex);
+  }
+  try { localStorage.setItem(COUNTED_KEY, JSON.stringify(out)); } catch (e) {}
+}
+addEventListener('pagehide', saveLastCounted);
 
 function recordSightingOnce(hex, kind) {
-  const now = performance.now();
+  const now = Date.now();
   const last = lastCountedAt.get(hex) || {};
   if (last[kind] !== undefined && now - last[kind] < SIGHTING_COOLDOWN_MS) return;
   lastCountedAt.set(hex, { ...last, [kind]: now });
+  if (!countedSaveTimer) countedSaveTimer = setTimeout(saveLastCounted, 15000);
   recordSighting(hex, kind);
 }
 
@@ -2078,7 +2104,28 @@ function initMap() {
   map.on('load', refreshStorms);
   map.on('load', refreshLightning);
   map.on('load', initApproachLayer);
+
+  // The style is fetched once, and a failure used to be permanent until the
+  // next page reload: after a power cut the kiosk often starts before WiFi is
+  // up, leaving a blank disc (and no runways, storms or heatmap, which all
+  // hang off 'load') for hours. If 'load' hasn't fired in time, throw this map
+  // away and build a fresh one, backing off so a dead tile host isn't hammered.
+  const thisMap = map;
+  map.on('load', () => { clearTimeout(mapLoadTimer); mapRetryMs = MAP_RETRY_MIN_MS; });
+  clearTimeout(mapLoadTimer);
+  mapLoadTimer = setTimeout(() => {
+    if (map !== thisMap || thisMap.loaded()) return;
+    try { thisMap.remove(); } catch (e) {}
+    map = null;
+    setTimeout(initMap, mapRetryMs);
+    mapRetryMs = Math.min(mapRetryMs * 2, MAP_RETRY_MAX_MS);
+  }, MAP_LOAD_TIMEOUT_MS);
 }
+const MAP_LOAD_TIMEOUT_MS = 60 * 1000;
+const MAP_RETRY_MIN_MS = 15 * 1000;
+const MAP_RETRY_MAX_MS = 10 * 60 * 1000;
+let mapRetryMs = MAP_RETRY_MIN_MS;
+let mapLoadTimer = null;
 
 // Registered before loadRunways() resolves (that one waits on a network
 // round-trip to Overpass; this doesn't, so it always finishes first),
@@ -2419,6 +2466,7 @@ function applyStormsVisibility() {
   if (map.getSource('storms')) map.removeSource('storms');
 }
 
+let lastStormUrl = null;
 async function refreshStorms() {
   // An overlay that is switched off must cost nothing: no request to
   // RainViewer, no tiles decoded, no textures uploaded. This ran on its timer
@@ -2433,6 +2481,12 @@ async function refreshStorms() {
     if (!frames || frames.length === 0) return;
     const latest = frames[frames.length - 1];
     const url = `${data.host}${latest.path}/256/{z}/{x}/{y}/${RAINVIEWER_COLOR}/${RAINVIEWER_OPTIONS}.png`;
+    // RainViewer publishes a new frame every ~10 min but this runs every 5,
+    // so half the rebuilds below re-fetched the frame already on screen --
+    // pure texture churn on a GPU whose shared memory is the kiosk's main
+    // long-run pressure point.
+    if (url === lastStormUrl && map.getSource('storms')) return;
+    lastStormUrl = url;
 
     // Rebuilt, not re-pointed. setTiles() swaps the URL but leaves the tiles
     // fetched under the old one held in GPU memory: measured on the device,
@@ -3906,8 +3960,14 @@ async function flushRouteQueue() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ planes: batch.map(({ callsign, lat, lng }) => ({ callsign, lat, lng })) }),
+      signal: AbortSignal.timeout(10000),
     });
-    const routes = res.ok ? await res.json() : [];
+    // A reply that isn't an array (an API change, an error object with a 200)
+    // used to throw inside the loop below, landing in the catch that caches
+    // nothing -- so the same callsigns were re-queried forever. Treat it as
+    // "no routes": every callsign in the batch is cached as a miss.
+    let routes = res.ok ? await res.json() : [];
+    if (!Array.isArray(routes)) routes = [];
     const found = new Set();
     for (const route of routes) {
       if (!route || !route.callsign) continue;
@@ -4680,6 +4740,10 @@ function updateStatus() {
     planes.clear();
     for (const node of tagNodes.values()) node.remove();
     tagNodes.clear();
+    // Leaders are only pruned alongside their tag, so clearing tags without
+    // these left every leader line frozen on screen after a feed outage.
+    for (const line of leaderNodes.values()) line.remove();
+    leaderNodes.clear();
   }
 }
 
@@ -4837,20 +4901,37 @@ function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES', aler
 // registration number itself, not anything that narrows down a real person's
 // location the way street-address-level lookup would (see HANDOFF.md for the
 // earlier, explicitly declined request to go further than this).
+// loadOwner is called on every 1 s poll for each private aircraft until the
+// answer is cached. A slow or failing adsbdb used to mean a new fetch per
+// aircraft per second, piling up behind Chromium's per-host connection limit
+// with no timeout. One request in flight per hex, a hard timeout, and a
+// short back-off after a failure keep that bounded.
+const ownerPending = new Set();
+const ownerFailedAt = new Map();   // hex -> Date.now() of the last failed attempt
+const OWNER_RETRY_MS = 5 * 60 * 1000;
 async function lookupOwner(hex) {
   if (ownerCache.has(hex)) return ownerCache.get(hex);
+  if (ownerPending.has(hex)) return null;
+  const failed = ownerFailedAt.get(hex);
+  if (failed && Date.now() - failed < OWNER_RETRY_MS) return null;
+  ownerPending.add(hex);
   try {
-    const res = await fetch(`https://api.adsbdb.com/v0/aircraft/${hex}`);
+    const res = await fetch(`https://api.adsbdb.com/v0/aircraft/${hex}`,
+                            { signal: AbortSignal.timeout(8000) });
     if (res.status === 404) { ownerCache.set(hex, null); return null; }
-    if (!res.ok) return null;
+    if (!res.ok) { ownerFailedAt.set(hex, Date.now()); return null; }
     const data = await res.json();
     const owner = data?.response?.aircraft?.registered_owner || null;
     const country = data?.response?.aircraft?.registered_owner_country_name || null;
     const result = owner ? { owner, country } : null;
     ownerCache.set(hex, result);
+    ownerFailedAt.delete(hex);
     return result;
   } catch (e) {
+    ownerFailedAt.set(hex, Date.now());
     return null;
+  } finally {
+    ownerPending.delete(hex);
   }
 }
 
