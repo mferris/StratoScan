@@ -216,6 +216,30 @@ def main():
     ok(ota.dest_for("sounds/../../../etc/cron.d/evil.ogg") is None,
        "an .ogg extension must not excuse a traversal out of WEB_ROOT")
 
+    # --- a changed service must actually be restarted -----------------------
+    # A funnel-gateway.py security fix once sat installed-but-not-running for
+    # hours because only the kiosk was restarted after an update.
+    gw = ota.dest_for("deploy/funnel-gateway.py")
+    ok(("system", "flightradar-funnel-gateway.service") in ota.services_to_restart([gw]),
+       "a changed gateway must be restarted, or its fix never runs")
+    ok(ota.services_to_restart([ota.dest_for("deploy/wake-listener.py")])
+       == [("user", "flightradar-wake.service")],
+       "wake-listener runs under the kiosk user's systemd")
+    both = ota.services_to_restart([ota.dest_for("deploy/setup-server.py"),
+                                    ota.dest_for("deploy/setup-ui.html")])
+    ok(both == [("system", "flightradar-setup.service")],
+       "two files of one service restart it once")
+    ok(ota.services_to_restart([ota.dest_for("index.html"),
+                                ota.dest_for("deploy/net-watchdog.py")]) == [],
+       "page assets and timer oneshots need no service restart")
+    ok(ota.services_to_restart(["/etc/evil/funnel-gateway.py"]) == [],
+       "only files in OPT_ROOT map to services")
+    for name in ("sighting-store.py", "approach-store.py", "network-compare.py",
+                 "photo-proxy.py", "funnel-gateway.py", "setup-server.py",
+                 "setupd.py", "wake-listener.py"):
+        ok(name in ota.DEPLOY_ALLOWED and name in ota.SERVICE_FOR,
+           f"{name} is updatable, so it must also be restarted when it changes")
+
     httpd.shutdown()
     shutil.rmtree(tmp, ignore_errors=True)
 
