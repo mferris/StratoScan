@@ -2722,7 +2722,9 @@ async function refreshStorms() {
       // makes MapLibre overzoom (upsample) that real data at our much closer
       // zoom instead of requesting tiles that don't exist, which otherwise
       // come back as a small tiled "Zoom Level Not Supported" placeholder.
-      map.addSource('storms', { type: 'raster', tiles: [url], tileSize: 256, maxzoom: 7 });
+      map.addSource('storms', { type: 'raster', tiles: [url], tileSize: 256, maxzoom: 7,
+        // RainViewer's API is free for personal use and asks to be credited.
+        attribution: '<a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a>' });
       map.addLayer({
         id: 'storms',
         type: 'raster',
@@ -2802,7 +2804,9 @@ function refreshLightning() {
     map.removeSource('lightning');
   }
   {
-    map.addSource('lightning', { type: 'raster', tiles: [url], tileSize: 256, maxzoom: 7 });
+    map.addSource('lightning', { type: 'raster', tiles: [url], tileSize: 256, maxzoom: 7,
+      // Required by RealEarth's terms of use, verbatim.
+      attribution: 'Source: SSEC RealEarth, UW-Madison' });
     map.addLayer({
       id: 'lightning',
       type: 'raster',
@@ -5215,6 +5219,43 @@ function showPlaceholderPhoto(photoEl) {
 // level of attribution (same non-clickable-text treatment as planespotters,
 // same kiosk-navigation-safety reasoning) felt like the right proportional
 // effort here, not full Commons per-image license/author boilerplate.
+// Attribution for a Wikipedia article's lead image, or null if it must not be
+// shown. Only files hosted on Wikimedia Commons qualify: everything there is
+// freely licensed, whereas a file hosted on English Wikipedia itself can be a
+// non-free "fair use" image whose permission does not extend to this app.
+// Most Commons images are CC BY-SA, which requires naming the author and the
+// licence -- "Wikipedia" alone, as this credit used to say, is not enough.
+async function commonsCredit(thumbUrl) {
+  const m = /\/wikipedia\/commons\/(?:thumb\/)?[0-9a-f]\/[0-9a-f]{2}\/([^/]+)/.exec(thumbUrl);
+  if (!m) return null;
+  const file = decodeURIComponent(m[1]);
+  const res = await fetch(
+    'https://commons.wikimedia.org/w/api.php?action=query&prop=imageinfo&iiprop=extmetadata' +
+    `&titles=${encodeURIComponent('File:' + file)}&format=json&origin=*`,
+    { cache: 'force-cache' });
+  const pages = (await res.json())?.query?.pages || {};
+  const meta = Object.values(pages)[0]?.imageinfo?.[0]?.extmetadata;
+  const license = meta?.LicenseShortName?.value;
+  if (!license) return null;
+  // Artist is HTML (often a link to a user page); keep only its text.
+  const artistHtml = meta?.Artist?.value || '';
+  const artist = new DOMParser().parseFromString(artistHtml, 'text/html').body.textContent.trim() || 'Unknown';
+  return {
+    artist: artist.slice(0, 80),
+    license: license.slice(0, 40),
+    page: `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(file)}`,
+  };
+}
+
+// A credit line: a real link in a normal browser, plain text on the kiosk,
+// where navigating away has no touch-reachable way back to the radar.
+function creditHtml(text, href) {
+  // https only: the href comes from external APIs, and a javascript: URL
+  // survives HTML escaping intact.
+  if (IS_KIOSK || !/^https:\/\//i.test(href || '')) return esc(text);
+  return `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`;
+}
+
 async function lookupStockPhoto(typeLabel) {
   if (stockPhotoCache.has(typeLabel)) return stockPhotoCache.get(typeLabel);
   if (stockPhotoPending.has(typeLabel)) return null;
@@ -5240,8 +5281,8 @@ async function lookupStockPhoto(typeLabel) {
       const sumRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`, { cache: 'force-cache' });
       const sumData = await sumRes.json();
       const thumb = sumData.thumbnail && sumData.thumbnail.source;
-      const page = sumData.content_urls && sumData.content_urls.desktop && sumData.content_urls.desktop.page;
-      if (thumb) result = { thumb, page: page || null };
+      const credit = thumb ? await commonsCredit(thumb) : null;
+      if (thumb && credit) result = { thumb, ...credit };
     }
   } catch (e) {
     // offline or Wikipedia unavailable this attempt -- caller falls back to
@@ -5286,7 +5327,7 @@ async function tryStockPhoto(hex, photoEl) {
   photoEl.innerHTML = `
     <div class="dp-photo-badge">Representative photo</div>
     <img src="${esc(stock.thumb)}" alt="${esc(typeLabel)} (representative photo, not this specific aircraft)">
-    <div class="dp-photo-credit">${esc(typeLabel)} · Wikipedia</div>
+    <div class="dp-photo-credit">${creditHtml(`${typeLabel} · Photo: ${stock.artist} · ${stock.license} · Wikimedia Commons`, stock.page)}</div>
   `;
   photoEl.style.display = 'block';
 }
@@ -5301,7 +5342,7 @@ async function loadDetailPhoto(hex) {
     if (!data.found) { await tryStockPhoto(hex, photoEl); return; }
     photoEl.innerHTML = `
       <img src="${esc(data.thumbLarge || data.thumb)}" alt="${esc(detailPanelEl.querySelector('.dp-cs')?.textContent || 'Aircraft')} photo">
-      <div class="dp-photo-credit">© ${esc(data.photographer || 'Unknown')} · planespotters.net</div>
+      <div class="dp-photo-credit">${creditHtml(`© ${data.photographer || 'Unknown'} · planespotters.net`, data.link)}</div>
     `;
     photoEl.style.display = 'block';
   } catch (e) {
@@ -5534,7 +5575,8 @@ function renderScorecard() {
     ${bandRows}
     <div class="sp-section-title">By direction</div>
     <div class="sp-sub" style="padding:6px 0;line-height:1.7">${esc(dirTxt)}</div>
-    <div class="sp-sub" style="padding:10px 0;line-height:1.7">${esc(verdict)}</div>`;
+    <div class="sp-sub" style="padding:10px 0;line-height:1.7">${esc(verdict)}</div>
+    <div class="sp-sub" style="padding:6px 0;opacity:0.7">Network data © ADSB.lol contributors, ODbL 1.0</div>`;
 }
 
 
