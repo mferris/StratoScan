@@ -21,6 +21,7 @@ install -m 0644 deploy/funnel-gateway.py   /opt/flightradar/funnel-gateway.py
 install -m 0755 deploy/offline-map.py      /opt/flightradar/offline-map.py
 install -m 0755 deploy/heartbeat.py        /opt/flightradar/heartbeat.py
 install -m 0755 deploy/notable-db.py       /opt/flightradar/notable-db.py
+install -m 0755 deploy/feeding.py          /opt/flightradar/feeding.py
 
 install -m 0644 deploy/flightradar-setupd.service /etc/systemd/system/
 install -m 0644 deploy/flightradar-setup.service  /etc/systemd/system/

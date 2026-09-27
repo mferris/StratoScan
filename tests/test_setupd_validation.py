@@ -286,9 +286,44 @@ def check_health_verbs(fails):
         fails.append("set_health_report must take the state lock")
 
 
+def check_feeding_verbs(fails):
+    """The FlightAware switch accepts a real boolean and runs the install in the background."""
+    calls = []
+    real_run, real_exists = d.run, d.os.path.exists
+
+    class P:
+        returncode = 0
+        stdout = b'{"flightaware": {"installed": false, "active": false}}'
+        stderr = b""
+
+    d.run = lambda argv, **k: (calls.append(argv), P())[1]
+    d.os.path.exists = lambda p: True if p == d.FEEDING else real_exists(p)
+    try:
+        for bad in ("true", 1, None, [True]):
+            try:
+                d.set_feeding(bad)
+                fails.append(f"set_feeding accepted {bad!r}")
+            except d.Err:
+                pass
+        if calls:
+            fails.append("a rejected value still ran a command")
+        d.set_feeding(True)
+        if not any(c[:1] == ["systemd-run"] and "enable-flightaware" in c for c in calls):
+            fails.append("turning feeding on must run in its own transient unit")
+        calls.clear()
+        d.set_feeding(False)
+        if not any("disable-flightaware" in c for c in calls):
+            fails.append("turning feeding off did not disable it")
+        if "set_feeding" not in d.MUTATING:
+            fails.append("set_feeding must take the state lock")
+    finally:
+        d.run, d.os.path.exists = real_run, real_exists
+
+
 def main():
     fails = []
     check_health_verbs(fails)
+    check_feeding_verbs(fails)
     check_validation(fails)
     check_readsb(fails)
     check_no_shell(fails)

@@ -75,6 +75,14 @@ factory-image work in [docs/ROADMAP.md](docs/ROADMAP.md).
 A pre-built device image would redistribute these, and must then include
 the GPL source offer (see the factory-image item in the roadmap).
 
+## Opt-in FlightAware feeding (installed only when the owner turns it on)
+
+| Component | License / terms | Notes |
+|---|---|---|
+| [PiAware](https://github.com/flightaware/piaware) | BSD-2-Clause | Installed from FlightAware's own apt repository, via their `flightaware-apt-repository` package, pinned by SHA-256 in `deploy/feeding.py`. Not shipped here, and must not be baked into a device image. |
+| [FlightAware](https://www.flightaware.com/about/termsofuse) data sharing | FlightAware's terms of use | The owner accepts them by turning the option on. The setup page says plainly that the antenna's exact location is shared. |
+| [Flightradar24 feeder](https://www.flightradar24.com/build-your-own) | Proprietary | **Not installed or automated by this project.** The setup page links to FR24's own instructions. |
+
 ## Not a license issue, but worth knowing
 
 - **Trademark.** "Flightradar24" is a registered trademark of Flightradar24 AB,

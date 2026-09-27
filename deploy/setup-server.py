@@ -318,6 +318,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._locale()
         if path == "/setup/api/ota":
             return self._send(200, call_setupd("ota_status", {})["result"])
+        if path == "/setup/api/feeding" and self.command == "GET":
+            return self._proxy_verb("feeding_status")
+        if path == "/setup/api/feeding" and self.command == "POST":
+            b = self._body()
+            return self._proxy_verb("set_feeding", {"flightaware": b.get("flightaware")})
         if path == "/setup/api/health" and self.command == "GET":
             return self._proxy_verb("health_status")
         if path == "/setup/api/health" and self.command == "POST":
