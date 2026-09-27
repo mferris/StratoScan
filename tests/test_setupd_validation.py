@@ -214,6 +214,43 @@ def check_reset(fails):
             fails.append("reset_full did not raise the hotspot (unit arrives unreachable)")
         if not any("logout" in " ".join(map(str, c)) for c in calls):
             fails.append("reset_full did not log out of tailscale")
+
+        # ---- no coordinates survive a full reset ------------------------
+        # The saved "original" can itself hold a position (whoever built the
+        # unit), and a unit located by hand has no original at all -- which
+        # used to skip the location reset entirely.
+        d.OFFLINE_MAP_DIR = os.path.join(tmp, "offline-map")
+        for label, keep_orig in (("with a saved original", True),
+                                 ("with no saved original (located by hand)", False)):
+            seed()
+            with open(d.READSB_ORIG, "w") as f:
+                f.write('DECODER_OPTIONS="--lat 51.50000 --lon -0.12000 --max-range 450"\n')
+            if not keep_orig:
+                os.unlink(d.READSB_ORIG)
+                with open(d.READSB_DEFAULT, "w") as f:
+                    f.write('DECODER_OPTIONS="--lat 35.8 --lon -78.7 --max-range 450"\n')
+            for sub in ("", ".new"):
+                os.makedirs(os.path.join(d.OFFLINE_MAP_DIR + sub, "tiles"), exist_ok=True)
+            calls.clear()
+            d.reset_full()
+            with open(d.READSB_DEFAULT) as f:
+                after = f.read()
+            if re.search(r"--l(at|on)", after):
+                fails.append(f"reset_full left coordinates in readsb {label}: {after.strip()}")
+            if "--max-range 450" not in after:
+                fails.append(f"reset_full dropped unrelated readsb options {label}")
+            flat = [" ".join(map(str, c)) for c in calls]
+            restart = next((i for i, c in enumerate(flat) if c.endswith("restart readsb")), None)
+            stop_map = next((i for i, c in enumerate(flat) if "stop flightradar-offline-map" in c), None)
+            if restart is None:
+                fails.append(f"reset_full did not restart readsb {label} (old position stays published)")
+            if stop_map is None:
+                fails.append(f"reset_full did not stop an in-flight offline-map build {label}")
+            elif restart is not None and stop_map < restart:
+                fails.append("the offline map was cleared before readsb stopped reporting the old house")
+            for sub in ("", ".new"):
+                if os.path.exists(d.OFFLINE_MAP_DIR + sub):
+                    fails.append(f"reset_full left offline-map{sub} (an extract around their house)")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

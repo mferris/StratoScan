@@ -255,5 +255,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    # A fresh process has restarted nothing yet, so any count on disk is a
+    # previous instance's. Left in place it could never be cleared -- a
+    # painted frame only clears the file when the in-memory count is non-zero
+    # -- and net-watchdog would eventually reboot a healthy unit over it.
+    _record_stuck(0)
     threading.Thread(target=_watchdog, daemon=True).start()
     http.server.ThreadingHTTPServer(LISTEN, Handler).serve_forever()

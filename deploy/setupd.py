@@ -297,6 +297,37 @@ def rewrite_readsb_location(lat, lon):
     return original
 
 
+def strip_readsb_location(text):
+    """`text` (an /etc/default/readsb) with every --lat/--lon option removed.
+
+    Same tokenise-and-reserialise discipline as rewrite_readsb_location: this
+    file is shell-sourced by root. readsb runs fine with no position; the
+    page then simply has no home to draw a map around until one is set.
+    """
+    out = []
+    for line in text.splitlines():
+        m = re.match(r'^(\s*DECODER_OPTIONS\s*=\s*)"(.*)"\s*$', line)
+        if not m:
+            out.append(line)
+            continue
+        toks, keep, i = shlex.split(m.group(2)), [], 0
+        while i < len(toks):
+            t = toks[i]
+            if t in ("--lat", "--lon"):
+                i += 2
+                continue
+            if t.startswith(("--lat=", "--lon=")):
+                i += 1
+                continue
+            keep.append(t)
+            i += 1
+        for t in keep:
+            if any(c in t for c in ('"', "'", "`", "$", "\\", "\n", "\r")):
+                raise Err("readsb_unsafe_token", "refusing to write an unsafe option")
+        out.append(f'{m.group(1)}"{" ".join(keep)}"')
+    return "\n".join(out) + "\n"
+
+
 def restart_readsb_or_rollback(previous):
     """Restart readsb; restore the previous file if it does not come back.
 
@@ -1119,17 +1150,37 @@ def reset_full():
                  "/var/lib/flightradar-network/coverage.json"):
         with contextlib.suppress(Exception):
             os.unlink(path)
-    # The offline map is an extract of the area around their house.
-    with contextlib.suppress(Exception):
-        shutil.rmtree(OFFLINE_MAP_DIR)
     with contextlib.suppress(Exception):
         run([SYSTEMCTL, "start", *stores], timeout=60)
 
-    # 4. receiver position back to the shipped default
-    if os.path.exists(READSB_ORIG):
-        with open(READSB_ORIG) as f:
-            atomic_write(READSB_DEFAULT, f.read(), mode=0o644)
+    # 4. receiver position: gone, not "back to the shipped default". The
+    # saved original only exists if the location was ever set through setup
+    # (a unit located by hand -- like the first one -- has none, and used to
+    # skip this step and keep its owner's coordinates), and even when it does
+    # exist it can carry whoever built the unit's own position. So whatever
+    # is restored is stripped of --lat/--lon outright.
+    with contextlib.suppress(Exception):
+        source = READSB_ORIG if os.path.exists(READSB_ORIG) else READSB_DEFAULT
+        with open(source) as f:
+            atomic_write(READSB_DEFAULT, strip_readsb_location(f.read()), mode=0o644)
         os.chown(READSB_DEFAULT, 0, 0)
+    # Restarted, not just rewritten: until readsb restarts it keeps
+    # publishing the old position in receiver.json -- which the page, the
+    # public Funnel and net-watchdog's offline-map check all read.
+    with contextlib.suppress(Exception):
+        run([SYSTEMCTL, "restart", "readsb"], timeout=30)
+
+    # 4b. the offline map is an extract of the area around their house. Only
+    # after readsb stops reporting that house: net-watchdog rebuilds a missing
+    # map for whatever receiver.json says, and deleting it earlier let it come
+    # straight back for the old owner's area. A build already in flight is
+    # stopped first -- it would otherwise rename a fresh copy back into place
+    # after the delete -- and its half-written staging dir goes too.
+    with contextlib.suppress(Exception):
+        run([SYSTEMCTL, "stop", "flightradar-offline-map.service"], timeout=30)
+    for d in (OFFLINE_MAP_DIR, OFFLINE_MAP_DIR + ".new", OFFLINE_MAP_DIR + ".old"):
+        with contextlib.suppress(Exception):
+            shutil.rmtree(d)
 
     clear_pending()
 
