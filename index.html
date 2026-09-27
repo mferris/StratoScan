@@ -6023,6 +6023,7 @@ function scorecardSubtitle() {
 }
 
 const STATS_SCREENS = [
+  { key: 'year',      label: `${new Date().getFullYear()} in review`, sub: () => 'Your year overhead: busiest times and most-seen aircraft' },
   { key: 'overview',  label: 'Overview',      sub: () => 'Everything seen here, and how much came close' },
   { key: 'operators', label: 'Who flies over', sub: () => 'Commercial, private and military' },
   { key: 'kinds',     label: 'What flies over', sub: () => 'Jets, propeller aircraft, helicopters' },
@@ -6084,12 +6085,53 @@ function statsDateLine(st) {
   return `<div class="sp-sub" style="padding:6px 0">${esc(started + backlog)}</div>`;
 }
 
+// Year in review, from the store's per-year counters (/sightings/year).
+let yearStats = null;
+async function loadYearStats() {
+  try { yearStats = await (await fetch('/sightings/year', { cache: 'no-store' })).json(); }
+  catch (e) { yearStats = null; }
+}
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function hourLabel(h) { return new Date(2000, 0, 1, h).toLocaleTimeString([], { hour: 'numeric' }); }
+
+function renderYearInReview(back, title) {
+  const y = yearStats;
+  if (!y) return `${back}${title}<div class="sp-sub" style="padding:10px 0">Looking back over the year…</div>`;
+  if (!y.ready) return `${back}${title}<div class="sp-sub" style="padding:10px 0;line-height:1.7">
+      The count for ${y.year} starts with the next aircraft this radar hears.</div>`;
+  const since = y.countingSince
+    ? `<div class="sp-sub" style="padding:6px 0">Counting since ${esc(new Date(y.countingSince * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'long' }))}</div>` : '';
+  const monthsSoFar = y.year === new Date().getFullYear() ? new Date().getMonth() + 1 : 12;
+  const rec = y.records || {};
+  const recRow = (key, label, fmt) => rec[key]
+    ? statRow(label, fmt(rec[key].v), rec[key].cs || (rec[key].hex || '').toUpperCase()) : '';
+  return `${back}${title}${since}
+    ${statRow('Visits overhead', statNum(y.visits), `By ${statNum(y.aircraft)} different aircraft`)}
+    ${statRow('New to this radar', statNum(y.newAircraft), 'Heard here for the very first time this year')}
+    ${statRow(`Came within ${ALERT_RADIUS_MI} miles`, statNum(y.nearby), 'Passes close enough to set off the nearby alert')}
+    ${y.busiestMonth !== null ? statRow('Busiest month', MONTHS_SHORT[y.busiestMonth], `${statNum(y.months[y.busiestMonth])} visits`) : ''}
+    ${y.busiestHour !== null ? statRow('Busiest hour', hourLabel(y.busiestHour), 'When the sky over you is fullest') : ''}
+    <div class="sp-section-title">Most-seen aircraft</div>
+    ${y.top.length ? y.top.map((t, i) => statRow(`${i + 1}. ${t.cs || t.hex.toUpperCase()}`, `${statNum(t.visits)}×`,
+        [KIND_LABELS[t.k] || null, OP_LABELS[t.op] || null].filter(Boolean).join(' · '))).join('') : '<div class="sp-sub">Nothing yet.</div>'}
+    <div class="sp-section-title">Month by month</div>
+    ${statBars(y.months.slice(0, monthsSoFar).map((v, i) => ({ label: MONTHS_SHORT[i], value: v })))}
+    <div class="sp-section-title">What flew over</div>
+    ${statBars(Object.entries(y.kinds || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: KIND_LABELS[k] || k, value: v })))}
+    <div class="sp-section-title">All-time records</div>
+    ${recRow('far', 'Farthest heard', v => `${v} nm`)}
+    ${recRow('high', 'Highest', v => `${Math.round(v).toLocaleString()} ft`)}
+    ${recRow('fast', 'Fastest', v => `${Math.round(v)} kt`)}
+    ${recRow('near', 'Closest', v => `${v} nm`)}`;
+}
+
 function renderStatsScreen(key, st) {
   const back = '<div class="sp-back">&#8592; Statistics</div>';
   const screen = STATS_SCREENS.find(x => x.key === key);
   const title = `<div class="sp-title">${esc(screen ? screen.label : 'Statistics')}</div>`;
 
   if (key === 'scorecard') return renderScorecard();
+  if (key === 'year') return renderYearInReview(back, title);
 
   if (!st) {
     return `${back}${title}<div class="sp-sub" style="padding:10px 0;line-height:1.7">
@@ -7035,6 +7077,10 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   if (menuRow && menuRow.dataset.stat) {
     statsView = menuRow.dataset.stat;
     settingsPanelEl.scrollTop = 0;
+    if (statsView === 'year') {
+      yearStats = null;
+      loadYearStats().then(() => { if (statsView === 'year') renderSettingsPanel(); });
+    }
     renderSettingsPanel();
     return;
   }

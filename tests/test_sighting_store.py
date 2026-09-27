@@ -248,6 +248,37 @@ with tempfile.TemporaryDirectory() as tmp:
     store["day"] = {"d": "2000-01-01", "t": 99, "n": 9}
     check("yesterday's tally is not reported as today", m.summarise(store)["today"]["total"] == 0)
 
+    # ---- year in review ----------------------------------------------------
+    store = m.fresh_store()
+    t_2026 = int(_time.mktime((2026, 3, 14, 9, 30, 0, 0, 0, -1)))
+    e1 = {"t": 1, "n": 0, "k": "jet"}
+    m.bump_year(store, e1, "total", t_2026, True)
+    m.bump_year(store, e1, "total", t_2026 + 60, False)
+    m.bump_year(store, e1, "nearby", t_2026 + 60, False)
+    e2 = {"t": 1, "n": 0, "k": "heli"}
+    m.bump_year(store, e2, "total", t_2026, True)
+    store["ac"] = {"aaa111": e1, "bbb222": e2}
+    y = store["years"]["2026"]
+    check("year visits counted", y["t"] == 3)
+    check("year nearby counted", y["n"] == 1)
+    check("first-ever aircraft counted as new", y["new"] == 2)
+    check("visits land in their month", y["months"][2] == 3)
+    check("visits land in their hour", y["hours"][9] == 3)
+    ys = m.year_summary(store, 2026)
+    check("the year summary is ready", ys["ready"] is True)
+    check("most-seen aircraft of the year comes first", ys["top"][0]["hex"] == "aaa111" and ys["top"][0]["visits"] == 2)
+    check("aircraft seen this year are counted", ys["aircraft"] == 2)
+    check("kinds are broken down", ys["kinds"] == {"jet": 1, "heli": 1})
+    check("busiest month found", ys["busiestMonth"] == 2)
+    t_2027 = int(_time.mktime((2027, 1, 2, 12, 0, 0, 0, 0, -1)))
+    m.bump_year(store, e1, "total", t_2027, False)
+    check("a new year starts the tail's count over", e1["y"] == [2027, 1])
+    check("last year's aggregates survive", store["years"]["2026"]["t"] == 3)
+    check("an unknown year is reported as not ready", m.year_summary(store, 2031)["ready"] is False)
+    for yr in range(2030, 2030 + m.YEARS_KEPT + 3):
+        m.bump_year(store, {}, "total", int(_time.mktime((yr, 6, 1, 12, 0, 0, 0, 0, -1))), False)
+    check("only YEARS_KEPT years are kept", len(store["years"]) == m.YEARS_KEPT)
+
 print(f"{checks - len(failures)}/{checks} sighting store checks passed")
 for f in failures:
     print("  FAILED:", f)

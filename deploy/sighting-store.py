@@ -241,6 +241,75 @@ def legacy_view(store):
             for h, e in store["ac"].items()}
 
 
+YEARS_KEPT = 12
+
+
+def bump_year(store, entry, kind, now, first_ever):
+    """Per-year aggregates for the Year-in-review screen.
+
+    All-time totals can't answer "what was this year like", so each counted
+    visit also lands in the year it happened (local time). Per-aircraft, only
+    the current year's count is kept (entry["y"] = [year, visits]) -- enough
+    for "most-seen this year" without a growing history per tail. At most
+    YEARS_KEPT years of aggregates are kept.
+    """
+    local = time.localtime(now)
+    year = str(local.tm_year)
+    years = store.setdefault("years", {})
+    y = years.get(year)
+    if not isinstance(y, dict):
+        y = years[year] = {"t": 0, "n": 0, "new": 0, "months": [0] * 12, "hours": [0] * 24}
+        for old in sorted(years)[:-YEARS_KEPT]:
+            del years[old]
+    if kind == "total":
+        y["t"] += 1
+        y["months"][local.tm_mon - 1] += 1
+        y["hours"][local.tm_hour] += 1
+        if first_ever:
+            y["new"] += 1
+        cur = entry.get("y")
+        if not (isinstance(cur, list) and len(cur) == 2 and cur[0] == local.tm_year):
+            cur = [local.tm_year, 0]
+        cur[1] += 1
+        entry["y"] = cur
+    elif kind == "nearby":
+        y["n"] += 1
+
+
+def year_summary(store, year=None):
+    year = int(year or time.localtime().tm_year)
+    y = (store.get("years") or {}).get(str(year))
+    if not isinstance(y, dict):
+        return {"year": year, "ready": False}
+    mine = [(h, e) for h, e in store["ac"].items()
+            if isinstance(e.get("y"), list) and e["y"][0] == year]
+    kinds = {}
+    for _, e in mine:
+        k = e.get("k") if e.get("k") in KINDS else "unknown"
+        kinds[k] = kinds.get(k, 0) + 1
+    top = sorted(mine, key=lambda he: he[1]["y"][1], reverse=True)[:5]
+    months, hours = y.get("months", [0] * 12), y.get("hours", [0] * 24)
+    since = store.get("since")
+    return {
+        "year": year,
+        "ready": True,
+        "visits": y.get("t", 0),
+        "nearby": y.get("n", 0),
+        "newAircraft": y.get("new", 0),
+        "aircraft": len(mine),
+        "months": months,
+        "hours": hours,
+        "busiestMonth": months.index(max(months)) if any(months) else None,
+        "busiestHour": hours.index(max(hours)) if any(hours) else None,
+        "kinds": kinds,
+        "top": [{"hex": h, "cs": e.get("cs"), "visits": e["y"][1], "k": e.get("k"), "op": e.get("op")}
+                for h, e in top],
+        "records": store.get("rec", {}),
+        # Counting may have started partway through the year.
+        "countingSince": since if since and time.localtime(since).tm_year == year else None,
+    }
+
+
 def _today(store):
     day = store.get("day")
     if isinstance(day, dict) and day.get("d") == time.strftime("%Y-%m-%d"):
@@ -375,6 +444,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             with lock:
                 payload = summarise(current())
             return self._json(200, payload)
+        if path == "/sightings/year":
+            from urllib.parse import parse_qs, urlparse
+            q = (parse_qs(urlparse(self.path).query).get("y") or [""])[0]
+            year = int(q) if q.isdigit() and 2000 <= int(q) <= 2100 else None
+            with lock:
+                payload = year_summary(current(), year)
+            return self._json(200, payload)
         if path == "/sightings/unclassified":
             with lock:
                 hexes = [h for h, e in current()["ac"].items() if not e.get("k")]
@@ -458,6 +534,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         with lock:
             store = current()
+            first_ever = hexcode not in store["ac"]
             entry = store["ac"].get(hexcode) or {"t": 0, "n": 0}
             now = int(time.time())
             if store.get("since") is None:
@@ -478,6 +555,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if not isinstance(day, dict) or day.get("d") != today:
                         day = store["day"] = {"d": today, "t": 0, "n": 0}
                     day["t" if kind == "total" else "n"] += 1
+                bump_year(store, entry, kind, now, first_ever and kind == "total")
             if classification is not None:
                 apply_class(entry, classification)
             store["ac"][hexcode] = entry
