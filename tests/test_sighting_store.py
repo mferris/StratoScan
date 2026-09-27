@@ -279,6 +279,31 @@ with tempfile.TemporaryDirectory() as tmp:
         m.bump_year(store, {}, "total", int(_time.mktime((yr, 6, 1, 12, 0, 0, 0, 0, -1))), False)
     check("only YEARS_KEPT years are kept", len(store["years"]) == m.YEARS_KEPT)
 
+    # ---- upgrading a store that predates per-year counting -------------------
+    now = int(_time.mktime((2026, 9, 27, 18, 0, 0, 0, 0, -1)))
+    old = m.fresh_store()
+    del old["years"]   # as written before per-year counting existed
+    old["since"] = int(_time.mktime((2026, 9, 3, 12, 0, 0, 0, 0, -1)))
+    old["hours"] = [1] * 24
+    old["ac"] = {"aaa111": {"t": 40, "n": 3, "f": old["since"] + 10},
+                 "bbb222": {"t": 2, "n": 0, "f": old["since"] + 99}, "ccc333": {"g": 5}}
+    check("a pre-yearly store is seeded", m.seed_current_year(old, now) is True)
+    y = old["years"]["2026"]
+    check("this year's visits are the all-time visits", y["t"] == 42 and y["n"] == 3)
+    check("a history all in this month lands in this month", y["months"][8] == 42 and sum(y["months"]) == 42)
+    check("every tail gets its count for the year", old["ac"]["aaa111"]["y"] == [2026, 40])
+    check("a network-only aircraft gets none", "y" not in old["ac"]["ccc333"])
+    check("the seed happens once", m.seed_current_year(old, now) is False)
+    summ = m.year_summary(old, 2026)
+    check("the year says counting began when the store did", summ["countingSince"] == old["since"])
+    older = m.fresh_store()
+    del older["years"]
+    older["since"] = int(_time.mktime((2025, 6, 1, 12, 0, 0, 0, 0, -1)))
+    older["ac"] = {"aaa111": {"t": 9}}
+    m.seed_current_year(older, now)
+    check("history reaching into last year is not passed off as this year's", older["years"] == {})
+    check("a brand-new store needs no seeding", m.seed_current_year(m.fresh_store(), now) is False)
+
 print(f"{checks - len(failures)}/{checks} sighting store checks passed")
 for f in failures:
     print("  FAILED:", f)
