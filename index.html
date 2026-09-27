@@ -3064,6 +3064,39 @@ const SOUND_THEMES = {
     airportPhase: (phase) =>
       playSample(phase === 'landing' ? 'sounds/kitten/landing.ogg' : 'sounds/kitten/takeoff.ogg'),
   },
+  plane: {
+    label: 'Plane',
+    sub: 'A real cabin chime — for the retro case, or anyone',
+    files: {
+      nearby:    'sounds/plane/nearby.ogg',
+      emergency: 'sounds/plane/emergency.ogg',
+      landing:   'sounds/plane/landing.ogg',
+      takeoff:   'sounds/plane/takeoff.ogg',
+    },
+    // All four derive from ONE recording -- an Airbus/Boeing-style seatbelt
+    // chime -- trimmed, pitched, or repeated. See sounds/plane/CREDITS.md for
+    // the source and the exact cuts; the short version: the chime is two
+    // notes, "ding" then "dong".
+    //
+    // nearby is just the first note, cut short before its natural decay --
+    // the everyday sound, so it has to be quick rather than a slow fade.
+    nearby: () => playSample('sounds/plane/nearby.ogg'),
+    // Three fast repeats of that SAME first note, not the two-note phrase.
+    // The two-note version was tried first and was wrong twice over: it ran
+    // 4.7 seconds, by far the longest sound in the app for the event that
+    // needs the fastest reaction, and a repeated two-note melody reads as
+    // pleasant and informational -- which is exactly why it is the
+    // seatbelt-sign chime -- not urgent. Real cockpit caution systems use a
+    // single repeated tone for elevated alerts for the same reason: it is
+    // the repetition of ONE note that reads as an alarm.
+    emergency: () => playSample('sounds/plane/emergency.ogg'),
+    // The full two-note chime, pitched down for landing and up for takeoff
+    // from the same source -- the same down/up convention the classic
+    // theme's tones and the kitten theme's trill already use, so all three
+    // sound themes agree on which direction means which event.
+    airportPhase: (phase) =>
+      playSample(phase === 'landing' ? 'sounds/plane/landing.ogg' : 'sounds/plane/takeoff.ogg'),
+  },
 };
 function soundTheme() {
   return SOUND_THEMES[alertSettings.soundTheme] || SOUND_THEMES.classic;
