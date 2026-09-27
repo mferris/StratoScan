@@ -169,6 +169,19 @@
     <div class="msg" id="otaMsg"></div>
   </div>
 
+  <!-- health reports -->
+  <div class="card">
+    <h2>Health reports</h2>
+    <p class="note">Optional. Every few hours the device sends the maintainer a short
+      health check (software version, whether the receiver is working, storage wear,
+      temperature) so a problem can be spotted and fixed without you having to notice it.
+      It <b>never</b> includes your location, your network, or what flew overhead.
+      Turn it off any time.</p>
+    <label><input type="checkbox" id="healthOn"> Send health reports</label>
+    <div class="note" id="healthNow"></div>
+    <div class="msg" id="healthMsg"></div>
+  </div>
+
   <!-- remote -->
   <div class="card">
     <h2>Public web address <span class="tick hide" id="tickRem">✓</span></h2>
@@ -647,6 +660,27 @@ $('otaApplyBtn').onclick = async () => {
   } catch (e) { show($('otaMsg'), 'err', e.message); $('otaApplyBtn').disabled = false; }
 };
 otaLoad();
+
+function healthRender(st) {
+  const box = $('healthOn'), now = $('healthNow');
+  if (!st || !st.available) { box.disabled = true; now.textContent = 'Not available on this version.'; return; }
+  box.checked = !!st.enabled;
+  const last = st.last && st.last.at ? new Date(st.last.at * 1000).toLocaleString() : null;
+  now.textContent = !st.enabled ? 'Off.'
+    : !st.relayConfigured ? 'On. Waiting for the maintainer to set up the receiving service.'
+    : last ? `On. Last report ${last}${st.last.ok ? '' : ' (did not go through; will retry)'}.`
+    : 'On. The first report goes out within a few minutes.';
+}
+async function healthLoad() {
+  try { healthRender((await api('health')).result); } catch (e) { healthRender(null); }
+}
+$('healthOn').onchange = async () => {
+  hide($('healthMsg'));
+  try {
+    healthRender((await api('health', { method: 'POST', body: JSON.stringify({ enabled: $('healthOn').checked }) })).result);
+  } catch (e) { show($('healthMsg'), 'err', e.message); healthLoad(); }
+};
+healthLoad();
 
 </script>
 </body>

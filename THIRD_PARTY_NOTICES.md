@@ -18,6 +18,17 @@ or uses, under what terms, and how each obligation is met. Reviewed
 Airline names and colours in `index.html` are factual identification of the
 operator, not logos or artwork.
 
+## The relay (`relay/`)
+
+| Component | License / terms | Notes |
+|---|---|---|
+| [Cloudflare Workers + D1](https://www.cloudflare.com/terms/) | Cloudflare's Terms of Service | Runs on the maintainer's own account. Units call it only if their owner opts in. |
+| [Wrangler](https://github.com/cloudflare/workers-sdk) | MIT OR Apache-2.0 | A development and deploy tool (`devDependencies`); not shipped to units or deployed. |
+
+On the unit, health reports are signed with
+[python3-cryptography](https://github.com/pyca/cryptography) (Apache-2.0 OR
+BSD-3-Clause), installed from Debian, not vendored here.
+
 ## Fetched at runtime (not redistributed)
 
 These are called by a running unit or browser. The project redistributes

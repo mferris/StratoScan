@@ -1,0 +1,9 @@
+{
+ "note": "Signed by deploy/heartbeat.py with a throwaway key, for cross-language interop testing only.",
+ "headers": {
+  "X-FR-Unit": "BJqGwB3McYleMymo73tYoDy2udpXyAK-OI2wbhEYLvA",
+  "X-FR-Time": "1800000000",
+  "X-FR-Sig": "_JkkXxrz14fwI44YBh_aOKB4GF45K5otv5ROublZq8bYI9eTdUlZ_Xmc31v9WMA_qcCFUm9qlW6K3wrUGz1NDg"
+ },
+ "body": "{\"v\":1,\"version\":\"fixture\",\"uptime_s\":1}"
+}

@@ -1,0 +1,15 @@
+{
+  "name": "flightradar-relay",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "FlightRadar's relay: unit heartbeats and fleet health (Cloudflare Worker + D1). See ../docs/ROADMAP.md.",
+  "scripts": {
+    "test": "node --test test/",
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute flightradar-relay --remote --file=schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
