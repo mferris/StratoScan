@@ -118,3 +118,6 @@ phone ──(pairing, notification rules)──▶ relay
 | 1.3 Relay | Built; 10 tests; verified end to end under the Workers runtime with RDU | Cloudflare login, then deploy (`relay/README.md`) |
 | 1.4 Health reports | Built; 23 checks on the Pi; setup-page switch; inert until `RELAY_URL` is set | 1.3 deploy |
 | 1.6 SD re-measure | Scheduled for 2026-09-28 13:00 | — |
+| 4.1 "What was that?" | Done: rewind button, closest passes from tar1090's in-RAM hour, track on radar | — |
+| 4.2 Notable aircraft | Done: plane-alert-db weekly on each unit; neutral labels; no private names; PIA dropped | — |
+| 4.3 Empty-sky screen | Done: clock, weather (Open-Meteo), today's tally after 30 s of empty sky | — |
