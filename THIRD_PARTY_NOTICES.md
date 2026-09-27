@@ -64,6 +64,17 @@ them. **A pre-built device image would redistribute these**, and must then
 include their licenses and offer the GPL components' source. See the
 factory-image work in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## Spoken alerts (installed by the installer, not shipped here)
+
+| Component | License | Notes |
+|---|---|---|
+| [Piper](https://github.com/OHF-voice/piper1-gpl) `piper-tts` 1.8.0 | GPL-3.0-or-later | Installed from PyPI into its own virtualenv, and run as a separate program (`deploy/tts-service.py` talks to it); not linked into or shipped with this MIT code. It bundles espeak-ng data (GPL-3.0). |
+| [ONNX Runtime](https://github.com/microsoft/onnxruntime) | MIT | Piper's dependency, installed from PyPI. |
+| [LJSpeech voice](https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/ljspeech) `en_US-ljspeech-medium` | Trained on the public-domain LJ Speech dataset | Chosen because many Piper voices come from non-commercial datasets. Downloaded by the installer. |
+
+A pre-built device image would redistribute these, and must then include
+the GPL source offer (see the factory-image item in the roadmap).
+
 ## Not a license issue, but worth knowing
 
 - **Trademark.** "Flightradar24" is a registered trademark of Flightradar24 AB,
