@@ -209,6 +209,12 @@ def main():
        "an update must not drop systemd units")
     ok(ota.dest_for("deploy/setupd.py") is not None,
        "the root helper must be fixable by an update")
+    ok(ota.dest_for("sounds/kitten/nearby.ogg") is not None,
+       "a sound theme's audio must be installable")
+    ok(ota.dest_for("sounds/kitten/CREDITS.md") is None,
+       "only audio extensions under sounds/ may be installed")
+    ok(ota.dest_for("sounds/../../../etc/cron.d/evil.ogg") is None,
+       "an .ogg extension must not excuse a traversal out of WEB_ROOT")
 
     httpd.shutdown()
     shutil.rmtree(tmp, ignore_errors=True)
