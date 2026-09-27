@@ -888,6 +888,40 @@ def set_health_report(enabled):
     return health_status()
 
 
+# ---- Opt-in feeding (FlightAware) ------------------------------------------
+# feeding.py does the work; setupd exposes a closed pair of verbs whose only
+# parameter is a strict boolean. Installing takes a minute or two, so turning
+# it on runs as a transient unit (like ota_apply) and the page polls status.
+FEEDING = "/opt/flightradar/feeding.py"
+
+
+def feeding_status():
+    if not os.path.exists(FEEDING):
+        return {"available": False}
+    r = run(["/usr/bin/python3", FEEDING, "status"], timeout=30)
+    try:
+        st = json.loads(_text(r) or "{}")
+    except ValueError:
+        st = {}
+    st["available"] = True
+    return st
+
+
+def set_feeding(flightaware):
+    if not isinstance(flightaware, bool):
+        raise Err("bad_enabled", "flightaware must be true or false")
+    if not os.path.exists(FEEDING):
+        raise Err("unavailable", "feeding is not installed on this unit")
+    if flightaware:
+        run([SYSTEMCTL, "stop", "flightradar-feeding.service"], timeout=30)
+        run(["systemd-run", "--quiet", "--collect", "--unit", "flightradar-feeding",
+             "--property=Type=oneshot", "/usr/bin/python3", FEEDING, "enable-flightaware"],
+            timeout=30, check=True)
+    else:
+        run(["/usr/bin/python3", FEEDING, "disable-flightaware"], timeout=90)
+    return feeding_status()
+
+
 def set_location(lat, lon):
     # Null Island. A real receiver is never at exactly 0,0, and accepting it
     # silently centres the radar in the Gulf of Guinea with no clue why.
@@ -1208,6 +1242,12 @@ def reset_full():
     with contextlib.suppress(Exception):
         run([SYSTEMCTL, "restart", "readsb"], timeout=30)
 
+    # 4a0. feeding: stop, and forget the feeder id -- it is claimed by the
+    # previous owner's FlightAware account.
+    with contextlib.suppress(Exception):
+        if os.path.exists(FEEDING):
+            run(["/usr/bin/python3", FEEDING, "reset"], timeout=120)
+
     # 4a. health reports were agreed to by the previous owner, not this one.
     with contextlib.suppress(Exception):
         hb = _heartbeat()
@@ -1280,6 +1320,8 @@ VERBS = {
     "reset_full": lambda p: reset_full(),
     "health_status": lambda p: health_status(),
     "set_health_report": lambda p: set_health_report(p.get("enabled")),
+    "feeding_status": lambda p: feeding_status(),
+    "set_feeding": lambda p: set_feeding(p.get("flightaware")),
 }
 # Shutdown is deliberately absent: a remote caller must never be able to
 # power off an appliance that then needs a physical visit to turn back on.
@@ -1292,7 +1334,7 @@ MUTATING = {"wifi_connect", "wifi_confirm", "wifi_rollback", "hotspot_start",
             # WiFi operations behind an address lookup.
             "set_timezone", "set_wifi_country", "ota_apply",
             "tailscale_funnel", "reboot", "reset_settings", "reset_full",
-            "tailscale_login_start", "set_health_report"}
+            "tailscale_login_start", "set_health_report", "set_feeding"}
 
 
 class Handler(socketserver.StreamRequestHandler):

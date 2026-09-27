@@ -97,6 +97,8 @@ DEPLOY_ALLOWED = {
     "notable-db.py",
     # Spoken alerts; runs in its own Piper virtualenv (installer-only).
     "tts-service.py",
+    # Opt-in FlightAware feeding; run by setupd.
+    "feeding.py",
     # ota-auto.sh decides whether an unattended update may proceed, running as
     # root on a timer on a device in someone else's house. Omitting it would
     # ship it in the bundle and then refuse to install it -- which is the same

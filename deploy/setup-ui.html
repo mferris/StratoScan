@@ -169,6 +169,25 @@
     <div class="msg" id="otaMsg"></div>
   </div>
 
+  <!-- feeding -->
+  <div class="card">
+    <h2>Share with FlightAware</h2>
+    <p class="note">Optional. Sends what this antenna hears to
+      <a href="https://www.flightaware.com/adsb/" target="_blank" rel="noopener">FlightAware</a>,
+      and in return gives you a free FlightAware Enterprise account (normally paid) for as
+      long as it keeps sharing. <b>It also shares this antenna's exact location with
+      FlightAware</b>, which they need to locate aircraft more precisely; you set it in your
+      own FlightAware account. By turning it on you agree to
+      <a href="https://www.flightaware.com/about/termsofuse" target="_blank" rel="noopener">FlightAware's terms</a>.
+      The radar on this device is unaffected either way.</p>
+    <label><input type="checkbox" id="faOn"> Share with FlightAware</label>
+    <div class="note" id="faNow"></div>
+    <div class="msg" id="faMsg"></div>
+    <p class="note" style="margin-top:14px">Flightradar24 offers a similar free plan to people who
+      share data. Their software is installed with their own instructions:
+      <a href="https://www.flightradar24.com/build-your-own" target="_blank" rel="noopener">flightradar24.com/build-your-own</a>.</p>
+  </div>
+
   <!-- health reports -->
   <div class="card">
     <h2>Health reports</h2>
@@ -681,6 +700,39 @@ $('healthOn').onchange = async () => {
   } catch (e) { show($('healthMsg'), 'err', e.message); healthLoad(); }
 };
 healthLoad();
+
+let faTimer = null;
+function faRender(st) {
+  const box = $('faOn'), now = $('faNow');
+  const fa = st && st.flightaware;
+  if (!st || !st.available || !fa) { box.disabled = true; now.textContent = 'Not available on this version.'; return; }
+  const prog = fa.progress;
+  const busy = prog && prog.ok && !['done', 'stopped'].includes(prog.step) && !fa.active;
+  box.checked = fa.active || busy;
+  box.disabled = busy;
+  if (busy) now.textContent = `Setting up: ${prog.step}…`;
+  else if (prog && !prog.ok) now.textContent = `Could not turn on: ${prog.detail || 'unknown error'}`;
+  else if (fa.active && fa.feederId) {
+    now.innerHTML = 'Sharing. Now <a target="_blank" rel="noopener"></a> to link it to your FlightAware account '
+      + '(sign in or create a free account there first).';
+    const a = now.querySelector('a'); a.href = fa.claimUrl; a.textContent = 'claim this feeder';
+  }
+  else if (fa.active) now.textContent = 'Sharing. The feeder ID appears here within a few minutes.';
+  else now.textContent = 'Off.';
+  clearTimeout(faTimer);
+  if (busy || (fa.active && !fa.feederId)) faTimer = setTimeout(faLoad, 5000);
+}
+async function faLoad() {
+  try { faRender((await api('feeding')).result); } catch (e) { faRender(null); }
+}
+$('faOn').onchange = async () => {
+  hide($('faMsg'));
+  try {
+    faRender((await api('feeding', { method: 'POST', body: JSON.stringify({ flightaware: $('faOn').checked }) })).result);
+    faTimer = setTimeout(faLoad, 3000);
+  } catch (e) { show($('faMsg'), 'err', e.message); faLoad(); }
+};
+faLoad();
 
 </script>
 </body>
