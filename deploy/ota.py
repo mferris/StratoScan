@@ -123,6 +123,24 @@ DEPLOY_ALLOWED = {
 # than by name, so adding a fifth sound later is dropping a file in sounds/,
 # not also a change here -- the DEPLOY_ALLOWED list is deliberately the
 # opposite of this because each entry there IS a decision to make.
+#
+# WIDENING THIS RULE HAS A ONE-RELEASE LAG, and it is worth understanding once
+# rather than re-diagnosing it from a symptom. apply() is a single process
+# invocation of the ota.py ALREADY ON DISK -- the copy from the PREVIOUS
+# install. If a release both widens dest_for() (or DEPLOY_ALLOWED) AND ships
+# files that need the wider rule to be installed, this run's dest_for() is
+# still the OLD one: it does not know the new rule exists, silently skips
+# those files (dest_for returning None is not an error, just a `continue`),
+# and only THEN writes the new ota.py to disk -- too late to change what this
+# run decided, because Python already has the old module loaded.
+#
+# This happened for real the day sounds/ shipped: staged 55 files, wrote 15,
+# no error anywhere, state=ok. The four .ogg files were downloaded and hash-
+# verified correctly; they were just invisible to the dest_for() that was
+# still running. The fix was not a bug fix -- it was a second release, which
+# ran with the now-current ota.py and installed them. A release that
+# introduces a new install rule and a file that needs it should assume that
+# file arrives one release later, or plan to cut a trivial follow-up.
 SOUNDS_EXT_ALLOWED = {".ogg", ".mp3", ".wav"}
 
 
