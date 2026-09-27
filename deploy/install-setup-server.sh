@@ -19,6 +19,7 @@ install -m 0644 deploy/setup-ui.html       /opt/flightradar/setup-ui.html
 install -m 0644 deploy/airports.json       /opt/flightradar/airports.json
 install -m 0644 deploy/funnel-gateway.py   /opt/flightradar/funnel-gateway.py
 install -m 0755 deploy/offline-map.py      /opt/flightradar/offline-map.py
+install -m 0755 deploy/heartbeat.py        /opt/flightradar/heartbeat.py
 
 install -m 0644 deploy/flightradar-setupd.service /etc/systemd/system/
 install -m 0644 deploy/flightradar-setup.service  /etc/systemd/system/
@@ -98,7 +99,9 @@ echo
 echo "== long-life hardening (security updates, panic reboot) =="
 # The apt timer is enabled on a stock image but does nothing without this
 # package -- the RDU unit went unpatched for months behind an "enabled" timer.
-DEBIAN_FRONTEND=noninteractive apt-get install -y -q unattended-upgrades >/dev/null
+# python3-cryptography signs the opt-in health reports (heartbeat.py). It
+# ships with Raspberry Pi OS; listed so a minimal image gets it too.
+DEBIAN_FRONTEND=noninteractive apt-get install -y -q unattended-upgrades python3-cryptography >/dev/null
 install -m 0644 deploy/20auto-upgrades                  /etc/apt/apt.conf.d/20auto-upgrades
 install -m 0644 deploy/52flightradar-unattended-upgrades /etc/apt/apt.conf.d/52flightradar-unattended-upgrades
 install -m 0644 deploy/90-flightradar-sysctl.conf        /etc/sysctl.d/90-flightradar-sysctl.conf
@@ -116,6 +119,24 @@ else
   echo "  FAIL: unattended-upgrades is not installed or its config did not load"; exit 1
 fi
 echo "  kernel.panic=$(cat /proc/sys/kernel/panic)"
+
+# Real-time clock battery. Without one the clock is lost at every power cut
+# and stays wrong until NTP answers -- or indefinitely, on a network that
+# blocks it. The Pi 5 can trickle-charge a RECHARGEABLE cell (ML-2020), but
+# charging must never be enabled for an ordinary CR2032, which is not
+# rechargeable and can leak or burst. So it is never guessed: run the
+# installer with RTC_RECHARGEABLE=1 only when an ML-2020 is actually fitted.
+RTC_V=$(cat /sys/class/rtc/rtc0/battery_voltage 2>/dev/null || echo 0)
+echo "  RTC battery: $((RTC_V / 1000)) mV ($([ "$RTC_V" -gt 1000000 ] && echo fitted || echo none fitted))"
+if [ "${RTC_RECHARGEABLE:-0}" = "1" ]; then
+  CFG=/boot/firmware/config.txt
+  if ! grep -q '^dtparam=rtc_bbat_vchg=' "$CFG"; then
+    printf '\n# FlightRadar: trickle-charge the rechargeable ML-2020 RTC cell\ndtparam=rtc_bbat_vchg=3000000\n' >> "$CFG"
+    echo "  RTC charging enabled (takes effect after a reboot)"
+  else
+    echo "  RTC charging already enabled"
+  fi
+fi
 
 # The kiosk's own units run under the desktop user's systemd, because they
 # need its Wayland session. Installed from here so a new unit gets the same

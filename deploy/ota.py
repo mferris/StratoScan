@@ -91,6 +91,8 @@ DEPLOY_ALLOWED = {
     "airports.json", "net-watchdog.py",
     # Builds the on-device fallback map; run by setupd and net-watchdog.
     "offline-map.py",
+    # Opt-in health reports to the relay; run by net-watchdog.
+    "heartbeat.py",
     # ota-auto.sh decides whether an unattended update may proceed, running as
     # root on a timer on a device in someone else's house. Omitting it would
     # ship it in the bundle and then refuse to install it -- which is the same

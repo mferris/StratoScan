@@ -850,6 +850,44 @@ def ota_apply():
     return {"state": "applying", "started": True}
 
 
+# ---- Health reports (opt-in) ------------------------------------------------
+# heartbeat.py owns the key, the report and the sending; setupd only turns it
+# on and off for the setup page. A closed pair of verbs whose only parameter
+# is a strict boolean -- nothing here for a caller to steer.
+HEARTBEAT = "/opt/flightradar/heartbeat.py"
+
+
+def _heartbeat():
+    import importlib.util
+    if not os.path.exists(HEARTBEAT):
+        return None
+    spec = importlib.util.spec_from_file_location("heartbeat", HEARTBEAT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def health_status():
+    hb = _heartbeat()
+    if hb is None:
+        return {"available": False}
+    key = hb.load_key(create=False)
+    return {"available": True, "enabled": hb.enabled(),
+            "relayConfigured": bool(hb.RELAY_URL),
+            "unit": hb.unit_id(key)[:10] if key else None,
+            "last": hb._json(hb.LAST) or None}
+
+
+def set_health_report(enabled):
+    if not isinstance(enabled, bool):
+        raise Err("bad_enabled", "enabled must be true or false")
+    hb = _heartbeat()
+    if hb is None:
+        raise Err("unavailable", "health reporting is not installed")
+    hb.set_enabled(enabled)
+    return health_status()
+
+
 def set_location(lat, lon):
     # Null Island. A real receiver is never at exactly 0,0, and accepting it
     # silently centres the radar in the Gulf of Guinea with no clue why.
@@ -1170,6 +1208,12 @@ def reset_full():
     with contextlib.suppress(Exception):
         run([SYSTEMCTL, "restart", "readsb"], timeout=30)
 
+    # 4a. health reports were agreed to by the previous owner, not this one.
+    with contextlib.suppress(Exception):
+        hb = _heartbeat()
+        if hb:
+            hb.set_enabled(False)
+
     # 4b. the offline map is an extract of the area around their house. Only
     # after readsb stops reporting that house: net-watchdog rebuilds a missing
     # map for whatever receiver.json says, and deleting it earlier let it come
@@ -1234,6 +1278,8 @@ VERBS = {
     "net_status": lambda p: net_status(),
     "reset_settings": lambda p: reset_settings(),
     "reset_full": lambda p: reset_full(),
+    "health_status": lambda p: health_status(),
+    "set_health_report": lambda p: set_health_report(p.get("enabled")),
 }
 # Shutdown is deliberately absent: a remote caller must never be able to
 # power off an appliance that then needs a physical visit to turn back on.
@@ -1246,7 +1292,7 @@ MUTATING = {"wifi_connect", "wifi_confirm", "wifi_rollback", "hotspot_start",
             # WiFi operations behind an address lookup.
             "set_timezone", "set_wifi_country", "ota_apply",
             "tailscale_funnel", "reboot", "reset_settings", "reset_full",
-            "tailscale_login_start"}
+            "tailscale_login_start", "set_health_report"}
 
 
 class Handler(socketserver.StreamRequestHandler):

@@ -255,8 +255,40 @@ def check_reset(fails):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def check_health_verbs(fails):
+    """The health-report switch accepts a real boolean and nothing else."""
+    calls = []
+
+    class FakeHB:
+        RELAY_URL = "https://relay.example"
+        LAST = "/nonexistent"
+        @staticmethod
+        def set_enabled(v): calls.append(v)
+        @staticmethod
+        def enabled(): return bool(calls and calls[-1])
+        @staticmethod
+        def load_key(create=False): return None
+        @staticmethod
+        def _json(p): return {}
+
+    d._heartbeat = lambda: FakeHB
+    for bad in ("true", 1, None, "yes", [True]):
+        try:
+            d.set_health_report(bad)
+            fails.append(f"set_health_report accepted {bad!r}")
+        except d.Err:
+            pass
+    if calls:
+        fails.append("a rejected value still changed the setting")
+    if d.set_health_report(True).get("enabled") is not True or calls != [True]:
+        fails.append("set_health_report(True) did not enable reporting")
+    if "set_health_report" not in d.MUTATING:
+        fails.append("set_health_report must take the state lock")
+
+
 def main():
     fails = []
+    check_health_verbs(fails)
     check_validation(fails)
     check_readsb(fails)
     check_no_shell(fails)

@@ -19,3 +19,8 @@ dist/
 offline-map/
 offline-map.new/
 offline-map.old/
+
+# relay/ build dependencies
+relay/node_modules/
+relay/.wrangler/
+relay/.dev.vars

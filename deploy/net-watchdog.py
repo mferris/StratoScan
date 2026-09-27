@@ -82,6 +82,7 @@ KIOSK_REBOOT_AFTER = 4
 # times a day", not a loop that makes the unit unusable.
 LAST_REBOOT = os.path.join(STATE_DIR, "last-watchdog-reboot")
 OFFLINE_MAP = "/opt/flightradar/offline-map.py"
+HEARTBEAT = "/opt/flightradar/heartbeat.py"
 MIN_REBOOT_INTERVAL_S = 6 * 3600
 
 
@@ -323,6 +324,24 @@ def maybe_build_offline_map():
          "/usr/bin/python3", OFFLINE_MAP, "ensure"], timeout=30)
 
 
+def maybe_send_health_report():
+    """Opt-in health report to the maintainer's relay, when one is due.
+
+    heartbeat.py decides (enabled? relay configured? due?) and does nothing
+    otherwise. A 10 s cap on the request keeps a slow relay from ever holding
+    up this watchdog's real job.
+    """
+    if not os.path.exists(HEARTBEAT):
+        return
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("heartbeat", HEARTBEAT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    line = mod.maybe_send()
+    if line:
+        print(f"health: {line}", flush=True)
+
+
 def main():
     os.makedirs(STATE_DIR, exist_ok=True)
     check_health()
@@ -345,6 +364,11 @@ def main():
             maybe_build_offline_map()
         except Exception as e:
             print(f"health: offline map check failed ({type(e).__name__}: {e})",
+                  flush=True)
+        try:
+            maybe_send_health_report()
+        except Exception as e:
+            print(f"health: health report failed ({type(e).__name__}: {e})",
                   flush=True)
         # An UNCLAIMED unit keeps its setup network up even when it has
         # connectivity by some other route. Plugging in an ethernet cable

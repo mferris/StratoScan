@@ -1,0 +1,13 @@
+name = "flightradar-relay"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "flightradar-relay"
+# Created once per maintainer account; see relay/README.md. Not a secret: a
+# D1 id is useless without the account's own credentials.
+database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+
+# Secrets are never stored here. Set them with:
+#   npx wrangler secret put FLEET_TOKEN
