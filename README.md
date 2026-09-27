@@ -6,6 +6,8 @@ just a local receiver and a browser.
 
 ![FlightRadar running on the physical kiosk display](docs/screenshots/kiosk.png)
 
+<sub>Centred on RDU airport. Map: OpenFreeMap © OpenMapTiles, data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).</sub>
+
 ## What it does
 
 Point an RTL-SDR dongle and a small antenna at the sky, and FlightRadar turns
@@ -336,16 +338,16 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes and
 ## Data sources
 
 FlightRadar leans entirely on free, no-key-required public data, same as
-[tar1090](https://github.com/wiedehopf/tar1090) (which inspired several of
-these choices, though no code is shared — its license is unclear):
+[tar1090](https://github.com/wiedehopf/tar1090) (GPL-2.0-or-later; it inspired
+several of these choices, but no code is shared):
 
 - **[readsb](https://github.com/wiedehopf/readsb)** — ADS-B decoding
 - **[MapLibre GL JS](https://maplibre.org/)** (BSD-3-Clause, vendored under [`vendor/`](vendor/) — self-hosted, no CDN dependency) + **[OpenFreeMap](https://openfreemap.org/)** — background map tiles/style
 - **[OpenStreetMap](https://www.openstreetmap.org/) via Overpass** — real runway/taxiway geometry
 - **[adsb.im](https://adsb.im/)** — route (city-pair) lookups
-- **[RainViewer](https://www.rainviewer.com/)** — live weather radar overlay
+- **[RainViewer](https://www.rainviewer.com/)** — live weather radar overlay (their API is free for personal/educational use only)
 - **[planespotters.net](https://www.planespotters.net/)** — aircraft photos
-- **[Wikipedia / Wikimedia Commons](https://www.wikipedia.org/)** — representative type photos when no tail-specific one exists
+- **[Wikimedia Commons](https://commons.wikimedia.org/)** — representative type photos when no tail-specific one exists, credited with author and license
 - **[adsbdb.com](https://www.adsbdb.com/)** — registered-owner lookups for confirmed-private aircraft
 - **[LiveATC.net](https://www.liveatc.net/)** — ATC audio for the configured airport, opened as a link to their own player (see [Security](#security) below for why it's a link, not an embed)
 - **[SSEC RealEarth](https://realearth.ssec.wisc.edu/)** (UW-Madison) — satellite-observed lightning strike density (GOES-East GLM)
@@ -353,7 +355,10 @@ these choices, though no code is shared — its license is unclear):
 - **[OurAirports](https://ourairports.com/data/)** (public domain) — the bundled airport table in [`deploy/airports.json`](deploy/airports.json)
 - **[adsb.lol](https://adsb.lol/)** — community-run ADS-B aggregation, used only by the network comparison, which can be switched off. Queried at most once every 15s no matter how many people are viewing, with coordinates rounded to ~1.1km
 
-Please respect each service's own terms of use if you build on this.
+Every obligation these carry, and how each is met, is in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Please respect each
+service's own terms if you build on this; RainViewer in particular is not
+for commercial use.
 
 ## Security
 
@@ -440,7 +445,8 @@ before you do:
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Third-party components and data sources keep
+their own licenses and terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Setting one up somewhere else
 
