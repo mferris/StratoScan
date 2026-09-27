@@ -293,12 +293,20 @@ def seed_current_year(store, now=None):
     exact when that history is all in the current month; otherwise they are
     left to fill from now on, and the screen shows what it knows.
     """
-    if "years" in store:
-        return False
     now = int(now or time.time())
     since = store.get("since")
     here = time.localtime(now)
-    years = store["years"] = {}
+    years = store.get("years")
+    if isinstance(years, dict):
+        # Already counting per year. Rebuild only if this year's counting
+        # began after the store did (a unit that ran the first per-year build
+        # before this seed existed): the all-time totals already include
+        # those later visits, so rebuilding from them loses nothing.
+        cur = years.get(str(here.tm_year))
+        if not (isinstance(cur, dict) and since and cur.get("since", 0) > since + 60):
+            return False
+    else:
+        years = store["years"] = {}
     if not since or time.localtime(since).tm_year != here.tm_year:
         return False
     ac = store["ac"]

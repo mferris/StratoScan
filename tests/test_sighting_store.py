@@ -303,6 +303,15 @@ with tempfile.TemporaryDirectory() as tmp:
     m.seed_current_year(older, now)
     check("history reaching into last year is not passed off as this year's", older["years"] == {})
     check("a brand-new store needs no seeding", m.seed_current_year(m.fresh_store(), now) is False)
+    late = m.fresh_store()
+    late["since"] = old["since"]
+    late["ac"] = {"aaa111": {"t": 40, "n": 3, "f": old["since"] + 10, "y": [2026, 2]}}
+    late["years"] = {"2026": {"t": 2, "n": 0, "new": 0, "months": [0] * 8 + [2] + [0] * 3,
+                              "hours": [0] * 24, "since": now - 3600}}
+    check("a year that started counting after the store is rebuilt", m.seed_current_year(late, now) is True)
+    check("from the all-time totals, which already include the later visits",
+          late["years"]["2026"]["t"] == 40 and late["ac"]["aaa111"]["y"] == [2026, 40])
+    check("and only once", m.seed_current_year(late, now) is False)
 
 print(f"{checks - len(failures)}/{checks} sighting store checks passed")
 for f in failures:
