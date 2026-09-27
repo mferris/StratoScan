@@ -152,3 +152,11 @@ printf '%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
     "$(date -Is)" "$uptime_s" "$shmem_kb" "$shm_used_kb" \
     "$(echo $stats | tr ' ' ',')" \
     "$gpu_errors" "$aircraft" "$temp_c" "$throttled" >> "$OUT"
+
+# Capped: this is diagnostic instrumentation, and one left enabled on a unit
+# for years would otherwise grow this file without limit. Keep the most
+# recent ~half once it passes the cap (a few weeks of 5-minute samples).
+MAX_BYTES=5000000
+if [ "$(stat -c %s "$OUT" 2>/dev/null || echo 0)" -gt "$MAX_BYTES" ]; then
+    tail -c $((MAX_BYTES / 2)) "$OUT" | tail -n +2 > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"
+fi

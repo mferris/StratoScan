@@ -46,11 +46,15 @@ resolved; this end only stores and aggregates what it is told.
                                           standing one
                             Returns the updated {"total": N, "nearby": M}.
                          -> or body {"batch": [{"hex": ..., "class": {...}}, ...]}
-                            to classify many at once. The whole store is
-                            rewritten on every save, so backfilling thousands
-                            of aircraft one request at a time would mean
-                            thousands of rewrites of the same file -- pointless
-                            wear on an SD card that has to last years.
+                            to classify many at once.
+
+The store lives in memory and is written to disk at most every
+FLUSH_INTERVAL seconds, plus on shutdown. It used to be re-read and rewritten
+whole on every POST: measured on the RDU unit, 3.5 GB written in 17 hours
+from a file under 1 MB. At the MAX_HEXES ceiling on a busy site (SFO,
+Schiphol) that pattern reaches ~100 GB/day -- a consumer SD card's whole
+endurance in a year or two. The cost of batching is at most FLUSH_INTERVAL of
+counts lost on a power cut, which is noise against years of history.
 
 Multiple viewers open at once each independently detect and report the same
 real sighting -- same accepted tradeoff as approach-store.py: harmless
@@ -58,16 +62,26 @@ over-counting by a point or two, not wrong. Records are the exception and
 need no such tolerance: they are compare-and-keep, so the same record
 offered by four viewers still lands once.
 """
+import heapq
 import http.server
 import json
 import os
 import re
+import signal
+import sys
 import threading
 import time
 
 LISTEN = ("127.0.0.1", 8083)
 STORE_PATH = os.path.join(os.environ.get("STATE_DIRECTORY", "."), "sightings.json")
-MAX_HEXES = 20000  # generous headroom over any realistic number of distinct aircraft ever seen
+# A busy site (SFO, Schiphol) sees ~20k distinct airframes within weeks, so
+# the cap is really an eviction policy, not headroom. 50k entries is ~5.5 MB
+# on disk; with FLUSH_INTERVAL batching that is well under 1 GB/day of writes.
+MAX_HEXES = 50000
+# Evict down to this, not to MAX_HEXES exactly, so a full store evicts in
+# occasional chunks rather than scanning all entries on every new aircraft.
+EVICT_TO = MAX_HEXES - 1000
+FLUSH_INTERVAL = 600
 # A real body is ~40 bytes for a bare increment and ~150 with a classification
 # and a record offer. Still tight: this endpoint is reachable from the public
 # internet via Funnel, where the gateway allows GET and refuses writes -- this
@@ -93,6 +107,8 @@ MAX_UNCLASSIFIED = 400   # hexes handed out per request, so the page works in bo
 MAX_BATCH_BYTES = 64000
 
 lock = threading.Lock()
+_store = None   # loaded on first use; see current()
+_dirty = False
 
 
 def fresh_store():
@@ -159,7 +175,64 @@ def save_store(store):
     tmp = STORE_PATH + ".tmp"
     with open(tmp, "w") as f:
         json.dump(store, f)
+        # Writes are now rare, so pay for durability: without this a power
+        # cut shortly after the rename can leave a zero-length file on ext4.
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(tmp, STORE_PATH)
+
+
+def current():
+    """The in-memory store. Caller must hold `lock`."""
+    global _store
+    if _store is None:
+        _store = load_store()
+    return _store
+
+
+def mark_dirty():
+    global _dirty
+    _dirty = True
+
+
+def flush():
+    """Write the store if anything changed since the last write."""
+    global _dirty
+    with lock:
+        if not _dirty or _store is None:
+            return
+        save_store(_store)
+        _dirty = False
+
+
+def evict(store):
+    """Drop the least-recently-seen aircraft once the store is over its cap.
+
+    Replaces insertion-order eviction, which (because updating a key keeps
+    its position) threw out the aircraft seen FIRST -- the daily regulars --
+    instead of one-off transits. Undated entries carried over from v1 have no
+    `l` and go before anything with a real last-seen time.
+    """
+    ac = store["ac"]
+    if len(ac) <= MAX_HEXES:
+        return
+    doomed = heapq.nsmallest(len(ac) - EVICT_TO, ac, key=lambda h: ac[h].get("l", 0))
+    for h in doomed:
+        del ac[h]
+
+
+def _flusher():
+    while True:
+        time.sleep(FLUSH_INTERVAL)
+        try:
+            flush()
+        except OSError as e:
+            print(f"sighting-store: flush failed: {e}", file=sys.stderr, flush=True)
+
+
+def _shutdown(signum, frame):
+    flush()
+    sys.exit(0)
 
 
 def legacy_view(store):
@@ -288,13 +361,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0].rstrip("/") or "/sightings"
+        # Built under the lock (handlers run on separate threads and a POST
+        # may be mutating the same dicts), sent after releasing it.
         if path == "/sightings/stats":
             with lock:
-                return self._json(200, summarise(load_store()))
+                payload = summarise(current())
+            return self._json(200, payload)
         if path == "/sightings/unclassified":
             with lock:
-                store = load_store()
-            hexes = [h for h, e in store["ac"].items() if not e.get("k")]
+                hexes = [h for h, e in current()["ac"].items() if not e.get("k")]
             return self._json(200, {"hexes": hexes[:MAX_UNCLASSIFIED],
                                     "remaining": max(0, len(hexes) - MAX_UNCLASSIFIED)})
         if path != "/sightings":
@@ -302,8 +377,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return
         with lock:
-            store = load_store()
-        self._json(200, legacy_view(store))
+            payload = legacy_view(current())
+        self._json(200, payload)
 
     def _do_batch(self, entries):
         if not isinstance(entries, list) or not entries or len(entries) > MAX_BATCH:
@@ -312,7 +387,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         applied = 0
         with lock:
-            store = load_store()
+            store = current()
             for item in entries:
                 if not isinstance(item, dict):
                     continue
@@ -334,7 +409,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if entry != before:
                     applied += 1
             if applied:
-                save_store(store)
+                mark_dirty()
         self._json(200, {"applied": applied})
 
     def do_POST(self):
@@ -374,7 +449,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         hexcode = hexcode.lower()
 
         with lock:
-            store = load_store()
+            store = current()
             entry = store["ac"].get(hexcode) or {"t": 0, "n": 0}
             now = int(time.time())
             if store.get("since") is None:
@@ -392,20 +467,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
             store["ac"][hexcode] = entry
             if records is not None:
                 apply_records(store, hexcode, entry, records)
-            if len(store["ac"]) > MAX_HEXES:
-                # oldest-inserted-first eviction -- dict preserves insertion
-                # order in Python 3.7+, and re-assigning an existing key
-                # (above) doesn't move it, so this evicts genuinely stale
-                # entries, not just-updated ones
-                for k in list(store["ac"].keys())[: len(store["ac"]) - MAX_HEXES]:
-                    del store["ac"][k]
-            save_store(store)
+            evict(store)
+            mark_dirty()
+            result = {"total": entry.get("t", 0), "nearby": entry.get("n", 0)}
 
-        self._json(200, {"total": entry.get("t", 0), "nearby": entry.get("n", 0)})
+        self._json(200, result)
 
     def log_message(self, fmt, *args):
         pass  # this gets hit on every new sighting across every open viewer; keep the journal quiet
 
 
 if __name__ == "__main__":
-    http.server.ThreadingHTTPServer(LISTEN, Handler).serve_forever()
+    # SIGTERM is what systemd sends on stop, restart and reboot -- the flush
+    # there is what keeps a clean shutdown from losing the last interval.
+    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGINT, _shutdown)
+    with lock:
+        current()
+    threading.Thread(target=_flusher, daemon=True).start()
+    server = http.server.ThreadingHTTPServer(LISTEN, Handler)
+    server.daemon_threads = True
+    server.serve_forever()
