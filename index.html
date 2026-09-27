@@ -2075,15 +2075,151 @@ function zoomForRange(rangeNm, lat, rPixels) {
   return Math.log2(156543.03392 * Math.cos(lat * Math.PI / 180) / metersPerPixel) - 1;
 }
 
-function initMap() {
-  if (!home || map) return;
+// ---- Map style: online, with an on-device fallback -------------------------
+// The live basemap comes from one free service. When it can't be reached --
+// no internet yet after a power cut, the service down, or gone for good --
+// the map falls back to an extract of this unit's own area stored on the
+// device (deploy/offline-map.py builds it whenever the location is set or
+// changed, and serves it at /offline-map/). The fallback style below reuses
+// the online style's layer ids for everything the themes touch ('water',
+// 'label_city', ...), so recolorLabels() and the Retro Radar water fix work
+// on either.
+const OFFLINE_MAP_BASE = '/offline-map/';
+const ONLINE_STYLE_TIMEOUT_MS = 10 * 1000;
+const ONLINE_TILE_CHECK_MS = 45 * 1000;
+const ONLINE_RECHECK_MS = 20 * 60 * 1000;
+let mapIsOffline = false;
+let mapStarting = false;
+
+async function fetchOnlineStyle() {
+  try {
+    const res = await fetch(MAP_STYLE_URL, { signal: AbortSignal.timeout(ONLINE_STYLE_TIMEOUT_MS) });
+    if (!res.ok) return null;
+    const style = await res.json();
+    return style && style.version && style.sources ? style : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function fetchOfflineMeta() {
+  try {
+    const res = await fetch(OFFLINE_MAP_BASE + 'meta.json', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+    return res.ok ? await res.json() : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Colours follow the online style's light basemap (cream land, mid-blue
+// water, darker road casings) on purpose: every theme's --map-filter was
+// tuned against that polarity, Retro Radar's invert() above all, so a
+// fallback drawn any other way would look wrong under every theme but one.
+function offlineStyle(meta) {
+  const base = location.origin + OFFLINE_MAP_BASE;
+  const kind = ['get', 'kind'];
+  const detail = ['get', 'kind_detail'];
+  const name = ['get', 'name'];
+  const label = (id, filter, size, extra = {}) => ({
+    id, type: 'symbol', source: 'offline', 'source-layer': 'places', filter,
+    layout: {
+      'text-field': name, 'text-font': ['Noto Sans Regular'], 'text-size': size,
+      'text-max-width': 8,
+      'symbol-sort-key': ['-', 20, ['coalesce', ['get', 'population_rank'], 0]],
+      ...extra,
+    },
+    paint: { 'text-color': '#333333', 'text-halo-color': '#ffffff', 'text-halo-width': 1.2 },
+  });
+  const road = (id, kinds, color, widths, minzoom = 0) => ({
+    id, type: 'line', source: 'offline', 'source-layer': 'roads', minzoom,
+    filter: ['in', kind, ['literal', kinds]],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': color, 'line-width': ['interpolate', ['linear'], ['zoom'], ...widths] },
+  });
+  return {
+    version: 8,
+    glyphs: base + 'fonts/{fontstack}/{range}.pbf',
+    sources: {
+      offline: {
+        type: 'vector',
+        tiles: [base + 'tiles/{z}/{x}/{y}.pbf'],
+        minzoom: meta.minzoom ?? 0,
+        maxzoom: meta.maxzoom ?? 11,
+        attribution: meta.attribution || '© OpenStreetMap contributors',
+      },
+    },
+    layers: [
+      { id: 'background', type: 'background', paint: { 'background-color': '#f8f4f0' } },
+      { id: 'landcover', type: 'fill', source: 'offline', 'source-layer': 'landcover',
+        paint: { 'fill-color': ['match', kind,
+          ['forest', 'wood'], '#d6e6c4',
+          ['grassland', 'scrub', 'farmland'], '#e6eed8',
+          'urban_area', '#ebe6df',
+          '#f8f4f0'], 'fill-opacity': 0.7 } },
+      { id: 'water', type: 'fill', source: 'offline', 'source-layer': 'water',
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: { 'fill-color': 'rgb(158, 189, 255)' } },
+      { id: 'waterway', type: 'line', source: 'offline', 'source-layer': 'water',
+        filter: ['==', ['geometry-type'], 'LineString'],
+        paint: { 'line-color': '#a0c8f0', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 12, 1.5] } },
+      { id: 'boundary', type: 'line', source: 'offline', 'source-layer': 'boundaries',
+        paint: { 'line-color': '#9e9cab', 'line-width': 1, 'line-dasharray': [3, 2] } },
+      road('road_minor', ['minor_road', 'other'], '#d6d0c8', [9, 0.3, 12, 1.2], 9),
+      road('road_medium_casing', ['medium_road'], '#c4bdb3', [8, 0.8, 12, 3]),
+      road('road_medium', ['medium_road'], '#ffffff', [8, 0.4, 12, 2]),
+      road('road_major_casing', ['major_road'], '#c9a877', [6, 1, 12, 4]),
+      road('road_major', ['major_road'], '#fff1b8', [6, 0.5, 12, 3]),
+      road('road_highway_casing', ['highway'], '#d18f52', [5, 1.2, 12, 5]),
+      road('road_highway', ['highway'], '#ffcc88', [5, 0.7, 12, 3.8]),
+      { id: 'water_name_point_label', type: 'symbol', source: 'offline', 'source-layer': 'water',
+        filter: ['all', ['==', ['geometry-type'], 'Point'], ['has', 'name']],
+        layout: { 'text-field': name, 'text-font': ['Noto Sans Italic'], 'text-size': 11, 'text-max-width': 8 },
+        paint: { 'text-color': '#1d5fa8', 'text-halo-color': '#ffffff', 'text-halo-width': 1 } },
+      label('label_other', ['in', detail, ['literal', ['hamlet', 'suburb', 'quarter', 'neighbourhood', 'isolated_dwelling']]], 10, { 'text-transform': 'uppercase', 'text-letter-spacing': 0.08 }),
+      label('label_village', ['==', detail, 'village'], 11),
+      label('label_town', ['==', detail, 'town'], 12.5),
+      label('label_city', ['all', ['==', detail, 'city'], ['!', ['has', 'capital']]], 14.5),
+      label('label_city_capital', ['all', ['==', kind, 'locality'], ['has', 'capital']], 15.5),
+    ],
+  };
+}
+
+// Picks the style, then builds the map. Async (both checks are network
+// round trips), so a second call while one is in flight is ignored rather
+// than building two maps into the same container.
+async function initMap() {
+  if (!home || map || mapStarting) return;
+  mapStarting = true;
+  try {
+    const online = await fetchOnlineStyle();
+    const meta = online ? null : await fetchOfflineMeta();
+    if (!home || map) return;
+    if (online) createMap(online, false);
+    else if (meta) createMap(offlineStyle(meta), true);
+    // Neither: try the online URL anyway, and let the load timeout below
+    // retry with backoff -- there is nothing better to show.
+    else createMap(MAP_STYLE_URL, false);
+  } finally {
+    mapStarting = false;
+  }
+}
+
+function replaceMap() {
+  if (!map) return;
+  try { map.remove(); } catch (e) {}
+  map = null;
+  clearTimeout(mapLoadTimer);
+}
+
+function createMap(style, offline) {
+  mapIsOffline = offline;
   // Initial zoom, calibrated against the stage's CSS size at this moment --
   // the resize listener below recalibrates this the same way if the window
   // is resized later (e.g. via the Funnel URL).
   const rCss = R * (stage.getBoundingClientRect().width / W);
   map = new maplibregl.Map({
     container: 'mapbg',
-    style: MAP_STYLE_URL,
+    style,
     center: [home.lon, home.lat],
     zoom: zoomForRange(RANGE_NM, home.lat, rCss),
     interactive: false,
@@ -2105,27 +2241,55 @@ function initMap() {
   map.on('load', refreshLightning);
   map.on('load', initApproachLayer);
 
-  // The style is fetched once, and a failure used to be permanent until the
-  // next page reload: after a power cut the kiosk often starts before WiFi is
-  // up, leaving a blank disc (and no runways, storms or heatmap, which all
-  // hang off 'load') for hours. If 'load' hasn't fired in time, throw this map
-  // away and build a fresh one, backing off so a dead tile host isn't hammered.
+  // If 'load' hasn't fired in time, throw this map away and build a fresh
+  // one, backing off so a dead tile host isn't hammered. A failure used to be
+  // permanent until the next page reload: after a power cut the kiosk often
+  // starts before WiFi is up, leaving a blank disc for hours.
   const thisMap = map;
   map.on('load', () => { clearTimeout(mapLoadTimer); mapRetryMs = MAP_RETRY_MIN_MS; });
   clearTimeout(mapLoadTimer);
   mapLoadTimer = setTimeout(() => {
     if (map !== thisMap || thisMap.loaded()) return;
-    try { thisMap.remove(); } catch (e) {}
-    map = null;
+    replaceMap();
     setTimeout(initMap, mapRetryMs);
     mapRetryMs = Math.min(mapRetryMs * 2, MAP_RETRY_MAX_MS);
   }, MAP_LOAD_TIMEOUT_MS);
+
+  // The style can load while every tile fails (the tile host down behind a
+  // style that still resolves), and MapLibre still fires 'load' -- a blank
+  // disc that the timeout above never catches. If nothing from the online
+  // tile source has arrived after a while but errors have, fall back.
+  // Only the basemap's own sources count: storm and lightning tiles load
+  // into the same map and would otherwise mask a dead basemap.
+  if (!offline && typeof style === 'object') {
+    const baseSources = new Set(Object.keys(style.sources || {}));
+    let tilesOk = 0, tileErrors = 0;
+    map.on('sourcedata', e => { if (e.tile && baseSources.has(e.sourceId)) tilesOk++; });
+    map.on('error', e => { if (baseSources.has(e.sourceId)) tileErrors++; });
+    setTimeout(async () => {
+      if (map !== thisMap || tilesOk > 0 || tileErrors === 0) return;
+      const meta = await fetchOfflineMeta();
+      if (!meta || map !== thisMap) return;
+      replaceMap();
+      createMap(offlineStyle(meta), true);
+    }, ONLINE_TILE_CHECK_MS);
+  }
 }
 const MAP_LOAD_TIMEOUT_MS = 60 * 1000;
 const MAP_RETRY_MIN_MS = 15 * 1000;
 const MAP_RETRY_MAX_MS = 10 * 60 * 1000;
 let mapRetryMs = MAP_RETRY_MIN_MS;
 let mapLoadTimer = null;
+
+// On the fallback, keep checking for the real map, and go back to it once
+// it answers -- the extract is a safety net, not a place to stay.
+setInterval(async () => {
+  if (!map || !mapIsOffline || mapStarting) return;
+  const online = await fetchOnlineStyle();
+  if (!online || !map || !mapIsOffline) return;
+  replaceMap();
+  createMap(online, false);
+}, ONLINE_RECHECK_MS);
 
 // Registered before loadRunways() resolves (that one waits on a network
 // round-trip to Overpass; this doesn't, so it always finishes first),

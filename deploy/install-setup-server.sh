@@ -18,6 +18,7 @@ install -m 0755 deploy/setup-server.py     /opt/flightradar/setup-server.py
 install -m 0644 deploy/setup-ui.html       /opt/flightradar/setup-ui.html
 install -m 0644 deploy/airports.json       /opt/flightradar/airports.json
 install -m 0644 deploy/funnel-gateway.py   /opt/flightradar/funnel-gateway.py
+install -m 0755 deploy/offline-map.py      /opt/flightradar/offline-map.py
 
 install -m 0644 deploy/flightradar-setupd.service /etc/systemd/system/
 install -m 0644 deploy/flightradar-setup.service  /etc/systemd/system/
@@ -133,3 +134,13 @@ if [ -n "$KIOSK_USER" ] && [ "$KIOSK_USER" != "root" ]; then
 else
   echo "  (run via sudo from the kiosk user's account to also install its user units)"
 fi
+
+echo
+echo "== offline fallback map =="
+# Built for the receiver's current location if it has one; otherwise setupd
+# builds it when the location is set, and net-watchdog retries any failure.
+python3 /opt/flightradar/offline-map.py ensure \
+  && { [ -f /var/www/html/offline-map/meta.json ] \
+         && echo "  built: $(cat /var/www/html/offline-map/meta.json)" \
+         || echo "  no location yet; it will be built when one is set"; } \
+  || echo "  build failed (no internet?); net-watchdog will retry"
