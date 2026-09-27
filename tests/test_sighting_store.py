@@ -240,6 +240,14 @@ with tempfile.TemporaryDirectory() as tmp:
     check("a flush clears the dirty flag", m._dirty is False)
     check("no temp file is left behind", not os.path.exists(store_path + ".tmp"))
 
+    # ---- today's tally ----------------------------------------------------
+    store = m.fresh_store()
+    check("a store with no day yet reports zero today", m.summarise(store)["today"] == {"total": 0, "nearby": 0})
+    store["day"] = {"d": _time.strftime("%Y-%m-%d"), "t": 12, "n": 3}
+    check("today's tally is reported", m.summarise(store)["today"] == {"total": 12, "nearby": 3})
+    store["day"] = {"d": "2000-01-01", "t": 99, "n": 9}
+    check("yesterday's tally is not reported as today", m.summarise(store)["today"]["total"] == 0)
+
 print(f"{checks - len(failures)}/{checks} sighting store checks passed")
 for f in failures:
     print("  FAILED:", f)

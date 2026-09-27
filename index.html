@@ -283,6 +283,29 @@
     letter-spacing: 0.05em;
   }
 
+  /* Empty-sky screen: a clock, the weather and today's tally in the middle
+     of the radar when nothing is in range, instead of an empty disc. Behind
+     every panel and the HUD, and never catches taps. */
+  #emptySky {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 1.2s ease;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+    text-shadow: 0 0 12px var(--bg), 0 0 4px var(--bg);
+  }
+  #emptySky.show { opacity: 1; }
+  #emptySky .es-time { font-size: 4.2rem; font-weight: 500; letter-spacing: 0.02em; line-height: 1; }
+  #emptySky .es-date { font-size: 0.95rem; color: var(--text-dim); letter-spacing: 0.12em; text-transform: uppercase; margin-top: 8px; }
+  #emptySky .es-weather { font-size: 1.15rem; margin-top: 22px; }
+  #emptySky .es-today { font-size: 0.85rem; color: var(--text-dim); margin-top: 14px; letter-spacing: 0.06em; }
+  #emptySky .es-credit { font-size: 0.5rem; color: var(--text-dim); margin-top: 18px; opacity: 0.7; }
+
   .status {
     position: absolute;
     bottom: 8%;
@@ -1145,6 +1168,13 @@
   <div class="hud">
     <div class="loc" id="loc">LOCATING…</div>
     <div class="count" id="count">0 AIRCRAFT</div>
+  </div>
+  <div id="emptySky" aria-live="polite">
+    <div class="es-time" id="esTime"></div>
+    <div class="es-date" id="esDate"></div>
+    <div class="es-weather" id="esWeather"></div>
+    <div class="es-today" id="esToday"></div>
+    <div class="es-credit" id="esCredit"></div>
   </div>
   <div class="status" id="status">NO SIGNAL — CHECK RECEIVER</div>
   <div class="netpill" id="netPill"><span class="dot"></span><span id="netPillText">CHECKING…</span></div>
@@ -3180,7 +3210,7 @@ const ALERT_SETTINGS_KEY = 'flightradar_alert_settings_v1';
 // volume is a plain 0..1 multiplier on the master gain; muted is kept separate
 // rather than being volume 0, so silencing it for an evening does not throw
 // away the level someone settled on. soundTheme picks the voice alerts speak in.
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic' };
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic' };
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -5022,6 +5052,7 @@ function drawPlanes(dt) {
   // this antenna heard but how many it did NOT -- that is the whole point of
   // the overlay, and it should be readable without hunting for faint rings.
   const missed = alertSettings.networkCompare ? ghosts.length : 0;
+  emptySkyTick(inRange.length);
   countEl.textContent = inRange.length + ' AIRCRAFT'
     + (missed ? ` · ${missed} NOT HEARD` : '');
 }
@@ -5496,6 +5527,7 @@ function alertSettingsMeta() { return [
   },
   { group: 'alerts', key: 'lightningAlert', label: 'Lightning proximity alert', sub: `Chime + banner when a strike is detected within ${LIGHTNING_ALERT_RADIUS_NM}nm` },
   { group: 'display', key: 'nightDim', label: 'Dim at night', sub: 'Darkens the display between sunset and sunrise at the receiver' },
+  { group: 'display', key: 'emptySky', label: 'Clock & weather when quiet', sub: 'Shows the time, the weather and today’s count when nothing is in range' },
   { group: 'alerts', key: 'alertWake', label: 'Alerts wake the screen', sub: 'Nearby + emergency alerts undim, and wake the display if the screensaver blanked it' },
 ]; }
 
@@ -5663,6 +5695,100 @@ function renderScorecard() {
     <div class="sp-sub" style="padding:6px 0;opacity:0.7">Network data © ADSB.lol contributors, ODbL 1.0</div>`;
 }
 
+
+// ---- Empty-sky screen ------------------------------------------------------
+// An empty radar reads as "broken" to anyone who didn't build it. After
+// EMPTY_SKY_AFTER_MS with nothing in range, show the time, the weather and
+// today's tally instead; the first aircraft back clears it at once.
+// Weather is Open-Meteo (free for non-commercial use, CC BY 4.0, credited on
+// screen), asked for with the position rounded to 2 dp (~1 km), the same
+// precision the public Funnel gateway already publishes.
+const EMPTY_SKY_AFTER_MS = 30 * 1000;
+const WEATHER_REFRESH_MS = 20 * 60 * 1000;
+const TODAY_REFRESH_MS = 5 * 60 * 1000;
+const emptySkyEl = document.getElementById('emptySky');
+let emptySinceAt = null;
+let emptySkyShown = false;
+let emptySkyRenderedAt = 0;
+let weatherAt = 0, weatherText = '';
+let todayAt = 0, todayText = '';
+const WMO = {
+  0: 'Clear', 1: 'Mostly clear', 2: 'Partly cloudy', 3: 'Overcast', 45: 'Fog', 48: 'Freezing fog',
+  51: 'Light drizzle', 53: 'Drizzle', 55: 'Heavy drizzle', 56: 'Freezing drizzle', 57: 'Freezing drizzle',
+  61: 'Light rain', 63: 'Rain', 65: 'Heavy rain', 66: 'Freezing rain', 67: 'Freezing rain',
+  71: 'Light snow', 73: 'Snow', 75: 'Heavy snow', 77: 'Snow grains',
+  80: 'Showers', 81: 'Showers', 82: 'Heavy showers', 85: 'Snow showers', 86: 'Snow showers',
+  95: 'Thunderstorm', 96: 'Thunderstorm, hail', 99: 'Thunderstorm, hail',
+};
+
+// The configured airport's country decides, where it is known. Configs
+// written before country was recorded (the first unit's) fall back to the
+// unit's time zone, which setup always sets and which, unlike the kiosk
+// browser's language (en-GB on the first unit), actually says where it is.
+// US zones are listed rather than matched by "America/": Toronto is not.
+const US_TIME_ZONES = /^(America\/(New_York|Detroit|Chicago|Denver|Boise|Phoenix|Los_Angeles|Anchorage|Juneau|Sitka|Metlakatla|Yakutat|Nome|Adak|Menominee|Puerto_Rico|Indiana\/|Kentucky\/|North_Dakota\/)|Pacific\/(Honolulu|Guam))/;
+function useFahrenheit() {
+  const cc = (AIRPORT.country || '').toUpperCase();
+  if (cc) return ['US', 'LR', 'MM', 'BS', 'BZ', 'KY', 'PW', 'PR', 'GU'].includes(cc);
+  return US_TIME_ZONES.test(Intl.DateTimeFormat().resolvedOptions().timeZone || '');
+}
+
+async function refreshWeather() {
+  if (!home) return;
+  weatherAt = performance.now();
+  const f = useFahrenheit();
+  const url = 'https://api.open-meteo.com/v1/forecast'
+    + `?latitude=${home.lat.toFixed(2)}&longitude=${home.lon.toFixed(2)}`
+    + '&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min'
+    + `&timezone=auto&forecast_days=1${f ? '&temperature_unit=fahrenheit' : ''}`;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return;
+    const d = await res.json();
+    const t = Math.round(d.current.temperature_2m), u = f ? '°F' : '°C';
+    const hi = Math.round(d.daily.temperature_2m_max[0]), lo = Math.round(d.daily.temperature_2m_min[0]);
+    weatherText = `${t}${u} · ${WMO[d.current.weather_code] || ''} · H ${hi}° L ${lo}°`;
+  } catch (e) { /* offline: the clock still shows; try again next interval */ }
+}
+
+async function refreshToday() {
+  todayAt = performance.now();
+  try {
+    const st = await (await fetch('/sightings/stats', { cache: 'no-store' })).json();
+    const n = st && st.today ? st.today.total : null;
+    if (typeof n === 'number') todayText = n === 1 ? '1 aircraft heard today' : `${n.toLocaleString()} aircraft heard today`;
+  } catch (e) { /* the store is optional; show without it */ }
+}
+
+function renderEmptySky() {
+  const now = new Date();
+  document.getElementById('esTime').textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  document.getElementById('esDate').textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+  document.getElementById('esWeather').textContent = weatherText;
+  document.getElementById('esToday').textContent = todayText;
+  document.getElementById('esCredit').textContent = weatherText ? 'Weather: Open-Meteo.com' : '';
+}
+
+// Called from the draw loop with the number of aircraft drawn in range.
+function emptySkyTick(inRangeCount) {
+  const now = performance.now();
+  const want = alertSettings.emptySky && inRangeCount === 0 && home;
+  if (!want) {
+    emptySinceAt = null;
+    if (emptySkyShown) { emptySkyShown = false; emptySkyEl.classList.remove('show'); }
+    return;
+  }
+  if (emptySinceAt === null) emptySinceAt = now;
+  if (now - emptySinceAt < EMPTY_SKY_AFTER_MS) return;
+  if (!emptySkyShown) {
+    emptySkyShown = true;
+    emptySkyEl.classList.add('show');
+  }
+  if (now - weatherAt > WEATHER_REFRESH_MS) refreshWeather().then(renderEmptySky);
+  if (now - todayAt > TODAY_REFRESH_MS) refreshToday().then(renderEmptySky);
+  // This runs every frame; the clock only needs a repaint once a second.
+  if (now - emptySkyRenderedAt > 1000) { emptySkyRenderedAt = now; renderEmptySky(); }
+}
 
 // ---- "What was that?" -----------------------------------------------------
 // The question gets asked right after something loud goes over, when it is
