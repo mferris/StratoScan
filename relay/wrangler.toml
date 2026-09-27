@@ -7,7 +7,7 @@ binding = "DB"
 database_name = "flightradar-relay"
 # Created once per maintainer account; see relay/README.md. Not a secret: a
 # D1 id is useless without the account's own credentials.
-database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+database_id = "bc652644-4181-433c-b177-ea59c2473d64"
 
 # Secrets are never stored here. Set them with:
 #   npx wrangler secret put FLEET_TOKEN
