@@ -121,6 +121,62 @@
     --map-filter: brightness(0.15) saturate(0.4);
   }
 
+  /* Old CRT plan-position-indicator radar: black screen, phosphor green.
+     Real single-phosphor scopes (P1/P39) had exactly one hue and told
+     targets apart by brightness alone -- the purest version of "authentic"
+     here. Not used: this app's OTHER two themes already establish, and the
+     high-contrast theme's own comment already argues, that same-hue-
+     different-brightness is a real usability cost, not just a style choice
+     -- eyes pick out a hue difference far faster than a brightness one when
+     scanning a screen of moving blips. So altitude keeps three DISTINCT
+     greens (warm yellow-green low, the classic phosphor mid, a cool
+     cyan-green high) rather than one hue at three intensities -- which also
+     has real precedent: dual- and multi-phosphor tactical scopes (P7 being
+     the well-known one) existed specifically because a single hue was not
+     always enough. --bad (red) and --warn (amber) are the other deliberate
+     breaks from monochrome, for the same reason those two are the one
+     universal-across-every-instrument-era exception: red-for-danger and
+     amber-for-caution read as an alarm on an otherwise green screen exactly
+     as they would on a real one -- most ATC and TCAS displays overlay red
+     conflict alerts on an otherwise monochrome or near-monochrome scope.
+
+     --map-filter is doing the real work of "authentic": these OSM tiles are
+     a light basemap (pale cream fill, dark linework), the opposite polarity
+     of a radar screen, so brightness/contrast alone just produces a dim
+     green FIELD, not a black screen with glowing traces. invert(1) first
+     flips that polarity -- background pixels go dark, linework goes
+     bright -- so grayscale+sepia+hue-rotate has bright traces on a dark
+     field to tint, the same shape a real PPI display actually has. Tuned by
+     eye against the live map, not computed: dial breaks (a green FIELD
+     instead of black-with-traces) below brightness ~0.85 or without the
+     invert are both easy to hit by guessing. */
+  html[data-theme="radar"] {
+    --bg: #000000;
+    --ring: #0b3d0b;
+    --ring-bright: #1f7a1f;
+    --ring-label: #4ee44e;
+    --crosshair: #145214;
+    --compass: #6dff6d;
+    --sweep: #39ff14;
+    --text-dim: #2f8f2f;
+    --text: #8cff8c;
+    --low: #b6ff3d;
+    --mid: #33ff33;
+    --high: #33ffc4;
+    --ground: #2f6b2f;
+    --taxi: #33cc88;
+    --bad: #ff3b3b;
+    --good: #39ff14;
+    --warn: #ffcc00;
+    --ghost: #3a5f3a;
+    --airport-highlight: #aaff00;
+    --panel-bg: rgba(0, 12, 0, 0.80);
+    --panel-bg-strong: rgba(0, 8, 0, 0.96);
+    --panel-border: rgba(57, 255, 20, 0.28);
+    --switch-track-off: rgba(57, 255, 20, 0.18);
+    --map-filter: invert(1) grayscale(1) brightness(0.85) contrast(1.4) sepia(1) hue-rotate(75deg) saturate(9);
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   html, body {
@@ -2865,6 +2921,7 @@ const THEMES = [
   { key: 'classic', label: 'Classic', sub: 'The original look — dark background, warm accent colors', swatchBg: '#0a0d0f', swatchAccent: '#4fd6c8' },
   { key: 'daylight', label: 'Daylight', sub: 'Light background, black text — for a bright room', swatchBg: '#eaf3f1', swatchAccent: '#0f7a6c' },
   { key: 'highcontrast', label: 'High Contrast', sub: 'Built for low-vision/colorblind readability — true black background, colorblind-safe accents (Okabe–Ito palette)', swatchBg: '#000000', swatchAccent: '#ffd400' },
+  { key: 'radar', label: 'Retro Radar', sub: 'Old CRT plan-position display — black screen, phosphor green', swatchBg: '#000000', swatchAccent: '#39ff14' },
 ];
 let uiTheme = 'classic';
 try {
