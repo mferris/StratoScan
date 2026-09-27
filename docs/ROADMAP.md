@@ -124,4 +124,4 @@ phone ──(pairing, notification rules)──▶ relay
 | 4.4 Spoken announcements | Done: Piper + LJSpeech voice on the unit; setting off by default | — |
 | 4.5 Year in review | Done: per-year counters; RDU's history carried over (44,332 visits in 2026) | — |
 | 4.6 FlightAware feeding | Done: opt-in setup-page card; PiAware relays readsb; remote updates off; FR24 linked, not automated | Owner turns it on and claims the feeder |
-| 1.5 Factory image | In progress: complete installer (verified on RDU), image build + first boot + GPL offer in CI | A spare SD card + Pi to test-flash |
+| 1.5 Factory image | Built: CI produces a 1.6 GB image that passes its checks (working unit, no per-unit secrets, GPL sources attached). Not yet published | A spare SD card + Pi to test-flash |
