@@ -349,6 +349,7 @@ these choices, though no code is shared — its license is unclear):
 - **[adsbdb.com](https://www.adsbdb.com/)** — registered-owner lookups for confirmed-private aircraft
 - **[LiveATC.net](https://www.liveatc.net/)** — ATC audio for the configured airport, opened as a link to their own player (see [Security](#security) below for why it's a link, not an embed)
 - **[SSEC RealEarth](https://realearth.ssec.wisc.edu/)** (UW-Madison) — satellite-observed lightning strike density (GOES-East GLM)
+- **[Protomaps](https://protomaps.com)** OpenStreetMap builds (© OpenStreetMap contributors, ODbL) — the per-unit offline fallback map built by [`deploy/offline-map.py`](deploy/offline-map.py)
 - **[OurAirports](https://ourairports.com/data/)** (public domain) — the bundled airport table in [`deploy/airports.json`](deploy/airports.json)
 - **[adsb.lol](https://adsb.lol/)** — community-run ADS-B aggregation, used only by the network comparison, which can be switched off. Queried at most once every 15s no matter how many people are viewing, with coordinates rounded to ~1.1km
 
@@ -562,3 +563,46 @@ To cut a release: `sh scripts/release.sh <version>`. It builds the bundle,
 writes a manifest of per-file hashes, signs it, **verifies its own output with
 the public key the devices carry**, and only then publishes to GitHub
 Releases.
+
+**Changed services are restarted.** A long-running service keeps its old code
+until it restarts, and the updater originally restarted only the kiosk — so a
+security fix to `funnel-gateway.py` was reported installed while the old
+gateway kept running for hours. It now compares each file with the one it
+replaces and restarts exactly the services whose code changed (and restarts
+them again on a rollback). Like any change to `ota.py`, that behaviour starts
+with the release *after* the one that installs it.
+
+The serial is the commit count, so two releases cut from the same commit carry
+the same serial and the second is refused as "not newer" — commit first.
+
+## Built to run for ten years
+
+Measured on the first unit and reviewed for a decade of unattended running at
+busy sites (SFO, Schiphol) as well as quiet ones:
+
+- **SD card wear.** The stores keep their data in memory and write at most
+  every 10 minutes and on shutdown; they used to rewrite the whole file on
+  every sighting (3.5 GB in 17 hours, ~100 GB/day at a busy site once full).
+  Chromium's HTTP cache lives in RAM. The history store evicts the aircraft
+  seen *least recently*, so daily regulars survive a full store.
+- **Recovery without a person.** The hardware watchdog reboots a hung kernel;
+  `kernel.panic=10` reboots a panicked one. `net-watchdog.py` also restarts
+  `readsb` when its output goes stale and reboots after repeated failed
+  restarts, and reboots when the frozen-display watchdog's browser restarts
+  keep failing — never more than once every 6 hours, so a fault a reboot
+  cannot fix degrades to a few reboots a day, not a loop.
+- **Security updates** via unattended-upgrades (Debian security and point
+  releases, the Raspberry Pi archive, Tailscale), holding Chromium, the
+  kernel and firmware — a bad unattended update to those strands a unit.
+- **An offline map.** When the location is set or changed, the unit
+  downloads its own area (2–7 MB) from [Protomaps](https://protomaps.com)'
+  OpenStreetMap builds into `/offline-map/`, and the page falls back to it
+  whenever OpenFreeMap can't be reached — so a dead tile service or a boot
+  before WiFi is up shows a real map, not a blank disc.
+
+These system-level pieces (unattended-upgrades, sysctl, unit files) are
+installed by `deploy/install-setup-server.sh`, never by an update — re-run it
+on any unit before it leaves the house. What remains is hardware: an RTC
+battery (ML-2020, with `dtparam=rtc_bbat_vchg`) keeps the clock across power
+cuts, and a high-endurance SD card or an NVMe drive is the better medium for
+a decade.
