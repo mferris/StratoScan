@@ -152,6 +152,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _is_read_only_public(cls, path):
         return _matches(cls._normalise(path), READ_ONLY_PUBLIC_PATHS)
 
+    @classmethod
+    def _is_rounded_receiver_json(cls, path):
+        # Was a bare `path == ROUNDED_PATH` -- a real hole, since self.path
+        # includes the query string and isn't traversal-collapsed. GET
+        # /tar1090/data/receiver.json?x=1 (or a trailing slash, or any of the
+        # percent-encodings _normalise() exists to defeat) failed that exact
+        # match and fell through to the unfiltered _proxy(), leaking the
+        # real, unrounded home coordinates to anyone with the Funnel URL.
+        # Same class of bug as the /wake bypass _normalise()'s own docstring
+        # documents; this call site just hadn't been switched over to it.
+        return cls._normalise(path) == ROUNDED_PATH
+
     def _dispatch(self):
         """Single gate for every HTTP method.
 
@@ -165,7 +177,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.command != "GET" and self._is_read_only_public(self.path):
             self.send_error(403, "Read-only")
             return
-        if self.command == "GET" and self.path == ROUNDED_PATH:
+        if self.command == "GET" and self._is_rounded_receiver_json(self.path):
             self._serve_rounded_receiver_json()
         else:
             self._proxy()

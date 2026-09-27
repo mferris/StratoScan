@@ -19,6 +19,7 @@ spec = importlib.util.spec_from_file_location("fg", root / "deploy" / "funnel-ga
 fg = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fg)
 is_local_only = fg.Handler._is_local_only
+is_rounded_receiver_json = fg.Handler._is_rounded_receiver_json
 
 MUST_BLOCK = [
     "/wake", "/wake/", "//wake", "///wake", "/./wake", "/.//wake",
@@ -120,10 +121,33 @@ def main():
     if "Host" in fg.forward_headers([("Host", "evil")]):
         failures.append("Host header forwarded upstream")
 
+    # The receiver-coordinate rounding filter must apply to every form of
+    # the same request, not just the byte-exact path -- a query string or
+    # trailing slash used to fall through to the unfiltered proxy and leak
+    # the real, unrounded home coordinates.
+    MUST_ROUND = [
+        "/tar1090/data/receiver.json", "/tar1090/data/receiver.json/",
+        "/tar1090/data/receiver.json?x=1", "/tar1090/data/receiver.json#f",
+        "//tar1090/data/receiver.json", "/./tar1090/data/receiver.json",
+        "/tar1090/data/receiver.json?",
+    ]
+    round_checks = 0
+    for p in MUST_ROUND:
+        round_checks += 1
+        if not is_rounded_receiver_json(p):
+            failures.append(f"NOT ROUNDED (coordinate leak): {p!r}")
+
+    # A path that merely starts with the same characters is a different
+    # resource and must not be caught -- there's no rounding logic to run for
+    # it, so misrouting it here would just be a bug, not a leak.
+    round_checks += 1
+    if is_rounded_receiver_json("/tar1090/data/receiver.jsonx"):
+        failures.append("wrongly matched: '/tar1090/data/receiver.jsonx'")
+
     for f in failures:
         print("FAIL:", f)
     total = (len(MUST_BLOCK) + len(MUST_ALLOW) + len(MUST_BE_READ_ONLY)
-             + marker_checks)
+             + marker_checks + round_checks)
     print(f"{total - len(failures)}/{total} path checks passed")
     return 1 if failures else 0
 
