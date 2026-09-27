@@ -1,0 +1,16 @@
+name: Inspect base image
+
+# Manual: reports how the pinned Raspberry Pi OS image does its first boot.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect
+        run: sudo sh image/inspect.sh
