@@ -49,7 +49,8 @@ BUNDLE="flightradar-$VERSION.tar.gz"
 COPYFILE_DISABLE=1 tar -czf "$OUT/$BUNDLE" \
     --exclude='.DS_Store' \
     --exclude='._*' \
-    index.html deploy
+    --exclude='CREDITS.md' \
+    index.html deploy sounds
 
 python3 - "$OUT" "$BUNDLE" "$VERSION" "$SERIAL" <<'PY'
 import hashlib, json, os, subprocess, sys, tarfile, time

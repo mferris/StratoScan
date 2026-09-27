@@ -2892,60 +2892,49 @@ function playTones(notes) {
   }
 }
 
-// A pitch-swept, filtered voice -- the second sound primitive, beside
-// playTones' pure sine notes.
+// Real recordings for the second voice, in place of the synthesized
+// approximation this replaced. That version was honest about being one: a
+// sawtooth swept through a filter reads as "a cat noise", not as a cat.
 //
-// A meow is not a note. It is a pitch contour with harmonics: up to a peak and
-// back down, brightness falling as the mouth closes. A sine cannot do that,
-// which is why the cat theme needed a new generator rather than a different
-// tune on the old one. Sawtooth for the harmonics, a lowpass sweeping down
-// behind the pitch, and optional vibrato for the wobble.
+// Four short CC0 recordings from Freesound (credited in
+// sounds/kitten/CREDITS.md, which also has the exact processing applied --
+// trim, normalize, and for landing/takeoff a pitch shift up or down from the
+// same source trill, the same up-for-takeoff/down-for-landing distinction the
+// synthesized version used). They ship as .ogg/Opus through the OTA bundle
+// alongside index.html -- 20KB for all four, decoded once and cached, so
+// there is no size or latency reason left to prefer synthesis.
 //
-// It is an approximation and should be heard as one: it reads as "a cat noise"
-// rather than passing for a recording. Real samples would be better and are a
-// bigger decision -- licensing, plus either bloating index.html with base64 or
-// putting binary assets through the OTA bundle.
-function playVoice({ f0, peakHz, f1, dur, peak = 0.22, bright = 2600, vibrato = 0 }) {
-  try {
+// Decoded into AudioBuffers rather than played through <audio> elements, so
+// playback goes through the same getMasterGain() node as playTones -- one
+// volume/mute path for every sound in the app, sample or synthesized, rather
+// than a second one with its own .volume property to keep in sync.
+const sampleBuffers = {};
+function loadSample(url) {
+  if (!sampleBuffers[url]) {
+    sampleBuffers[url] = fetch(url)
+      .then((r) => r.arrayBuffer())
+      .then((buf) => getAudioCtx().decodeAudioData(buf));
+  }
+  return sampleBuffers[url];
+}
+// Warmed on load and whenever the kitten theme is selected, so the first real
+// alert plays immediately instead of paying a decode on the critical path --
+// the moment that matters is a plane already inside the alert radius, not a
+// good time to discover a slow decode.
+function preloadSoundTheme(theme) {
+  Object.values(theme.files || {}).forEach(loadSample);
+}
+function playSample(url) {
+  loadSample(url).then((buffer) => {
     const ctx = getAudioCtx();
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-    const t = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const lp = ctx.createBiquadFilter();
-    osc.type = 'sawtooth';
-    lp.type = 'lowpass';
-    lp.Q.value = 6;
-
-    // pitch: rise to the peak early, fall away over the remainder
-    osc.frequency.setValueAtTime(f0, t);
-    osc.frequency.exponentialRampToValueAtTime(peakHz, t + dur * 0.33);
-    osc.frequency.exponentialRampToValueAtTime(f1, t + dur);
-
-    // brightness tracks the pitch down, which is the closing-mouth sound
-    lp.frequency.setValueAtTime(bright, t);
-    lp.frequency.exponentialRampToValueAtTime(Math.max(300, bright * 0.25), t + dur);
-
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(peak, t + dur * 0.15);
-    gain.gain.setValueAtTime(peak, t + dur * 0.6);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-
-    osc.connect(lp).connect(gain).connect(getMasterGain());
-
-    if (vibrato) {
-      const lfo = ctx.createOscillator();
-      const lfoGain = ctx.createGain();
-      lfo.frequency.value = vibrato;
-      lfoGain.gain.value = peakHz * 0.035;
-      lfo.connect(lfoGain).connect(osc.frequency);
-      lfo.start(t); lfo.stop(t + dur + 0.02);
-    }
-    osc.start(t);
-    osc.stop(t + dur + 0.02);
-  } catch (e) {
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(getMasterGain());
+    src.start();
+  }).catch(() => {
     // same contract as playTones: audio is garnish, the visual alert is the alert
-  }
+  });
 }
 
 // ---- Sound themes ---------------------------------------------------
@@ -2971,29 +2960,38 @@ const SOUND_THEMES = {
   },
   kitten: {
     label: 'Kitten',
-    sub: 'Meows and chirrups — made for the cat case',
+    sub: 'Real meows and chirrups — made for the cat case',
+    // Every file this theme can play, so preloadSoundTheme() has one place to
+    // find them all rather than a call buried in each generator below.
+    files: {
+      nearby:    'sounds/kitten/nearby.ogg',
+      emergency: 'sounds/kitten/emergency.ogg',
+      landing:   'sounds/kitten/landing.ogg',
+      takeoff:   'sounds/kitten/takeoff.ogg',
+    },
     // One unhurried meow: the everyday sound, so it must not grate on the
     // hundredth hearing.
-    nearby: () => playVoice({ f0: 420, peakHz: 860, f1: 480, dur: 0.42, peak: 0.2, vibrato: 11 }),
-    // Three short, rising, insistent yowls. Urgency here comes from repetition
-    // and pitch climbing, the same way the classic theme's four beeps do it --
-    // not from being louder, which only makes people mute the whole thing.
-    emergency: () => {
-      playVoice({ f0: 520, peakHz: 1150, f1: 700, dur: 0.26, peak: 0.28, bright: 3200, vibrato: 16 });
-      setTimeout(() => playVoice({ f0: 560, peakHz: 1250, f1: 760, dur: 0.26, peak: 0.28, bright: 3200, vibrato: 16 }), 300);
-      setTimeout(() => playVoice({ f0: 600, peakHz: 1400, f1: 820, dur: 0.30, peak: 0.3, bright: 3400, vibrato: 18 }), 600);
-    },
-    // A short chirrup, the noise a cat makes at a window. Quietest of the
-    // three, because this one fires on every landing and takeoff.
-    airportPhase: (phase) => playVoice(
-      phase === 'landing'
-        ? { f0: 700, peakHz: 900,  f1: 520, dur: 0.16, peak: 0.13, bright: 2200 }
-        : { f0: 600, peakHz: 1150, f1: 900, dur: 0.16, peak: 0.13, bright: 2800 }),
+    nearby: () => playSample('sounds/kitten/nearby.ogg'),
+    // A single hiss. A cat hiss already reads as the alarmed, back-off sound
+    // on first hearing -- it does not need the classic theme's trick of
+    // building urgency through repetition, and repeating a 1-second recording
+    // three times would make this by far the longest sound in the app for
+    // the thing that is supposed to demand the quickest reaction.
+    emergency: () => playSample('sounds/kitten/emergency.ogg'),
+    // A short trill, the chirrup a cat makes at a window. Quietest of the
+    // three in how it was mastered, because this one fires on every landing
+    // and takeoff. Landing and takeoff are the same recording pitch-shifted
+    // down and up from a shared source, so the two stay recognizably one
+    // sound family while remaining distinguishable by ear -- the same
+    // down-for-landing/up-for-takeoff convention the classic theme's tones use.
+    airportPhase: (phase) =>
+      playSample(phase === 'landing' ? 'sounds/kitten/landing.ogg' : 'sounds/kitten/takeoff.ogg'),
   },
 };
 function soundTheme() {
   return SOUND_THEMES[alertSettings.soundTheme] || SOUND_THEMES.classic;
 }
+preloadSoundTheme(soundTheme());
 
 // Two-note ascending chime in the classic theme; a meow in the kitten one.
 function playAlertSound() {
@@ -6048,6 +6046,10 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     if (!e.target.closest('.sp-radio')) return;   // row body is for scrolling
     alertSettings.soundTheme = soundRow.dataset.soundTheme;
     saveAlertSettings();
+    // Warm every file in the newly-picked theme now, not just the one
+    // playAlertSound() below happens to preview -- so a real alert on the
+    // OTHER two sounds does not pay a decode the first time it matters.
+    preloadSoundTheme(soundTheme());
     if (!alertSettings.muted) playAlertSound();
     renderSettingsPanel();
     return;

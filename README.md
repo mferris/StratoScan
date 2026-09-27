@@ -62,6 +62,11 @@ too.
   label of anything currently landing or departing at your home airport, plus
   an optional quiet chime; pairs with an optional link to LiveATC.net's live
   approach/departure audio
+- **Volume, mute, and a choice of alert sound** — every chime above goes
+  through one master volume with three stepped levels plus mute, and can play
+  either the original synth tones or real CC0-licensed cat sounds (a meow, a
+  hiss for emergencies, and a chirrup for landing/takeoff) for a kitten-cased
+  unit — see `sounds/kitten/CREDITS.md` for what was recorded and how
 - **Night dimming** — the display darkens between sunset and sunrise,
   computed from the receiver's own coordinates so it tracks the seasons
   without any configuration; alerts can optionally undim it
@@ -320,6 +325,7 @@ docs/           hardware/software spec, original prototype, screenshots
 enclosure/      parametric OpenSCAD source for the printed cases (two designs)
 tests/          regression tests for the security-critical paths
 vendor/         vendored MapLibre GL JS (self-hosted, no CDN dependency)
+sounds/         CC0 audio for the alert sound themes (see sounds/*/CREDITS.md)
 ios/            native SwiftUI companion app
 ```
 

@@ -116,6 +116,15 @@ DEPLOY_ALLOWED = {
 # This list is itself shippable: ota.py can update ota.py, so widening it later
 # is a normal release, not a one-way door.
 
+# Static web assets -- audio for the sound themes, so far -- get a narrower
+# rule than DEPLOY_ALLOWED's per-file list, because they are a different kind
+# of thing: browser-sandboxed content with no more privilege than index.html
+# already has, not code a service runs as root. Matched by extension rather
+# than by name, so adding a fifth sound later is dropping a file in sounds/,
+# not also a change here -- the DEPLOY_ALLOWED list is deliberately the
+# opposite of this because each entry there IS a decision to make.
+SOUNDS_EXT_ALLOWED = {".ogg", ".mp3", ".wav"}
+
 
 class Fail(Exception):
     pass
@@ -133,6 +142,18 @@ def dest_for(name):
         base = name[len("deploy/"):]
         if base in DEPLOY_ALLOWED:
             return os.path.join(OPT_ROOT, base)
+    if name.startswith("sounds/"):
+        if os.path.splitext(name)[1].lower() not in SOUNDS_EXT_ALLOWED:
+            return None
+        # name cannot legitimately contain ".." -- it comes from walking real
+        # files when the release was built -- and the tar extraction guard
+        # above already refuses any member that does. This is the same
+        # "two independent refusals" belt-and-braces as that guard, priced at
+        # one join and one prefix check.
+        dest = os.path.normpath(os.path.join(WEB_ROOT, name))
+        if dest == WEB_ROOT or dest.startswith(WEB_ROOT + os.sep):
+            return dest
+        return None
     return None
 
 
@@ -348,6 +369,12 @@ def apply():
                    f"cannot run, so an update would be rolled back whatever "
                    f"happened. Is flightradar-wake.service running?")
     for src, dest, want_exec in plan:
+        # Every existing DEST directory (WEB_ROOT, OPT_ROOT) is already there
+        # on a device that has run any prior release. This only matters for a
+        # NEW subdirectory shipping for the first time -- sounds/kitten/ did
+        # not exist before this file was added -- and copy2 does not create
+        # parents, it raises FileNotFoundError.
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
         tmp = dest + ".ota-tmp"
         shutil.copy2(src, tmp)
         # The signed manifest decides whether this is a program. Falling back
