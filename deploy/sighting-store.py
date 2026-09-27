@@ -116,7 +116,7 @@ def fresh_store():
     # Both are local, deliberately: "when is it busy here" is a question about
     # this house's week, not about UTC.
     return {"v": 2, "ac": {}, "hours": [0] * 24, "dows": [0] * 7,
-            "rec": {}, "since": int(time.time())}
+            "rec": {}, "since": int(time.time()), "years": {}}
 
 
 def migrate(data):
@@ -133,6 +133,10 @@ def migrate(data):
     if data.get("v") == 2 and isinstance(data.get("ac"), dict):
         store = fresh_store()
         store.update(data)
+        # Written before per-year counting existed: leave "years" absent so
+        # seed_current_year() can carry this year's history over, once.
+        if "years" not in data:
+            del store["years"]
         # a truncated or hand-edited file should not take the service down
         if not isinstance(store.get("hours"), list) or len(store["hours"]) != 24:
             store["hours"] = [0] * 24
@@ -187,6 +191,8 @@ def current():
     global _store
     if _store is None:
         _store = load_store()
+        if seed_current_year(_store):
+            mark_dirty()
     return _store
 
 
@@ -258,7 +264,8 @@ def bump_year(store, entry, kind, now, first_ever):
     years = store.setdefault("years", {})
     y = years.get(year)
     if not isinstance(y, dict):
-        y = years[year] = {"t": 0, "n": 0, "new": 0, "months": [0] * 12, "hours": [0] * 24}
+        y = years[year] = {"t": 0, "n": 0, "new": 0, "months": [0] * 12, "hours": [0] * 24,
+                           "since": int(now)}
         for old in sorted(years)[:-YEARS_KEPT]:
             del years[old]
     if kind == "total":
@@ -274,6 +281,43 @@ def bump_year(store, entry, kind, now, first_ever):
         entry["y"] = cur
     elif kind == "nearby":
         y["n"] += 1
+
+
+def seed_current_year(store, now=None):
+    """One-time: give a store written before per-year counting its year so far.
+
+    Without this, a unit that has counted since September would show a year
+    of three visits after upgrading. When the whole existing history falls in
+    the current year -- which is checkable, from `since` -- the all-time
+    totals ARE this year's, and are carried over exactly. Months are only
+    exact when that history is all in the current month; otherwise they are
+    left to fill from now on, and the screen shows what it knows.
+    """
+    if "years" in store:
+        return False
+    now = int(now or time.time())
+    since = store.get("since")
+    here = time.localtime(now)
+    years = store["years"] = {}
+    if not since or time.localtime(since).tm_year != here.tm_year:
+        return False
+    ac = store["ac"]
+    visits = sum(e.get("t", 0) for e in ac.values())
+    months = [0] * 12
+    if time.localtime(since).tm_mon == here.tm_mon:
+        months[here.tm_mon - 1] = visits
+    years[str(here.tm_year)] = {
+        "t": visits,
+        "n": sum(e.get("n", 0) for e in ac.values()),
+        "new": sum(1 for e in ac.values() if e.get("t", 0) and e.get("f", 0) >= since),
+        "months": months,
+        "hours": list(store.get("hours", [0] * 24)),
+        "since": since,
+    }
+    for e in ac.values():
+        if e.get("t", 0):
+            e["y"] = [here.tm_year, e["t"]]
+    return True
 
 
 def year_summary(store, year=None):
@@ -305,9 +349,17 @@ def year_summary(store, year=None):
         "top": [{"hex": h, "cs": e.get("cs"), "visits": e["y"][1], "k": e.get("k"), "op": e.get("op")}
                 for h, e in top],
         "records": store.get("rec", {}),
-        # Counting may have started partway through the year.
-        "countingSince": since if since and time.localtime(since).tm_year == year else None,
+        # Counting may have started partway through the year; say from when.
+        "countingSince": _counting_since(y, since, year),
     }
+
+
+def _counting_since(y, store_since, year):
+    started = y.get("since") or store_since
+    if not started or time.localtime(started).tm_year != year:
+        return None
+    # A year that began counting on 1-2 January is a whole year: say nothing.
+    return None if time.localtime(started).tm_yday <= 2 else started
 
 
 def _today(store):
