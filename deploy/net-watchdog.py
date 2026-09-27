@@ -83,6 +83,7 @@ KIOSK_REBOOT_AFTER = 4
 LAST_REBOOT = os.path.join(STATE_DIR, "last-watchdog-reboot")
 OFFLINE_MAP = "/opt/flightradar/offline-map.py"
 HEARTBEAT = "/opt/flightradar/heartbeat.py"
+NOTABLE_DB = "/opt/flightradar/notable-db.py"
 MIN_REBOOT_INTERVAL_S = 6 * 3600
 
 
@@ -324,6 +325,25 @@ def maybe_build_offline_map():
          "/usr/bin/python3", OFFLINE_MAP, "ensure"], timeout=30)
 
 
+def maybe_refresh_notable_db():
+    """Weekly refresh of the notable-aircraft list, in its own transient unit.
+
+    notable-db.py decides whether it is due (and backs off after a failure);
+    the download never holds up this watchdog.
+    """
+    if not os.path.exists(NOTABLE_DB):
+        return
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("notable_db", NOTABLE_DB)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    if not mod.needs_refresh():
+        return
+    run(["systemd-run", "--quiet", "--collect", "--unit", "flightradar-notable-db",
+         "--property=Type=oneshot", "--property=Nice=10",
+         "/usr/bin/python3", NOTABLE_DB, "ensure"], timeout=30)
+
+
 def maybe_send_health_report():
     """Opt-in health report to the maintainer's relay, when one is due.
 
@@ -364,6 +384,11 @@ def main():
             maybe_build_offline_map()
         except Exception as e:
             print(f"health: offline map check failed ({type(e).__name__}: {e})",
+                  flush=True)
+        try:
+            maybe_refresh_notable_db()
+        except Exception as e:
+            print(f"health: notable list check failed ({type(e).__name__}: {e})",
                   flush=True)
         try:
             maybe_send_health_report()
