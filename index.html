@@ -638,6 +638,34 @@
     box-shadow: 0 0 10px 1px color-mix(in srgb, var(--mid) 35%, transparent);
   }
   #gearBtn:active { color: var(--text); }
+  /* The gear's mirror image, on the east side of the ring. One tap from the
+     radar, because "what was that?" is asked the moment something roars past
+     -- not after digging through settings. */
+  #rewindBtn {
+    position: absolute;
+    top: 50%;
+    right: 5%;
+    transform: translateY(-50%);
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: var(--panel-bg-strong);
+    border: 1px solid color-mix(in srgb, var(--mid) 50%, transparent);
+    color: var(--mid);
+    font-size: 1.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 5;
+    box-shadow: 0 0 10px 1px color-mix(in srgb, var(--mid) 35%, transparent);
+  }
+  #rewindBtn:active { color: var(--text); }
+  .rw-windows { display: flex; gap: 8px; padding: 6px 0 10px; }
+  .rw-win { flex: 1; text-align: center; padding: 8px 0; border-radius: 8px;
+            border: 1px solid var(--panel-border); color: var(--text-dim); cursor: pointer; }
+  .rw-win.on { color: var(--text); border-color: var(--mid); background: color-mix(in srgb, var(--mid) 18%, transparent); }
+  .rw-detail { padding: 2px 0 10px 12px; border-left: 2px solid var(--mid); margin: -4px 0 10px; }
 
   #settingsBackdrop {
     position: absolute;
@@ -1125,6 +1153,7 @@
   <div id="detailBackdrop"></div>
   <div id="detailPanel"></div>
   <div id="gearBtn" title="Settings">⚙</div>
+  <div id="rewindBtn" title="What was that?" aria-label="What was that? Aircraft that just passed overhead">↺</div>
   <div id="settingsBackdrop"></div>
   <div id="settingsPanel"></div>
   <div id="nightDim"></div>
@@ -5020,6 +5049,7 @@ function tick(ts) {
   drawRings();
   drawSweep();
   drawTrails();
+  drawRewindTrack();
   updateGhosts(ts);      // advance dead reckoning before anything reads `ghosts`
   drawGhostTrails();
   drawGhosts();          // under drawPlanes: a ghost must never hide a real contact
@@ -5429,6 +5459,10 @@ function renderSettingsPanel() {
     settingsPanelEl.innerHTML = `<div class="sp-close">&times;</div>` + renderStatistics();
     return;
   }
+  if (settingsSection === 'rewind') {
+    settingsPanelEl.innerHTML = `<div class="sp-close">&times;</div>` + renderRewind();
+    return;
+  }
   const group = SETTINGS_GROUPS.find(g => g.key === settingsSection);
   const rows = alertSettingsMeta().filter(m => m.group === settingsSection);
   settingsPanelEl.innerHTML = `
@@ -5579,6 +5613,155 @@ function renderScorecard() {
     <div class="sp-sub" style="padding:6px 0;opacity:0.7">Network data © ADSB.lol contributors, ODbL 1.0</div>`;
 }
 
+
+// ---- "What was that?" -----------------------------------------------------
+// The question gets asked right after something loud goes over, when it is
+// usually already off the radar -- or the display was blanked. tar1090 keeps
+// the last hour of every track in RAM on the unit (/run/tar1090: 20-snapshot
+// chunks, 8 s apart, plus the in-progress "current" files), so the answer
+// needs no new storage and no extra SD-card writes: fetch that history, find
+// each aircraft's closest approach to here, and list the ones that came near.
+// Finished chunks never change, so they are cached for the page's life.
+const REWIND_WINDOWS_MIN = [5, 15, 60];
+const REWIND_NEAR_NM = 5;      // "overhead" enough to have been heard
+const REWIND_MIN_ROWS = 4;     // on a quiet day, show the nearest few anyway
+const REWIND_MAX_ROWS = 25;
+const rewindChunkCache = new Map();   // chunk name -> snapshots
+let rewindWindowMin = 5;
+let rewindRows = null;                 // null = not loaded yet
+let rewindError = '';
+let rewindSelected = null;             // hex whose track is drawn
+let rewindLoadSeq = 0;
+
+async function fetchChunk(name, fresh) {
+  const res = await fetch(`/tar1090/chunks/${name}`, { cache: fresh ? 'no-store' : 'default' });
+  if (!res.ok) throw new Error(`history unavailable (${res.status})`);
+  const data = await res.json();
+  return Array.isArray(data.files) ? data.files : [];
+}
+
+async function loadRewind() {
+  const seq = ++rewindLoadSeq;
+  rewindError = '';
+  try {
+    const list = await (await fetch('/tar1090/chunks/chunks.json', { cache: 'no-store' })).json();
+    const names = Array.isArray(list.chunks) ? list.chunks : [];
+    for (const k of rewindChunkCache.keys()) if (!names.includes(k)) rewindChunkCache.delete(k);
+    await Promise.all(names.filter(n => !rewindChunkCache.has(n)).map(async n => {
+      rewindChunkCache.set(n, await fetchChunk(n, false));
+    }));
+    const current = await Promise.all(['current_large.gz', 'current_small.gz']
+      .map(n => fetchChunk(n, true).catch(() => [])));
+    const snaps = new Map();
+    for (const files of [...rewindChunkCache.values(), ...current]) {
+      for (const f of files) if (f && typeof f.now === 'number') snaps.set(f.now, f);
+    }
+    if (seq !== rewindLoadSeq) return;           // a newer request superseded this one
+    rewindRows = closestPasses([...snaps.values()], rewindWindowMin);
+  } catch (e) {
+    if (seq !== rewindLoadSeq) return;
+    rewindError = 'History is not available right now.';
+    rewindRows = [];
+  }
+}
+
+// snapshots: [{ now, aircraft: [[hex, alt, gs, track, lat, lon, seen_pos, type, flight, ...]] }]
+function closestPasses(snapshots, windowMin) {
+  if (!home || !snapshots.length) return [];
+  snapshots.sort((a, b) => a.now - b.now);
+  const latest = snapshots[snapshots.length - 1].now;
+  const cutoff = latest - windowMin * 60;
+  const byHex = new Map();
+  for (const snap of snapshots) {
+    if (snap.now < cutoff) continue;
+    for (const a of snap.aircraft || []) {
+      const [hex, alt, gs, track, lat, lon, , , flight] = a;
+      if (typeof hex !== 'string' || typeof lat !== 'number' || typeof lon !== 'number') continue;
+      const { bearing, range } = haversineBearingRange(home.lat, home.lon, lat, lon);
+      let e = byHex.get(hex);
+      if (!e) byHex.set(hex, e = { hex, cs: null, points: [], best: null });
+      e.points.push({ bearing, range });
+      if (realCallsign(flight)) e.cs = realCallsign(flight);
+      if (!e.best || range < e.best.range) e.best = { range, bearing, at: snap.now, alt, gs, track };
+    }
+  }
+  const all = [...byHex.values()].filter(e => e.best);
+  const near = all.filter(e => e.best.range <= REWIND_NEAR_NM);
+  const rows = near.length >= REWIND_MIN_ROWS ? near
+    : all.sort((a, b) => a.best.range - b.best.range).slice(0, REWIND_MIN_ROWS);
+  return rows.sort((a, b) => b.best.at - a.best.at).slice(0, REWIND_MAX_ROWS)
+    .map(e => ({ ...e, ago: Math.max(0, latest - e.best.at) }));
+}
+
+const COMPASS16 = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+const compassOf = deg => COMPASS16[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+const agoText = s => s < 60 ? 'just now' : `${Math.round(s / 60)} min ago`;
+
+function renderRewind() {
+  const chips = REWIND_WINDOWS_MIN.map(m =>
+    `<div class="rw-win${m === rewindWindowMin ? ' on' : ''}" data-rwin="${m}">${m === 60 ? '1 hour' : m + ' min'}</div>`).join('');
+  let body;
+  if (rewindRows === null) body = '<div class="sp-sub" style="padding:10px 0">Looking back…</div>';
+  else if (rewindError) body = `<div class="sp-sub" style="padding:10px 0">${esc(rewindError)}</div>`;
+  else if (!rewindRows.length) body = '<div class="sp-sub" style="padding:10px 0">Nothing was heard in this window.</div>';
+  else body = rewindRows.map(r => {
+    const b = r.best;
+    const open = r.hex === rewindSelected;
+    const info = hexTypeCache.get(r.hex);
+    const route = r.cs ? routeCache.get(r.cs) : null;
+    const detail = open ? `<div class="rw-detail">
+        <div class="sp-sub">${esc([info && info.type, info && info.reg].filter(Boolean).join(' · ') || 'Type not known')}</div>
+        ${route ? `<div class="sp-sub">${esc(route.text)}${route.plausible ? '' : ' (unconfirmed)'}</div>` : ''}
+        <div class="sp-sub">${typeof b.gs === 'number' ? Math.round(b.gs) + ' kt' : '—'}${typeof b.track === 'number' ? ' · heading ' + Math.round(b.track) + '°' : ''} · hex ${esc(r.hex.toUpperCase())}</div>
+        <div class="sp-sub">Its track is drawn on the radar.</div>
+      </div>` : '';
+    return `<div class="sp-menu-row" data-rhex="${esc(r.hex)}">
+        <div>
+          <div class="sp-label">${esc(r.cs || (info && info.reg) || r.hex.toUpperCase())}</div>
+          <div class="sp-sub">${agoText(r.ago)} · ${b.range.toFixed(1)} nm ${compassOf(b.bearing)} · ${esc(formatAltitude(b.alt ?? null))}</div>
+        </div>
+        <div class="sp-chevron">${open ? '&#8964;' : '&#8250;'}</div>
+      </div>${detail}`;
+  }).join('');
+  return `<div class="sp-title">What was that?</div>
+    <div class="sp-sub" style="padding:2px 0 4px">What passed closest to here, most recent first.</div>
+    <div class="rw-windows">${chips}</div>${body}`;
+}
+
+function showRewindPanel() {
+  hideDetailPanel();
+  settingsSection = 'rewind';
+  rewindRows = null;
+  rewindSelected = null;
+  settingsPanelEl.scrollTop = 0;
+  renderSettingsPanel();
+  settingsPanelEl.classList.add('show');
+  settingsBackdropEl.classList.add('show');
+  loadRewind().then(() => { if (settingsSection === 'rewind') renderSettingsPanel(); });
+}
+
+function drawRewindTrack() {
+  if (!rewindSelected || settingsSection !== 'rewind' || !settingsPanelEl.classList.contains('show')) return;
+  const r = (rewindRows || []).find(x => x.hex === rewindSelected);
+  if (!r || r.points.length < 1) return;
+  ctx.save();
+  ctx.strokeStyle = COLORS.airportHighlight || COLORS.text;
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.lineWidth = 3;
+  ctx.setLineDash([8, 6]);
+  ctx.beginPath();
+  r.points.forEach((pt, i) => {
+    const { x, y } = polarToXY(pt.bearing, Math.min(pt.range, RANGE_NM * 1.2));
+    if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+  });
+  ctx.stroke();
+  ctx.setLineDash([]);
+  const c = polarToXY(r.best.bearing, r.best.range);
+  ctx.beginPath();
+  ctx.arc(c.x, c.y, 9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
 
 // ---- Statistics ------------------------------------------------------
 // Everything here is read from the sighting store's aggregate, not
@@ -6428,6 +6611,7 @@ function showSettingsPanel() {
 function hideSettingsPanel() {
   settingsPanelEl.classList.remove('show');
   settingsBackdropEl.classList.remove('show');
+  rewindSelected = null;
 }
 
 // Tapping a row toggles that setting without closing the panel (stops the
@@ -6577,6 +6761,27 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     renderSettingsPanel();
     return;
   }
+  const rwWin = e.target.closest('.rw-win');
+  if (rwWin && settingsSection === 'rewind') {
+    rewindWindowMin = Number(rwWin.dataset.rwin) || 5;
+    rewindSelected = null;
+    rewindRows = null;
+    renderSettingsPanel();
+    loadRewind().then(() => { if (settingsSection === 'rewind') renderSettingsPanel(); });
+    return;
+  }
+  const rwRow = e.target.closest('[data-rhex]');
+  if (rwRow && settingsSection === 'rewind') {
+    const hex = rwRow.dataset.rhex;
+    rewindSelected = rewindSelected === hex ? null : hex;
+    renderSettingsPanel();
+    if (rewindSelected) {
+      const row = (rewindRows || []).find(x => x.hex === hex);
+      lookupType(hex).then(() => { if (settingsSection === 'rewind') renderSettingsPanel(); });
+      if (row && row.cs && !routeCache.has(row.cs)) queueRouteLookup(row.cs, home.lat, home.lon);
+    }
+    return;
+  }
   const menuRow = e.target.closest('.sp-menu-row');
   if (menuRow && menuRow.dataset.group === 'stats') {
     settingsSection = 'stats';
@@ -6700,6 +6905,12 @@ gearBtnEl.addEventListener('pointerup', (e) => {
   // small close button or the narrow strip of screen beside the panel.
   if (settingsPanelEl.classList.contains('show')) hideSettingsPanel();
   else showSettingsPanel();
+});
+
+document.getElementById('rewindBtn').addEventListener('pointerup', (e) => {
+  e.stopPropagation(); // same reason as the gear: the stage handler would close what this opens
+  if (settingsPanelEl.classList.contains('show') && settingsSection === 'rewind') hideSettingsPanel();
+  else showRewindPanel();
 });
 
 function findPlaneAtStagePoint(x, y) {
