@@ -30,8 +30,9 @@ import sys
 import time
 import urllib.request
 
-# Empty until the relay is deployed; reporting is a no-op without it.
-RELAY_URL = os.environ.get("FLIGHTRADAR_RELAY_URL", "")
+# The maintainer's relay (relay/, deployed on Cloudflare). Reporting still
+# does nothing unless the owner turns it on in the setup page.
+RELAY_URL = os.environ.get("FLIGHTRADAR_RELAY_URL", "https://stratoscan-relay.example.workers.dev")
 STATE_DIR = os.environ.get("FLIGHTRADAR_RELAY_STATE", "/var/lib/flightradar-relay")
 KEY_PATH = os.path.join(STATE_DIR, "unit.key")
 CONFIG = os.path.join(STATE_DIR, "heartbeat.json")    # {"enabled": bool}
