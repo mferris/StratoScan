@@ -312,6 +312,12 @@ with tempfile.TemporaryDirectory() as tmp:
     check("from the all-time totals, which already include the later visits",
           late["years"]["2026"]["t"] == 40 and late["ac"]["aaa111"]["y"] == [2026, 40])
     check("and only once", m.seed_current_year(late, now) is False)
+    first_build = m.fresh_store()
+    first_build["since"] = old["since"]
+    first_build["ac"] = {"aaa111": {"t": 40, "n": 3, "f": old["since"] + 10}}
+    first_build["years"] = {"2026": {"t": 2, "n": 0, "new": 0, "months": [0] * 12, "hours": [0] * 24}}
+    check("a year from the first build (no start time) is rebuilt too",
+          m.seed_current_year(first_build, now) is True and first_build["years"]["2026"]["t"] == 40)
 
 print(f"{checks - len(failures)}/{checks} sighting store checks passed")
 for f in failures:

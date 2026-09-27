@@ -302,8 +302,11 @@ def seed_current_year(store, now=None):
         # began after the store did (a unit that ran the first per-year build
         # before this seed existed): the all-time totals already include
         # those later visits, so rebuilding from them loses nothing.
+        # A year with no "since" at all was created by that same first build
+        # (it predates the field), so it started late by definition.
         cur = years.get(str(here.tm_year))
-        if not (isinstance(cur, dict) and since and cur.get("since", 0) > since + 60):
+        started = cur.get("since") if isinstance(cur, dict) else None
+        if not (isinstance(cur, dict) and since and (started is None or started > since + 60)):
             return False
     else:
         years = store["years"] = {}
