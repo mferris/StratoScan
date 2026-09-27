@@ -335,13 +335,32 @@ def paint_stamp():
         return 0.0
 
 
+# systemd-run's --on-active timers default to AccuracySec=1min, so "in 2
+# seconds" meant anywhere up to a minute: measured on RDU, restarts asked for
+# at 13:09:17 ran at 13:09:38. Service restarts landed after this process had
+# already reported success -- and, worse, see kiosk_started_at().
+TIMER_ACCURACY = "--timer-property=AccuracySec=100ms"
+
+
+def kiosk_started_at():
+    """Monotonic start time of the kiosk unit, or None if it can't be read."""
+    try:
+        out = subprocess.run(
+            ["/usr/bin/systemctl", "--user", "-M", f"{KIOSK_USER}@", "show",
+             "-p", "ActiveEnterTimestampMonotonic", "--value", KIOSK_UNIT],
+            capture_output=True, text=True, timeout=15).stdout.strip()
+        return int(out) if out.isdigit() and int(out) > 0 else None
+    except Exception:
+        return None
+
+
 def restart_kiosk():
     # Out of this process's control group, so a restart cannot kill the updater
     # mid-way and leave the device half-written with nothing watching it.
     subprocess.run(
         ["systemd-run", "--quiet", "--collect",
          "--unit", f"flightradar-ota-restart-{os.getpid()}",
-         "--on-active=2s",
+         "--on-active=2s", TIMER_ACCURACY,
          "/usr/bin/systemctl", "--user", "-M", f"{KIOSK_USER}@",
          "restart", KIOSK_UNIT],
         check=False, timeout=30)
@@ -393,13 +412,13 @@ def restart_services(units):
         subprocess.run(
             ["systemd-run", "--quiet", "--collect",
              "--unit", f"flightradar-ota-services-{os.getpid()}",
-             "--on-active=1s", "/usr/bin/systemctl", "restart", *system],
+             "--on-active=1s", TIMER_ACCURACY, "/usr/bin/systemctl", "restart", *system],
             check=False, timeout=30)
     if user:
         subprocess.run(
             ["systemd-run", "--quiet", "--collect",
              "--unit", f"flightradar-ota-userservices-{os.getpid()}",
-             "--on-active=1s", "/usr/bin/systemctl", "--user", "-M",
+             "--on-active=1s", TIMER_ACCURACY, "/usr/bin/systemctl", "--user", "-M",
              f"{KIOSK_USER}@", "restart", *user],
             check=False, timeout=30)
     if units:
@@ -472,12 +491,38 @@ def apply():
     write_status(state="applying", version=manifest["version"],
                  serial=manifest["serial"])
     services = services_to_restart(changed)
+    kiosk_was = kiosk_started_at()
     restart_services(services)
     restart_kiosk()
 
-    deadline = time.time() + RESTART_SETTLE_S + PAINT_TIMEOUT_S
+    # Only a frame painted by the NEW page proves anything. The old page keeps
+    # heartbeating every 20 s until the restart actually lands, and comparing
+    # against the pre-install stamp accepted one of those: .14 was reported
+    # "installed and painting" before the kiosk had even restarted, so a build
+    # that could not paint would have been approved by the page it replaced.
+    # So wait for the kiosk unit's start time to move, and only count
+    # heartbeats after that.
+    restarted = False
+    settle_until = time.time() + RESTART_SETTLE_S + 60
+    while time.time() < settle_until:
+        now_started = kiosk_started_at()
+        if kiosk_was is None or now_started is None:
+            time.sleep(RESTART_SETTLE_S)      # can't observe it; allow for the delay
+            restarted = True
+            break
+        if now_started != kiosk_was:
+            restarted = True
+            break
+        time.sleep(1)
+    if not restarted:
+        # The old page would keep "passing" the paint check below; a new build
+        # that was never shown has not been verified, so it does not stay.
+        log("the kiosk did not restart after the update")
+    baseline = time.time()
+
+    deadline = baseline + RESTART_SETTLE_S + PAINT_TIMEOUT_S if restarted else 0
     while time.time() < deadline:
-        if paint_stamp() > before:
+        if paint_stamp() > baseline:
             with open(INSTALLED, "w") as f:
                 json.dump({"serial": int(manifest["serial"]),
                            "version": manifest["version"]}, f)
