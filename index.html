@@ -2178,6 +2178,32 @@ function recolorLabels() {
     map.setPaintProperty('water_name_point_label', 'text-color', light ? '#1d5fa8' : '#9fc4e8');
     map.setPaintProperty('water_name_point_label', 'text-halo-color', haloColor);
   }
+
+  // The radar theme's --map-filter works by INVERTING the whole map before
+  // tinting it (see that token's own comment): background pixels need to
+  // start LIGHT so invert() turns them dark, and traces need to start DARK
+  // so invert() turns them bright. That is true of this style's actual
+  // background (#f8f4f0, a light cream) and of roads/labels (dark), which is
+  // why those come out right without any override. It is NOT true of water,
+  // which this style fills at a solid rgb(158,189,255) -- a MEDIUM blue,
+  // neither light enough to recede nor dark enough to glow. The result was
+  // found on a real receiver location, not this one: a harbor or lake shows
+  // up as a big, flat, oddly bright field, wrong on any theme but especially
+  // wrong on the one styled as a mostly-black screen with sparse traces.
+  //
+  // Setting water's fill to the same light cream as the background makes it
+  // recede through the invert exactly like land does -- confirmed against a
+  // dense harbor (New York) and a lake-heavy coastline (Amsterdam), not just
+  // the one location this theme was designed against. Only for radar: every
+  // other theme uses water's real blue at reduced brightness, which reads
+  // as "dim water", not "a mistake", so they are left alone. Must be reset
+  // when leaving the theme -- setPaintProperty persists across style state,
+  // so switching to classic without this line would show cream-colored
+  // water there too.
+  if (map.getLayer('water')) {
+    map.setPaintProperty('water', 'fill-color',
+      uiTheme === 'radar' ? '#f8f4f0' : 'rgb(158, 189, 255)');
+  }
 }
 
 // Zoom is calibrated against the stage's CSS pixel size (see zoomForRange's
