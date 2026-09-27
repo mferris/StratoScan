@@ -103,9 +103,18 @@ install -m 0644 deploy/20auto-upgrades                  /etc/apt/apt.conf.d/20au
 install -m 0644 deploy/52flightradar-unattended-upgrades /etc/apt/apt.conf.d/52flightradar-unattended-upgrades
 install -m 0644 deploy/90-flightradar-sysctl.conf        /etc/sysctl.d/90-flightradar-sysctl.conf
 sysctl -q -p /etc/sysctl.d/90-flightradar-sysctl.conf
-unattended-upgrade --dry-run >/dev/null 2>&1 \
-  && echo "  security updates: configured (dry run OK)" \
-  || { echo "  FAIL: unattended-upgrade dry run failed"; exit 1; }
+# Checked cheaply, not with `unattended-upgrade --dry-run`: on a Pi that
+# simulates every pending upgrade one at a time and ran past 40 minutes on the
+# RDU unit -- long enough that anyone would Ctrl-C a "hung" installer and
+# never reach the kiosk units and offline map below. `apt-config dump` fails
+# on a syntax error in any apt.conf.d file, and the grep proves ours is read.
+if dpkg -s unattended-upgrades >/dev/null 2>&1 \
+   && apt-config dump 2>/dev/null | grep -q 'Unattended-Upgrade::Package-Blacklist:: "chromium"' \
+   && apt-config dump 2>/dev/null | grep -q 'APT::Periodic::Unattended-Upgrade "1"'; then
+  echo "  security updates: configured (chromium, kernel and firmware held)"
+else
+  echo "  FAIL: unattended-upgrades is not installed or its config did not load"; exit 1
+fi
 echo "  kernel.panic=$(cat /proc/sys/kernel/panic)"
 
 # The kiosk's own units run under the desktop user's systemd, because they
