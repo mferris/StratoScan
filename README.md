@@ -63,10 +63,11 @@ too.
   an optional quiet chime; pairs with an optional link to LiveATC.net's live
   approach/departure audio
 - **Volume, mute, and a choice of alert sound** — every chime above goes
-  through one master volume with three stepped levels plus mute, and can play
-  either the original synth tones or real CC0-licensed cat sounds (a meow, a
-  hiss for emergencies, and a chirrup for landing/takeoff) for a kitten-cased
-  unit — see `sounds/kitten/CREDITS.md` for what was recorded and how
+  through one master gain, adjustable up to 300% (with a limiter, so louder
+  never means distorted) plus mute, and can play the original synth tones or
+  real CC0-licensed recordings: cat sounds for a kitten-cased unit, or a real
+  airline cabin chime for anyone — see `sounds/*/CREDITS.md` for what was
+  recorded and how
 - **Night dimming** — the display darkens between sunset and sunrise,
   computed from the receiver's own coordinates so it tracks the seasons
   without any configuration; alerts can optionally undim it
