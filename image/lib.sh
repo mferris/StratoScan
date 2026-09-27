@@ -41,7 +41,6 @@ mount_image() {
 
 chroot_prepare() {
   for d in dev dev/pts proc sys run; do mount --bind "/$d" "$MNT/$d"; done
-  cp --remove-destination /etc/resolv.conf "$MNT/etc/resolv.conf"
   # Services must not start inside the build: this makes every invoke-rc.d /
   # package postinst "start" a no-op.
   printf '#!/bin/sh\nexit 101\n' > "$MNT/usr/sbin/policy-rc.d"

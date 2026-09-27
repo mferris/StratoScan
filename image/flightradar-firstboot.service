@@ -1,0 +1,16 @@
+[Unit]
+Description=FlightRadar first boot (finish provisioning the factory image)
+ConditionPathExists=!/var/lib/flightradar-firstboot.done
+After=local-fs.target systemd-remount-fs.service
+# Deliberately NOT Before=display-manager: if anything here stalled, the
+# screen would stay black for up to the timeout. The kiosk page retries until
+# the web server answers, so the two can start side by side.
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/flightradar-src/image/firstboot.sh
+RemainAfterExit=yes
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=multi-user.target
