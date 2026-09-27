@@ -109,3 +109,12 @@ phone ──(pairing, notification rules)──▶ relay
 - 1.5 should come after 1.1, 1.2 and 1.4 settle, so the image carries them.
 - Phase 4 items are independent, and can be interleaved whenever Phase 1–3
   items are blocked on an owner action.
+
+## Status
+
+| Item | State | Waiting on |
+|---|---|---|
+| 1.1 RTC battery | Software done: the installer reports the battery; `RTC_RECHARGEABLE=1` enables charging | ML-2020 cells |
+| 1.3 Relay | Built; 10 tests; verified end to end under the Workers runtime with RDU | Cloudflare login, then deploy (`relay/README.md`) |
+| 1.4 Health reports | Built; 23 checks on the Pi; setup-page switch; inert until `RELAY_URL` is set | 1.3 deploy |
+| 1.6 SD re-measure | Scheduled for 2026-09-28 13:00 | — |
