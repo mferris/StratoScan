@@ -196,6 +196,50 @@ with tempfile.TemporaryDirectory() as tmp:
           before["dows"][local.tm_wday] == 1)
     check("Monday is index 0 (ISO weekday)", _time.strptime("2026-09-07", "%Y-%m-%d").tm_wday == 0)
 
+    # ---- eviction drops the least-recently-seen, not the first-seen -------
+    # Insertion-order eviction used to throw out the daily regulars, because
+    # they were inserted first and updating a key never moves it.
+    store = m.fresh_store()
+    store["ac"]["regular"] = {"t": 900, "f": 1, "l": 5000}   # seen first, seen today
+    for i in range(m.MAX_HEXES + 5):
+        store["ac"]["x%05d" % i] = {"t": 1, "f": 100 + i, "l": 100 + i}
+    m.evict(store)
+    check("eviction brings the store under the cap", len(store["ac"]) <= m.MAX_HEXES)
+    check("eviction evicts in a chunk, not one at a time",
+          len(store["ac"]) == m.EVICT_TO)
+    check("a regular seen first but seen recently survives", "regular" in store["ac"])
+    check("the stalest transit is evicted", "x00000" not in store["ac"])
+    check("a recent transit survives", "x%05d" % (m.MAX_HEXES + 4) in store["ac"])
+
+    store = m.fresh_store()
+    store["ac"]["undated"] = {"t": 3}
+    for i in range(m.MAX_HEXES):
+        store["ac"]["y%05d" % i] = {"t": 1, "l": 100 + i}
+    m.evict(store)
+    check("an undated v1 entry goes before any dated one", "undated" not in store["ac"])
+
+    # ---- writes are batched: a flush writes only when something changed --
+    with open(store_path, "w") as f:
+        json.dump(m.fresh_store(), f)
+    m._store = None
+    m._dirty = False
+    with m.lock:
+        live = m.current()
+    before_mtime = os.stat(store_path).st_mtime_ns
+    _time.sleep(0.01)
+    m.flush()
+    check("a clean store is not rewritten", os.stat(store_path).st_mtime_ns == before_mtime)
+
+    with m.lock:
+        live["ac"]["abc123"] = {"t": 7, "n": 1, "l": 1}
+        m.mark_dirty()
+    check("a change is not written until flushed",
+          "abc123" not in m.load_store()["ac"])
+    m.flush()
+    check("a flush persists the change", m.load_store()["ac"]["abc123"]["t"] == 7)
+    check("a flush clears the dirty flag", m._dirty is False)
+    check("no temp file is left behind", not os.path.exists(store_path + ".tmp"))
+
 print(f"{checks - len(failures)}/{checks} sighting store checks passed")
 for f in failures:
     print("  FAILED:", f)

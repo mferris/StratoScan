@@ -18,8 +18,8 @@ Why a device-side service rather than fetching from the page:
 
 Nothing here runs on its own. The scorecard accumulates only from
 requests the page makes, and the page only makes them when the
-"Network comparison" setting is on -- which is OFF by default. A unit
-nobody has enabled it on never contacts anyone.
+"Network comparison" setting is on -- which is ON by default
+(DEFAULT_ALERT_SETTINGS in index.html). Turning it off stops all contact.
 
 GET /network      -> {"ac": [...], "stats": {...}, "source": ..., "fetched": age_s}
 GET /network/stats -> just the scorecard, no upstream call
@@ -29,6 +29,8 @@ import json
 import math
 import os
 import re
+import signal
+import sys
 import threading
 import time
 import urllib.error
@@ -66,6 +68,13 @@ WINDOW_S = 24 * 3600    # scorecard covers a rolling day
 
 lock = threading.Lock()
 _cache = {"at": 0.0, "payload": None}
+# The scorecard lives in memory and is written at most every FLUSH_INTERVAL,
+# plus on shutdown. It used to be rewritten on every upstream fetch (every
+# ~15 s, ~4,300 times a day) -- steady SD-card wear for a rolling one-day
+# scorecard whose last few minutes are worth nothing after a power cut.
+FLUSH_INTERVAL = 600
+_store = None
+_dirty = False
 
 
 def band_label(lo, hi):
@@ -85,7 +94,40 @@ def save_store(store):
     tmp = STORE_PATH + ".tmp"
     with open(tmp, "w") as f:
         json.dump(store, f)
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(tmp, STORE_PATH)   # atomic: a torn scorecard is worse than a stale one
+
+
+def current():
+    """The in-memory scorecard. Caller must hold `lock`."""
+    global _store
+    if _store is None:
+        _store = load_store() or fresh_store()
+    return _store
+
+
+def flush():
+    global _dirty
+    with lock:
+        if not _dirty or _store is None:
+            return
+        save_store(_store)
+        _dirty = False
+
+
+def _flusher():
+    while True:
+        time.sleep(FLUSH_INTERVAL)
+        try:
+            flush()
+        except OSError as e:
+            print(f"network-compare: flush failed: {e}", file=sys.stderr, flush=True)
+
+
+def _shutdown(signum, frame):
+    flush()
+    sys.exit(0)
 
 
 def fresh_store():
@@ -219,10 +261,13 @@ def scorecard(store):
 def build_payload():
     lat, lon = home()
     mine, theirs = compare(lat, lon)
+    global _store, _dirty
     with lock:
-        store = fold(load_store() or fresh_store(), mine, theirs)
-        save_store(store)
-        card = scorecard(store)
+        # fold() may hand back a brand-new store when the day window rolls
+        # over, so keep whatever it returns rather than mutating in place.
+        _store = fold(current(), mine, theirs)
+        _dirty = True
+        card = scorecard(_store)
 
     # Only the aircraft this receiver did NOT hear are worth sending: the
     # page already has its own, and shipping duplicates would invite the
@@ -287,8 +332,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0].rstrip("/")
         if path == "/network/stats":
             with lock:
-                return self._json(200, {"stats": scorecard(load_store()),
-                                        "source": SOURCE_NAME})
+                card = scorecard(current())
+            return self._json(200, {"stats": card, "source": SOURCE_NAME})
         if path != "/network":
             return self._json(404, {"error": "not found"})
 
@@ -325,7 +370,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 def main():
+    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGINT, _shutdown)
+    threading.Thread(target=_flusher, daemon=True).start()
     srv = http.server.ThreadingHTTPServer(LISTEN, Handler)
+    srv.daemon_threads = True
     srv.serve_forever()
 
 
