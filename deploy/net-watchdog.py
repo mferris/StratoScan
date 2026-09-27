@@ -81,6 +81,7 @@ KIOSK_REBOOT_AFTER = 4
 # reboot cannot fix (a missing SDR stick) must degrade to "reboots a few
 # times a day", not a loop that makes the unit unusable.
 LAST_REBOOT = os.path.join(STATE_DIR, "last-watchdog-reboot")
+OFFLINE_MAP = "/opt/flightradar/offline-map.py"
 MIN_REBOOT_INTERVAL_S = 6 * 3600
 
 
@@ -297,6 +298,31 @@ def check_health():
                   flush=True)
 
 
+def maybe_build_offline_map():
+    """Start an offline-map build if the stored one is wrong or missing.
+
+    setupd starts one whenever the location changes, but that can fail -- a
+    unit set up from the hotspot has no internet yet -- and a unit that was
+    located before this feature existed has none at all. The decision is
+    offline-map.py's own needs_build(), so the two can never disagree; it is
+    cheap (two small files) and backs off for hours after a failed build.
+    The build itself runs in its own transient unit so this watchdog is never
+    held up by a download, and systemd refuses a second one while it runs.
+    """
+    if not os.path.exists(OFFLINE_MAP):
+        return
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("offline_map", OFFLINE_MAP)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    if mod.needs_build() is None:
+        return
+    print("health: offline map missing or out of date; building", flush=True)
+    run(["systemd-run", "--quiet", "--collect", "--unit", "flightradar-offline-map",
+         "--property=Type=oneshot", "--property=Nice=10",
+         "/usr/bin/python3", OFFLINE_MAP, "ensure"], timeout=30)
+
+
 def main():
     os.makedirs(STATE_DIR, exist_ok=True)
     check_health()
@@ -315,6 +341,11 @@ def main():
     # 2. keep the device reachable
     if have_connectivity():
         write_failcount(0)
+        try:
+            maybe_build_offline_map()
+        except Exception as e:
+            print(f"health: offline map check failed ({type(e).__name__}: {e})",
+                  flush=True)
         # An UNCLAIMED unit keeps its setup network up even when it has
         # connectivity by some other route. Plugging in an ethernet cable
         # otherwise tore the hotspot down mid-setup, stranding whoever was

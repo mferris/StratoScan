@@ -49,6 +49,8 @@ READSB_DEFAULT = "/etc/default/readsb"
 READSB_ORIG = os.path.join(STATE_DIR, "readsb.default.orig")
 READSB_BACKUP = os.path.join(STATE_DIR, "readsb.fr-backup")
 CONFIG_JSON = "/var/www/html/config.json"
+OFFLINE_MAP_DIR = "/var/www/html/offline-map"
+OFFLINE_MAP = "/opt/flightradar/offline-map.py"
 AIRPORTS_JSON = "/opt/flightradar/airports.json"
 
 CANDIDATE_PROFILE = "fr-candidate"
@@ -825,7 +827,37 @@ def set_location(lat, lon):
     lat, lon = v_lat(lat), v_lon(lon)
     previous = rewrite_readsb_location(lat, lon)
     restart_readsb_or_rollback(previous)
-    return {"lat": round(lat, 5), "lon": round(lon, 5), "readsbRestarted": True}
+    return {"lat": round(lat, 5), "lon": round(lon, 5), "readsbRestarted": True,
+            "offlineMap": start_offline_map_build(lat, lon)}
+
+
+def start_offline_map_build(lat, lon):
+    """Fetch the offline fallback map for this location, in the background.
+
+    A minute or so of downloads, so never inline: the setup page is waiting on
+    this call. A transient unit, like ota_apply, so it survives this daemon
+    restarting and a second location change cannot run two builds at once --
+    systemd-run refuses a unit name that is already active. If it fails (no
+    internet yet on a unit being set up on the hotspot), net-watchdog's
+    periodic check notices the map does not match the location and retries.
+    """
+    if not os.path.exists(OFFLINE_MAP):
+        return False
+    # The location change has already succeeded by the time this runs; the
+    # map is a nice-to-have that net-watchdog retries, so nothing here may
+    # turn a good location change into a reported failure.
+    try:
+        # A build still running for the PREVIOUS location is now building the
+        # wrong area; stop it so this one can take the unit name.
+        run([SYSTEMCTL, "stop", "flightradar-offline-map.service"], timeout=30)
+        r = run(["systemd-run", "--quiet", "--collect",
+                 "--unit", "flightradar-offline-map",
+                 "--property=Type=oneshot", "--property=Nice=10",
+                 "/usr/bin/python3", OFFLINE_MAP, "build", f"{lat:.5f}", f"{lon:.5f}"],
+                timeout=30)
+        return r.returncode == 0
+    except Exception:
+        return False
 
 
 def set_airport(code, atc_mount=""):
@@ -1070,12 +1102,28 @@ def reset_full():
         run([TAILSCALE, "logout"], timeout=60)
 
     # 3. owner-specific data. The stores are geolocated to their house.
+    # The sighting and network stores keep their data in memory and write it
+    # back on a timer and on shutdown, so deleting the file under a running
+    # store erases nothing: its next flush puts the old owner's history
+    # straight back. Stop first (the stop's own flush lands BEFORE the
+    # delete), delete, then start them empty.
+    stores = ("flightradar-sighting-store.service",
+              "flightradar-network.service",
+              "flightradar-approach-store.service")
+    with contextlib.suppress(Exception):
+        run([SYSTEMCTL, "stop", *stores], timeout=60)
     for path in (os.path.join(STATE_DIR, "setup.json"),
                  CONFIG_JSON,
                  "/var/lib/flightradar-sightings/sightings.json",
-                 "/var/lib/flightradar-approaches/approaches.json"):
+                 "/var/lib/flightradar-approaches/approaches.json",
+                 "/var/lib/flightradar-network/coverage.json"):
         with contextlib.suppress(Exception):
             os.unlink(path)
+    # The offline map is an extract of the area around their house.
+    with contextlib.suppress(Exception):
+        shutil.rmtree(OFFLINE_MAP_DIR)
+    with contextlib.suppress(Exception):
+        run([SYSTEMCTL, "start", *stores], timeout=60)
 
     # 4. receiver position back to the shipped default
     if os.path.exists(READSB_ORIG):

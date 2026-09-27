@@ -14,3 +14,8 @@ ios/**/*.xcuserdatad/
 # Release build output: bundles, manifests and signatures are published
 # to GitHub Releases, never committed. Signing is a local act.
 dist/
+
+# Built per-unit by deploy/offline-map.py; never committed.
+offline-map/
+offline-map.new/
+offline-map.old/

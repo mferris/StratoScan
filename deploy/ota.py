@@ -89,6 +89,8 @@ DEPLOY_ALLOWED = {
     "network-compare.py", "photo-proxy.py", "funnel-gateway.py",
     "setup-server.py", "setup-ui.html", "shm-guard.sh", "ota.py",
     "airports.json", "net-watchdog.py",
+    # Builds the on-device fallback map; run by setupd and net-watchdog.
+    "offline-map.py",
     # ota-auto.sh decides whether an unattended update may proceed, running as
     # root on a timer on a device in someone else's house. Omitting it would
     # ship it in the bundle and then refuse to install it -- which is the same
