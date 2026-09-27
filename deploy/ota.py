@@ -52,6 +52,44 @@ STATUS = os.path.join(STATE_DIR, "status.json")
 STAGING = os.path.join(STATE_DIR, "staging")
 ROLLBACK = os.path.join(STATE_DIR, "rollback")
 LOCK = os.path.join(STATE_DIR, "ota.lock")
+LIGHTDM_CONFS = ["/etc/lightdm/lightdm.conf"]
+
+
+def detect_kiosk_user(confs=None):
+    """The desktop user the kiosk runs as, without assuming a name.
+
+    The first unit's user was hard-coded here, which a unit built from the
+    factory image (user "flightradar") would not have -- every update would
+    then have restarted a user that doesn't exist and waited for a paint that
+    could never be reported. Order: explicit override, then the display
+    manager's autologin user (that IS the kiosk session), then uid 1000.
+    """
+    override = os.environ.get("FLIGHTRADAR_KIOSK_USER")
+    if override:
+        return override
+    paths = list(confs or LIGHTDM_CONFS)
+    d = "/etc/lightdm/lightdm.conf.d"
+    if confs is None and os.path.isdir(d):
+        paths += sorted(os.path.join(d, n) for n in os.listdir(d) if n.endswith(".conf"))
+    user = None
+    for path in paths:
+        try:
+            with open(path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("autologin-user=") and line.split("=", 1)[1].strip():
+                        user = line.split("=", 1)[1].strip()   # later files override earlier
+        except OSError:
+            continue
+    if user:
+        return user
+    try:
+        import pwd
+        return pwd.getpwuid(1000).pw_name
+    except (KeyError, ImportError):
+        return "flightradar"
+
+
 def _default_heartbeat():
     """The kiosk user's runtime directory, resolved from their uid.
 
@@ -60,7 +98,7 @@ def _default_heartbeat():
     """
     try:
         import pwd
-        uid = pwd.getpwnam(os.environ.get("FLIGHTRADAR_KIOSK_USER", "mferris")).pw_uid
+        uid = pwd.getpwnam(detect_kiosk_user()).pw_uid
         return f"/run/user/{uid}/flightradar-painted"
     except (KeyError, ImportError):
         return "/tmp/flightradar-painted"
@@ -71,7 +109,7 @@ HEARTBEAT = os.environ.get("FLIGHTRADAR_PAINT_STAMP", _default_heartbeat())
 WEB_ROOT = os.environ.get("FLIGHTRADAR_WEB_ROOT", "/var/www/html")
 OPT_ROOT = os.environ.get("FLIGHTRADAR_OPT_ROOT", "/opt/flightradar")
 KIOSK_UNIT = "flightradar-kiosk.service"
-KIOSK_USER = os.environ.get("FLIGHTRADAR_KIOSK_USER", "mferris")
+KIOSK_USER = detect_kiosk_user()
 
 HTTP_TIMEOUT_S = 30
 MAX_BUNDLE_BYTES = 32 * 1024 * 1024

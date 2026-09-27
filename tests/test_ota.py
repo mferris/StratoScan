@@ -240,6 +240,26 @@ def main():
         ok(name in ota.DEPLOY_ALLOWED and name in ota.SERVICE_FOR,
            f"{name} is updatable, so it must also be restarted when it changes")
 
+    # --- the kiosk user is found, never assumed ------------------------------
+    d = tempfile.mkdtemp()
+    conf = os.path.join(d, "lightdm.conf")
+    with open(conf, "w") as f:
+        f.write("[Seat:*]\n#autologin-user=\nautologin-user=flightradar\nautologin-session=rpd-labwc\n")
+    saved = os.environ.pop("FLIGHTRADAR_KIOSK_USER", None)
+    ok(ota.detect_kiosk_user([conf]) == "flightradar",
+       "the autologin user is the kiosk user (a factory-image unit is not 'mferris')")
+    override = os.path.join(d, "override.conf")
+    with open(override, "w") as f:
+        f.write("[Seat:*]\nautologin-user=someoneelse\n")
+    ok(ota.detect_kiosk_user([conf, override]) == "someoneelse", "a later config overrides an earlier one")
+    os.environ["FLIGHTRADAR_KIOSK_USER"] = "explicit"
+    ok(ota.detect_kiosk_user([conf]) == "explicit", "an explicit override wins")
+    if saved is None:
+        del os.environ["FLIGHTRADAR_KIOSK_USER"]
+    else:
+        os.environ["FLIGHTRADAR_KIOSK_USER"] = saved
+    shutil.rmtree(d, ignore_errors=True)
+
     httpd.shutdown()
     shutil.rmtree(tmp, ignore_errors=True)
 
