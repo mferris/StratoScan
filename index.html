@@ -758,7 +758,63 @@
     cursor: pointer;
   }
   #settingsPanel .sp-theme-row:first-of-type { border-top: none; }
-  #settingsPanel .sp-theme-row > div:nth-child(2) { flex: 1; }
+  /* Class-based, not positional. It was `> div:nth-child(2)`, which only
+     worked by coincidence for the colour-theme row's three children
+     (swatch, label, radio) -- the label happens to be 2nd there. Any row
+     with a different child count hits something else: the volume and
+     sound-theme rows have two children, so position 2 was the RADIO, which
+     then stretched to fill whatever space the label didn't use -- a
+     different, wrong width on every row, because it tracked each row's own
+     label length. Confirmed via getComputedStyle before fixing: computed
+     widths of 204px, 239px, 4px on rows that are meant to be 18px circles. */
+  #settingsPanel .sp-theme-label { flex: 1; }
+
+  /* The volume slider. A generous thumb -- 34px, bigger than the 18px radios
+     -- because this is the one continuous control on a touch panel where the
+     old reasoning about thin range inputs being a poor target was correct;
+     the fix is a fat thumb and a fat track, not avoiding the control. */
+  #settingsPanel .sp-slider-row {
+    padding: 10px 0 14px;
+    border-top: 1px solid var(--panel-border);
+  }
+  #settingsPanel .sp-slider-row.disabled { opacity: 0.45; }
+  #settingsPanel .sp-slider-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+  #settingsPanel .sp-slider-value {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-dim);
+  }
+  #settingsPanel input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 34px;
+    margin: 0;
+    background: transparent;
+  }
+  /* The track is drawn as a flat bar vertically centered in the 34px hit
+     height, not the full height itself -- the height exists for the thumb's
+     touch target, not to make the track itself thick. */
+  #settingsPanel input[type=range]::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--panel-border);
+  }
+  #settingsPanel input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 34px;
+    height: 34px;
+    margin-top: -14px;
+    border-radius: 50%;
+    background: var(--mid);
+    border: 2px solid var(--text);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  }
+  #settingsPanel input[type=range]:disabled::-webkit-slider-thumb { background: var(--panel-border); }
   #settingsPanel .sp-theme-swatch {
     width: 28px;
     height: 28px;
@@ -2734,6 +2790,22 @@ try {
 } catch (e) {
   // corrupt/unavailable storage -- defaults stand
 }
+// A slider, after all. The stepped-rows version reasoned that a thin range
+// input is a poor touch target on a round panel driven by a fingertip --
+// true, and fixed by styling the thumb generously (see #settingsPanel
+// input[type=range] below) rather than by avoiding range inputs altogether.
+// What forced the change was the ceiling: three fixed stops cannot express
+// "some specific amount louder than the loudest stop", which is exactly what
+// was asked for once real speakers were on the other end of this.
+//
+// VOLUME_MAX is 3 (300%): headroom for a physically quiet speaker, past the
+// 1.0 (unity) gain the old "High" stop meant. Above 1.0 this is amplifying,
+// not just un-attenuating, and the mastered sample peaks (-1 to -3dBFS, see
+// sounds/kitten/CREDITS.md) will clip well before reaching it -- which is why
+// getMasterGain() below feeds a compressor rather than the destination
+// directly, so "louder than it was mastered for" costs a little bit of
+// squash at the very top rather than harsh digital clipping.
+const VOLUME_MAX = 3;
 // Clamp the volume that came out of storage. A bad value here either silences
 // the device or deafens the room, and neither shows on the settings screen --
 // the row looks perfectly normal while the sound is wrong. soundTheme needs no
@@ -2742,7 +2814,7 @@ try {
 if (typeof alertSettings.volume !== 'number' || !isFinite(alertSettings.volume)) {
   alertSettings.volume = DEFAULT_ALERT_SETTINGS.volume;
 }
-alertSettings.volume = Math.min(1, Math.max(0, alertSettings.volume));
+alertSettings.volume = Math.min(VOLUME_MAX, Math.max(0, alertSettings.volume));
 // Force-correct a stored 'atc: true' on the kiosk itself -- this is exactly
 // the value that got left behind by testing the feature directly on the
 // physical hardware before ensureAtcAudio's own IS_KIOSK guard existed.
@@ -2789,16 +2861,6 @@ const THEME_KEY = 'flightradar_theme_v1';
 // value from the [data-theme] CSS blocks (can't read another theme's CSS
 // custom properties while a different one is active, so there's no way to
 // derive these live from the stylesheet itself).
-// Stepped levels rather than a slider. This is a 1080x1080 round panel driven
-// by a fingertip: a thin range input is a poor target and lands wherever the
-// finger did. Three rows reuse the radio pattern already on this screen, and
-// each is a deliberate choice you can hit without looking at it.
-const VOLUME_LEVELS = [
-  { label: 'Low',    sub: 'Just audible in a quiet room', v: 0.3 },
-  { label: 'Medium', sub: 'Normal listening level',       v: 0.7 },
-  { label: 'High',   sub: 'Loud — for a noisy room',      v: 1.0 },
-];
-
 const THEMES = [
   { key: 'classic', label: 'Classic', sub: 'The original look — dark background, warm accent colors', swatchBg: '#0a0d0f', swatchAccent: '#4fd6c8' },
   { key: 'daylight', label: 'Daylight', sub: 'Light background, black text — for a bright room', swatchBg: '#eaf3f1', swatchAccent: '#0f7a6c' },
@@ -2848,7 +2910,22 @@ function getMasterGain() {
   const ctx = getAudioCtx();
   if (!masterGain) {
     masterGain = ctx.createGain();
-    masterGain.connect(ctx.destination);
+    // A limiter, not a tone-shaping compressor -- fast attack, fast release,
+    // and it only starts working within a few dB of full scale. Below unity
+    // gain (the whole original range) it is inaudible; it exists for the
+    // headroom ABOVE unity that VOLUME_MAX opens up, where the mastered
+    // sample peaks (-1 to -3dBFS) would otherwise clip hard against a plain
+    // gain node once the multiplier pushes them over 0dBFS. This trades a
+    // small amount of squash at the loudest instant for "louder, not
+    // distorted" -- the whole point of raising the ceiling in the first
+    // place.
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -3;
+    limiter.knee.value = 6;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.002;
+    limiter.release.value = 0.08;
+    masterGain.connect(limiter).connect(ctx.destination);
   }
   applyVolume();
   return masterGain;
@@ -4906,17 +4983,20 @@ function renderSettingsPanel() {
         <div class="sp-sub">Alerts still appear on screen; nothing is heard</div>
       </div>
       <div class="sp-switch${alertSettings.muted ? ' on' : ''}"></div>
-    </div>` + VOLUME_LEVELS.map(({ label, sub, v }) => `
-      <div class="sp-theme-row${Math.abs(alertSettings.volume - v) < 0.01 && !alertSettings.muted ? ' selected' : ''}" data-vol="${v}">
-        <div>
-          <div class="sp-label">${esc(label)}</div>
-          <div class="sp-sub">${esc(sub)}</div>
-        </div>
-        <div class="sp-radio${Math.abs(alertSettings.volume - v) < 0.01 && !alertSettings.muted ? ' on' : ''}"></div>
-      </div>`).join('') + `
+    </div>
+    <div class="sp-slider-row${alertSettings.muted ? ' disabled' : ''}">
+      <div class="sp-slider-head">
+        <span class="sp-label">Volume</span>
+        <span class="sp-slider-value">${Math.round((alertSettings.muted ? 0 : alertSettings.volume) * 100)}%</span>
+      </div>
+      <input type="range" id="volumeSlider" min="0" max="${VOLUME_MAX}" step="0.02"
+             value="${alertSettings.volume}" ${alertSettings.muted ? 'disabled' : ''}>
+      <div class="sp-sub">100% is where the sounds were mastered; past that is
+        amplified and gently limited so it gets louder, not distorted.</div>
+    </div>
     <div class="sp-section-title">Alert sounds</div>` + Object.entries(SOUND_THEMES).map(([k, t]) => `
       <div class="sp-theme-row${alertSettings.soundTheme === k ? ' selected' : ''}" data-sound-theme="${k}">
-        <div>
+        <div class="sp-theme-label">
           <div class="sp-label">${esc(t.label)}</div>
           <div class="sp-sub">${esc(t.sub)} — tap to hear it</div>
         </div>
@@ -4926,7 +5006,7 @@ function renderSettingsPanel() {
     <div class="sp-section-title">Color theme</div>` + THEMES.map(({ key, label, sub, swatchBg, swatchAccent }) => `
       <div class="sp-theme-row${uiTheme === key ? ' selected' : ''}" data-theme-key="${key}">
         <div class="sp-theme-swatch" style="background:${swatchBg}"><span style="background:${swatchAccent}"></span></div>
-        <div>
+        <div class="sp-theme-label">
           <div class="sp-label">${esc(label)}</div>
           <div class="sp-sub">${esc(sub)}</div>
         </div>
@@ -5937,10 +6017,54 @@ detailPanelEl.addEventListener('pointerup', (e) => {
 });
 
 settingsPanelEl.addEventListener('pointerdown', (e) => {
+  // The range input owns its own drag entirely. Without this exemption the
+  // panel's manual scroll-by-touch (below) still runs -- pointer capture only
+  // changes hit-testing, the pointermove still bubbles here -- and a real
+  // finger rarely drags perfectly horizontally, so a small vertical wobble
+  // while sliding the volume thumb would ALSO scroll the settings list at
+  // the same time. Same category as the switch/radio/swatch already being
+  // exempt from "row body is for scrolling", just for a control that needs
+  // its native drag left alone rather than a tap distinguished from a drag.
+  if (e.target.closest('input[type=range]')) { settingsPointerStart = null; return; }
   settingsPointerStart = { x: e.clientX, y: e.clientY, scrollTop: settingsPanelEl.scrollTop };
 });
 
 settingsPanelEl.addEventListener('pointercancel', () => { settingsPointerStart = null; });
+
+// Delegated onto the panel rather than attached to the slider element
+// directly. renderSettingsPanel() rebuilds the panel's whole innerHTML on
+// every OTHER settings change too -- muting, switching sound themes, opening
+// a different section and coming back -- each of which throws away and
+// recreates the slider element. A directly-attached listener would need to
+// be re-attached after every one of those; a listener on the stable panel
+// element never needs to be.
+let volumeDebounce = null;
+settingsPanelEl.addEventListener('input', (e) => {
+  if (e.target.id !== 'volumeSlider') return;
+  // Live while dragging: the gain node updates every tick so the setting is
+  // never stale, and the on-screen percentage tracks the thumb. What does NOT
+  // happen on every tick is a sound or a write to storage -- see 'change'
+  // below -- a slider fires 'input' dozens of times over one drag, and doing
+  // either of those that often would be a alert-sound machine gun and a
+  // localStorage write storm for a single gesture.
+  alertSettings.volume = parseFloat(e.target.value);
+  alertSettings.muted = false;
+  applyVolume();
+  const valueEl = settingsPanelEl.querySelector('.sp-slider-value');
+  if (valueEl) valueEl.textContent = `${Math.round(alertSettings.volume * 100)}%`;
+  clearTimeout(volumeDebounce);
+  volumeDebounce = setTimeout(() => { saveAlertSettings(); }, 400);
+});
+settingsPanelEl.addEventListener('change', (e) => {
+  if (e.target.id !== 'volumeSlider') return;
+  // Fires once, when the drag actually ends (Chromium-only kiosk, so this is
+  // reliable rather than a cross-browser guess). This is the confirmation
+  // sound and the guaranteed-persisted write, in case the 400ms debounce
+  // above hasn't fired yet by the time the finger lifts.
+  clearTimeout(volumeDebounce);
+  saveAlertSettings();
+  playAlertSound();
+});
 
 settingsPanelEl.addEventListener('pointerup', (e) => {
   const start = settingsPointerStart;
@@ -6019,41 +6143,27 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     renderSettingsPanel();
     return;
   }
-  // Volume and sound theme. These MUST be handled before the colour-theme
-  // block below: they reuse .sp-theme-row for its radio styling but carry no
+  // Sound theme. This MUST be handled before the colour-theme block below:
+  // it reuses .sp-theme-row for its radio styling but carries no
   // data-theme-key, so falling through would call applyTheme(undefined) and
-  // wipe the colour theme as a side effect of turning the volume up.
+  // wipe the colour theme as a side effect of picking a sound theme.
   //
-  // Both play a sound on selection. Choosing a level you cannot hear, or a
-  // voice you have never heard, is otherwise guesswork -- and on a device with
-  // no hardware volume knob that guesswork has nowhere else to go.
-  // These two accept a tap ANYWHERE on the row, unlike the switch rows and
-  // the colour-theme rows below (which gate on '.sp-radio' or the swatch
+  // Accepts a tap ANYWHERE on the row, unlike the switch rows and the
+  // colour-theme rows below (which gate on '.sp-radio' or the swatch
   // graphic). That is not an oversight -- the colour-theme row has its big
-  // swatch circle as an obvious, generous target; these rows have no
-  // equivalent graphic, only the same 18px dot every row carries, and on a
-  // touchscreen a physical tap naturally lands on the label text someone is
-  // reading, not on a small dot beside it. A toggle switch getting fat-
-  // fingered while scrolling is worth guarding against -- it flips a boolean
-  // that may go unnoticed. A radio row like these is the opposite: picking
-  // the wrong one of three visible options is corrected by looking at the
-  // screen and tapping the right one, immediately. The drag-vs-tap slop
-  // check above this already separates "scrolling past this row" from "a
-  // tap that landed on it" -- the row-body restriction on other rows is an
-  // extra safety margin on top of that, one these rows don't need as badly.
-  const volRow = e.target.closest('[data-vol]');
-  if (volRow) {
-    // Reaching for a level while muted means "make it this loud", not
-    // "nothing". Leaving these inert was a dead control: the tap landed, the
-    // row was styled disabled, and nothing happened or explained why.
-    alertSettings.volume = parseFloat(volRow.dataset.vol);
-    alertSettings.muted = false;
-    saveAlertSettings();
-    applyVolume();
-    playAlertSound();
-    renderSettingsPanel();
-    return;
-  }
+  // swatch circle as an obvious, generous target; this row has no equivalent
+  // graphic, only the same 18px dot every row carries, and on a touchscreen a
+  // physical tap naturally lands on the label text someone is reading, not on
+  // a small dot beside it. A toggle switch getting fat-fingered while
+  // scrolling is worth guarding against -- it flips a boolean that may go
+  // unnoticed. A radio row like this is the opposite: picking the wrong one
+  // of two visible options is corrected by looking at the screen and tapping
+  // the right one, immediately. The drag-vs-tap slop check above this already
+  // separates "scrolling past this row" from "a tap that landed on it" -- the
+  // row-body restriction on other rows is an extra safety margin on top of
+  // that, one this row does not need as badly. Also plays the theme's sound
+  // on selection: choosing a voice you have never heard is otherwise
+  // guesswork.
   const soundRow = e.target.closest('[data-sound-theme]');
   if (soundRow) {
     alertSettings.soundTheme = soundRow.dataset.soundTheme;
