@@ -36,7 +36,9 @@ chroot "$MNT" /bin/sh /opt/flightradar-src/image/customize.sh
 
 echo "== checks: the image must be a working unit with no per-unit secrets"
 fail=0
-must()    { [ -e "$MNT$1" ] || { echo "  MISSING $1"; fail=1; }; }
+# -L too: enablement links point at absolute paths, which resolve against the
+# BUILD machine's filesystem from out here, not the image's.
+must()    { [ -e "$MNT$1" ] || [ -L "$MNT$1" ] || { echo "  MISSING $1"; fail=1; }; }
 mustnot() { [ ! -e "$MNT$1" ] || { echo "  MUST NOT SHIP $1"; fail=1; }; }
 for f in /usr/bin/readsb /usr/local/share/tar1090/git/.flightradar-commit /var/www/html/index.html \
          /opt/flightradar/ota.py /opt/flightradar/allowed_signers /opt/flightradar/tts/venv/bin/python \
