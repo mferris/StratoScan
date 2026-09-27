@@ -241,6 +241,13 @@ def legacy_view(store):
             for h, e in store["ac"].items()}
 
 
+def _today(store):
+    day = store.get("day")
+    if isinstance(day, dict) and day.get("d") == time.strftime("%Y-%m-%d"):
+        return {"total": int(day.get("t", 0)), "nearby": int(day.get("n", 0))}
+    return {"total": 0, "nearby": 0}
+
+
 def summarise(store):
     ac = store["ac"]
     by_op = {k: {"ac": 0, "visits": 0, "nearby": 0} for k in OPERATORS + ("unk",)}
@@ -299,6 +306,7 @@ def summarise(store):
         "hours": store.get("hours", [0] * 24),
         "dows": store.get("dows", [0] * 7),
         "records": store.get("rec", {}),
+        "today": _today(store),
         "top": top,
     }
 
@@ -462,6 +470,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     local = time.localtime(now)
                     store["hours"][local.tm_hour] += 1
                     store["dows"][local.tm_wday] += 1
+                # Today's tally, for the empty-sky screen. Local date, reset
+                # on the first increment of a new day.
+                if kind in ("total", "nearby"):
+                    today = time.strftime("%Y-%m-%d", time.localtime(now))
+                    day = store.get("day")
+                    if not isinstance(day, dict) or day.get("d") != today:
+                        day = store["day"] = {"d": today, "t": 0, "n": 0}
+                    day["t" if kind == "total" else "n"] += 1
             if classification is not None:
                 apply_class(entry, classification)
             store["ac"][hexcode] = entry
