@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Keeps a FlightRadar unit reachable no matter what.
 
-Runs every couple of minutes and at boot. Two jobs:
+Runs every couple of minutes and at boot. It is also the one root process on
+a timer that updates can reach, so it carries the last-resort health checks
+too -- see check_health() -- which a unit ten years into someone else's house
+has no other way to get. Networking jobs:
 
 1. RECONCILE an unconfirmed network change. setupd writes pending.json
    (fsynced) before it touches the radio and deletes it on confirm. If a
@@ -54,6 +57,31 @@ FAILCOUNT = "/run/flightradar-net/failcount"
 HOTSPOT_SINCE = "/run/flightradar-net/hotspot-since"
 ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
 NMCLI = "/usr/bin/nmcli"
+SYSTEMCTL = "/usr/bin/systemctl"
+
+# ---- Last-resort health checks -------------------------------------------
+# readsb rewrites this every second whether or not anything is in the sky, so
+# a stale file means the receiver is wedged (SDR stick hung, USB glitch), not
+# a quiet night. The service can stay "active" through that, so systemd's
+# Restart= never fires and the screen says NO RECEIVER forever.
+AIRCRAFT_JSON = "/run/readsb/aircraft.json"
+RECEIVER_STALE_S = 180
+RECEIVER_BOOT_GRACE_S = 300
+RECEIVER_RESTARTS = "/run/flightradar-net/receiver-restarts"
+RECEIVER_REBOOT_AFTER = 3          # restarts that did not bring data back
+# wake-listener.py (the frozen-display watchdog) runs as the desktop user and
+# can only restart the browser. It counts restarts that did not bring a
+# painted frame back and leaves the count here; past the limit the fault is
+# below Chromium (compositor, GPU driver) and only a reboot clears it.
+KIOSK_STUCK_GLOB = "/run/user/*/flightradar-kiosk-stuck"
+# The count includes the restart just issued, so 4 means three restarts each
+# had their full 15 minutes to bring a frame back and none did.
+KIOSK_REBOOT_AFTER = 4
+# However broken things are, never reboot more often than this: a fault a
+# reboot cannot fix (a missing SDR stick) must degrade to "reboots a few
+# times a day", not a loop that makes the unit unusable.
+LAST_REBOOT = os.path.join(STATE_DIR, "last-watchdog-reboot")
+MIN_REBOOT_INTERVAL_S = 6 * 3600
 
 
 def run(argv, timeout=45):
@@ -194,8 +222,84 @@ def retry_known_networks():
     return have_connectivity()
 
 
+def _uptime():
+    with open("/proc/uptime") as f:
+        return float(f.read().split()[0])
+
+
+def _read_int(path):
+    try:
+        with open(path) as f:
+            return int(f.read().strip() or 0)
+    except Exception:
+        return 0
+
+
+def _write_int(path, n):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write(str(n))
+
+
+def watchdog_reboot(reason):
+    try:
+        last = os.path.getmtime(LAST_REBOOT)
+    except OSError:
+        last = 0
+    if time.time() - last < MIN_REBOOT_INTERVAL_S:
+        print(f"health: would reboot ({reason}) but rebooted recently; holding",
+              flush=True)
+        return
+    print(f"health: rebooting -- {reason}", flush=True)
+    touch_runtime(LAST_REBOOT)
+    run([SYSTEMCTL, "reboot"], timeout=30)
+
+
+def check_receiver():
+    if _uptime() < RECEIVER_BOOT_GRACE_S:
+        return
+    try:
+        age = time.time() - os.path.getmtime(AIRCRAFT_JSON)
+    except OSError:
+        age = float("inf")
+    if age < RECEIVER_STALE_S:
+        if _read_int(RECEIVER_RESTARTS):
+            print("health: receiver data flowing again", flush=True)
+            _write_int(RECEIVER_RESTARTS, 0)
+        return
+    what = "missing" if age == float("inf") else f"stale for {int(age)}s"
+    restarts = _read_int(RECEIVER_RESTARTS)
+    if restarts >= RECEIVER_REBOOT_AFTER:
+        watchdog_reboot(f"receiver data {what} after {restarts} readsb restarts")
+        return
+    print(f"health: receiver data {what}; restarting readsb", flush=True)
+    _write_int(RECEIVER_RESTARTS, restarts + 1)
+    run([SYSTEMCTL, "restart", "readsb.service"], timeout=60)
+
+
+def check_kiosk():
+    import glob
+    for path in glob.glob(KIOSK_STUCK_GLOB):
+        stuck = _read_int(path)
+        if stuck >= KIOSK_REBOOT_AFTER:
+            watchdog_reboot(f"display frozen through {stuck} browser restarts")
+            return
+
+
+def check_health():
+    # Independent of each other and of the networking below: a bug or an
+    # odd state in one must never stop the unit staying reachable.
+    for check in (check_receiver, check_kiosk):
+        try:
+            check()
+        except Exception as e:
+            print(f"health: {check.__name__} failed ({type(e).__name__}: {e})",
+                  flush=True)
+
+
 def main():
     os.makedirs(STATE_DIR, exist_ok=True)
+    check_health()
 
     # 1. roll back anything left unconfirmed
     if os.path.exists(PENDING):

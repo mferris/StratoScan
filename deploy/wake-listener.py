@@ -68,6 +68,26 @@ _last_beat = 0.0          # monotonic; 0 until the first frame is reported
 _last_restart = 0.0
 _started_at = time.monotonic()
 
+# A browser restart cannot fix a fault below the browser (a hung compositor, a
+# wedged GPU driver) -- this used to restart the kiosk every 15 minutes
+# forever. The count of restarts that brought no frame back is left where the
+# root watchdog (net-watchdog.py, which can reboot) reads it; a painted frame
+# clears it. In the runtime dir, so a reboot starts the count over.
+STUCK_FILE = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"),
+                          "flightradar-kiosk-stuck")
+_unrecovered_restarts = 0
+
+
+def _record_stuck(n):
+    try:
+        if n:
+            with open(STUCK_FILE, "w") as f:
+                f.write(str(n))
+        elif os.path.exists(STUCK_FILE):
+            os.unlink(STUCK_FILE)
+    except OSError:
+        pass
+
 
 def _display_is_on():
     """True only if we can positively confirm the panel is powered on.
@@ -85,7 +105,7 @@ def _display_is_on():
 
 
 def _watchdog():
-    global _last_restart
+    global _last_restart, _unrecovered_restarts
     while True:
         time.sleep(WATCHDOG_PERIOD_S)
         try:
@@ -105,9 +125,15 @@ def _watchdog():
             if not _display_is_on():
                 continue   # blanked by the screensaver; no frames expected
             _last_restart = now
+            # A restart that did not bring a frame back is one we already
+            # did, still unrecovered -- only reachable if there was a restart
+            # before and no beat since.
+            _unrecovered_restarts += 1
+            _record_stuck(_unrecovered_restarts)
             silent_for = int(now - reference)
             print(f"watchdog: display on but no frame painted for {silent_for}s"
-                  f" -- restarting {KIOSK_UNIT}", flush=True)
+                  f" -- restarting {KIOSK_UNIT}"
+                  f" (attempt {_unrecovered_restarts} without recovery)", flush=True)
             subprocess.run(["systemctl", "--user", "restart", KIOSK_UNIT],
                            timeout=60, check=False)
         except Exception as e:
@@ -183,7 +209,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return "FlightRadar"
 
     def do_POST(self):
-        global _last_wake, _last_beat
+        global _last_wake, _last_beat, _unrecovered_restarts
         path = self.path.split("?", 1)[0].rstrip("/")
         if path == "/wake/alive":
             if not _last_beat:
@@ -196,6 +222,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                       flush=True)
             _last_beat = time.monotonic()
             _mark_painted()
+            if _unrecovered_restarts:
+                _unrecovered_restarts = 0
+                _record_stuck(0)
             if _take_reload_request():
                 print("reload: instructing the page to reload", flush=True)
                 body = b'{"reload":1}'

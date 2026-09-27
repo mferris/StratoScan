@@ -5,4 +5,8 @@ Documentation=https://github.com/mferris/FlightRadar
 [Service]
 Type=oneshot
 StateDirectory=flightradar-shmguard
+# A oneshot with no timeout waits forever: one hung compositor call used to
+# leave this unit 'activating' for good, and its timer never fired again --
+# silently disabling the leak guard.
+TimeoutStartSec=5min
 ExecStart=/opt/flightradar/shm-guard.sh
