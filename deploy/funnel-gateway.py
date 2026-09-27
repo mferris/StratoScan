@@ -36,7 +36,9 @@ COORD_PRECISION = 2  # decimal places -- ~0.7mi at this latitude
 # side effect on hardware in someone's house, and nothing off-LAN has any
 # business reaching it. The kiosk and the rest of the LAN talk to lighttpd
 # directly and are unaffected by this.
-LOCAL_ONLY_PATHS = ("/wake", "/setup")
+# /tts is text-to-speech: CPU-heavy synthesis on the unit, which only the
+# house needs; a public caller could otherwise keep the Pi busy talking.
+LOCAL_ONLY_PATHS = ("/wake", "/setup", "/tts")
 
 # Paths that may be READ publicly but must not be WRITTEN publicly.
 #

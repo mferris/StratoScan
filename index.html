@@ -3210,7 +3210,7 @@ const ALERT_SETTINGS_KEY = 'flightradar_alert_settings_v1';
 // volume is a plain 0..1 multiplier on the master gain; muted is kept separate
 // rather than being volume 0, so silencing it for an evening does not throw
 // away the level someone settled on. soundTheme picks the voice alerts speak in.
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic' };
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, voice: false, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic' };
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -3454,6 +3454,61 @@ function playSample(url) {
   });
 }
 
+// ---- Spoken announcements -----------------------------------------------------
+// After an alert's chime, one short sentence saying what it is. Synthesized on
+// the unit by deploy/tts-service.py (Piper, offline) and played through the
+// same master gain as every other sound, so volume and mute apply. The unit's
+// /tts is local-only, so a viewer over the public URL simply hears the chime.
+const COMPASS8_WORDS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+function directionWords(deg) { return COMPASS8_WORDS[Math.round(((deg % 360) + 360) % 360 / 45) % 8]; }
+
+function spokenName(pl) {
+  const m = pl.hasCallsign ? /^([A-Z]{3})(\d+)([A-Z]*)$/.exec(pl.cs || '') : null;
+  const airline = m ? AIRLINES[m[1]] : null;
+  if (airline) return `${airline.name} ${m[2].split('').join(' ')}${m[3] ? ' ' + m[3].split('').join(' ') : ''}`;
+  return pl.airlineLabel === PRIVATE_LABEL ? 'Private aircraft' : 'Aircraft';
+}
+
+function announcementFor(pl, lead) {
+  const parts = [];
+  if (lead) parts.push(lead);
+  parts.push(spokenName(pl));
+  if (pl.typeLabel) parts.push(pl.typeLabel.replace(/[-/]/g, ' '));
+  if (pl.alt === 'ground') parts.push('on the ground');
+  else if (typeof pl.alt === 'number') parts.push(`${(Math.round(pl.alt / 100) * 100).toLocaleString('en-US')} feet`);
+  if (typeof pl.range === 'number') {
+    const miles = pl.range * 1.15078;
+    parts.push(miles < 0.75 ? 'overhead' : `${Math.round(miles)} ${Math.round(miles) === 1 ? 'mile' : 'miles'} ${directionWords(pl.bearing)}`);
+  }
+  const sentence = parts.join(', ') + '.';
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+}
+
+const spokenBuffers = new Map();   // phrase -> Promise<AudioBuffer>, bounded
+function speak(text, delayMs = 1100) {
+  if (!alertSettings.voice || alertSettings.muted || !text) return;
+  let p = spokenBuffers.get(text);
+  if (!p) {
+    p = fetch('/tts?text=' + encodeURIComponent(text.slice(0, 240)), { signal: AbortSignal.timeout(15000) })
+      .then(r => { if (!r.ok) throw new Error('tts ' + r.status); return r.arrayBuffer(); })
+      .then(buf => getAudioCtx().decodeAudioData(buf));
+    p.catch(() => spokenBuffers.delete(text));
+    spokenBuffers.set(text, p);
+    if (spokenBuffers.size > 32) spokenBuffers.delete(spokenBuffers.keys().next().value);
+  }
+  const startAt = performance.now() + delayMs;   // after the chime, not over it
+  p.then(buffer => {
+    setTimeout(() => {
+      const ctx = getAudioCtx();
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(getMasterGain());
+      src.start();
+    }, Math.max(0, startAt - performance.now()));
+  }).catch(() => { /* no speech on this unit or viewer: the chime already said it */ });
+}
+
 // ---- Sound themes ---------------------------------------------------
 // The same three events, in two voices. Which one plays is a setting, because
 // the device has no way to know what it is wearing: the case is a printed
@@ -3581,6 +3636,7 @@ function checkNearbyAlert(pl, range) {
         wakeScreenForAlert();
         showDetailPanel(pl, true);
         playAlertSound();
+        speak(announcementFor(pl));
       }
     }
   } else if (range > ALERT_CLEAR_RADIUS_NM) {
@@ -4158,6 +4214,7 @@ function checkRareAircraft(pl) {
   wakeScreenForAlert();
   showDetailPanel(pl, true, why.label.toUpperCase(), '\u2726');
   playRareSound();
+  speak(announcementFor(pl, why.label));
   showToast(`\u2726 ${why.label.toUpperCase()} \u00b7 ${pl.cs}`, 8000);
 }
 
@@ -4195,6 +4252,8 @@ function checkEmergencySquawk(pl) {
       wakeScreenForAlert();
       playEmergencySound();
       showDetailPanel(pl, true, label);
+      // "Emergency squawk 7700", in words a person reads aloud, not the banner's.
+      speak(announcementFor(pl, `${label.split(' — ')[0].toLowerCase()}, squawk ${String(pl.squawk).split('').join(' ')}`), 2200);
     }
   } else {
     pl.emergencyAlerted = false;
@@ -5528,6 +5587,7 @@ function alertSettingsMeta() { return [
   { group: 'alerts', key: 'lightningAlert', label: 'Lightning proximity alert', sub: `Chime + banner when a strike is detected within ${LIGHTNING_ALERT_RADIUS_NM}nm` },
   { group: 'display', key: 'nightDim', label: 'Dim at night', sub: 'Darkens the display between sunset and sunrise at the receiver' },
   { group: 'display', key: 'emptySky', label: 'Clock & weather when quiet', sub: 'Shows the time, the weather and today’s count when nothing is in range' },
+  { group: 'alerts', key: 'voice', label: 'Spoken announcements', sub: 'Says what it is after the chime: “Delta 1 4 0, Boeing 767, 3,000 feet, 2 miles north-east”' },
   { group: 'alerts', key: 'alertWake', label: 'Alerts wake the screen', sub: 'Nearby + emergency alerts undim, and wake the display if the screensaver blanked it' },
 ]; }
 

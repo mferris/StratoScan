@@ -1,0 +1,22 @@
+[Unit]
+Description=FlightRadar spoken alerts (local Piper text-to-speech)
+After=network.target
+
+[Service]
+ExecStart=/opt/flightradar/tts/venv/bin/python /opt/flightradar/tts-service.py
+Restart=always
+RestartSec=5
+# 127.0.0.1-only listener that reads a voice model and writes nothing.
+DynamicUser=yes
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# The voice model is ~64 MB; bound it so a runaway input can't starve the kiosk.
+MemoryMax=600M
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

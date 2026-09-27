@@ -95,6 +95,8 @@ DEPLOY_ALLOWED = {
     "heartbeat.py",
     # Weekly notable-aircraft list (plane-alert-db); run by net-watchdog.
     "notable-db.py",
+    # Spoken alerts; runs in its own Piper virtualenv (installer-only).
+    "tts-service.py",
     # ota-auto.sh decides whether an unattended update may proceed, running as
     # root on a timer on a device in someone else's house. Omitting it would
     # ship it in the bundle and then refuse to install it -- which is the same
@@ -387,6 +389,7 @@ SERVICE_FOR = {
     "setup-ui.html":      ("system", "flightradar-setup.service"),
     "setupd.py":          ("system", "flightradar-setupd.service"),
     "wake-listener.py":   ("user",   "flightradar-wake.service"),
+    "tts-service.py":     ("system", "flightradar-tts.service"),
 }
 
 

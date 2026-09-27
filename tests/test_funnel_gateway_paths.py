@@ -30,6 +30,8 @@ MUST_BLOCK = [
     # The kiosk's paint heartbeat. Reachable publicly it would let a stranger
     # convince the watchdog a frozen display is healthy.
     "/wake/alive",
+    # Local text-to-speech: CPU-heavy, and only the house needs it.
+    "/tts", "/tts?text=hello", "/%74ts", "/TTS", "/x/../tts",
     # These used to be asserted as MUST_ALLOW, on the reasoning that a path
     # merely starting with the same letters is a different path. That is true
     # of the gateway in isolation and false of the system: lighttpd routes on
@@ -80,7 +82,7 @@ def main():
             failures.append(f"wrongly blocked (app breakage): {p!r}")
 
     # the deny list itself must not be silently emptied by a future edit
-    for required in ("/wake", "/setup"):
+    for required in ("/wake", "/setup", "/tts"):
         if required not in fg.LOCAL_ONLY_PATHS:
             failures.append(f"{required} missing from LOCAL_ONLY_PATHS")
 

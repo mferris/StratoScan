@@ -180,3 +180,30 @@ echo
 echo "== notable-aircraft list (plane-alert-db, ODbL) =="
 python3 /opt/flightradar/notable-db.py ensure \
   && echo "  ready" || echo "  fetch failed (no internet?); net-watchdog will retry"
+
+echo
+echo "== spoken alerts (Piper text-to-speech, offline) =="
+# Piper (GPL-3.0-or-later) runs as its own program in its own virtualenv, and
+# is installed from PyPI here rather than shipped in this repository. The
+# voice is LJSpeech, trained on a public-domain dataset -- many Piper voices
+# are not licensed for redistribution or commercial use, so it is pinned.
+PIPER_VERSION=1.8.0
+TTS=/opt/flightradar/tts
+VOICE=en_US-ljspeech-medium
+install -d -m 0755 "$TTS" "$TTS/voices"
+[ -x "$TTS/venv/bin/python" ] || python3 -m venv "$TTS/venv"
+"$TTS/venv/bin/pip" install -q "piper-tts==$PIPER_VERSION"
+[ -f "$TTS/voices/$VOICE.onnx" ] || \
+  "$TTS/venv/bin/python" -m piper.download_voices "$VOICE" --data-dir "$TTS/voices"
+chmod -R a+rX "$TTS"
+install -m 0755 deploy/tts-service.py /opt/flightradar/tts-service.py
+install -m 0644 deploy/flightradar-tts.service /etc/systemd/system/
+install -m 0644 deploy/97-flightradar-tts.conf /etc/lighttpd/conf-available/
+ln -sf /etc/lighttpd/conf-available/97-flightradar-tts.conf \
+       /etc/lighttpd/conf-enabled/97-flightradar-tts.conf
+lighttpd -tt -f /etc/lighttpd/lighttpd.conf
+systemctl daemon-reload
+systemctl enable --now flightradar-tts.service
+systemctl reload lighttpd
+systemctl restart flightradar-funnel-gateway.service
+echo "  tts: $(systemctl is-active flightradar-tts.service)"
