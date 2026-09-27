@@ -20,6 +20,7 @@ install -m 0644 deploy/airports.json       /opt/flightradar/airports.json
 install -m 0644 deploy/funnel-gateway.py   /opt/flightradar/funnel-gateway.py
 install -m 0755 deploy/offline-map.py      /opt/flightradar/offline-map.py
 install -m 0755 deploy/heartbeat.py        /opt/flightradar/heartbeat.py
+install -m 0755 deploy/notable-db.py       /opt/flightradar/notable-db.py
 
 install -m 0644 deploy/flightradar-setupd.service /etc/systemd/system/
 install -m 0644 deploy/flightradar-setup.service  /etc/systemd/system/
@@ -174,3 +175,8 @@ python3 /opt/flightradar/offline-map.py ensure \
          && echo "  built: $(cat /var/www/html/offline-map/meta.json)" \
          || echo "  no location yet; it will be built when one is set"; } \
   || echo "  build failed (no internet?); net-watchdog will retry"
+
+echo
+echo "== notable-aircraft list (plane-alert-db, ODbL) =="
+python3 /opt/flightradar/notable-db.py ensure \
+  && echo "  ready" || echo "  fetch failed (no internet?); net-watchdog will retry"

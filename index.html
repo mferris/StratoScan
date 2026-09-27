@@ -4041,9 +4041,58 @@ const RARE_FIRST_MIN_CATALOGUE = 2000;
 const RARE_ALERT_COOLDOWN_MS = 10 * 60 * 1000;
 let lastRareAlertAt = -Infinity;
 
+// Specific notable aircraft, from plane-alert-db (ODbL 1.0), fetched weekly by
+// the unit (deploy/notable-db.py) into /data/notable.json. Its own category
+// names are in-jokes ("Oxcart", "Joe Cool") that mean nothing on someone's
+// wall, and a few pass judgement on people ("Dictator Alert", "Oligarch"), so
+// every category is shown by a plain, neutral description instead.
+// Operator names only ever appear where notable-db.py kept them: military,
+// government and police -- never a private person's name.
+const NOTABLE_LABELS = {
+  'Aerial Firefighter': 'Firefighting aircraft', 'Aerobatic Teams': 'Aerobatic display team',
+  'Army Air Corps': 'UK Army Air Corps', 'As Seen on TV': 'Company aircraft',
+  'Big Hello': 'Heavy helicopter', 'Bizjets': 'Private jet', 'CAP': 'Civil Air Patrol',
+  'Climate Crisis': 'Large business jet', 'Coastguard': 'Coast guard or border patrol',
+  'Da Comrade': 'Russian- or Soviet-built aircraft', 'Dictator Alert': 'VIP aircraft',
+  'Distinctive': 'One-of-a-kind aircraft', 'Dogs with Jobs': 'Special-mission aircraft',
+  "Don't you know who I am?": 'Aircraft of a well-known person', 'Flying Doctors': 'Air ambulance',
+  'Football': 'Sports team aircraft', 'GAF': 'German Air Force', 'Gas Bags': 'Balloon or airship',
+  'Governments': 'Government aircraft', 'Gunship': 'Attack aircraft', 'Head of State': 'Head of state aircraft',
+  'Hired Gun': 'Military contractor', 'Historic': 'Historic aircraft',
+  'Jesus he Knows me': 'Religious organisation aircraft', 'Joe Cool': 'Notable aircraft',
+  'Jump Johnny Jump': 'de Havilland Chipmunk', 'Nuclear': 'Nuclear emergency support',
+  'Oligarch': 'VIP private jet', 'Other Air Forces': 'Air force', 'Other Navies': 'Navy',
+  'Oxcart': 'Surveillance aircraft', 'Perfectly Serviceable Aircraft': 'Skydiving aircraft',
+  'Police Forces': 'Police aircraft', 'Ptolemy would be proud': 'Aerial survey aircraft',
+  'Quango': 'International organisation (NATO, UN…)', 'Radiohead': 'Presidential or VIP transport',
+  'RAF': 'Royal Air Force', 'Royal Aircraft': 'Royal Family aircraft', 'Royal Navy Fleet Air Arm': 'Royal Navy',
+  'Special Forces': 'Special operations aircraft', 'Toy Soldiers': 'Army aircraft', 'UAV': 'Drone (UAV)',
+  'UK National Police Air Service': 'Police aircraft (UK NPAS)', 'Ukraine': 'Ukrainian aircraft',
+  'United States Marine Corps': 'US Marine Corps', 'United States Navy': 'US Navy', 'USAF': 'US Air Force',
+  'Vanity Plate': 'Distinctive registration', 'Watch Me Fly': 'Flight school aircraft',
+  'You came here in that thing?': 'Microlight or very small aircraft', 'Zoomies': 'Fast jet',
+};
+let notableDb = null;   // hex -> [category, kind, operator, type]
+async function loadNotableDb() {
+  try {
+    const res = await fetch('/data/notable.json');
+    if (res.ok) notableDb = (await res.json()).ac || null;
+  } catch (e) { /* absent until the unit's first weekly fetch; the rest still works */ }
+}
+function notableFor(hex) {
+  const e = notableDb && notableDb[hex];
+  if (!e) return null;
+  return { label: NOTABLE_LABELS[e[0]] || 'Notable aircraft', operator: e[2] || null };
+}
+
 // Returns {kind, label} for the strongest reason this aircraft is unusual,
 // or null if it is just ordinary traffic.
 function rarityOf(pl) {
+  // A specific tail on the notable list says more than any class-level rule
+  // below -- "Air ambulance", not just "never seen here before".
+  const listed = notableFor(pl.hex);
+  if (listed) return { kind: 'notable', label: listed.label, operator: listed.operator };
+
   const mil = militaryOperator(pl.hex);
   if (mil) return { kind: 'military', label: mil };
 
@@ -5119,10 +5168,11 @@ function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES', aler
       <div class="dp-field"><div class="dp-label">Vert. rate</div><div class="dp-value">${vrateLabel(p.vrate)}</div></div>
       <div class="dp-field"><div class="dp-label">Squawk</div><div class="dp-value">${p.squawk ?? '—'}</div></div>
       <div class="dp-field"><div class="dp-label">Range / Brg</div><div class="dp-value">${rangeTxt}</div></div>
-      ${!p.rareReason ? '' : `<div class="dp-field dp-rare"><div class="dp-label">Notable</div><div class="dp-value">${esc(p.rareReason.label)}</div></div>`}
+      ${!p.rareReason ? '' : `<div class="dp-field dp-rare"><div class="dp-label">Notable</div><div class="dp-value">${esc(p.rareReason.label)}${p.rareReason.operator ? ' · ' + esc(p.rareReason.operator) : ''}</div></div>`}
       <div class="dp-field"><div class="dp-label">Sightings</div><div class="dp-value">${counts.total}</div></div>
       <div class="dp-field"><div class="dp-label">Within 2mi</div><div class="dp-value">${counts.nearby}</div></div>
     </div>
+    ${p.rareReason && p.rareReason.kind === 'notable' ? '<div class="dp-photo-credit" style="position:static;padding-top:6px">Notable list: plane-alert-db (ODbL)</div>' : ''}
   `;
   detailPanelEl.classList.add('show');
   detailPanelEl.classList.toggle('alert', isAlert);
@@ -5709,7 +5759,9 @@ function renderRewind() {
     const open = r.hex === rewindSelected;
     const info = hexTypeCache.get(r.hex);
     const route = r.cs ? routeCache.get(r.cs) : null;
+    const listed = notableFor(r.hex);
     const detail = open ? `<div class="rw-detail">
+        ${listed ? `<div class="sp-sub" style="color:var(--airport-highlight)">&#10022; ${esc(listed.label)}${listed.operator ? ' · ' + esc(listed.operator) : ''}</div>` : ''}
         <div class="sp-sub">${esc([info && info.type, info && info.reg].filter(Boolean).join(' · ') || 'Type not known')}</div>
         ${route ? `<div class="sp-sub">${esc(route.text)}${route.plausible ? '' : ' (unconfirmed)'}</div>` : ''}
         <div class="sp-sub">${typeof b.gs === 'number' ? Math.round(b.gs) + ' kt' : '—'}${typeof b.track === 'number' ? ' · heading ' + Math.round(b.track) + '°' : ''} · hex ${esc(r.hex.toUpperCase())}</div>
@@ -6964,6 +7016,7 @@ async function start() {
   loadApproachPoints(); // non-blocking; heatmap fills in once ready (or once initApproachLayer adds the source, whichever comes second)
   loadSightingCounts(); // non-blocking; counts fill in once ready, same reasoning
   loadFlightStats();    // the standing records, so a first plane cannot look like one
+  loadNotableDb();      // non-blocking; notable-aircraft labels fill in once ready
   setTimeout(backfillClassifications, BACKFILL_START_DELAY_MS); // fill in history that predates classification
 
   // Both of these belong here, once, for the life of the page. They were

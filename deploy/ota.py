@@ -93,6 +93,8 @@ DEPLOY_ALLOWED = {
     "offline-map.py",
     # Opt-in health reports to the relay; run by net-watchdog.
     "heartbeat.py",
+    # Weekly notable-aircraft list (plane-alert-db); run by net-watchdog.
+    "notable-db.py",
     # ota-auto.sh decides whether an unattended update may proceed, running as
     # root on a timer on a device in someone else's house. Omitting it would
     # ship it in the bundle and then refuse to install it -- which is the same

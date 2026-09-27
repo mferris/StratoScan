@@ -24,3 +24,4 @@ offline-map.old/
 relay/node_modules/
 relay/.wrangler/
 relay/.dev.vars
+data/
