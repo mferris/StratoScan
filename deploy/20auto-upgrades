@@ -1,0 +1,8 @@
+// Turns on the daily apt timers' actual work. apt-daily-upgrade.timer is
+// enabled on a stock image, but without these two lines (and the
+// unattended-upgrades package) it runs and does nothing -- which is how the
+// RDU unit went unpatched while its update timer showed as "enabled".
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+// Old .debs pile up in /var/cache/apt otherwise, forever.
+APT::Periodic::AutocleanInterval "7";

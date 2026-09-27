@@ -20,4 +20,8 @@ Type=oneshot
 # browser windowed on the display.
 Environment=SHMGUARD_FORCE=1
 StateDirectory=flightradar-shmguard
+# A oneshot with no timeout waits forever: one hung compositor call used to
+# leave this unit 'activating' for good, and its timer never fired again --
+# silently disabling the nightly restart.
+TimeoutStartSec=5min
 ExecStart=/opt/flightradar/shm-guard.sh

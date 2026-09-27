@@ -1,0 +1,59 @@
+// FlightRadar: unattended security updates for a unit nobody will ever SSH
+// into again. Installed to /etc/apt/apt.conf.d/ by install-setup-server.sh.
+//
+// Without this the kernel, OpenSSL, ca-certificates, tzdata and tailscaled
+// stay frozen at the day the card was flashed -- on a device with a public
+// Funnel URL. A stale ca-certificates alone eventually breaks TLS to the map
+// tiles, GitHub (OTA) and Tailscale's control plane as root CAs rotate.
+//
+// Origins, and why each is here:
+//   Debian-Security / trixie-updates  the security feed, plus the stable
+//                                     point updates that carry tzdata and
+//                                     ca-certificates
+//   Raspberry Pi Foundation           Pi OS rebuilds some Debian packages --
+//                                     openssl among them (+rpt1) -- so their
+//                                     security fixes arrive from HERE, not
+//                                     from Debian-Security
+//   Tailscale                         an old tailscaled is eventually refused
+//                                     by the control plane; staying current
+//                                     is what keeps remote access working
+Unattended-Upgrade::Origins-Pattern {
+        "origin=Debian,codename=${distro_codename},label=Debian-Security";
+        "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+        "origin=Debian,codename=${distro_codename}-updates";
+        "origin=Raspberry Pi Foundation,codename=${distro_codename}";
+        "origin=Tailscale";
+};
+
+// Held back: anything that can leave a unit in someone else's house unable
+// to boot, off the network, or with the kiosk broken -- with no one there who
+// can fix it. These need a tested, deliberate update, not an unattended one.
+//   chromium   kiosk flags and GPU behaviour change between releases; a bad
+//              one leaves the radar windowed or frozen
+//   kernel, boot firmware, EEPROM   a bad one is an unbootable unit
+//   firmware-  the WiFi chip's firmware; a bad one is an unreachable unit
+Unattended-Upgrade::Package-Blacklist {
+        "chromium";
+        "linux-image";
+        "linux-headers";
+        "linux-kbuild";
+        "raspi-firmware";
+        "raspberrypi-kernel";
+        "raspberrypi-bootloader";
+        "rpi-eeprom";
+        "firmware-";
+};
+
+// Never reboot on our own: a kernel update is held above anyway, and the
+// watchdogs decide when this unit reboots.
+Unattended-Upgrade::Automatic-Reboot "false";
+// One package at a time, so a power cut mid-upgrade leaves at most one
+// package half-configured -- which AutoFixInterruptedDpkg repairs next run.
+Unattended-Upgrade::MinimalSteps "true";
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "false";
+// Keep our own edits to config files; never stop for a prompt.
+Dpkg::Options {
+        "--force-confdef";
+        "--force-confold";
+};

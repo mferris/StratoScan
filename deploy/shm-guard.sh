@@ -56,7 +56,7 @@ fi
 WD=$(basename "$(ls "$XDG_RUNTIME_DIR"/wayland-*[0-9] 2>/dev/null | head -1)" 2>/dev/null || true)
 panel="unknown"
 if [ -n "${WD:-}" ]; then
-    panel=$(WAYLAND_DISPLAY="$WD" wlopm 2>/dev/null | awk '/HDMI/ {print $2}' || echo unknown)
+    panel=$(WAYLAND_DISPLAY="$WD" timeout 10 wlopm 2>/dev/null | awk '/HDMI/ {print $2}' || echo unknown)
     [ -n "$panel" ] || panel="unknown"
 fi
 
@@ -106,7 +106,7 @@ PY
 # cannot be read, which is treated as "do not judge".
 screen_topleft() {
     [ -n "${WD:-}" ] || { echo "-1"; return 0; }
-    WAYLAND_DISPLAY="$WD" grim -t ppm - 2>/dev/null | python3 -c '
+    WAYLAND_DISPLAY="$WD" timeout 15 grim -t ppm - 2>/dev/null | python3 -c '
 import sys
 d = sys.stdin.buffer.read()
 if not d.startswith(b"P6"):
@@ -150,13 +150,13 @@ restart_kiosk() {   # reason
     if [ "$panel" = "off" ] && [ -n "${WD:-}" ]; then
         was_off=1
         echo "shm-guard: panel is off -- waking it first, or Chromium restarts windowed"
-        WAYLAND_DISPLAY="$WD" wlopm --on HDMI-A-1 >/dev/null 2>&1 || true
+        WAYLAND_DISPLAY="$WD" timeout 10 wlopm --on HDMI-A-1 >/dev/null 2>&1 || true
         sleep 2
     fi
-    systemctl --user restart flightradar-kiosk.service
+    timeout 120 systemctl --user restart flightradar-kiosk.service
     if [ "$was_off" = "1" ]; then
         sleep "$RESTART_SETTLE_S"
-        WAYLAND_DISPLAY="$WD" wlopm --off HDMI-A-1 >/dev/null 2>&1 || true
+        WAYLAND_DISPLAY="$WD" timeout 10 wlopm --off HDMI-A-1 >/dev/null 2>&1 || true
         echo "shm-guard: panel blanked again after ${RESTART_SETTLE_S}s"
     fi
 }

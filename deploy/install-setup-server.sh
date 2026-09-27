@@ -89,3 +89,47 @@ install -m 0644 deploy/flightradar-captive-dns.conf \
 lighttpd -tt -f /etc/lighttpd/lighttpd.conf
 systemctl reload lighttpd
 echo "  captive portal installed"
+
+# Everything below is image-level: ota.py deliberately cannot install system
+# config or unit files, so a unit only ever gets these from this script. That
+# makes this the last chance before a unit leaves the house.
+echo
+echo "== long-life hardening (security updates, panic reboot) =="
+# The apt timer is enabled on a stock image but does nothing without this
+# package -- the RDU unit went unpatched for months behind an "enabled" timer.
+DEBIAN_FRONTEND=noninteractive apt-get install -y -q unattended-upgrades >/dev/null
+install -m 0644 deploy/20auto-upgrades                  /etc/apt/apt.conf.d/20auto-upgrades
+install -m 0644 deploy/52flightradar-unattended-upgrades /etc/apt/apt.conf.d/52flightradar-unattended-upgrades
+install -m 0644 deploy/90-flightradar-sysctl.conf        /etc/sysctl.d/90-flightradar-sysctl.conf
+sysctl -q -p /etc/sysctl.d/90-flightradar-sysctl.conf
+unattended-upgrade --dry-run >/dev/null 2>&1 \
+  && echo "  security updates: configured (dry run OK)" \
+  || { echo "  FAIL: unattended-upgrade dry run failed"; exit 1; }
+echo "  kernel.panic=$(cat /proc/sys/kernel/panic)"
+
+# The kiosk's own units run under the desktop user's systemd, because they
+# need its Wayland session. Installed from here so a new unit gets the same
+# versions as the repo rather than whatever was copied by hand last time.
+KIOSK_USER="${SUDO_USER:-}"
+if [ -n "$KIOSK_USER" ] && [ "$KIOSK_USER" != "root" ]; then
+  echo
+  echo "== installing the kiosk user units for $KIOSK_USER =="
+  KHOME=$(getent passwd "$KIOSK_USER" | cut -d: -f6)
+  KUID=$(id -u "$KIOSK_USER")
+  UDIR="$KHOME/.config/systemd/user"
+  install -d -o "$KIOSK_USER" -g "$KIOSK_USER" "$UDIR"
+  for u in flightradar-kiosk.service flightradar-kiosk-restart.service \
+           flightradar-kiosk-restart.timer flightradar-shmguard.service \
+           flightradar-shmguard.timer flightradar-screensaver.service \
+           flightradar-wake.service; do
+    install -m 0644 -o "$KIOSK_USER" -g "$KIOSK_USER" "deploy/$u" "$UDIR/$u"
+  done
+  install -m 0755 deploy/shm-guard.sh     /opt/flightradar/shm-guard.sh
+  install -m 0755 deploy/wake-listener.py /opt/flightradar/wake-listener.py
+  runuser -u "$KIOSK_USER" -- env XDG_RUNTIME_DIR="/run/user/$KUID" \
+    systemctl --user daemon-reload \
+    && echo "  user units installed; they take effect on the next kiosk restart" \
+    || echo "  user units copied; log in as $KIOSK_USER and run: systemctl --user daemon-reload"
+else
+  echo "  (run via sudo from the kiosk user's account to also install its user units)"
+fi
