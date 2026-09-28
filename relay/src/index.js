@@ -2,6 +2,16 @@
 //
 // POST /v1/heartbeat   signed by a unit; records its health (never a location)
 // POST /v1/events      signed by a unit; moments for its paired phones (never a location)
+//
+// Pairing (roadmap 2.3), units signing with X-FR-Unit:
+// POST /v1/unit/pairing          offer a one-time secret's hash (shown on screen as a QR code)
+// POST /v1/unit/pairing/cancel   withdraw it
+// GET  /v1/unit/phones           the phones paired with this unit, and any open offer
+// POST /v1/unit/unpair           remove one phone, or all
+// ...and phones signing with X-FR-Phone:
+// POST /v1/pair                  present a unit's secret; become paired with it
+// GET  /v1/phone/units           the units this phone is paired with
+// POST /v1/phone/unpair          leave a unit
 // GET  /fleet          the maintainer's view of every unit (HTTP Basic auth)
 // GET  /fleet.json     the same, as JSON
 // POST /fleet/name     name a unit ("Dad's radar")
@@ -10,13 +20,14 @@
 // A unit that cannot reach this keeps working exactly as before: the radar
 // never depends on it.
 
-import { verifyRequest } from './auth.js';
+import { verifyRequest, sha256Hex, b64urlDecode } from './auth.js';
 // Only `default` may be exported from this file: the Workers runtime treats
 // every named export of the main module as an entrypoint and refuses to
 // start on anything else. Shared constants and helpers live in limits.js.
 import {
   MAX_BODY, MIN_INTERVAL_S, MAX_UNITS, HISTORY_PER_UNIT, assess,
   MAX_EVENTS_PER_REQUEST, EVENTS_PER_HOUR, EVENTS_PER_UNIT, EVENT_RETENTION_S, cleanEvent,
+  PAIRING_TTL_S, PAIRING_MAX_ATTEMPTS, MAX_PHONES_PER_UNIT, MAX_UNITS_PER_PHONE, cleanPhoneName,
 } from './limits.js';
 
 const nowS = () => Math.floor(Date.now() / 1000);
@@ -109,6 +120,11 @@ async function events(request, env) {
   if (bad !== -1) return json(400, { error: 'bad event', index: bad });
 
   const db = env.DB;
+  // Nobody to deliver to: store nothing, and say so. The unit turns its
+  // events off when it hears this, so an unpaired unit stops sending.
+  const phones = await phoneCount(db, auth.unit);
+  if (phones === 0) return json(200, { ok: true, stored: 0, phones: 0 });
+
   const state = await db.prepare('SELECT * FROM event_senders WHERE unit = ?').bind(auth.unit).first();
   if (state) {
     if (auth.ts <= state.last_ts) return json(409, { error: 'replayed or out of order' });
@@ -135,7 +151,146 @@ async function events(request, env) {
          (SELECT rowid FROM events WHERE unit = ?1 ORDER BY received DESC, rowid DESC LIMIT ?2)`
     ).bind(auth.unit, EVENTS_PER_UNIT),
   ]);
-  return json(200, { ok: true, stored: clean.length });
+  return json(200, { ok: true, stored: clean.length, phones });
+}
+
+// ---- pairing (roadmap 2.3) --------------------------------------------------
+
+const phoneCount = async (db, unit) =>
+  (await db.prepare('SELECT COUNT(*) AS n FROM pairings WHERE unit = ?').bind(unit).first()).n;
+
+async function signedJson(request, idHeader) {
+  const body = await readBody(request);
+  if (!body) return { error: json(413, { error: 'too large' }) };
+  const auth = await verifyRequest(request, body, nowS(), idHeader);
+  if (auth.error) return { error: json(401, { error: auth.error }) };
+  if (request.method === 'GET') return { auth, payload: {} };
+  try {
+    const payload = JSON.parse(new TextDecoder().decode(body));
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error();
+    return { auth, payload };
+  } catch {
+    return { error: json(400, { error: 'expected a JSON object' }) };
+  }
+}
+
+const isId = v => typeof v === 'string' && (b64urlDecode(v) || []).length === 32;
+
+async function unitOffer(request, env) {
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit');
+  if (error) return error;
+  if (typeof payload.secret_hash !== 'string' || !/^[0-9a-f]{64}$/.test(payload.secret_hash)) {
+    return json(400, { error: 'secret_hash must be a hex SHA-256' });
+  }
+  const db = env.DB;
+  const had = await db.prepare('SELECT 1 FROM pairing_offers WHERE unit = ?').bind(auth.unit).first();
+  if (!had) {
+    const { n } = await db.prepare('SELECT COUNT(*) AS n FROM pairing_offers').first();
+    if (n >= MAX_UNITS) return json(503, { error: 'too many open offers' });
+  }
+  const expires = nowS() + PAIRING_TTL_S;
+  await db.prepare(
+    `INSERT INTO pairing_offers (unit, secret_hash, expires, attempts) VALUES (?1, ?2, ?3, 0)
+     ON CONFLICT(unit) DO UPDATE SET secret_hash = ?2, expires = ?3, attempts = 0`
+  ).bind(auth.unit, payload.secret_hash, expires).run();
+  return json(200, { ok: true, expires });
+}
+
+async function unitCancelOffer(request, env) {
+  const { auth, error } = await signedJson(request, 'X-FR-Unit');
+  if (error) return error;
+  await env.DB.prepare('DELETE FROM pairing_offers WHERE unit = ?').bind(auth.unit).run();
+  return json(200, { ok: true });
+}
+
+async function unitPhones(request, env) {
+  const { auth, error } = await signedJson(request, 'X-FR-Unit');
+  if (error) return error;
+  const db = env.DB;
+  const { results } = await db.prepare(
+    'SELECT phone, name, created FROM pairings WHERE unit = ? ORDER BY created'
+  ).bind(auth.unit).all();
+  const offer = await db.prepare('SELECT expires FROM pairing_offers WHERE unit = ? AND expires > ?')
+    .bind(auth.unit, nowS()).first();
+  return json(200, { phones: results || [], offer: offer ? { expires: offer.expires } : null });
+}
+
+async function unitUnpair(request, env) {
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit');
+  if (error) return error;
+  const db = env.DB;
+  if (payload.all === true) {
+    await db.batch([
+      db.prepare('DELETE FROM pairings WHERE unit = ?').bind(auth.unit),
+      db.prepare('DELETE FROM pairing_offers WHERE unit = ?').bind(auth.unit),
+      db.prepare('DELETE FROM events WHERE unit = ?').bind(auth.unit),
+    ]);
+  } else if (isId(payload.phone)) {
+    await db.prepare('DELETE FROM pairings WHERE unit = ? AND phone = ?').bind(auth.unit, payload.phone).run();
+  } else {
+    return json(400, { error: 'name a phone, or all: true' });
+  }
+  return json(200, { ok: true, phones: await phoneCount(db, auth.unit) });
+}
+
+async function phonePair(request, env) {
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone');
+  if (error) return error;
+  const { unit, secret } = payload;
+  if (!isId(unit) || typeof secret !== 'string' || secret.length < 16 || secret.length > 64) {
+    return json(400, { error: 'expected unit and secret' });
+  }
+  const db = env.DB;
+  const offer = await db.prepare('SELECT * FROM pairing_offers WHERE unit = ?').bind(unit).first();
+  if (!offer || offer.expires <= nowS()) {
+    if (offer) await db.prepare('DELETE FROM pairing_offers WHERE unit = ?').bind(unit).run();
+    return json(404, { error: 'no pairing code is showing on that radar; start again from its screen' });
+  }
+  const given = await sha256Hex(new TextEncoder().encode(secret));
+  if (!timingSafeEqual(given, offer.secret_hash)) {
+    if (offer.attempts + 1 >= PAIRING_MAX_ATTEMPTS) {
+      await db.prepare('DELETE FROM pairing_offers WHERE unit = ?').bind(unit).run();
+    } else {
+      await db.prepare('UPDATE pairing_offers SET attempts = attempts + 1 WHERE unit = ?').bind(unit).run();
+    }
+    return json(403, { error: 'that pairing code is not the one on the screen' });
+  }
+  const already = await db.prepare('SELECT 1 FROM pairings WHERE unit = ? AND phone = ?').bind(unit, auth.unit).first();
+  if (!already) {
+    if (await phoneCount(db, unit) >= MAX_PHONES_PER_UNIT) {
+      return json(409, { error: `a radar can be paired with at most ${MAX_PHONES_PER_UNIT} phones` });
+    }
+    const { n } = await db.prepare('SELECT COUNT(*) AS n FROM pairings WHERE phone = ?').bind(auth.unit).first();
+    if (n >= MAX_UNITS_PER_PHONE) {
+      return json(409, { error: `a phone can be paired with at most ${MAX_UNITS_PER_PHONE} radars` });
+    }
+  }
+  await db.batch([
+    db.prepare(
+      `INSERT INTO pairings (unit, phone, name, created) VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT(unit, phone) DO UPDATE SET name = ?3`
+    ).bind(unit, auth.unit, cleanPhoneName(payload.name), nowS()),
+    // One use only: the code on screen is spent.
+    db.prepare('DELETE FROM pairing_offers WHERE unit = ?').bind(unit),
+  ]);
+  return json(200, { ok: true, unit });
+}
+
+async function phoneUnits(request, env) {
+  const { auth, error } = await signedJson(request, 'X-FR-Phone');
+  if (error) return error;
+  const { results } = await env.DB.prepare(
+    'SELECT unit, created FROM pairings WHERE phone = ? ORDER BY created'
+  ).bind(auth.unit).all();
+  return json(200, { units: results || [] });
+}
+
+async function phoneUnpair(request, env) {
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone');
+  if (error) return error;
+  if (!isId(payload.unit)) return json(400, { error: 'name a unit' });
+  await env.DB.prepare('DELETE FROM pairings WHERE unit = ? AND phone = ?').bind(payload.unit, auth.unit).run();
+  return json(200, { ok: true });
 }
 
 // ---- fleet view (maintainer only) -----------------------------------------
@@ -245,6 +400,13 @@ export default {
     if (pathname === '/health' && m === 'GET') return json(200, { ok: true });
     if (pathname === '/v1/heartbeat' && m === 'POST') return heartbeat(request, env);
     if (pathname === '/v1/events' && m === 'POST') return events(request, env);
+    if (pathname === '/v1/unit/pairing' && m === 'POST') return unitOffer(request, env);
+    if (pathname === '/v1/unit/pairing/cancel' && m === 'POST') return unitCancelOffer(request, env);
+    if (pathname === '/v1/unit/phones' && m === 'GET') return unitPhones(request, env);
+    if (pathname === '/v1/unit/unpair' && m === 'POST') return unitUnpair(request, env);
+    if (pathname === '/v1/pair' && m === 'POST') return phonePair(request, env);
+    if (pathname === '/v1/phone/units' && m === 'GET') return phoneUnits(request, env);
+    if (pathname === '/v1/phone/unpair' && m === 'POST') return phoneUnpair(request, env);
     if (pathname === '/fleet' || pathname === '/fleet.json' || pathname === '/fleet/name') {
       const state = maintainer(request, env);
       if (state !== 'ok') return needAuth(state);

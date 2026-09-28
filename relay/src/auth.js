@@ -6,7 +6,7 @@
 // in someone else's house carries nothing that can act for any other unit.
 //
 // Signed message: `${ts}\n${METHOD}\n${path}\n${hex sha256(body)}`
-// Headers:        X-FR-Unit, X-FR-Time (unix seconds), X-FR-Sig (base64url)
+// Headers:        X-FR-Unit (or X-FR-Phone), X-FR-Time (unix seconds), X-FR-Sig (base64url)
 
 export const MAX_SKEW_S = 300;
 
@@ -33,8 +33,11 @@ export function signedMessage(ts, method, path, bodyHash) {
 
 // Returns { unit, ts } when the request is authentic and fresh, else
 // { error } with a short reason. `body` is the raw bytes already read.
-export async function verifyRequest(request, body, nowS) {
-  const unit = request.headers.get('X-FR-Unit') || '';
+// Phones sign the same way with their own Ed25519 key (CryptoKit's
+// Curve25519.Signing), naming themselves in X-FR-Phone instead; `unit` in
+// the result is then the phone's id.
+export async function verifyRequest(request, body, nowS, idHeader = 'X-FR-Unit') {
+  const unit = request.headers.get(idHeader) || '';
   const tsRaw = request.headers.get('X-FR-Time') || '';
   const sigRaw = request.headers.get('X-FR-Sig') || '';
 

@@ -139,6 +139,8 @@ DEPLOY_ALLOWED = {
     "feeding.py",
     # Unit events for paired phones; its own service (installer-only unit).
     "events.py",
+    # Phone pairing; loaded fresh by setupd on each call, so no restart.
+    "pairing.py",
     # ota-auto.sh decides whether an unattended update may proceed, running as
     # root on a timer on a device in someone else's house. Omitting it would
     # ship it in the bundle and then refuse to install it -- which is the same

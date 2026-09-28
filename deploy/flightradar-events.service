@@ -29,6 +29,8 @@ RestrictSUIDSGID=yes
 LockPersonality=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 RuntimeDirectory=flightradar-events
+# Keeps what was already reported across a restart (events.py FIRED).
+RuntimeDirectoryPreserve=restart
 MemoryMax=150M
 Nice=5
 

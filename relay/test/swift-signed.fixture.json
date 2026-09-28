@@ -1,0 +1,10 @@
+{
+  "headers" : {
+    "X-FR-Phone" : "vMvKcINdSi3JXVdmOeNo4eRLbfqvJs4jmLqmn4S3hhU",
+    "X-FR-Sig" : "IKcHqu3CxK6gClr1QiG8Z7fpMH6Qs1iTO6R_bDKx32bHGCIBX8Ts9tKPBscItOfOY0jxHQXeoXhJNRxurCuqBQ",
+    "X-FR-Time" : "1800000000"
+  },
+  "method" : "GET",
+  "note" : "Signed by ios\/Radome\/Pairing\/RelayIdentity.swift with a throwaway key, for cross-language interop testing only.",
+  "path" : "\/v1\/phone\/units"
+}

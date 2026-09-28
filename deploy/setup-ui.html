@@ -188,6 +188,22 @@
       <a href="https://www.flightradar24.com/build-your-own" target="_blank" rel="noopener">flightradar24.com/build-your-own</a>.</p>
   </div>
 
+  <!-- phone pairing (roadmap 2.3) -->
+  <div class="card">
+    <h2>Phone app</h2>
+    <p class="note">Pair the Radome iPhone app to get alerts from this radar: emergencies,
+      notable aircraft, helicopters and anything low overhead. Alerts say what flew by and
+      roughly how far away, <b>never</b> where this radar is.</p>
+    <div id="pairList" class="note"></div>
+    <button id="pairBtn">Pair this phone</button>
+    <div id="pairCode" class="hide" style="text-align:center">
+      <img id="pairQr" alt="Pairing code" style="width:220px;max-width:80%;background:#fff;border-radius:6px;margin-top:12px">
+      <div class="note" id="pairNote"></div>
+      <button class="sec" id="pairCancel">Cancel</button>
+    </div>
+    <div class="msg" id="pairMsg"></div>
+  </div>
+
   <!-- health reports -->
   <div class="card">
     <h2>Health reports</h2>
@@ -296,6 +312,9 @@ $('authBtn').onclick = async () => {
     $('panels').classList.remove('hide');
     $('sub').textContent = 'Signed in.';
     refresh();
+    // These cards need the session: loading them before sign-in was
+    // refused, and left them saying "not available" until a reload.
+    otaLoad(); healthLoad(); faLoad(); pairLoad();
   } catch (e) { show($('authMsg'), 'err', e.message); }
 };
 
@@ -678,7 +697,54 @@ $('otaApplyBtn').onclick = async () => {
     otaTimer = setInterval(otaLoad, 5000);
   } catch (e) { show($('otaMsg'), 'err', e.message); $('otaApplyBtn').disabled = false; }
 };
-otaLoad();
+
+// On a phone, "Pair this phone" opens the Radome app straight from the link;
+// on anything else the same one-time code is shown as a QR to scan.
+const ON_PHONE = /iPhone|iPad|iPod/.test(navigator.userAgent);
+let pairTimer = null;
+function pairRender(st) {
+  const list = $('pairList'), btn = $('pairBtn');
+  if (!st || st.available === false) { btn.disabled = true; list.textContent = 'Not available on this version.'; return; }
+  const phones = st.phones || [];
+  list.innerHTML = '';
+  if (!phones.length) list.textContent = 'No phone is paired yet.';
+  for (const p of phones) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0';
+    const name = document.createElement('span');
+    name.textContent = (p.name || 'Phone') + (p.created ? ' · since ' + new Date(p.created * 1000).toLocaleDateString() : '');
+    const rm = document.createElement('button');
+    rm.className = 'sec'; rm.textContent = 'Unpair';
+    rm.style.cssText = 'width:auto;margin:0;padding:6px 12px';
+    rm.onclick = () => pairAction({ action: 'remove', phone: p.id });
+    row.append(name, rm);
+    list.append(row);
+  }
+  btn.textContent = ON_PHONE ? 'Pair this phone' : 'Pair a phone';
+  const o = st.offer;
+  $('pairCode').classList.toggle('hide', !o || ON_PHONE);
+  btn.classList.toggle('hide', !!o && !ON_PHONE);
+  if (o && !ON_PHONE) {
+    if (o.qr) $('pairQr').src = 'data:image/svg+xml;base64,' + btoa(o.qr);
+    const left = Math.max(0, Math.round(o.expires - Date.now() / 1000));
+    $('pairNote').textContent = `Scan with the iPhone Camera or the Radome app. Works once, for ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} more.`;
+  }
+  clearTimeout(pairTimer);
+  if (o) pairTimer = setTimeout(pairLoad, 3000);
+}
+async function pairLoad() {
+  try { pairRender((await api('pair')).result); } catch (e) { show($('pairMsg'), 'err', e.message); }
+}
+async function pairAction(body) {
+  hide($('pairMsg'));
+  try {
+    const r = (await api('pair', { method: 'POST', body: JSON.stringify(body) })).result;
+    if (body.action === 'start' && ON_PHONE && r && r.link) { window.location.href = r.link; }
+  } catch (e) { show($('pairMsg'), 'err', e.message); }
+  pairLoad();
+}
+$('pairBtn').onclick = () => pairAction({ action: 'start' });
+$('pairCancel').onclick = () => pairAction({ action: 'cancel' });
 
 function healthRender(st) {
   const box = $('healthOn'), now = $('healthNow');
@@ -699,7 +765,6 @@ $('healthOn').onchange = async () => {
     healthRender((await api('health', { method: 'POST', body: JSON.stringify({ enabled: $('healthOn').checked }) })).result);
   } catch (e) { show($('healthMsg'), 'err', e.message); healthLoad(); }
 };
-healthLoad();
 
 let faTimer = null;
 function faRender(st) {
@@ -732,7 +797,6 @@ $('faOn').onchange = async () => {
     faTimer = setTimeout(faLoad, 3000);
   } catch (e) { show($('faMsg'), 'err', e.message); faLoad(); }
 };
-faLoad();
 
 </script>
 </body>

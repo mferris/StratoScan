@@ -27,6 +27,14 @@ with a compass direction. Events are kept for **48 hours** at most (500 per
 unit), only long enough to deliver them. The fleet page shows how many
 arrived, never what they were.
 
+For **pairing** (roadmap 2.3): which phones are paired with which unit,
+each phone's public key (its id) and the name it gave itself ("iPhone"),
+and while a code is showing on a unit's screen, that code's SHA-256. The
+code itself reaches the relay only when a phone presents it, is compared
+and then discarded; it works once, and expires after 10 minutes or five
+wrong guesses. A unit stops sending events when its last phone unpairs,
+and the relay drops events from a unit with no phones.
+
 **No locations.** Reports or events carrying a latitude or longitude field
 are rejected outright. No network addresses are stored either. An event
 still says roughly where its unit is ("a helicopter passed within 2
@@ -43,6 +51,10 @@ miles"), which is why events are opt-in and kept so briefly.
   before it is stored.
 - An unknown key registers on first contact. The number of units is capped,
   so this can't grow without bound.
+- Phones sign the same way with their own Ed25519 key (CryptoKit on iOS),
+  named in `X-FR-Phone`. A phone can only pair by presenting the code on a
+  unit's screen, and can only unpair itself. A unit can list and remove its
+  own phones.
 - The fleet page requires HTTP Basic auth against the `FLEET_TOKEN` secret.
   With no secret set, the page doesn't exist at all. Its only form refuses
   cross-site posts.

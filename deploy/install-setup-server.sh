@@ -39,7 +39,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 echo "== packages =="
 apt-get install -y -q lighttpd git curl ca-certificates python3-venv python3-cryptography \
-  unattended-upgrades javascript-common >/dev/null
+  python3-qrcode unattended-upgrades javascript-common >/dev/null
 echo "  ok"
 
 echo "== receiver: readsb $READSB_TAG =="
@@ -116,7 +116,7 @@ fi
 echo "== programs =="
 install -d -m 0755 /opt/flightradar
 for f in setupd.py setup-server.py funnel-gateway.py offline-map.py heartbeat.py notable-db.py \
-         events.py feeding.py ota.py ota-auto.sh net-watchdog.py sighting-store.py approach-store.py \
+         events.py pairing.py feeding.py ota.py ota-auto.sh net-watchdog.py sighting-store.py approach-store.py \
          network-compare.py photo-proxy.py tts-service.py shm-guard.sh wake-listener.py; do
   install -m 0755 "deploy/$f" "/opt/flightradar/$f"
 done

@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var viewModel = RadarViewModel()
     @State private var showSettings = false
+    @EnvironmentObject private var pairing: PairingStore
 
     var body: some View {
         GeometryReader { geo in
@@ -77,7 +78,12 @@ struct ContentView: View {
         .onAppear { viewModel.start() }
         .onDisappear { viewModel.stop() }
         .sheet(isPresented: $showSettings) {
-            SettingsView()
+            SettingsView().environmentObject(pairing)
+        }
+        .alert(pairing.message ?? "", isPresented: Binding(
+            get: { pairing.message != nil && !showSettings },
+            set: { if !$0 { pairing.message = nil } })) {
+            Button("OK", role: .cancel) { pairing.message = nil }
         }
     }
 
@@ -104,5 +110,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView().environmentObject(PairingStore())
 }

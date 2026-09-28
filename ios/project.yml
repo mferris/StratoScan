@@ -34,6 +34,10 @@ targets:
           NSAllowsArbitraryLoads: true
         UIStatusBarHidden: true
         UIRequiresFullScreen: false
+        CFBundleURLTypes:
+          - CFBundleURLName: io.github.mferris.radome.pair
+            CFBundleURLSchemes: [radome]
+        NSCameraUsageDescription: "To scan a Radome radar's pairing code."
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.mferris.radome

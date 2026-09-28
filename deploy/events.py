@@ -27,7 +27,7 @@ expire. Nothing is written to storage while it runs.
 
   events.py run       the service loop (flightradar-events.service)
   events.py status    what is on, what is queued, the last send
-  events.py enable    turn events on (pairing a phone does this; roadmap 2.3)
+  events.py enable    turn events on (pairing a phone does this: pairing.py)
   events.py disable   turn them off
   events.py test      send one synthetic "test" event now
 """
@@ -49,6 +49,10 @@ NOTABLE_JSON = os.environ.get("FLIGHTRADAR_NOTABLE_JSON", "/var/www/html/data/no
 TAR1090_DB_GLOB = os.environ.get("FLIGHTRADAR_TAR1090_DB", "/usr/local/share/tar1090/html/db-*")
 RUN_DIR = os.environ.get("FLIGHTRADAR_EVENTS_RUN", "/run/flightradar-events")
 STATUS = os.path.join(RUN_DIR, "status.json")
+# What has been reported recently, so a restart (an update, a reinstall) does
+# not report the same pass again. /run: survives a service restart
+# (RuntimeDirectoryPreserve=restart), never touches storage.
+FIRED = os.path.join(RUN_DIR, "fired.json")
 
 POLL_S = 5
 IDLE_POLL_S = 30              # while events are off: only watch for them being turned on
@@ -338,6 +342,28 @@ class Detector:
         self.fired = {}                        # (hex, kind[, detail]) -> ts
         self.sent_times = collections.deque()  # non-emergency events in the last hour
 
+    def save(self, path=FIRED):
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            tmp = path + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump([[list(k), t] for k, t in self.fired.items()], f)
+            os.replace(tmp, path)
+        except OSError:
+            pass
+
+    def load(self, path=FIRED, now=None):
+        now = now if now is not None else time.time()
+        try:
+            with open(path) as f:
+                rows = json.load(f)
+        except (OSError, ValueError):
+            return
+        horizon = max(COOLDOWN_S.values())
+        for k, t in rows if isinstance(rows, list) else []:
+            if isinstance(k, list) and isinstance(t, (int, float)) and now - t <= horizon:
+                self.fired[tuple(k)] = t
+
     def _due(self, key, kind, now):
         last = self.fired.get(key)
         return last is None or now - last >= COOLDOWN_S[kind]
@@ -419,6 +445,7 @@ class Sender:
         self.next_try = 0.0
         self.failures = 0
         self.last = None
+        self.unpaired = False
 
     def add(self, events):
         self.queue.extend(events)
@@ -455,6 +482,15 @@ class Sender:
                 self.queue.popleft()
             self.failures = 0
             self.next_try = now + MIN_SEND_GAP_S
+            try:
+                reply = json.loads(detail or b"{}")
+            except ValueError:
+                reply = {}
+            if reply.get("phones") == 0:
+                # The relay stored nothing: no phone is paired any more.
+                self.queue.clear()
+                self.unpaired = True
+                return "no phone is paired with this unit; events off"
             kinds = collections.Counter(e["kind"] for e in batch)
             return "sent " + ", ".join(f"{n} {k}" for k, n in sorted(kinds.items()))
         if status in (400, 401, 413):
@@ -484,6 +520,7 @@ def write_status(detector, sender, on):
 
 def run():
     detector, sender = Detector(), Sender()
+    detector.load()
     last_mtime = None
     print(f"events: watching {AIRCRAFT_JSON}; relay {hb.RELAY_URL or '(none)'}", flush=True)
     while True:
@@ -496,6 +533,8 @@ def run():
                     with open(AIRCRAFT_JSON) as f:
                         doc = json.load(f)
                     new = detector.scan(doc)
+                    if new:
+                        detector.save()
                     for e in new:
                         print(f"events: {e['kind']} {e.get('flight') or e['hex']}"
                               f" {e.get('label', '')}".rstrip(), flush=True)
@@ -505,6 +544,9 @@ def run():
             line = sender.flush()
             if line:
                 print(f"events: {line}", flush=True)
+            if sender.unpaired:
+                set_enabled(False)
+                sender.unpaired = False
         else:
             sender.queue.clear()
         write_status(detector, sender, on)
@@ -528,6 +570,8 @@ def main(argv):
         sender = Sender()
         sender.add([{"kind": "test", "ts": int(time.time()), "label": "Test event from this unit"}])
         print(sender.flush() or "nothing sent (no relay configured)")
+        if sender.unpaired:
+            set_enabled(False)
         return 0 if sender.last and sender.last["status"] and 200 <= sender.last["status"] < 300 else 1
     print("usage: events.py run|status|enable|disable|test", file=sys.stderr)
     return 2
