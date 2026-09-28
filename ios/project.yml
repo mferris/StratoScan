@@ -1,6 +1,6 @@
 name: Radome
 options:
-  bundleIdPrefix: io.github.mferris
+  bundleIdPrefix: com.NelsonIndustries
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
@@ -35,12 +35,12 @@ targets:
         UIStatusBarHidden: true
         UIRequiresFullScreen: false
         CFBundleURLTypes:
-          - CFBundleURLName: io.github.mferris.radome.pair
+          - CFBundleURLName: com.NelsonIndustries.radome.pair
             CFBundleURLSchemes: [radome]
         NSCameraUsageDescription: "To scan a Radome radar's pairing code."
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.mferris.radome
+        PRODUCT_BUNDLE_IDENTIFIER: com.NelsonIndustries.radome
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.10"
