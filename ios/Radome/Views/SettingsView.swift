@@ -2,12 +2,14 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var pairing: PairingStore
     @State private var baseURL: String = APIConfig.baseURL
 
     var body: some View {
         NavigationView {
             Form {
                 PairedRadarsSection()
+                if !pairing.radars.isEmpty { AlertsSection() }
 
                 Section {
                     TextField("Base URL", text: $baseURL)
@@ -41,5 +43,5 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView().environmentObject(PairingStore())
+    SettingsView().environmentObject(PairingStore()).environmentObject(PushManager.shared)
 }

@@ -81,6 +81,8 @@ final class PairingStore: ObservableObject {
                 APIConfig.baseURL = "http://\(h)"
             }
             message = "Paired. Alerts from this radar will come to this phone."
+            // Now the reason for notifications is obvious; ask (once) and register.
+            await PushManager.shared.enable()
         } catch {
             message = error.localizedDescription
         }

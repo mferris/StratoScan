@@ -402,3 +402,150 @@ test('a request signed by the iOS app verifies', async () => {
   const moved = await worker.fetch(new Request(BASE + '/v1/unit/phones', { method: 'GET', headers: fx.headers }), env());
   assert.equal(moved.status, 401, 'the signature is bound to its path');
 });
+
+// ---- push (roadmap 2.1) ------------------------------------------------------
+// Apple is replaced by a recorder (env.APNS_FETCH): real APNs needs HTTP/2
+// from Cloudflare's edge, so it can only be exercised once deployed.
+
+import { PUSHES_PER_HOUR } from '../src/limits.js';
+import * as apns from '../src/apns.js';
+
+async function apnsKey() {
+  const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  const der = Buffer.from(await crypto.subtle.exportKey('pkcs8', kp.privateKey)).toString('base64');
+  return { pem: `-----BEGIN PRIVATE KEY-----\n${der.match(/.{1,64}/g).join('\n')}\n-----END PRIVATE KEY-----\n`, pub: kp.publicKey };
+}
+
+function apple(replies = []) {
+  const sent = [];
+  const fetchImpl = async (url, init) => {
+    sent.push({ url, headers: init.headers, body: JSON.parse(init.body) });
+    const [status, reason] = replies.shift() || [200];
+    return new Response(reason ? JSON.stringify({ reason }) : null, { status });
+  };
+  return { sent, fetchImpl };
+}
+
+async function pushEnv(replies) {
+  const key = await apnsKey();
+  const a = apple(replies);
+  return { e: env({ APNS_KEY: key.pem, APNS_KEY_ID: 'KEYID12345', APNS_TEAM_ID: 'TEAM123456',
+                    APNS_TOPIC: 'com.example.radome', APNS_FETCH: a.fetchImpl }), key, a };
+}
+
+const TOKEN = 'ab'.repeat(32);
+const register = async (e, phone, body) => worker.fetch(await signed(phone, JSON.stringify(body),
+  { path: '/v1/phone/register', as: 'X-FR-Phone' }), e);
+
+async function pairedPhone(e, u, opts = {}) {
+  const phone = await newUnit();
+  await offer(e, u, SECRET); await pair(e, phone, u, SECRET);
+  clock += 1;
+  const r = await register(e, phone, { token: opts.token || TOKEN, env: opts.env || 'sandbox', kinds: opts.kinds });
+  assert.equal(r.status, 200);
+  return phone;
+}
+
+test('a paired phone gets its alerts, signed the way Apple requires', async () => {
+  const { e, key, a } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  await pairedPhone(e, u);
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'helicopter', hex: 'abc123', flight: 'N407XX', alt_ft: 1000, dist_nm: 1.5, dir: 'NE' })]);
+  assert.equal(a.sent.length, 1);
+  const p = a.sent[0];
+  assert.equal(p.url, `https://api.sandbox.push.apple.com/3/device/${TOKEN}`, 'a development build uses the sandbox');
+  assert.equal(p.headers['apns-topic'], 'com.example.radome');
+  assert.equal(p.headers['apns-push-type'], 'alert');
+  assert.equal(p.body.aps.alert.title, 'Helicopter nearby');
+  assert.equal(p.body.aps.alert.body, 'N407XX · Bell 407 · 1,000 ft · 2 mi NE');
+  assert.equal(p.body.aps['thread-id'], u.id);
+
+  const [h, c, s] = p.headers.authorization.replace('bearer ', '').split('.');
+  const dec = x => JSON.parse(Buffer.from(x, 'base64url').toString());
+  assert.deepEqual(dec(h), { alg: 'ES256', kid: 'KEYID12345' });
+  assert.equal(dec(c).iss, 'TEAM123456');
+  assert.ok(await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key.pub,
+    Buffer.from(s, 'base64url'), new TextEncoder().encode(`${h}.${c}`)), 'the provider token verifies with the key');
+});
+
+test('a notification never carries a position', async () => {
+  const n = apns.notificationFor({ kind: 'emergency', ts: 1, hex: 'aaaaa1', squawk: '7700', label: 'emergency',
+    flight: 'DAL123', alt_ft: 3000, dist_nm: 4, dir: 'SW' }, 'U'.repeat(43));
+  const text = JSON.stringify(n).toLowerCase();
+  for (const w of ['"lat"', '"lon"', 'latitude', 'longitude']) assert.ok(!text.includes(w));
+  assert.equal(n.urgent, true);
+  assert.equal(n.payload.aps.alert.title, 'Emergency · squawk 7700');
+  assert.equal(n.payload.aps['interruption-level'], 'time-sensitive');
+});
+
+test('phones get only the kinds they asked for; emergencies are never rate-limited', async () => {
+  const { e, a } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  await pairedPhone(e, u, { kinds: ['emergency'], env: 'production' });
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'helicopter' }), evt({ kind: 'emergency', hex: 'aaaaa1', squawk: '7700' })]);
+  assert.equal(a.sent.length, 1);
+  assert.ok(a.sent[0].url.startsWith('https://api.push.apple.com/'), 'an App Store build uses production');
+  assert.equal(a.sent[0].headers['apns-priority'], '10');
+
+  const { e: e2, a: a2 } = await pushEnv();
+  const u2 = await newUnit();
+  clock += 1000;
+  await pairedPhone(e2, u2);
+  for (let i = 0; i < PUSHES_PER_HOUR + 5; i++) {
+    clock += 5;
+    await postEvents(e2, u2, [evt({ kind: 'low_overhead', hex: (0x100000 + i).toString(16) })]);
+  }
+  assert.equal(a2.sent.length, PUSHES_PER_HOUR, 'ordinary alerts are capped per phone per hour');
+  clock += 5;
+  await postEvents(e2, u2, [evt({ kind: 'emergency', hex: 'aaaaa2' })]);
+  assert.equal(a2.sent.length, PUSHES_PER_HOUR + 1, 'an emergency still goes through');
+});
+
+test('a token Apple says is dead is forgotten', async () => {
+  const { e, a } = await pushEnv([[410, 'Unregistered']]);
+  const u = await newUnit();
+  clock += 1000;
+  const phone = await pairedPhone(e, u);
+  clock += 1;
+  await postEvents(e, u, [evt()]);
+  clock += 5;
+  await postEvents(e, u, [evt({ hex: 'abc124' })]);
+  assert.equal(a.sent.length, 1, 'nothing more is sent to a dead token');
+  assert.equal(e.DB.raw.prepare('SELECT token FROM phones WHERE id = ?').get(phone.id).token, null);
+});
+
+test('registering needs a pairing, a real token and known kinds', async () => {
+  const { e } = await pushEnv();
+  const stranger = await newUnit();
+  clock += 1000;
+  assert.equal((await register(e, stranger, { token: TOKEN, env: 'sandbox' })).status, 403);
+  const u = await newUnit();
+  const phone = await pairedPhone(e, u);
+  clock += 1;
+  assert.equal((await register(e, phone, { token: 'xyz', env: 'sandbox' })).status, 400);
+  clock += 1;
+  assert.equal((await register(e, phone, { token: TOKEN, env: 'staging' })).status, 400);
+  clock += 1;
+  assert.equal((await register(e, phone, { token: TOKEN, env: 'sandbox', kinds: ['fireworks'] })).status, 400);
+});
+
+test('a phone can ask for a test notification', async () => {
+  const { e, a } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  const phone = await pairedPhone(e, u);
+  clock += 1;
+  const r = await worker.fetch(await signed(phone, '{}', { path: '/v1/phone/test', as: 'X-FR-Phone' }), e);
+  assert.equal(r.status, 200);
+  assert.equal(a.sent.at(-1).body.aps.alert.title, 'Radome test');
+
+  const unset = env();
+  const p2 = await newUnit();
+  clock += 1;
+  assert.equal((await worker.fetch(await signed(p2, '{}', { path: '/v1/phone/test', as: 'X-FR-Phone' }), unset)).status, 503,
+    'says plainly when push is not set up');
+});

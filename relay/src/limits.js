@@ -84,3 +84,14 @@ export function cleanPhoneName(v) {
   const t = v.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, '').trim().slice(0, 40);
   return t || null;
 }
+
+// Push (roadmap 2.1).
+export const PUSH_KINDS = ['emergency', 'notable', 'low_overhead', 'helicopter'];
+export const PUSHES_PER_HOUR = 30;      // per phone; emergencies and tests are exempt
+
+export function cleanKinds(v) {
+  if (v === undefined) return [...PUSH_KINDS];
+  if (!Array.isArray(v)) return null;
+  const out = [...new Set(v)].filter(k => PUSH_KINDS.includes(k));
+  return out.length === v.length ? out : null;
+}

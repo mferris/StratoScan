@@ -29,7 +29,15 @@ struct RelayClient {
         _ = try await send("POST", "/v1/phone/unpair", ["unit": unit])
     }
 
-    private func send(_ method: String, _ path: String, _ payload: [String: String]?) async throws -> Data {
+    func register(token: String, environment: String, kinds: [String]) async throws {
+        _ = try await send("POST", "/v1/phone/register", ["token": token, "env": environment, "kinds": kinds])
+    }
+
+    func testPush() async throws {
+        _ = try await send("POST", "/v1/phone/test", [:])
+    }
+
+    private func send(_ method: String, _ path: String, _ payload: [String: Any]?) async throws -> Data {
         let body = try payload.map { try JSONSerialization.data(withJSONObject: $0) } ?? Data()
         var req = URLRequest(url: Self.baseURL.appendingPathComponent(String(path.dropFirst())))
         req.httpMethod = method
