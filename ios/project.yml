@@ -20,6 +20,14 @@ targets:
     dependencies:
       - package: MapLibre
         product: MapLibre
+    entitlements:
+      path: Radome/App/Radome.entitlements
+      properties:
+        # Development builds; Xcode switches to "production" when exporting
+        # for TestFlight or the App Store.
+        aps-environment: development
+        # Lets an emergency squawk break through Focus modes.
+        com.apple.developer.usernotifications.time-sensitive: true
     info:
       path: Radome/App/Info.plist
       properties:
@@ -34,6 +42,7 @@ targets:
           NSAllowsArbitraryLoads: true
         UIStatusBarHidden: true
         UIRequiresFullScreen: false
+        UIBackgroundModes: [remote-notification]
         CFBundleURLTypes:
           - CFBundleURLName: com.NelsonIndustries.radome.pair
             CFBundleURLSchemes: [radome]
@@ -41,6 +50,9 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.NelsonIndustries.radome
+        # The maintainer's Apple team. A fork sets its own (Xcode › Signing).
+        DEVELOPMENT_TEAM: XXXXXXXXXX
+        CODE_SIGN_STYLE: Automatic
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.10"

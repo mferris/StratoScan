@@ -9,5 +9,13 @@ database_name = "flightradar-relay"
 # D1 id is useless without the account's own credentials.
 database_id = "bc652644-4181-433c-b177-ea59c2473d64"
 
+# Push (roadmap 2.1). Not secret: they identify the key, and are useless
+# without it. A fork uses its own team's values.
+[vars]
+APNS_KEY_ID = "XXXXXXXXXX"
+APNS_TEAM_ID = "XXXXXXXXXX"
+APNS_TOPIC = "com.NelsonIndustries.radome"
+
 # Secrets are never stored here. Set them with:
 #   npx wrangler secret put FLEET_TOKEN
+#   npx wrangler secret put APNS_KEY < AuthKey_<KEY ID>.p8    (the APNs auth key)

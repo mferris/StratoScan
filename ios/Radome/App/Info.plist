@@ -36,6 +36,10 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>To scan a Radome radar's pairing code.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiresFullScreen</key>

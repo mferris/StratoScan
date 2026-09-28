@@ -55,3 +55,16 @@ CREATE TABLE IF NOT EXISTS pairings (
   PRIMARY KEY (unit, phone)
 );
 CREATE INDEX IF NOT EXISTS pairings_phone ON pairings (phone);
+
+-- Push (roadmap 2.1): where each phone receives notifications, and what it
+-- wants. A token is only an address for Apple's push service; it is not
+-- tied to the phone's identity key and says nothing about its owner.
+CREATE TABLE IF NOT EXISTS phones (
+  id            TEXT PRIMARY KEY,   -- same id as pairings.phone
+  token         TEXT,               -- APNs device token (hex); NULL once Apple says it is dead
+  env           TEXT NOT NULL,      -- 'sandbox' (development builds) or 'production'
+  kinds         TEXT NOT NULL,      -- JSON array of event kinds this phone wants
+  updated       INTEGER NOT NULL,
+  window_start  INTEGER NOT NULL DEFAULT 0,   -- per-phone push rate limit
+  window_count  INTEGER NOT NULL DEFAULT 0
+);

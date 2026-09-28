@@ -78,7 +78,7 @@ struct ContentView: View {
         .onAppear { viewModel.start() }
         .onDisappear { viewModel.stop() }
         .sheet(isPresented: $showSettings) {
-            SettingsView().environmentObject(pairing)
+            SettingsView().environmentObject(pairing).environmentObject(PushManager.shared)
         }
         .alert(pairing.message ?? "", isPresented: Binding(
             get: { pairing.message != nil && !showSettings },

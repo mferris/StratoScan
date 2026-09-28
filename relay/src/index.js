@@ -12,6 +12,8 @@
 // POST /v1/pair                  present a unit's secret; become paired with it
 // GET  /v1/phone/units           the units this phone is paired with
 // POST /v1/phone/unpair          leave a unit
+// POST /v1/phone/register        this phone's push token and which alerts it wants (2.1)
+// POST /v1/phone/test            send this phone a test notification
 // GET  /fleet          the maintainer's view of every unit (HTTP Basic auth)
 // GET  /fleet.json     the same, as JSON
 // POST /fleet/name     name a unit ("Dad's radar")
@@ -28,7 +30,9 @@ import {
   MAX_BODY, MIN_INTERVAL_S, MAX_UNITS, HISTORY_PER_UNIT, assess,
   MAX_EVENTS_PER_REQUEST, EVENTS_PER_HOUR, EVENTS_PER_UNIT, EVENT_RETENTION_S, cleanEvent,
   PAIRING_TTL_S, PAIRING_MAX_ATTEMPTS, MAX_PHONES_PER_UNIT, MAX_UNITS_PER_PHONE, cleanPhoneName,
+  PUSHES_PER_HOUR, cleanKinds,
 } from './limits.js';
+import * as apns from './apns.js';
 
 const nowS = () => Math.floor(Date.now() / 1000);
 
@@ -98,7 +102,7 @@ async function heartbeat(request, env) {
 // Events are delivered to the unit's paired phones (roadmap 2.1) and kept
 // only EVENT_RETENTION_S: "a helicopter passed within 2 miles" says roughly
 // where a unit is, to anyone who reads it.
-async function events(request, env) {
+async function events(request, env, ctx) {
   const body = await readBody(request);
   if (!body) return json(413, { error: 'too large' });
   const auth = await verifyRequest(request, body, nowS());
@@ -151,7 +155,76 @@ async function events(request, env) {
          (SELECT rowid FROM events WHERE unit = ?1 ORDER BY received DESC, rowid DESC LIMIT ?2)`
     ).bind(auth.unit, EVENTS_PER_UNIT),
   ]);
+  // Delivery must never hold up, or fail, the unit's request.
+  const delivery = deliver(env, auth.unit, clean).catch(() => {});
+  if (ctx && ctx.waitUntil) ctx.waitUntil(delivery); else await delivery;
   return json(200, { ok: true, stored: clean.length, phones });
+}
+
+// ---- push delivery (roadmap 2.1) --------------------------------------------
+
+async function deliver(env, unit, evs) {
+  if (!apns.configured(env)) return;
+  const db = env.DB;
+  const { results } = await db.prepare(
+    `SELECT p.* FROM pairings x JOIN phones p ON p.id = x.phone
+      WHERE x.unit = ? AND p.token IS NOT NULL`
+  ).bind(unit).all();
+  for (const phone of results || []) {
+    let wants = [];
+    try { wants = JSON.parse(phone.kinds); } catch { /* none */ }
+    for (const e of evs) {
+      if (e.kind !== 'test' && !wants.includes(e.kind)) continue;
+      await pushTo(env, phone, apns.notificationFor(e, unit), e.kind === 'emergency' || e.kind === 'test');
+    }
+  }
+}
+
+// One push to one phone, within its hourly allowance; forgets dead tokens.
+async function pushTo(env, phone, notification, exempt) {
+  const db = env.DB, now = nowS();
+  if (now - phone.window_start >= 3600) { phone.window_start = now; phone.window_count = 0; }
+  if (!exempt && phone.window_count >= PUSHES_PER_HOUR) return { ok: false, reason: 'rate limited' };
+  phone.window_count += 1;
+  const r = await apns.send(env, phone, notification, now, env.APNS_FETCH || fetch);
+  await db.prepare(
+    `UPDATE phones SET window_start = ?, window_count = ?${r.dead ? ', token = NULL' : ''} WHERE id = ?`
+  ).bind(phone.window_start, phone.window_count, phone.id).run();
+  return r;
+}
+
+async function phoneRegister(request, env) {
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone');
+  if (error) return error;
+  const token = payload.token;
+  if (typeof token !== 'string' || !/^[0-9a-f]{64,200}$/.test(token)) return json(400, { error: 'expected a hex device token' });
+  if (!['sandbox', 'production'].includes(payload.env)) return json(400, { error: "env must be 'sandbox' or 'production'" });
+  const kinds = cleanKinds(payload.kinds);
+  if (!kinds) return json(400, { error: 'unknown alert kind' });
+  const db = env.DB;
+  const known = await db.prepare('SELECT 1 FROM phones WHERE id = ?').bind(auth.unit).first();
+  if (!known) {
+    // Only a phone that is paired with something has any business here,
+    // which bounds this table by the pairings table.
+    const paired = await db.prepare('SELECT 1 FROM pairings WHERE phone = ?').bind(auth.unit).first();
+    if (!paired) return json(403, { error: 'pair with a radar first' });
+  }
+  await db.prepare(
+    `INSERT INTO phones (id, token, env, kinds, updated) VALUES (?1, ?2, ?3, ?4, ?5)
+     ON CONFLICT(id) DO UPDATE SET token = ?2, env = ?3, kinds = ?4, updated = ?5`
+  ).bind(auth.unit, token, payload.env, JSON.stringify(kinds), nowS()).run();
+  return json(200, { ok: true, kinds, push: apns.configured(env) });
+}
+
+async function phoneTest(request, env) {
+  const { auth, error } = await signedJson(request, 'X-FR-Phone');
+  if (error) return error;
+  if (!apns.configured(env)) return json(503, { error: 'Notifications are not set up on this Radome service yet.' });
+  const phone = await env.DB.prepare('SELECT * FROM phones WHERE id = ?').bind(auth.unit).first();
+  if (!phone || !phone.token) return json(409, { error: 'This phone has not registered for notifications.' });
+  const r = await pushTo(env, phone, apns.notificationFor({ kind: 'test' }, 'test'), true);
+  if (!r.ok) return json(502, { error: `Apple did not accept it (${r.reason || r.status}).` });
+  return json(200, { ok: true });
 }
 
 // ---- pairing (roadmap 2.3) --------------------------------------------------
@@ -394,12 +467,12 @@ async function nameUnit(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const { pathname } = new URL(request.url);
     const m = request.method;
     if (pathname === '/health' && m === 'GET') return json(200, { ok: true });
     if (pathname === '/v1/heartbeat' && m === 'POST') return heartbeat(request, env);
-    if (pathname === '/v1/events' && m === 'POST') return events(request, env);
+    if (pathname === '/v1/events' && m === 'POST') return events(request, env, ctx);
     if (pathname === '/v1/unit/pairing' && m === 'POST') return unitOffer(request, env);
     if (pathname === '/v1/unit/pairing/cancel' && m === 'POST') return unitCancelOffer(request, env);
     if (pathname === '/v1/unit/phones' && m === 'GET') return unitPhones(request, env);
@@ -407,6 +480,8 @@ export default {
     if (pathname === '/v1/pair' && m === 'POST') return phonePair(request, env);
     if (pathname === '/v1/phone/units' && m === 'GET') return phoneUnits(request, env);
     if (pathname === '/v1/phone/unpair' && m === 'POST') return phoneUnpair(request, env);
+    if (pathname === '/v1/phone/register' && m === 'POST') return phoneRegister(request, env);
+    if (pathname === '/v1/phone/test' && m === 'POST') return phoneTest(request, env);
     if (pathname === '/fleet' || pathname === '/fleet.json' || pathname === '/fleet/name') {
       const state = maintainer(request, env);
       if (state !== 'ok') return needAuth(state);

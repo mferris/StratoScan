@@ -35,6 +35,12 @@ and then discarded; it works once, and expires after 10 minutes or five
 wrong guesses. A unit stops sending events when its last phone unpairs,
 and the relay drops events from a unit with no phones.
 
+For **push** (roadmap 2.1): each paired phone's APNs device token, whether
+it is a development or App Store build, and which alert kinds it wants.
+A token is only an address for Apple's push service. Apple tells the relay
+when a token stops working, and the relay then forgets it. Each phone gets
+at most 30 ordinary alerts an hour; emergencies always go through.
+
 **No locations.** Reports or events carrying a latitude or longitude field
 are rejected outright. No network addresses are stored either. An event
 still says roughly where its unit is ("a helicopter passed within 2
@@ -68,6 +74,8 @@ npx wrangler login                                  # opens a browser
 npx wrangler d1 create flightradar-relay            # copy the id into wrangler.toml
 npm run db:init                                     # applies schema.sql
 npx wrangler secret put FLEET_TOKEN                 # choose a long random password
+npx wrangler secret put APNS_KEY < AuthKey_XXXX.p8  # the APNs auth key from developer.apple.com
+                                                    # (key id, team id and app id go in wrangler.toml [vars])
 npm run deploy                                      # prints https://flightradar-relay.<you>.workers.dev
 ```
 
