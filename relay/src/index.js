@@ -244,7 +244,7 @@ async function phonePair(request, env) {
   const offer = await db.prepare('SELECT * FROM pairing_offers WHERE unit = ?').bind(unit).first();
   if (!offer || offer.expires <= nowS()) {
     if (offer) await db.prepare('DELETE FROM pairing_offers WHERE unit = ?').bind(unit).run();
-    return json(404, { error: 'no pairing code is showing on that radar; start again from its screen' });
+    return json(404, { error: 'That pairing code has been used or has expired. Start again from the radar’s screen.' });
   }
   const given = await sha256Hex(new TextEncoder().encode(secret));
   if (!timingSafeEqual(given, offer.secret_hash)) {
@@ -253,16 +253,16 @@ async function phonePair(request, env) {
     } else {
       await db.prepare('UPDATE pairing_offers SET attempts = attempts + 1 WHERE unit = ?').bind(unit).run();
     }
-    return json(403, { error: 'that pairing code is not the one on the screen' });
+    return json(403, { error: 'That is not the code on the radar’s screen.' });
   }
   const already = await db.prepare('SELECT 1 FROM pairings WHERE unit = ? AND phone = ?').bind(unit, auth.unit).first();
   if (!already) {
     if (await phoneCount(db, unit) >= MAX_PHONES_PER_UNIT) {
-      return json(409, { error: `a radar can be paired with at most ${MAX_PHONES_PER_UNIT} phones` });
+      return json(409, { error: `A radar can be paired with at most ${MAX_PHONES_PER_UNIT} phones. Unpair one first.` });
     }
     const { n } = await db.prepare('SELECT COUNT(*) AS n FROM pairings WHERE phone = ?').bind(auth.unit).first();
     if (n >= MAX_UNITS_PER_PHONE) {
-      return json(409, { error: `a phone can be paired with at most ${MAX_UNITS_PER_PHONE} radars` });
+      return json(409, { error: `A phone can be paired with at most ${MAX_UNITS_PER_PHONE} radars. Unpair one first.` });
     }
   }
   await db.batch([
