@@ -100,7 +100,7 @@ final class PairingStore: ObservableObject {
     }
 
     func rename(_ radar: Radar, to name: String) {
-        guard let i = radars.firstIndex(of: radar) else { return }
+        guard let i = radars.firstIndex(where: { $0.unit == radar.unit }) else { return }
         let t = name.trimmingCharacters(in: .whitespacesAndNewlines)
         radars[i].name = t.isEmpty ? radar.name : String(t.prefix(40))
         save()
