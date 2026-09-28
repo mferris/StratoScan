@@ -8,7 +8,11 @@ ExecStartPre=/bin/sh -c 'i=0; while [ $i -lt 60 ]; do ls "$XDG_RUNTIME_DIR"/wayl
 # card: storm and lightning tiles are re-fetched every few minutes forever,
 # and that churn was ~1 GB/day of card writes. The profile itself stays on
 # disk -- it holds the settings (localStorage) that must survive a reboot.
-ExecStart=/usr/bin/chromium --disk-cache-dir=%t/chromium-cache --disk-cache-size=104857600 --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --disable-restore-session-state --check-for-update-interval=31536000 --overscroll-history-navigation=0 --disable-pinch --password-store=basic --disable-features=TranslateUI --autoplay-policy=no-user-gesture-required "http://localhost/index.html?kiosk=1"
+# --disable-gpu-shader-disk-cache: the GPU and Dawn shader caches under the
+# profile were rewritten every few minutes (~1 GB/day with the rest of the
+# browser, measured 2026-09-28); recompiling the page's few shaders at start
+# costs nothing that matters on a kiosk that restarts once a night.
+ExecStart=/usr/bin/chromium --disk-cache-dir=%t/chromium-cache --disk-cache-size=104857600 --disable-gpu-shader-disk-cache --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --disable-restore-session-state --check-for-update-interval=31536000 --overscroll-history-navigation=0 --disable-pinch --password-store=basic --disable-features=TranslateUI --autoplay-policy=no-user-gesture-required "http://localhost/index.html?kiosk=1"
 Restart=always
 RestartSec=5
 
