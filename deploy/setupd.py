@@ -867,6 +867,19 @@ def _heartbeat():
     return mod
 
 
+EVENTS = "/opt/flightradar/events.py"
+
+
+def _events():
+    import importlib.util
+    if not os.path.exists(EVENTS):
+        return None
+    spec = importlib.util.spec_from_file_location("events", EVENTS)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def health_status():
     hb = _heartbeat()
     if hb is None:
@@ -1253,6 +1266,12 @@ def reset_full():
         hb = _heartbeat()
         if hb:
             hb.set_enabled(False)
+
+    # 4a1. phone alerts went to the previous owner's paired phones.
+    with contextlib.suppress(Exception):
+        ev = _events()
+        if ev:
+            ev.set_enabled(False)
 
     # 4b. the offline map is an extract of the area around their house. Only
     # after readsb stops reporting that house: net-watchdog rebuilds a missing

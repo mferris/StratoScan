@@ -198,8 +198,17 @@ def check_reset(fails):
         if not os.path.exists(os.path.join(tmp, "setup.json")):
             fails.append("reset_settings erased the admin password")
 
+        events_set = []
+
+        class FakeEvents:
+            @staticmethod
+            def set_enabled(v): events_set.append(v)
+        d._events = lambda: FakeEvents
+
         seed(); calls.clear()
         d.reset_full()
+        if events_set != [False]:
+            fails.append("reset_full left phone alerts on (they would reach the previous owner)")
         deleted = [c[3] for c in calls
                    if len(c) > 3 and c[1] == "connection" and c[2] == "delete"]
         if "uuid-aaa" not in deleted or "uuid-bbb" not in deleted:

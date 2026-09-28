@@ -116,7 +116,7 @@ fi
 echo "== programs =="
 install -d -m 0755 /opt/flightradar
 for f in setupd.py setup-server.py funnel-gateway.py offline-map.py heartbeat.py notable-db.py \
-         feeding.py ota.py ota-auto.sh net-watchdog.py sighting-store.py approach-store.py \
+         events.py feeding.py ota.py ota-auto.sh net-watchdog.py sighting-store.py approach-store.py \
          network-compare.py photo-proxy.py tts-service.py shm-guard.sh wake-listener.py; do
   install -m 0755 "deploy/$f" "/opt/flightradar/$f"
 done
@@ -142,6 +142,7 @@ echo "== system services and web routing =="
 for u in flightradar-setupd.service flightradar-setup.service flightradar-funnel-gateway.service \
          flightradar-sighting-store.service flightradar-approach-store.service \
          flightradar-network.service flightradar-photo-proxy.service flightradar-tts.service \
+         flightradar-events.service \
          flightradar-ota-check.service flightradar-ota-check.timer \
          flightradar-ota-auto.service flightradar-ota-auto.timer \
          flightradar-netwatchdog.service flightradar-netwatchdog.timer; do
@@ -276,6 +277,7 @@ if live; then systemctl daemon-reload; fi
 for u in flightradar-setupd.service flightradar-setup.service flightradar-funnel-gateway.service \
          flightradar-sighting-store.service flightradar-approach-store.service \
          flightradar-network.service flightradar-photo-proxy.service flightradar-tts.service \
+         flightradar-events.service \
          flightradar-ota-check.timer flightradar-ota-auto.timer flightradar-netwatchdog.timer \
          lighttpd.service readsb.service; do
   enable_unit "$u"
@@ -286,6 +288,7 @@ if ! live; then
 fi
 systemctl reload lighttpd
 restart_unit flightradar-funnel-gateway.service
+restart_unit flightradar-events.service
 systemctl restart systemd-journald
 
 echo "== verifying privileged paths are refused on the public tunnel =="

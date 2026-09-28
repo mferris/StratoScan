@@ -137,6 +137,8 @@ DEPLOY_ALLOWED = {
     "tts-service.py",
     # Opt-in FlightAware feeding; run by setupd.
     "feeding.py",
+    # Unit events for paired phones; its own service (installer-only unit).
+    "events.py",
     # ota-auto.sh decides whether an unattended update may proceed, running as
     # root on a timer on a device in someone else's house. Omitting it would
     # ship it in the bundle and then refuse to install it -- which is the same
@@ -430,7 +432,13 @@ SERVICE_FOR = {
     "setupd.py":          ("system", "flightradar-setupd.service"),
     "wake-listener.py":   ("user",   "flightradar-wake.service"),
     "tts-service.py":     ("system", "flightradar-tts.service"),
+    "events.py":          ("system", "flightradar-events.service"),
 }
+# Where the installer puts system units. An update can deliver a program
+# before the installer has put its service on that unit; restarting a unit
+# that does not exist only fails the restart command it shares with the
+# others, so it is left out and logged instead.
+SYSTEM_UNIT_DIR = os.environ.get("FLIGHTRADAR_SYSTEM_UNIT_DIR", "/etc/systemd/system")
 
 
 def services_to_restart(dests):
@@ -453,6 +461,11 @@ def restart_services(units):
     (setupd starts it via systemd-run; ota-auto has its own service), so even
     restarting setupd here cannot reach it.
     """
+    missing = [u for scope, u in units
+               if scope == "system" and not os.path.exists(os.path.join(SYSTEM_UNIT_DIR, u))]
+    if missing:
+        log("not installed yet, not restarting: " + ", ".join(missing))
+    units = [(scope, u) for scope, u in units if (scope, u) not in [("system", m) for m in missing]]
     system = [u for scope, u in units if scope == "system"]
     user = [u for scope, u in units if scope == "user"]
     if system:

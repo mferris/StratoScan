@@ -43,10 +43,12 @@ mustnot() { [ ! -e "$MNT$1" ] || { echo "  MUST NOT SHIP $1"; fail=1; }; }
 for f in /usr/bin/readsb /usr/local/share/tar1090/git/.flightradar-commit /var/www/html/index.html \
          /opt/flightradar/ota.py /opt/flightradar/allowed_signers /opt/flightradar/tts/venv/bin/python \
          /etc/systemd/system/multi-user.target.wants/flightradar-firstboot.service \
+         /etc/systemd/system/multi-user.target.wants/flightradar-events.service \
          /home/flightradar/.config/systemd/user/default.target.wants/flightradar-kiosk.service \
          /usr/bin/tailscale; do must "$f"; done
 for f in /var/lib/flightradar-relay/unit.key /var/lib/flightradar-setup/setup.json \
          /var/lib/flightradar-setup/hotspot-psk /var/lib/tailscale/tailscaled.state \
+         /var/lib/flightradar-relay/events.json /var/lib/flightradar-relay/heartbeat.json \
          /etc/xdg/autostart/piwiz.desktop /etc/sudoers.d/010_wiz-nopasswd; do mustnot "$f"; done
 grep -rq "^autologin-user=flightradar" "$MNT/etc/lightdm/" || { echo "  autologin is not the kiosk user"; fail=1; }
 [ "$fail" = 0 ] || { echo "IMAGE CHECKS FAILED"; exit 1; }
