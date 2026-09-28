@@ -127,5 +127,5 @@ phone ──(pairing, notification rules)──▶ relay
 | 4.4 Spoken announcements | Done: Piper + LJSpeech voice on the unit; setting off by default | — |
 | 4.5 Year in review | Done: per-year counters; RDU's history carried over (44,332 visits in 2026) | — |
 | 4.6 FlightAware feeding | Done: opt-in setup-page card; PiAware relays readsb; remote updates off; FR24 linked, not automated | Owner turns it on and claims the feeder |
-| 2.2 Unit events | Built: `deploy/events.py` service (emergency, notable, low overhead, helicopter; the kiosk's own rules), relay `POST /v1/events` (validated, 120/h, kept 48 h). Off until a phone pairs (2.3); on for RDU by hand | Relay schema + deploy; then real RDU events |
+| 2.2 Unit events | **Done.** `deploy/events.py` service on RDU; relay `POST /v1/events` live. First real events 2026-09-28: a US Army helicopter (ZEUS11), sent as notable + helicopter. Off by default on new units until a phone pairs (2.3) | — |
 | 1.5 Factory image | Built: CI produces a 1.6 GB image that passes its checks (working unit, no per-unit secrets, GPL sources attached). Rebuilt as Radome (2026.09.28). Not yet published | A spare SD card + Pi to test-flash |
