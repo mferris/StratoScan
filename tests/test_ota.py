@@ -236,9 +236,26 @@ def main():
        "only files in OPT_ROOT map to services")
     for name in ("sighting-store.py", "approach-store.py", "network-compare.py",
                  "photo-proxy.py", "funnel-gateway.py", "setup-server.py",
-                 "setupd.py", "wake-listener.py"):
+                 "setupd.py", "wake-listener.py", "tts-service.py", "events.py"):
         ok(name in ota.DEPLOY_ALLOWED and name in ota.SERVICE_FOR,
            f"{name} is updatable, so it must also be restarted when it changes")
+
+    # An update can deliver a program before the installer has put its
+    # service on that unit; that service is skipped, not restarted.
+    units_dir = tempfile.mkdtemp()
+    open(os.path.join(units_dir, "flightradar-setup.service"), "w").close()
+    ran = []
+    real_run, real_dir = ota.subprocess.run, ota.SYSTEM_UNIT_DIR
+    ota.subprocess.run = lambda argv, **k: ran.append(argv)
+    ota.SYSTEM_UNIT_DIR = units_dir
+    try:
+        ota.restart_services([("system", "flightradar-setup.service"),
+                              ("system", "flightradar-events.service")])
+    finally:
+        ota.subprocess.run, ota.SYSTEM_UNIT_DIR = real_run, real_dir
+    restarted = [a for argv in ran for a in argv if a.endswith(".service")]
+    ok(restarted == ["flightradar-setup.service"],
+       "an installed service is restarted and a not-yet-installed one is skipped")
 
     # --- the kiosk user is found, never assumed ------------------------------
     d = tempfile.mkdtemp()

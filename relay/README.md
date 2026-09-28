@@ -18,16 +18,29 @@ For each unit:
 - its last ~30 days of health reports: uptime, receiver health, storage
   wear, temperature, clock battery, update state.
 
-**No locations.** Reports carrying a latitude or longitude field are
-rejected outright. No network addresses are stored either.
+For each unit that sends **events** (roadmap 2.2; only once its owner
+pairs a phone): the moments it decided a paired phone should hear about.
+There are four kinds: emergency squawks, notable aircraft, low aircraft
+overhead and helicopters. Each carries the aircraft's identity, type,
+altitude, and its distance from the unit rounded to half a nautical mile
+with a compass direction. Events are kept for **48 hours** at most (500 per
+unit), only long enough to deliver them. The fleet page shows how many
+arrived, never what they were.
+
+**No locations.** Reports or events carrying a latitude or longitude field
+are rejected outright. No network addresses are stored either. An event
+still says roughly where its unit is ("a helicopter passed within 2
+miles"), which is why events are opt-in and kept so briefly.
 
 ## Security model
 
 - Each unit signs every request with its own Ed25519 key, generated on the
   unit and never copied off it. No shared secret is baked into images.
 - Requests are bound to their timestamp, method, path and body. The relay
-  rejects anything more than 5 minutes off, replayed, or sent more often
-  than every 10 minutes.
+  rejects anything more than 5 minutes off or replayed. Health reports may
+  come at most every 10 minutes. Events are capped at 120 an hour per unit
+  and 20 per request, and every field is validated and length-limited
+  before it is stored.
 - An unknown key registers on first contact. The number of units is capped,
   so this can't grow without bound.
 - The fleet page requires HTTP Basic auth against the `FLEET_TOKEN` secret.
@@ -45,6 +58,9 @@ npm run db:init                                     # applies schema.sql
 npx wrangler secret put FLEET_TOKEN                 # choose a long random password
 npm run deploy                                      # prints https://flightradar-relay.<you>.workers.dev
 ```
+
+After a change to `schema.sql` (new tables only, never altered ones), run
+`npm run db:init` again before `npm run deploy`. It is safe to repeat.
 
 Then set `RELAY_URL` in `deploy/heartbeat.py` to that address and cut a
 release; units that have opted in start reporting within a few minutes. The

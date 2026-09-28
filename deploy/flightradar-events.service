@@ -1,0 +1,36 @@
+[Unit]
+Description=Radome unit events for paired phones (emergency, notable, low, helicopter)
+Documentation=https://github.com/mferris/Radome
+After=network-online.target readsb.service
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/flightradar/events.py run
+Restart=always
+RestartSec=10
+# Root only so it can read the unit key (/var/lib/flightradar-relay, 0700
+# root). It holds no capabilities, sees the filesystem read-only apart from
+# its own tmpfs status file, and only ever makes outbound HTTPS requests.
+CapabilityBoundingSet=
+AmbientCapabilities=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RuntimeDirectory=flightradar-events
+MemoryMax=150M
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

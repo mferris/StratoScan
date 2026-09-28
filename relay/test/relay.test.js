@@ -5,7 +5,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import worker from '../src/index.js';
-import { assess, HISTORY_PER_UNIT, MAX_UNITS, MIN_INTERVAL_S, STALE_AFTER_S } from '../src/limits.js';
+import {
+  assess, HISTORY_PER_UNIT, MAX_UNITS, MIN_INTERVAL_S, STALE_AFTER_S,
+  EVENTS_PER_HOUR, EVENTS_PER_UNIT, EVENT_RETENTION_S, MAX_EVENTS_PER_REQUEST,
+} from '../src/limits.js';
 import { sha256Hex, signedMessage } from '../src/auth.js';
 import { makeD1 } from './d1-sqlite.js';
 
@@ -151,6 +154,108 @@ test('assess flags what needs attention', () => {
   assert.ok(!assess(unit({ rtc: { fitted: false, battery_mv: 2 } }), now).flags.includes('RTC battery low'));
   assert.ok(assess(unit({ storage: { gb_per_day: 9 } }), now).flags.includes('heavy writes'));
   assert.ok(assess(unit({ ota: { state: 'rolled_back' } }), now).flags.includes('update rolled_back'));
+});
+
+// ---- unit events (roadmap 2.2) ---------------------------------------------
+
+const evBody = (events) => JSON.stringify({ v: 1, events });
+const evt = (o = {}) => ({ kind: 'helicopter', ts: clock, hex: 'abc123', flight: 'N407XX', type: 'Bell 407',
+  alt_ft: 1000, dist_nm: 1.5, dir: 'NE', ...o });
+const postEvents = async (e, u, events, opts = {}) =>
+  worker.fetch(await signed(u, evBody(events), { path: '/v1/events', ...opts }), e);
+const stored = (e, u) => e.DB.raw.prepare('SELECT kind, payload FROM events WHERE unit = ? ORDER BY rowid').all(u.id);
+
+test('signed events are stored, whitelisted, with no need for health reports', async () => {
+  const e = env(), u = await newUnit();
+  clock += 1000;
+  const r = await postEvents(e, u, [evt(), evt({ kind: 'emergency', hex: 'aaaaa1', squawk: '7700', label: 'emergency', extra: 'x' })]);
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { ok: true, stored: 2 });
+  const rows = stored(e, u);
+  assert.deepEqual(rows.map(x => x.kind), ['helicopter', 'emergency']);
+  const em = JSON.parse(rows[1].payload);
+  assert.equal(em.squawk, '7700');
+  assert.equal(em.extra, undefined, 'unknown fields are dropped');
+  assert.equal(await e.DB.prepare('SELECT * FROM units').first(), null, 'events do not register a health-report unit');
+});
+
+test('an event carrying a location is refused, and nothing is stored', async () => {
+  const e = env(), u = await newUnit();
+  clock += 1000;
+  assert.equal((await postEvents(e, u, [evt({ lat: 35.8, lon: -78.7 })])).status, 400);
+  assert.equal((await postEvents(e, u, [evt({ where: { latitude: 1 } })], { ts: clock + 1 })).status, 400);
+  assert.equal(stored(e, u).length, 0);
+});
+
+test('bad events are refused whole', async () => {
+  const e = env(), u = await newUnit();
+  clock += 1000;
+  let ts = clock;
+  const refused = async (events, why) => {
+    ts += 1; clock = ts;
+    assert.equal((await postEvents(e, u, events)).status, 400, why);
+  };
+  await refused([], 'empty');
+  await refused(Array.from({ length: MAX_EVENTS_PER_REQUEST + 1 }, () => evt()), 'too many at once');
+  await refused([evt({ kind: 'party' })], 'unknown kind');
+  await refused([evt({ hex: 'ABC12' })], 'bad hex');
+  await refused([evt({ ts: ts - 7200 })], 'too old');
+  await refused([evt({ ts: ts + 3600 })], 'from the future');
+  await refused([evt(), 'x'], 'one bad event spoils the batch');
+  assert.equal(stored(e, u).length, 0);
+});
+
+test('event text is made safe for a lock screen', async () => {
+  const e = env(), u = await newUnit();
+  clock += 1000;
+  await postEvents(e, u, [evt({ label: 'Air\u0000 ambulance\u2028' + 'x'.repeat(100), dir: 'up', alt_ft: 1e9, squawk: '9999' })]);
+  const p = JSON.parse(stored(e, u)[0].payload);
+  assert.ok(p.label.startsWith('Air ambulance') && p.label.length <= 60 && !/[\u0000\u2028]/.test(p.label));
+  assert.equal(p.dir, undefined);
+  assert.equal(p.alt_ft, undefined);
+  assert.equal(p.squawk, undefined);
+});
+
+test('events are replay-guarded and rate-limited per unit', async () => {
+  const e = env(), u = await newUnit();
+  clock += 1000;
+  assert.equal((await postEvents(e, u, [evt()])).status, 200);
+  assert.equal((await postEvents(e, u, [evt()])).status, 409, 'same timestamp again');
+  let sent = 1;
+  while (sent + MAX_EVENTS_PER_REQUEST <= EVENTS_PER_HOUR) {
+    clock += 5;
+    assert.equal((await postEvents(e, u, Array.from({ length: MAX_EVENTS_PER_REQUEST }, () => evt()))).status, 200);
+    sent += MAX_EVENTS_PER_REQUEST;
+  }
+  clock += 5;
+  assert.equal((await postEvents(e, u, Array.from({ length: EVENTS_PER_HOUR - sent + 1 }, () => evt()))).status, 429);
+  clock += 3600;
+  assert.equal((await postEvents(e, u, [evt()])).status, 200, 'a new hour, a new allowance');
+});
+
+test('events are kept only briefly, and bounded per unit', async () => {
+  const e = env(), u = await newUnit();
+  const ins = e.DB.raw.prepare('INSERT INTO events (unit, ts, received, kind, payload) VALUES (?, ?, ?, ?, ?)');
+  clock += 1000;
+  ins.run(u.id, clock - EVENT_RETENTION_S - 10, clock - EVENT_RETENTION_S - 10, 'notable', '{}');
+  for (let i = 0; i < EVENTS_PER_UNIT + 5; i++) ins.run(u.id, clock - 100, clock - 100, 'low_overhead', '{}');
+  assert.equal((await postEvents(e, u, [evt()])).status, 200);
+  const rows = stored(e, u);
+  assert.equal(rows.length, EVENTS_PER_UNIT);
+  assert.ok(!rows.some(r => r.kind === 'notable'), 'expired events are gone');
+  assert.equal(rows.at(-1).kind, 'helicopter', 'the newest is kept');
+});
+
+test('the fleet page counts a unit\'s recent alerts', async () => {
+  const e = env({ FLEET_TOKEN: 's3cret' }), u = await newUnit();
+  clock += 1000;
+  await worker.fetch(await signed(u, hb()), e);
+  clock += 1;
+  await postEvents(e, u, [evt(), evt({ kind: 'notable', label: 'Air ambulance' })]);
+  const list = await (await worker.fetch(new Request(BASE + '/fleet.json', { headers: { Authorization: basic('s3cret') } }), e)).json();
+  assert.equal(list[0].events_24h, 2);
+  const page = await (await worker.fetch(new Request(BASE + '/fleet', { headers: { Authorization: basic('s3cret') } }), e)).text();
+  assert.ok(!page.includes('Air ambulance'), 'the fleet page shows counts, not what a unit saw');
 });
 
 // The unit signs in Python (deploy/heartbeat.py), the relay verifies in

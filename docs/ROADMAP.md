@@ -48,7 +48,10 @@ phone ──(pairing, notification rules)──▶ relay
 - **Events:** the unit decides locally what matters (notable aircraft,
   emergency squawk, low overhead…) and posts a small event. The relay fans
   it out to paired devices over APNs. Payloads carry aircraft data only,
-  never the home location.
+  never the home location: identity, type, altitude, and distance rounded
+  to half a nautical mile with a compass direction. That still hints where
+  a unit is, so events are off until the owner pairs a phone, and the relay
+  keeps them only 48 hours. A factory reset turns them off.
 - **Failure mode:** if the relay is down, units keep a short queue, drop it
   on overflow, and the radar is unaffected.
 
@@ -124,4 +127,5 @@ phone ──(pairing, notification rules)──▶ relay
 | 4.4 Spoken announcements | Done: Piper + LJSpeech voice on the unit; setting off by default | — |
 | 4.5 Year in review | Done: per-year counters; RDU's history carried over (44,332 visits in 2026) | — |
 | 4.6 FlightAware feeding | Done: opt-in setup-page card; PiAware relays readsb; remote updates off; FR24 linked, not automated | Owner turns it on and claims the feeder |
+| 2.2 Unit events | Built: `deploy/events.py` service (emergency, notable, low overhead, helicopter; the kiosk's own rules), relay `POST /v1/events` (validated, 120/h, kept 48 h). Off until a phone pairs (2.3); on for RDU by hand | Relay schema + deploy; then real RDU events |
 | 1.5 Factory image | Built: CI produces a 1.6 GB image that passes its checks (working unit, no per-unit secrets, GPL sources attached). Rebuilt as Radome (2026.09.28). Not yet published | A spare SD card + Pi to test-flash |

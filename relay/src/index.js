@@ -1,6 +1,7 @@
 // Radome relay (Cloudflare Worker + D1). See docs/ROADMAP.md.
 //
 // POST /v1/heartbeat   signed by a unit; records its health (never a location)
+// POST /v1/events      signed by a unit; moments for its paired phones (never a location)
 // GET  /fleet          the maintainer's view of every unit (HTTP Basic auth)
 // GET  /fleet.json     the same, as JSON
 // POST /fleet/name     name a unit ("Dad's radar")
@@ -13,7 +14,10 @@ import { verifyRequest } from './auth.js';
 // Only `default` may be exported from this file: the Workers runtime treats
 // every named export of the main module as an entrypoint and refuses to
 // start on anything else. Shared constants and helpers live in limits.js.
-import { MAX_BODY, MIN_INTERVAL_S, MAX_UNITS, HISTORY_PER_UNIT, assess } from './limits.js';
+import {
+  MAX_BODY, MIN_INTERVAL_S, MAX_UNITS, HISTORY_PER_UNIT, assess,
+  MAX_EVENTS_PER_REQUEST, EVENTS_PER_HOUR, EVENTS_PER_UNIT, EVENT_RETENTION_S, cleanEvent,
+} from './limits.js';
 
 const nowS = () => Math.floor(Date.now() / 1000);
 
@@ -30,6 +34,8 @@ async function readBody(request) {
   const buf = new Uint8Array(await request.arrayBuffer());
   return buf.length > MAX_BODY ? null : buf;
 }
+
+const carriesLocation = text => /"(lat|lon|latitude|longitude)"\s*:/i.test(text);
 
 async function heartbeat(request, env) {
   const body = await readBody(request);
@@ -49,9 +55,7 @@ async function heartbeat(request, env) {
   // A location has no business here. Refuse rather than silently store one
   // if a future client bug ever included it.
   const text = JSON.stringify(payload);
-  if (/"(lat|lon|latitude|longitude)"\s*:/i.test(text)) {
-    return json(400, { error: 'location fields are not accepted' });
-  }
+  if (carriesLocation(text)) return json(400, { error: 'location fields are not accepted' });
 
   const db = env.DB;
   const existing = await db.prepare('SELECT last_ts FROM units WHERE id = ?').bind(auth.unit).first();
@@ -78,6 +82,60 @@ async function heartbeat(request, env) {
     ).bind(auth.unit, HISTORY_PER_UNIT),
   ]);
   return json(200, { ok: true });
+}
+
+// Events are delivered to the unit's paired phones (roadmap 2.1) and kept
+// only EVENT_RETENTION_S: "a helicopter passed within 2 miles" says roughly
+// where a unit is, to anyone who reads it.
+async function events(request, env) {
+  const body = await readBody(request);
+  if (!body) return json(413, { error: 'too large' });
+  const auth = await verifyRequest(request, body, nowS());
+  if (auth.error) return json(401, { error: auth.error });
+
+  let payload;
+  try {
+    payload = JSON.parse(new TextDecoder().decode(body));
+  } catch {
+    return json(400, { error: 'not json' });
+  }
+  if (carriesLocation(JSON.stringify(payload))) return json(400, { error: 'location fields are not accepted' });
+  const list = payload && Array.isArray(payload.events) ? payload.events : null;
+  if (!list || list.length === 0 || list.length > MAX_EVENTS_PER_REQUEST) {
+    return json(400, { error: `expected 1-${MAX_EVENTS_PER_REQUEST} events` });
+  }
+  const clean = list.map(e => cleanEvent(e, auth.ts));
+  const bad = clean.indexOf(null);
+  if (bad !== -1) return json(400, { error: 'bad event', index: bad });
+
+  const db = env.DB;
+  const state = await db.prepare('SELECT * FROM event_senders WHERE unit = ?').bind(auth.unit).first();
+  if (state) {
+    if (auth.ts <= state.last_ts) return json(409, { error: 'replayed or out of order' });
+  } else {
+    const { n } = await db.prepare('SELECT COUNT(*) AS n FROM event_senders').first();
+    if (n >= MAX_UNITS) return json(503, { error: 'fleet full' });
+  }
+  let start = state ? state.window_start : auth.ts;
+  let count = state ? state.window_count : 0;
+  if (auth.ts - start >= 3600) { start = auth.ts; count = 0; }
+  if (count + clean.length > EVENTS_PER_HOUR) return json(429, { error: 'too many events' });
+
+  const received = nowS();
+  await db.batch([
+    db.prepare(
+      `INSERT INTO event_senders (unit, last_ts, window_start, window_count) VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT(unit) DO UPDATE SET last_ts = ?2, window_start = ?3, window_count = ?4`
+    ).bind(auth.unit, auth.ts, start, count + clean.length),
+    ...clean.map(e => db.prepare('INSERT INTO events (unit, ts, received, kind, payload) VALUES (?, ?, ?, ?, ?)')
+      .bind(auth.unit, e.ts, received, e.kind, JSON.stringify(e))),
+    db.prepare('DELETE FROM events WHERE unit = ? AND received < ?').bind(auth.unit, received - EVENT_RETENTION_S),
+    db.prepare(
+      `DELETE FROM events WHERE unit = ?1 AND rowid NOT IN
+         (SELECT rowid FROM events WHERE unit = ?1 ORDER BY received DESC, rowid DESC LIMIT ?2)`
+    ).bind(auth.unit, EVENTS_PER_UNIT),
+  ]);
+  return json(200, { ok: true, stored: clean.length });
 }
 
 // ---- fleet view (maintainer only) -----------------------------------------
@@ -121,8 +179,10 @@ function ago(s) {
 
 async function listUnits(env) {
   const { results } = await env.DB.prepare(
-    'SELECT id, name, first_seen, last_seen, version, payload FROM units ORDER BY last_seen DESC'
-  ).all();
+    `SELECT u.id, u.name, u.first_seen, u.last_seen, u.version, u.payload,
+            (SELECT COUNT(*) FROM events e WHERE e.unit = u.id AND e.received > ?) AS events_24h
+       FROM units u ORDER BY u.last_seen DESC`
+  ).bind(nowS() - 86400).all();
   return results || [];
 }
 
@@ -137,6 +197,7 @@ async function fleetPage(env) {
       <td>${esc(ago(now - u.last_seen))}</td>
       <td>${esc(uptimeD)}</td>
       <td>${flags.length ? esc(flags.join(', ')) : 'healthy'}</td>
+      <td>${esc(u.events_24h || 0)}</td>
       <td><form method="post" action="/fleet/name"><input type="hidden" name="unit" value="${esc(u.id)}">
         <input name="name" maxlength="40" value="${esc(u.name || '')}" placeholder="name"><button>Save</button></form></td>
     </tr>`;
@@ -151,7 +212,7 @@ async function fleetPage(env) {
   button{background:#23424f;color:#e6e6e6;border:0;padding:5px 10px;margin-left:4px}
 </style></head><body>
 <h1>Radome fleet</h1><p>${rows ? '' : 'No unit has reported yet.'}</p>
-<table><tr><th>Unit</th><th>Version</th><th>Last report</th><th>Uptime</th><th>Status</th><th></th></tr>${rows}</table>
+<table><tr><th>Unit</th><th>Version</th><th>Last report</th><th>Uptime</th><th>Status</th><th>Alerts 24h</th><th></th></tr>${rows}</table>
 </body></html>`;
   return new Response(html, {
     headers: {
@@ -183,6 +244,7 @@ export default {
     const m = request.method;
     if (pathname === '/health' && m === 'GET') return json(200, { ok: true });
     if (pathname === '/v1/heartbeat' && m === 'POST') return heartbeat(request, env);
+    if (pathname === '/v1/events' && m === 'POST') return events(request, env);
     if (pathname === '/fleet' || pathname === '/fleet.json' || pathname === '/fleet/name') {
       const state = maintainer(request, env);
       if (state !== 'ok') return needAuth(state);
