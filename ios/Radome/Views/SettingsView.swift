@@ -7,6 +7,8 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
+                PairedRadarsSection()
+
                 Section {
                     TextField("Base URL", text: $baseURL)
                         .keyboardType(.URL)
@@ -39,5 +41,5 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView()
+    SettingsView().environmentObject(PairingStore())
 }

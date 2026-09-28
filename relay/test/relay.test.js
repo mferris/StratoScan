@@ -8,6 +8,7 @@ import worker from '../src/index.js';
 import {
   assess, HISTORY_PER_UNIT, MAX_UNITS, MIN_INTERVAL_S, STALE_AFTER_S,
   EVENTS_PER_HOUR, EVENTS_PER_UNIT, EVENT_RETENTION_S, MAX_EVENTS_PER_REQUEST,
+  PAIRING_TTL_S, PAIRING_MAX_ATTEMPTS, MAX_PHONES_PER_UNIT,
 } from '../src/limits.js';
 import { sha256Hex, signedMessage } from '../src/auth.js';
 import { makeD1 } from './d1-sqlite.js';
@@ -25,14 +26,14 @@ async function newUnit() {
   return { id: b64url(raw), key: kp.privateKey };
 }
 
-async function signed(unit, body, { ts = clock, path = '/v1/heartbeat', tamper = null } = {}) {
-  const bytes = new TextEncoder().encode(body);
-  const msg = signedMessage(ts, 'POST', path, await sha256Hex(bytes));
+async function signed(unit, body, { ts = clock, path = '/v1/heartbeat', tamper = null, method = 'POST', as = 'X-FR-Unit' } = {}) {
+  const bytes = new TextEncoder().encode(method === 'GET' ? '' : body);
+  const msg = signedMessage(ts, method, path, await sha256Hex(bytes));
   const sig = new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, unit.key, new TextEncoder().encode(msg)));
   return new Request(BASE + path, {
-    method: 'POST',
-    headers: { 'X-FR-Unit': unit.id, 'X-FR-Time': String(ts), 'X-FR-Sig': b64url(sig), 'Content-Type': 'application/json' },
-    body: tamper ?? body,
+    method,
+    headers: { [as]: unit.id, 'X-FR-Time': String(ts), 'X-FR-Sig': b64url(sig), 'Content-Type': 'application/json' },
+    ...(method === 'GET' ? {} : { body: tamper ?? body }),
   });
 }
 
@@ -164,13 +165,17 @@ const evt = (o = {}) => ({ kind: 'helicopter', ts: clock, hex: 'abc123', flight:
 const postEvents = async (e, u, events, opts = {}) =>
   worker.fetch(await signed(u, evBody(events), { path: '/v1/events', ...opts }), e);
 const stored = (e, u) => e.DB.raw.prepare('SELECT kind, payload FROM events WHERE unit = ? ORDER BY rowid').all(u.id);
+// Events are only kept for a unit with a paired phone; most tests just need one.
+const paired = (e, u, phone = 'P'.repeat(43)) =>
+  e.DB.raw.prepare('INSERT INTO pairings (unit, phone, name, created) VALUES (?, ?, ?, ?)').run(u.id, phone, null, clock);
 
 test('signed events are stored, whitelisted, with no need for health reports', async () => {
   const e = env(), u = await newUnit();
+  paired(e, u);
   clock += 1000;
   const r = await postEvents(e, u, [evt(), evt({ kind: 'emergency', hex: 'aaaaa1', squawk: '7700', label: 'emergency', extra: 'x' })]);
   assert.equal(r.status, 200);
-  assert.deepEqual(await r.json(), { ok: true, stored: 2 });
+  assert.deepEqual(await r.json(), { ok: true, stored: 2, phones: 1 });
   const rows = stored(e, u);
   assert.deepEqual(rows.map(x => x.kind), ['helicopter', 'emergency']);
   const em = JSON.parse(rows[1].payload);
@@ -181,6 +186,7 @@ test('signed events are stored, whitelisted, with no need for health reports', a
 
 test('an event carrying a location is refused, and nothing is stored', async () => {
   const e = env(), u = await newUnit();
+  paired(e, u);
   clock += 1000;
   assert.equal((await postEvents(e, u, [evt({ lat: 35.8, lon: -78.7 })])).status, 400);
   assert.equal((await postEvents(e, u, [evt({ where: { latitude: 1 } })], { ts: clock + 1 })).status, 400);
@@ -189,6 +195,7 @@ test('an event carrying a location is refused, and nothing is stored', async () 
 
 test('bad events are refused whole', async () => {
   const e = env(), u = await newUnit();
+  paired(e, u);
   clock += 1000;
   let ts = clock;
   const refused = async (events, why) => {
@@ -207,6 +214,7 @@ test('bad events are refused whole', async () => {
 
 test('event text is made safe for a lock screen', async () => {
   const e = env(), u = await newUnit();
+  paired(e, u);
   clock += 1000;
   await postEvents(e, u, [evt({ label: 'Air\u0000 ambulance\u2028' + 'x'.repeat(100), dir: 'up', alt_ft: 1e9, squawk: '9999' })]);
   const p = JSON.parse(stored(e, u)[0].payload);
@@ -218,6 +226,7 @@ test('event text is made safe for a lock screen', async () => {
 
 test('events are replay-guarded and rate-limited per unit', async () => {
   const e = env(), u = await newUnit();
+  paired(e, u);
   clock += 1000;
   assert.equal((await postEvents(e, u, [evt()])).status, 200);
   assert.equal((await postEvents(e, u, [evt()])).status, 409, 'same timestamp again');
@@ -235,6 +244,7 @@ test('events are replay-guarded and rate-limited per unit', async () => {
 
 test('events are kept only briefly, and bounded per unit', async () => {
   const e = env(), u = await newUnit();
+  paired(e, u);
   const ins = e.DB.raw.prepare('INSERT INTO events (unit, ts, received, kind, payload) VALUES (?, ?, ?, ?, ?)');
   clock += 1000;
   ins.run(u.id, clock - EVENT_RETENTION_S - 10, clock - EVENT_RETENTION_S - 10, 'notable', '{}');
@@ -248,6 +258,7 @@ test('events are kept only briefly, and bounded per unit', async () => {
 
 test('the fleet page counts a unit\'s recent alerts', async () => {
   const e = env({ FLEET_TOKEN: 's3cret' }), u = await newUnit();
+  paired(e, u);
   clock += 1000;
   await worker.fetch(await signed(u, hb()), e);
   clock += 1;
@@ -256,6 +267,112 @@ test('the fleet page counts a unit\'s recent alerts', async () => {
   assert.equal(list[0].events_24h, 2);
   const page = await (await worker.fetch(new Request(BASE + '/fleet', { headers: { Authorization: basic('s3cret') } }), e)).text();
   assert.ok(!page.includes('Air ambulance'), 'the fleet page shows counts, not what a unit saw');
+});
+
+test('a unit with no paired phone has its events dropped, and is told so', async () => {
+  const e = env(), u = await newUnit();
+  clock += 1000;
+  const r = await postEvents(e, u, [evt()]);
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { ok: true, stored: 0, phones: 0 });
+  assert.equal(stored(e, u).length, 0);
+});
+
+// ---- pairing (roadmap 2.3) ---------------------------------------------------
+
+const offer = async (e, u, secret) => worker.fetch(await signed(u,
+  JSON.stringify({ secret_hash: await sha256Hex(new TextEncoder().encode(secret)) }), { path: '/v1/unit/pairing' }), e);
+const pair = async (e, phone, unit, secret, name = 'Test iPhone') => worker.fetch(await signed(phone,
+  JSON.stringify({ unit: unit.id, secret, name }), { path: '/v1/pair', as: 'X-FR-Phone' }), e);
+const getAs = async (e, who, path, as = 'X-FR-Unit') => (await worker.fetch(await signed(who, '', { path, method: 'GET', as }), e)).json();
+const SECRET = 'test-pairing-code-for-unit-tests';
+
+test('a phone that presents the code on screen is paired, once', async () => {
+  const e = env(), u = await newUnit(), phone = await newUnit(), late = await newUnit();
+  clock += 1000;
+  assert.equal((await offer(e, u, SECRET)).status, 200);
+  const offered = await getAs(e, u, '/v1/unit/phones');
+  assert.ok(offered.offer && offered.offer.expires === clock + PAIRING_TTL_S);
+  assert.equal(e.DB.raw.prepare('SELECT secret_hash FROM pairing_offers').get().secret_hash.includes(SECRET), false,
+    'the relay never stores the secret itself');
+
+  const r = await pair(e, phone, u, SECRET);
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { ok: true, unit: u.id });
+  const list = await getAs(e, u, '/v1/unit/phones');
+  assert.deepEqual(list.phones.map(p => [p.phone, p.name]), [[phone.id, 'Test iPhone']]);
+  assert.equal(list.offer, null, 'the code is spent');
+  assert.deepEqual((await getAs(e, phone, '/v1/phone/units', 'X-FR-Phone')).units.map(x => x.unit), [u.id]);
+
+  clock += 1;
+  assert.equal((await pair(e, late, u, SECRET)).status, 404, 'a second phone cannot reuse the same code');
+});
+
+test('a wrong, expired or guessed code pairs nothing', async () => {
+  const e = env(), u = await newUnit(), phone = await newUnit();
+  clock += 1000;
+  await offer(e, u, SECRET);
+  assert.equal((await pair(e, phone, u, 'wrong-secret-0123456')).status, 403);
+  for (let i = 1; i < PAIRING_MAX_ATTEMPTS; i++) { clock += 1; await pair(e, phone, u, 'wrong-secret-0123456'); }
+  clock += 1;
+  assert.equal((await pair(e, phone, u, SECRET)).status, 404, 'too many wrong guesses void the offer');
+
+  await offer(e, u, SECRET);
+  clock += PAIRING_TTL_S + 1;
+  assert.equal((await pair(e, phone, u, SECRET)).status, 404, 'expired');
+  assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM pairings').get().n, 0);
+
+  clock += 1;
+  await offer(e, u, SECRET);
+  const forged = await signed(phone, JSON.stringify({ unit: u.id, secret: SECRET }), { path: '/v1/pair', as: 'X-FR-Unit' });
+  assert.equal((await worker.fetch(forged, e)).status, 401, 'a phone must name itself as a phone');
+});
+
+test('the unit can withdraw a code, and remove one phone or all', async () => {
+  const e = env(), u = await newUnit(), a = await newUnit(), b = await newUnit();
+  clock += 1000;
+  await offer(e, u, SECRET);
+  assert.equal((await worker.fetch(await signed(u, '{}', { path: '/v1/unit/pairing/cancel' }), e)).status, 200);
+  assert.equal((await pair(e, a, u, SECRET)).status, 404, 'withdrawn');
+
+  for (const p of [a, b]) { clock += 1; await offer(e, u, SECRET); await pair(e, p, u, SECRET); }
+  clock += 1;
+  let r = await worker.fetch(await signed(u, JSON.stringify({ phone: a.id }), { path: '/v1/unit/unpair' }), e);
+  assert.deepEqual(await r.json(), { ok: true, phones: 1 });
+  clock += 1;
+  await postEvents(e, u, [evt()]);
+  clock += 1;
+  r = await worker.fetch(await signed(u, JSON.stringify({ all: true }), { path: '/v1/unit/unpair' }), e);
+  assert.deepEqual(await r.json(), { ok: true, phones: 0 });
+  assert.equal(stored(e, u).length, 0, 'unpairing everyone also clears undelivered events');
+});
+
+test('a phone can leave a unit, and only its own pairing', async () => {
+  const e = env(), u = await newUnit(), a = await newUnit(), b = await newUnit();
+  clock += 1000;
+  for (const p of [a, b]) { clock += 1; await offer(e, u, SECRET); await pair(e, p, u, SECRET); }
+  clock += 1;
+  const r = await worker.fetch(await signed(a, JSON.stringify({ unit: u.id }), { path: '/v1/phone/unpair', as: 'X-FR-Phone' }), e);
+  assert.equal(r.status, 200);
+  assert.deepEqual((await getAs(e, u, '/v1/unit/phones')).phones.map(p => p.phone), [b.id]);
+});
+
+test('pairing is bounded', async () => {
+  const e = env(), u = await newUnit();
+  const ins = e.DB.raw.prepare('INSERT INTO pairings (unit, phone, name, created) VALUES (?, ?, NULL, 0)');
+  for (let i = 0; i < MAX_PHONES_PER_UNIT; i++) ins.run(u.id, String(i).padStart(43, 'x'));
+  clock += 1000;
+  await offer(e, u, SECRET);
+  assert.equal((await pair(e, await newUnit(), u, SECRET)).status, 409);
+});
+
+test('a phone name is made safe', async () => {
+  const e = env(), u = await newUnit(), phone = await newUnit();
+  clock += 1000;
+  await offer(e, u, SECRET);
+  await pair(e, phone, u, SECRET, 'Mike\u0000s\u2028 phone' + 'x'.repeat(80));
+  const name = e.DB.raw.prepare('SELECT name FROM pairings').get().name;
+  assert.ok(name.startsWith('Mikes phone') && name.length <= 40);
 });
 
 // The unit signs in Python (deploy/heartbeat.py), the relay verifies in
@@ -271,4 +388,17 @@ test('a request signed by the Python unit client verifies', async () => {
   const tampered = new Request(BASE + '/v1/heartbeat', { method: 'POST', headers: fx.headers, body: fx.body.replace('fixture', 'fixturf') });
   clock += 1;
   assert.equal((await worker.fetch(tampered, env())).status, 401);
+});
+
+// The phone signs in Swift (ios/Radome/Pairing/RelayIdentity.swift, CryptoKit).
+// Same guarantee as the Python fixture above, for the other client.
+test('a request signed by the iOS app verifies', async () => {
+  const { readFileSync } = await import('node:fs');
+  const fx = JSON.parse(readFileSync(new URL('./swift-signed.fixture.json', import.meta.url)));
+  clock = Number(fx.headers['X-FR-Time']);
+  const ok = await worker.fetch(new Request(BASE + fx.path, { method: 'GET', headers: fx.headers }), env());
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await ok.json(), { units: [] });
+  const moved = await worker.fetch(new Request(BASE + '/v1/unit/phones', { method: 'GET', headers: fx.headers }), env());
+  assert.equal(moved.status, 401, 'the signature is bound to its path');
 });

@@ -204,11 +204,19 @@ def check_reset(fails):
             @staticmethod
             def set_enabled(v): events_set.append(v)
         d._events = lambda: FakeEvents
+        forgot = []
+
+        class FakePairing:
+            @staticmethod
+            def forget_everything(): forgot.append(True)
+        d._pairing = lambda: FakePairing
 
         seed(); calls.clear()
         d.reset_full()
         if events_set != [False]:
             fails.append("reset_full left phone alerts on (they would reach the previous owner)")
+        if forgot != [True]:
+            fails.append("reset_full left the previous owner's phones paired")
         deleted = [c[3] for c in calls
                    if len(c) > 3 and c[1] == "connection" and c[2] == "delete"]
         if "uuid-aaa" not in deleted or "uuid-bbb" not in deleted:
@@ -295,6 +303,49 @@ def check_health_verbs(fails):
         fails.append("set_health_report must take the state lock")
 
 
+def check_pairing_verbs(fails):
+    """Only a well-formed phone id reaches pairing.py; relay errors come back as Err."""
+    removed = []
+
+    class FakeRelayError(Exception):
+        pass
+
+    class FakePairing:
+        RelayError = FakeRelayError
+        @staticmethod
+        def remove(phone): removed.append(phone); return {"phones": 0}
+        @staticmethod
+        def start(): raise FakeRelayError("Could not reach the Radome service. Is this radar online?")
+
+    real = d._pairing
+    d._pairing = lambda: FakePairing
+    try:
+        for bad in (None, 1, "", "x" * 42, "x" * 44, "../../etc/passwd" + "x" * 27, "a b" + "x" * 40):
+            try:
+                d.pair_remove(bad)
+                fails.append(f"pair_remove accepted {bad!r}")
+            except d.Err:
+                pass
+        if removed:
+            fails.append("a rejected phone id still reached pairing.py")
+        good = "A" * 20 + "_-" + "b" * 21
+        if d.pair_remove(good) != {"phones": 0} or removed != [good]:
+            fails.append("pair_remove did not pass a valid phone id through")
+        try:
+            d.pair_start()
+            fails.append("a relay failure was not reported")
+        except d.Err as e:
+            if "Could not reach" not in e.detail:
+                fails.append("a relay failure lost its reason")
+    finally:
+        d._pairing = real
+    for v in ("pair_start", "pair_cancel", "pair_remove"):
+        if v not in d.MUTATING:
+            fails.append(f"{v} must take the state lock")
+    if "pair_status" in d.MUTATING:
+        fails.append("pair_status does network I/O and must not hold the state lock")
+
+
 def check_feeding_verbs(fails):
     """The FlightAware switch accepts a real boolean and runs the install in the background."""
     calls = []
@@ -333,6 +384,7 @@ def main():
     fails = []
     check_health_verbs(fails)
     check_feeding_verbs(fails)
+    check_pairing_verbs(fails)
     check_validation(fails)
     check_readsb(fails)
     check_no_shell(fails)

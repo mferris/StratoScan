@@ -901,6 +901,55 @@ def set_health_report(enabled):
     return health_status()
 
 
+# ---- Phone pairing (roadmap 2.3) ------------------------------------------
+# pairing.py does the work, signing with the unit key; setupd exposes it to
+# the radar's own screen (setup-server's loopback-only onboarding listener)
+# and to the password-protected setup page. The only parameter anywhere is a
+# phone id, checked against the exact shape of one.
+PAIRING = "/opt/flightradar/pairing.py"
+RE_PHONE_ID = re.compile(r"^[A-Za-z0-9_-]{43}$")
+
+
+def _pairing():
+    import importlib.util
+    if not os.path.exists(PAIRING):
+        return None
+    spec = importlib.util.spec_from_file_location("pairing", PAIRING)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _pairing_call(fn_name, *args):
+    p = _pairing()
+    if p is None:
+        raise Err("unavailable", "phone pairing is not installed")
+    try:
+        return getattr(p, fn_name)(*args)
+    except p.RelayError as e:
+        raise Err("relay", str(e))
+
+
+def pair_status():
+    if _pairing() is None:
+        return {"available": False}
+    return {"available": True, **_pairing_call("status")}
+
+
+def pair_start():
+    return _pairing_call("start")
+
+
+def pair_cancel():
+    return _pairing_call("cancel")
+
+
+def pair_remove(phone):
+    if not isinstance(phone, str) or not RE_PHONE_ID.match(phone):
+        raise Err("bad_phone", "not a phone id")
+    return _pairing_call("remove", phone)
+
+
 # ---- Opt-in feeding (FlightAware) ------------------------------------------
 # feeding.py does the work; setupd exposes a closed pair of verbs whose only
 # parameter is a strict boolean. Installing takes a minute or two, so turning
@@ -1267,7 +1316,13 @@ def reset_full():
         if hb:
             hb.set_enabled(False)
 
-    # 4a1. phone alerts went to the previous owner's paired phones.
+    # 4a1. phones paired with this unit are the previous owner's. Unpair
+    # them, and retire the unit's identity so that even if the relay could
+    # not be reached just now, nothing this unit sends can reach them again.
+    with contextlib.suppress(Exception):
+        pr = _pairing()
+        if pr:
+            pr.forget_everything()
     with contextlib.suppress(Exception):
         ev = _events()
         if ev:
@@ -1339,6 +1394,10 @@ VERBS = {
     "reset_full": lambda p: reset_full(),
     "health_status": lambda p: health_status(),
     "set_health_report": lambda p: set_health_report(p.get("enabled")),
+    "pair_status": lambda p: pair_status(),
+    "pair_start": lambda p: pair_start(),
+    "pair_cancel": lambda p: pair_cancel(),
+    "pair_remove": lambda p: pair_remove(p.get("phone")),
     "feeding_status": lambda p: feeding_status(),
     "set_feeding": lambda p: set_feeding(p.get("flightaware")),
 }
@@ -1353,7 +1412,8 @@ MUTATING = {"wifi_connect", "wifi_confirm", "wifi_rollback", "hotspot_start",
             # WiFi operations behind an address lookup.
             "set_timezone", "set_wifi_country", "ota_apply",
             "tailscale_funnel", "reboot", "reset_settings", "reset_full",
-            "tailscale_login_start", "set_health_report", "set_feeding"}
+            "tailscale_login_start", "set_health_report", "set_feeding",
+            "pair_start", "pair_cancel", "pair_remove"}
 
 
 class Handler(socketserver.StreamRequestHandler):

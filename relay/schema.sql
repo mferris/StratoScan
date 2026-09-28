@@ -36,3 +36,22 @@ CREATE TABLE IF NOT EXISTS events (
   payload   TEXT NOT NULL           -- the validated event, JSON
 );
 CREATE INDEX IF NOT EXISTS events_unit_received ON events (unit, received);
+
+-- Pairing (roadmap 2.3). A unit's screen shows a QR code holding its id and
+-- a one-time secret; the unit registers only the secret's SHA-256 here. A
+-- phone that presents the secret within PAIRING_TTL_S is linked to the unit.
+CREATE TABLE IF NOT EXISTS pairing_offers (
+  unit         TEXT PRIMARY KEY,
+  secret_hash  TEXT NOT NULL,       -- hex sha256 of the secret; the secret itself never reaches the relay until a phone uses it
+  expires      INTEGER NOT NULL,
+  attempts     INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS pairings (
+  unit     TEXT NOT NULL,
+  phone    TEXT NOT NULL,           -- base64url Ed25519 public key; the phone's identity
+  name     TEXT,                    -- what the phone calls itself ("Alex's iPhone")
+  created  INTEGER NOT NULL,
+  PRIMARY KEY (unit, phone)
+);
+CREATE INDEX IF NOT EXISTS pairings_phone ON pairings (phone);

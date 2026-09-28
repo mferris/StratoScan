@@ -745,6 +745,10 @@
   #settingsPanel .sp-row.disabled .sp-sub { color: var(--bad); }
   #settingsPanel .sp-label { font-size: 0.78rem; }
   #settingsPanel .sp-sub { font-size: 0.6rem; color: var(--text-dim); margin-top: 3px; line-height: 1.4; }
+  /* The pairing code: always dark-on-white whatever the theme, since that is
+     what phone cameras read best, with a quiet zone of its own. */
+  #settingsPanel .sp-qr { display: block; width: 72%; max-width: 260px; margin: 6px auto; background: #fff;
+    border-radius: 6px; image-rendering: pixelated; }
   #settingsPanel .sp-switch {
     position: relative;
     width: 42px;
@@ -5549,6 +5553,7 @@ const SETTINGS_GROUPS = [
   { key: 'display',  label: 'Display',      sub: 'Night dimming and colour theme' },
   { key: 'audio',    label: 'ATC audio',    sub: 'Live tower feed for the home airport' },
   { key: 'stats',    label: 'Statistics',   sub: 'What has flown over, and how well you hear it' },
+  { key: 'phone',    label: 'Phone & Watch', sub: 'Pair the Radome app for alerts on your phone' },
   { key: 'device',   label: 'Device setup',  sub: 'WiFi, location, home airport, reset' },
 ];
 let settingsSection = null;  // null = the menu; otherwise a group key
@@ -5603,6 +5608,10 @@ function renderSettingsPanel() {
   }
   if (settingsSection === 'rewind') {
     settingsPanelEl.innerHTML = `<div class="sp-close">&times;</div>` + renderRewind();
+    return;
+  }
+  if (settingsSection === 'phone') {
+    settingsPanelEl.innerHTML = `<div class="sp-close">&times;</div>` + renderPhone();
     return;
   }
   const group = SETTINGS_GROUPS.find(g => g.key === settingsSection);
@@ -5682,6 +5691,122 @@ async function deviceApi(path, opts = {}) {
   try { b = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(b?.error?.message || 'That did not work.');
   return b;
+}
+
+// ---- Phone & Watch: pairing the Radome app (roadmap 2.3) -------------------
+// The code on screen is a one-time secret (deploy/pairing.py) and reaches this
+// page only over the loopback-only listener above, so nothing else on the
+// network can read it. Scanning it with the iPhone Camera opens the app,
+// which presents it to the relay; this panel sees the new phone on its next
+// poll. Alerts then flow to that phone (deploy/events.py).
+const PHONE_POLL_MS = 3000;
+let phoneState = null;    // last /onboard/pair: { available, phones, offer }
+let phoneMsg = '';
+let phoneBusy = false;
+let phoneConfirm = null;  // phone id awaiting a second tap to unpair
+let phonePoll = null;
+
+async function loadPhoneStatus() {
+  try {
+    const prev = phoneState ? phoneState.phones.length : null;
+    phoneState = (await deviceApi('/onboard/pair')).result;
+    if (prev !== null && phoneState.phones.length > prev) {
+      const p = phoneState.phones[phoneState.phones.length - 1];
+      phoneMsg = `Paired with ${p.name || 'a phone'}. Alerts will go to it.`;
+    }
+  } catch (e) {
+    phoneMsg = e.message;
+  }
+}
+
+function stopPhonePolling() {
+  if (phonePoll) { clearInterval(phonePoll); phonePoll = null; }
+}
+
+function startPhonePolling() {
+  stopPhonePolling();
+  phonePoll = setInterval(async () => {
+    if (settingsSection !== 'phone' || !settingsPanelEl.classList.contains('show')) {
+      stopPhonePolling();
+      return;
+    }
+    await loadPhoneStatus();
+    if (settingsSection === 'phone') renderSettingsPanel();
+    if (!phoneState || !phoneState.offer) stopPhonePolling();
+  }, PHONE_POLL_MS);
+}
+
+function renderPhone() {
+  const head = `<div class="sp-back">&#8592; Settings</div><div class="sp-title">Phone &amp; Watch</div>`;
+  if (!IS_KIOSK) {
+    return head + `<div class="sp-sub" style="padding:10px 0;line-height:1.7">
+      Pair a phone from the radar's own screen, or from this radar's setup page.
+      The pairing code is only ever shown there.</div>`;
+  }
+  const msg = phoneMsg ? `<div class="sp-sub" style="padding:8px 0;color:var(--text)">${esc(phoneMsg)}</div>` : '';
+  if (!phoneState) {
+    return head + msg + `<div class="sp-sub" style="padding:10px 0">${phoneBusy || !phoneMsg ? 'Checking…' : ''}</div>`;
+  }
+  if (phoneState.available === false) {
+    return head + `<div class="sp-sub" style="padding:10px 0">Needs a newer version of this radar's software.</div>`;
+  }
+  const o = phoneState.offer;
+  if (o) {
+    const left = Math.max(0, Math.round(o.expires - Date.now() / 1000));
+    const mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, '0');
+    const qr = o.qr
+      ? `<img class="sp-qr" alt="Pairing code" src="data:image/svg+xml;base64,${btoa(o.qr)}">`
+      : `<div class="sp-sub" style="padding:10px 0">QR codes need a software update on this radar.</div>`;
+    return head + `
+      <div class="sp-sub" style="padding:8px 0;line-height:1.6">Point your iPhone's Camera at this code,
+        then tap the Radome banner. Or scan it from the Radome app.</div>
+      ${qr}
+      <div class="sp-sub" style="text-align:center;padding:4px 0 8px">Code works once, for ${mm}:${ss} more</div>
+      ${msg}
+      <div class="sp-menu-row" data-pact="cancel"><div><div class="sp-label">Cancel</div></div><div class="sp-chevron">&#8250;</div></div>`;
+  }
+  const phones = (phoneState.phones || []).map(p => {
+    const since = p.created ? new Date(p.created * 1000).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    const confirm = phoneConfirm === p.id;
+    return `<div class="sp-menu-row" data-unpair="${esc(p.id)}">
+      <div><div class="sp-label">${esc(p.name || 'Phone')}</div>
+           <div class="sp-sub">${confirm ? '<b>Tap again to unpair</b>' : `Paired ${esc(since)} · tap to unpair`}</div></div>
+      <div class="sp-chevron">&#8250;</div></div>`;
+  }).join('');
+  return head + msg + (phones || `<div class="sp-sub" style="padding:8px 0">No phone is paired yet.</div>`) + `
+    <div class="sp-menu-row" data-pact="start">
+      <div><div class="sp-label">${phoneBusy ? 'Working…' : 'Pair a phone'}</div>
+           <div class="sp-sub">Shows a code to scan with the Radome app</div></div>
+      <div class="sp-chevron">&#8250;</div></div>
+    <div class="sp-sub" style="padding:12px 0 4px;line-height:1.6">Alerts reach paired phones through the Radome
+      service. They say what flew by and roughly how far away, never where this radar is.</div>`;
+}
+
+async function handlePhoneTap(row) {
+  const { pact, unpair } = row.dataset;
+  if (phoneBusy) return;
+  phoneMsg = '';
+  if (unpair) {
+    if (phoneConfirm !== unpair) { phoneConfirm = unpair; renderSettingsPanel(); return; }
+    phoneConfirm = null;
+  }
+  phoneBusy = true; renderSettingsPanel();
+  try {
+    if (pact === 'start') {
+      await deviceApi('/onboard/pair', { method: 'POST', body: JSON.stringify({ action: 'start' }) });
+    } else if (pact === 'cancel') {
+      await deviceApi('/onboard/pair', { method: 'POST', body: JSON.stringify({ action: 'cancel' }) });
+    } else if (unpair) {
+      await deviceApi('/onboard/pair', { method: 'POST', body: JSON.stringify({ action: 'remove', phone: unpair }) });
+      phoneMsg = 'Unpaired.';
+    }
+    await loadPhoneStatus();
+  } catch (e) {
+    phoneMsg = e.message;
+  }
+  phoneBusy = false;
+  if (settingsSection === 'phone') renderSettingsPanel();
+  if (phoneState && phoneState.offer) startPhonePolling();
 }
 
 let deviceView = null;   // null | 'wifi' | 'location' | 'airport' | 'reset' | 'password'
@@ -6891,6 +7016,7 @@ function showSettingsPanel() {
 function hideSettingsPanel() {
   settingsPanelEl.classList.remove('show');
   settingsBackdropEl.classList.remove('show');
+  stopPhonePolling();
   rewindSelected = null;
 }
 
@@ -7082,6 +7208,24 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
       loadYearStats().then(() => { if (statsView === 'year') renderSettingsPanel(); });
     }
     renderSettingsPanel();
+    return;
+  }
+  if (menuRow && menuRow.dataset.group === 'phone') {
+    settingsSection = 'phone';
+    settingsPanelEl.scrollTop = 0;
+    phoneState = null; phoneMsg = ''; phoneConfirm = null;
+    renderSettingsPanel();
+    if (IS_KIOSK) {
+      loadPhoneStatus().then(() => {
+        if (settingsSection !== 'phone') return;
+        renderSettingsPanel();
+        if (phoneState && phoneState.offer) startPhonePolling();
+      });
+    }
+    return;
+  }
+  if (menuRow && settingsSection === 'phone' && (menuRow.dataset.pact || menuRow.dataset.unpair)) {
+    handlePhoneTap(menuRow);
     return;
   }
   if (menuRow && menuRow.dataset.group === 'device') {

@@ -225,6 +225,28 @@ s.add([{"kind": "low_overhead", "ts": now, "hex": f"{i:06x}"} for i in range(ev.
 check("the queue is bounded; overflow drops the oldest",
       len(s.queue) == ev.QUEUE_MAX and s.queue[0]["hex"] == f"{10:06x}")
 
+s = ev.Sender(post=lambda batch: (200, b'{"ok":true,"stored":0,"phones":0}'))
+s.add([{"kind": "notable", "ts": now, "hex": "000004"}, {"kind": "notable", "ts": now, "hex": "000005"}])
+line = s.flush(now)
+check("a relay with no paired phone turns events off", s.unpaired and "events off" in line and not s.queue)
+
+# ---- a restart does not report the same pass again ----------------------------------
+fired = os.path.join(tmp, "fired.json")
+d = ev.Detector()
+scan(d, ac("abc123", dist=1.0, alt=1000))
+d.save(fired)
+d2 = ev.Detector()
+d2.load(fired, now=1_000_060)
+check("what was reported survives a restart", scan(d2, ac("abc123", dist=0.9, alt=900), now=1_000_060) == [])
+d3 = ev.Detector()
+d3.load(fired, now=1_000_000 + 7 * 3600)
+check("but long-finished passes are not carried over", len(d3.fired) == 0)
+with open(fired, "w") as f:
+    f.write("not json")
+d4 = ev.Detector()
+d4.load(fired)
+check("a damaged file is ignored, not fatal", d4.fired == {})
+
 # ---- opt-in -----------------------------------------------------------------------
 check("off until a phone is paired", ev.enabled() is False)
 try:

@@ -72,3 +72,15 @@ export function assess(unit, now) {
   return { flags, p };
 }
 
+
+// Pairing (roadmap 2.3).
+export const PAIRING_TTL_S = 10 * 60;
+export const PAIRING_MAX_ATTEMPTS = 5;   // wrong secrets before an offer is void
+export const MAX_PHONES_PER_UNIT = 10;
+export const MAX_UNITS_PER_PHONE = 20;
+
+export function cleanPhoneName(v) {
+  if (typeof v !== 'string') return null;
+  const t = v.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, '').trim().slice(0, 40);
+  return t || null;
+}

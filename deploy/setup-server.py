@@ -323,6 +323,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/setup/api/feeding" and self.command == "POST":
             b = self._body()
             return self._proxy_verb("set_feeding", {"flightaware": b.get("flightaware")})
+        if path == "/setup/api/pair" and self.command == "GET":
+            return self._pair_reply(pair_verb("status"))
+        if path == "/setup/api/pair" and self.command == "POST":
+            b = self._body() or {}
+            return self._pair_reply(pair_verb(b.get("action"), b.get("phone")))
         if path == "/setup/api/health" and self.command == "GET":
             return self._proxy_verb("health_status")
         if path == "/setup/api/health" and self.command == "POST":
@@ -431,6 +436,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         save_state(st)
         drop_sessions()
         return self._send(200, {"changed": True})
+
+    def _pair_reply(self, r):
+        if r.get("ok"):
+            return self._send(200, {"result": r.get("result")})
+        return self._err(400, r.get("code", "failed"), friendly(r.get("code", ""), r.get("detail", "")))
 
     def _proxy_verb(self, verb, params=None):
         r = call_setupd(verb, params)
@@ -633,6 +643,53 @@ def friendly(code, detail=""):
     return FRIENDLY.get(code) or (detail or "That did not work.")
 
 
+# ------------------------------------------------- phone pairing (roadmap 2.3)
+# setupd/pairing.py open a one-time code with the relay; this tier only
+# dresses the link for display: the LAN address (so the app can also reach
+# the radar at home), and a QR code for the screen to show.
+
+def qr_svg(text):
+    """The QR code as an SVG string, or None if python3-qrcode is missing."""
+    try:
+        import qrcode
+        import qrcode.image.svg
+    except ImportError:
+        return None
+    img = qrcode.make(text, image_factory=qrcode.image.svg.SvgPathFillImage,
+                      box_size=10, border=2,
+                      error_correction=qrcode.constants.ERROR_CORRECT_M)
+    return img.to_string(encoding="unicode")
+
+
+def dress_offer(offer):
+    if not isinstance(offer, dict) or not offer.get("link"):
+        return offer
+    link = offer["link"]
+    addrs = lan_addresses()
+    if addrs:
+        link += f"&h={addrs[0]}"
+    return {**offer, "link": link, "qr": qr_svg(link)}
+
+
+def pair_verb(action, phone=None):
+    """One pairing action for either surface. Returns a setupd-style reply."""
+    if action == "status":
+        r = call_setupd("pair_status", {}, timeout=30)
+        if r.get("ok") and isinstance(r.get("result"), dict):
+            r["result"]["offer"] = dress_offer(r["result"].get("offer"))
+        return r
+    if action == "start":
+        r = call_setupd("pair_start", {}, timeout=30)
+        if r.get("ok"):
+            r["result"] = dress_offer(r.get("result"))
+        return r
+    if action == "cancel":
+        return call_setupd("pair_cancel", {}, timeout=30)
+    if action == "remove":
+        return call_setupd("pair_remove", {"phone": phone}, timeout=30)
+    return {"ok": False, "code": "bad_action", "detail": "Use start, cancel or remove."}
+
+
 # ------------------------------------------------- on-screen onboarding tier
 #
 # The radar's own display is the only channel a recipient has before the
@@ -693,6 +750,8 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             if not verb:
                 return self._json(400, {"error": {"message": "Use check or apply."}})
             return self._verb(verb, timeout=180)
+        if path == "/onboard/pair":
+            return self._relay(pair_verb(body.get("action"), body.get("phone")))
         if path == "/onboard/locale":
             # Same locale step as the phone page, for a recipient who only
             # ever uses the touchscreen. Both surfaces must be able to finish
@@ -828,6 +887,8 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
                 "forCountry": z["result"].get("forCountry", []),
                 "all": z["result"].get("timezones", []),
             })
+        if p == "/onboard/pair":
+            return self._relay(pair_verb("status"))
         if p == "/onboard/airports":
             try:
                 with open(AIRPORTS_JSON) as f:
