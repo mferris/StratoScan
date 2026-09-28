@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Opt-in health reports from this unit to the FlightRadar relay (relay/).
+Opt-in health reports from this unit to the Radome relay (relay/).
 
 A gifted unit lives in someone else's house, and until now the only way to
 learn it had died was for them to mention it. With the owner's consent, this
@@ -245,7 +245,7 @@ def send(report=None):
     body = json.dumps(report, separators=(",", ":")).encode()
     path = "/v1/heartbeat"
     headers = {"Content-Type": "application/json",
-               "User-Agent": "FlightRadar-unit/1 (+https://github.com/mferris/FlightRadar)"}
+               "User-Agent": "Radome-unit/1 (+https://github.com/mferris/Radome)"}
     headers.update(sign_headers(key, "POST", path, body))
     req = urllib.request.Request(RELAY_URL.rstrip("/") + path, data=body, headers=headers, method="POST")
     try:

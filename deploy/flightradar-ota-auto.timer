@@ -1,5 +1,5 @@
 [Unit]
-Description=Apply FlightRadar updates once a day
+Description=Apply Radome updates once a day
 
 [Timer]
 # Evening rather than the small hours. The update has to see a painted frame

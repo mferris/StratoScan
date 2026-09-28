@@ -144,7 +144,7 @@ _opener = urllib.request.build_opener(_NoRedirect)
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def version_string(self):
-        return "FlightRadar"  # don't advertise the Python/http.server version
+        return "Radome"  # don't advertise the Python/http.server version
 
     def _send_security_headers(self):
         for k, v in SECURITY_HEADERS.items():

@@ -314,7 +314,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def version_string(self):
-        return "FlightRadar"
+        return "Radome"
 
     def log_message(self, *a):
         pass

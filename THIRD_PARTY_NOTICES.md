@@ -1,6 +1,6 @@
 # Third-party notices
 
-FlightRadar's own code, enclosure designs and documentation are MIT-licensed
+Radome's own code, enclosure designs and documentation are MIT-licensed
 (see [LICENSE](LICENSE)). This file lists everything else the project ships
 or uses, under what terms, and how each obligation is met. Reviewed
 2026-09-27; re-check it whenever a dependency or data source is added.
@@ -85,10 +85,12 @@ the GPL source offer (see the factory-image item in the roadmap).
 
 ## Not a license issue, but worth knowing
 
-- **Trademark.** "Flightradar24" is a registered trademark of Flightradar24 AB,
-  and this project's name, "FlightRadar", is close to it. Fine for a personal
-  project; reconsider the name before any commercial or large-scale public
-  launch.
+- **Trademark.** "Flightradar24" is a registered trademark of Flightradar24 AB.
+  This project was called "FlightRadar" until 2026-09-28 and was renamed
+  "Radome" to stay clear of it. Some internal identifiers (the
+  `/opt/flightradar` install path, `flightradar-*` service names,
+  `FLIGHTRADAR_*` settings) keep the old name so units already in service
+  update cleanly; none of them is shown to people using the device.
 - **Registered-owner names** shown for private aircraft come from public
   national registries (via adsbdb). They are shown on the device, never
   stored in this repository.

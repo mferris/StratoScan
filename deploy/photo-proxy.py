@@ -23,7 +23,7 @@ import time
 import urllib.request
 
 LISTEN = ("127.0.0.1", 8081)
-USER_AGENT = "FlightRadar/1.0 (+https://github.com/mferris/FlightRadar; personal ADS-B kiosk project)"
+USER_AGENT = "Radome/1.0 (+https://github.com/mferris/Radome; personal ADS-B kiosk project)"
 CACHE_TTL = 24 * 3600
 HEX_RE = re.compile(r"/photo/([0-9a-fA-F]{6})$")
 
@@ -39,7 +39,7 @@ CACHE_MAX = 4096
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def version_string(self):
-        return "FlightRadar"  # don't advertise the Python/http.server version
+        return "Radome"  # don't advertise the Python/http.server version
 
     def do_GET(self):
         m = HEX_RE.search(self.path)

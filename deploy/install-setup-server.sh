@@ -1,5 +1,5 @@
 #!/bin/sh
-# Provisions a FlightRadar unit: everything it needs, on top of a stock
+# Provisions a Radome unit: everything it needs, on top of a stock
 # Raspberry Pi OS with desktop (Trixie, arm64). Idempotent; safe to re-run --
 # re-running it is how an existing unit picks up system-level changes that a
 # signed update deliberately cannot make (unit files, system config).
@@ -210,7 +210,7 @@ fi
 if [ "${RTC_RECHARGEABLE:-0}" = "1" ]; then
   CFG=/boot/firmware/config.txt
   if ! grep -q '^dtparam=rtc_bbat_vchg=' "$CFG"; then
-    printf '\n# FlightRadar: trickle-charge the rechargeable ML-2020 RTC cell\ndtparam=rtc_bbat_vchg=3000000\n' >> "$CFG"
+    printf '\n# Radome: trickle-charge the rechargeable ML-2020 RTC cell\ndtparam=rtc_bbat_vchg=3000000\n' >> "$CFG"
     echo "  RTC charging enabled (takes effect after a reboot)"
   fi
 fi

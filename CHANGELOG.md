@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Renamed from FlightRadar to **Radome** (2026-09-28), to stay clear of the
+  Flightradar24 trademark. The GitHub repo moved to `mferris/Radome` (old
+  links redirect). Internal paths and service names keep the old name so
+  units already in service update cleanly.
+
 ## v1.0.0 — 2026-08-23
 
 First tagged release. FlightRadar has been under active development for a

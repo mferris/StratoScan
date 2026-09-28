@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>FlightRadar</title>
+<title>Radome</title>
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
@@ -1207,7 +1207,7 @@ const RECEIVER_URL = '/tar1090/data/receiver.json';
 const IS_KIOSK = new URLSearchParams(location.search).get('kiosk') === '1';
 // Overrides the receiver's actual configured position for DISPLAY purposes
 // only (readsb keeps using its own real antenna position internally for
-// signal-range/MLAT math — this only changes what FlightRadar centers on).
+// signal-range/MLAT math — this only changes what Radome centers on).
 // Set to null to go back to auto-detecting the receiver's real position
 // from receiver.json. When set, bearing/range are always computed via
 // haversine from raw lat/lon rather than trusting readsb's r_dst/r_dir,
@@ -3069,7 +3069,7 @@ async function refreshOnboarding() {
   const steps = [];
   // Branch on whether the AP is actually UP, not merely on whether it has a
   // name: if the radar is already on a network, sending someone to look for
-  // "FlightRadar-Setup" sends them hunting for a network that isn't there.
+  // "Radome-Setup" sends them hunting for a network that isn't there.
   if (hs.active && hs.ssid) {
     steps.push(`On your phone, join the WiFi network <b>${esc(hs.ssid)}</b>` +
                (hs.psk ? ` using password <b>${esc(hs.psk)}</b>` : ''));
@@ -6777,7 +6777,7 @@ async function handleDeviceTap(row) {
   }
 
   if (act === 'remote-start') {
-    const name = await openKeyboard('NAME FOR THIS RADAR  (letters, digits, -)', 'flightradar');
+    const name = await openKeyboard('NAME FOR THIS RADAR  (letters, digits, -)', 'radome');
     if (name === null) return;
     deviceBusy = true; renderSettingsPanel();
     try {

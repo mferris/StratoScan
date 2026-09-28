@@ -74,7 +74,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     timeout = 30
 
     def version_string(self):
-        return "FlightRadar"
+        return "Radome"
 
     def log_message(self, *args):
         pass

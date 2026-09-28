@@ -1,5 +1,5 @@
 [Unit]
-Description=FlightRadar aircraft photo proxy (planespotters.net)
+Description=Radome aircraft photo proxy (planespotters.net)
 After=network-online.target
 
 [Service]

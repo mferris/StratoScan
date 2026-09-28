@@ -1,0 +1,451 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		026C830A71C6C9FFF6476AEF /* Aircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FA73E0BEE13F9078C2D1599 /* Aircraft.swift */; };
+		02D44458B240373C158F99BA /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 727162416541DB120DB0E5C1 /* APIConfig.swift */; };
+		045525804441022B5E807489 /* RouteLookupClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FA4F22EA60A35820DF1F1DD /* RouteLookupClient.swift */; };
+		08244F03D833C06145FB9B5F /* PlaneState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07EB33AD4B25EBAB71D4C610 /* PlaneState.swift */; };
+		0DE14D91681F7C764E922EDB /* AircraftTypeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 769D50FEEB254553EEC84466 /* AircraftTypeClient.swift */; };
+		1B95814B1810FC6200FD2CE2 /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CD506C01DF1BB9E8ADF899 /* Geo.swift */; };
+		25FC95561C8C8EC59463D039 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82D0550591B3A5D10B447D6B /* ContentView.swift */; };
+		2DDAA7C10336F84FD9A228BC /* NormalizedAircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1830CD86FA2C8BA2A10B2FE /* NormalizedAircraft.swift */; };
+		52B97D347E2A8632F33A8EF4 /* RadarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B487FEB78297D897DBF514 /* RadarView.swift */; };
+		6C1237AB31DFA25D8C05037F /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 3235AA9CD83A6D560C73BCB9 /* MapLibre */; };
+		8C0C1472DE073B3D43272768 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E19D2A0D7427942DE7CE2C0A /* Assets.xcassets */; };
+		91C2BCF8BF0A780884396FAB /* MapBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59D8472601E7A87932540E37 /* MapBackgroundView.swift */; };
+		AB1FD195DD76E4F0E485649D /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43EFAB2CF3B2820D75F71320 /* AircraftFeedClient.swift */; };
+		B6702FB094B782BC253305C4 /* RadomeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 253708C4759FB636D54CE7FE /* RadomeApp.swift */; };
+		C69753DE205589E999B71F62 /* RunwayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F19B466EF642F0BCA2029A /* RunwayClient.swift */; };
+		EB80C2098169E49EFA266123 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291E986AEF670EDAD724B1DC /* SettingsView.swift */; };
+		F116F0F02DB64AF8485758E5 /* AirlineTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F20F5270C45A7271C7A517F /* AirlineTable.swift */; };
+		FBB4EB19F51B17D7FF2A05F0 /* RadarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C61F1870157C6C22B86BEFBC /* RadarViewModel.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		07EB33AD4B25EBAB71D4C610 /* PlaneState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaneState.swift; sourceTree = "<group>"; };
+		13B3D352D5EFF08433519043 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		253708C4759FB636D54CE7FE /* RadomeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadomeApp.swift; sourceTree = "<group>"; };
+		26F19B466EF642F0BCA2029A /* RunwayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayClient.swift; sourceTree = "<group>"; };
+		291E986AEF670EDAD724B1DC /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		3F20F5270C45A7271C7A517F /* AirlineTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirlineTable.swift; sourceTree = "<group>"; };
+		3FA73E0BEE13F9078C2D1599 /* Aircraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Aircraft.swift; sourceTree = "<group>"; };
+		43EFAB2CF3B2820D75F71320 /* AircraftFeedClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftFeedClient.swift; sourceTree = "<group>"; };
+		59D8472601E7A87932540E37 /* MapBackgroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapBackgroundView.swift; sourceTree = "<group>"; };
+		727162416541DB120DB0E5C1 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
+		769D50FEEB254553EEC84466 /* AircraftTypeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftTypeClient.swift; sourceTree = "<group>"; };
+		82D0550591B3A5D10B447D6B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		89B487FEB78297D897DBF514 /* RadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarView.swift; sourceTree = "<group>"; };
+		91035FC9B53995586796D3F8 /* Radome.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Radome.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9FA4F22EA60A35820DF1F1DD /* RouteLookupClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteLookupClient.swift; sourceTree = "<group>"; };
+		A1830CD86FA2C8BA2A10B2FE /* NormalizedAircraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NormalizedAircraft.swift; sourceTree = "<group>"; };
+		A5CD506C01DF1BB9E8ADF899 /* Geo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geo.swift; sourceTree = "<group>"; };
+		C61F1870157C6C22B86BEFBC /* RadarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarViewModel.swift; sourceTree = "<group>"; };
+		E19D2A0D7427942DE7CE2C0A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		9307E7C0E9FF31EB3473BAC5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6C1237AB31DFA25D8C05037F /* MapLibre in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0584F7E5156EAB31491A005A /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				82D0550591B3A5D10B447D6B /* ContentView.swift */,
+				59D8472601E7A87932540E37 /* MapBackgroundView.swift */,
+				89B487FEB78297D897DBF514 /* RadarView.swift */,
+				291E986AEF670EDAD724B1DC /* SettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		1EF452AD73544EEC2DCFC20E /* App */ = {
+			isa = PBXGroup;
+			children = (
+				E19D2A0D7427942DE7CE2C0A /* Assets.xcassets */,
+				13B3D352D5EFF08433519043 /* Info.plist */,
+				253708C4759FB636D54CE7FE /* RadomeApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		30408F55DFBBE6CB77C7CCB2 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				91035FC9B53995586796D3F8 /* Radome.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		4C9A1433FD6DBA5618A3A02E /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				43EFAB2CF3B2820D75F71320 /* AircraftFeedClient.swift */,
+				769D50FEEB254553EEC84466 /* AircraftTypeClient.swift */,
+				727162416541DB120DB0E5C1 /* APIConfig.swift */,
+				9FA4F22EA60A35820DF1F1DD /* RouteLookupClient.swift */,
+				26F19B466EF642F0BCA2029A /* RunwayClient.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		78ACA7DD040AD6280B8589C9 /* Radome */ = {
+			isa = PBXGroup;
+			children = (
+				1EF452AD73544EEC2DCFC20E /* App */,
+				EE9260830A972FBE9AD27FCA /* Models */,
+				4C9A1433FD6DBA5618A3A02E /* Networking */,
+				850D502EB0D23B3D1B0D9430 /* Util */,
+				B0958080EB170AC648409AE7 /* ViewModels */,
+				0584F7E5156EAB31491A005A /* Views */,
+			);
+			path = Radome;
+			sourceTree = "<group>";
+		};
+		850D502EB0D23B3D1B0D9430 /* Util */ = {
+			isa = PBXGroup;
+			children = (
+				A5CD506C01DF1BB9E8ADF899 /* Geo.swift */,
+			);
+			path = Util;
+			sourceTree = "<group>";
+		};
+		94ED6EAEAA1CB6C636418B36 = {
+			isa = PBXGroup;
+			children = (
+				78ACA7DD040AD6280B8589C9 /* Radome */,
+				30408F55DFBBE6CB77C7CCB2 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B0958080EB170AC648409AE7 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				C61F1870157C6C22B86BEFBC /* RadarViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		EE9260830A972FBE9AD27FCA /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				3FA73E0BEE13F9078C2D1599 /* Aircraft.swift */,
+				3F20F5270C45A7271C7A517F /* AirlineTable.swift */,
+				A1830CD86FA2C8BA2A10B2FE /* NormalizedAircraft.swift */,
+				07EB33AD4B25EBAB71D4C610 /* PlaneState.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		C10322E7B49D83B343F6F7C5 /* Radome */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 584B78FE4C149AB4BB2D9FA9 /* Build configuration list for PBXNativeTarget "Radome" */;
+			buildPhases = (
+				6F408E2AEA1A3AF1F43452BB /* Sources */,
+				AABDBCE9A8BB62A164E5D681 /* Resources */,
+				9307E7C0E9FF31EB3473BAC5 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Radome;
+			packageProductDependencies = (
+				3235AA9CD83A6D560C73BCB9 /* MapLibre */,
+			);
+			productName = Radome;
+			productReference = 91035FC9B53995586796D3F8 /* Radome.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		DC6586927B5F9AD425E547FA /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = FF53B4EA066E33EF866FE615 /* Build configuration list for PBXProject "Radome" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 94ED6EAEAA1CB6C636418B36;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B242C4DEB5F813619DEB234E /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 30408F55DFBBE6CB77C7CCB2 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C10322E7B49D83B343F6F7C5 /* Radome */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AABDBCE9A8BB62A164E5D681 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8C0C1472DE073B3D43272768 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6F408E2AEA1A3AF1F43452BB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				02D44458B240373C158F99BA /* APIConfig.swift in Sources */,
+				026C830A71C6C9FFF6476AEF /* Aircraft.swift in Sources */,
+				AB1FD195DD76E4F0E485649D /* AircraftFeedClient.swift in Sources */,
+				0DE14D91681F7C764E922EDB /* AircraftTypeClient.swift in Sources */,
+				F116F0F02DB64AF8485758E5 /* AirlineTable.swift in Sources */,
+				25FC95561C8C8EC59463D039 /* ContentView.swift in Sources */,
+				1B95814B1810FC6200FD2CE2 /* Geo.swift in Sources */,
+				91C2BCF8BF0A780884396FAB /* MapBackgroundView.swift in Sources */,
+				2DDAA7C10336F84FD9A228BC /* NormalizedAircraft.swift in Sources */,
+				08244F03D833C06145FB9B5F /* PlaneState.swift in Sources */,
+				52B97D347E2A8632F33A8EF4 /* RadarView.swift in Sources */,
+				FBB4EB19F51B17D7FF2A05F0 /* RadarViewModel.swift in Sources */,
+				B6702FB094B782BC253305C4 /* RadomeApp.swift in Sources */,
+				045525804441022B5E807489 /* RouteLookupClient.swift in Sources */,
+				C69753DE205589E999B71F62 /* RunwayClient.swift in Sources */,
+				EB80C2098169E49EFA266123 /* SettingsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		57A58F99A0DEC0657CA04FDF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		8D6A835328534EE026250B50 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = Radome/App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.mferris.radome;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.10;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		D146339A6F669A42C7A16174 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = Radome/App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.mferris.radome;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.10;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D9284793CAFC13231615C52A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		584B78FE4C149AB4BB2D9FA9 /* Build configuration list for PBXNativeTarget "Radome" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D146339A6F669A42C7A16174 /* Debug */,
+				8D6A835328534EE026250B50 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FF53B4EA066E33EF866FE615 /* Build configuration list for PBXProject "Radome" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				57A58F99A0DEC0657CA04FDF /* Debug */,
+				D9284793CAFC13231615C52A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B242C4DEB5F813619DEB234E /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/maplibre/maplibre-gl-native-distribution";
+			requirement = {
+				kind = exactVersion;
+				version = 6.28.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		3235AA9CD83A6D560C73BCB9 /* MapLibre */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B242C4DEB5F813619DEB234E /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */;
+			productName = MapLibre;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = DC6586927B5F9AD425E547FA /* Project object */;
+}

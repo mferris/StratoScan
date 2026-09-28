@@ -1,6 +1,6 @@
 [Unit]
-Description=FlightRadar unattended update (wakes the display, applies, self-rolls-back)
-Documentation=https://github.com/mferris/FlightRadar
+Description=Radome unattended update (wakes the display, applies, self-rolls-back)
+Documentation=https://github.com/mferris/Radome
 After=network-online.target
 Wants=network-online.target
 

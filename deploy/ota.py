@@ -37,7 +37,7 @@ import tempfile
 import time
 import urllib.request
 
-REPO = os.environ.get("FLIGHTRADAR_OTA_REPO", "mferris/FlightRadar")
+REPO = os.environ.get("FLIGHTRADAR_OTA_REPO", "mferris/Radome")
 # Overridable so the whole path -- fetch, verify, stage, reject -- can be
 # exercised against a local server in tests. The default is the real thing;
 # nothing about the trust model depends on this being GitHub.
@@ -264,7 +264,7 @@ def installed_version():
 
 
 def fetch(url, limit=MAX_BUNDLE_BYTES):
-    req = urllib.request.Request(url, headers={"User-Agent": "FlightRadar-OTA"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Radome-OTA"})
     with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_S) as r:
         data = r.read(limit + 1)
     if len(data) > limit:
