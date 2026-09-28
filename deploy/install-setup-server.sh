@@ -287,8 +287,14 @@ if ! live; then
   exit 0
 fi
 systemctl reload lighttpd
-restart_unit flightradar-funnel-gateway.service
-restart_unit flightradar-events.service
+# A re-run installs new code over running services; enabling alone does not
+# restart them, so without this a re-run left the previous code running.
+for u in flightradar-setupd.service flightradar-setup.service flightradar-funnel-gateway.service \
+         flightradar-sighting-store.service flightradar-approach-store.service \
+         flightradar-network.service flightradar-photo-proxy.service flightradar-tts.service \
+         flightradar-events.service; do
+  restart_unit "$u"
+done
 systemctl restart systemd-journald
 
 echo "== verifying privileged paths are refused on the public tunnel =="
