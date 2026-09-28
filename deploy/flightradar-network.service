@@ -1,5 +1,5 @@
 [Unit]
-Description=FlightRadar network comparison proxy (local-only)
+Description=Radome network comparison proxy (local-only)
 After=network-online.target lighttpd.service
 Wants=network-online.target
 

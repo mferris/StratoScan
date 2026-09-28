@@ -488,7 +488,7 @@ def apply_records(store, hexcode, entry, payload):
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def version_string(self):
-        return "FlightRadar"
+        return "Radome"
 
     def _json(self, code, payload):
         body = json.dumps(payload).encode()

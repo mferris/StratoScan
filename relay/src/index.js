@@ -1,4 +1,4 @@
-// FlightRadar relay (Cloudflare Worker + D1). See docs/ROADMAP.md.
+// Radome relay (Cloudflare Worker + D1). See docs/ROADMAP.md.
 //
 // POST /v1/heartbeat   signed by a unit; records its health (never a location)
 // GET  /fleet          the maintainer's view of every unit (HTTP Basic auth)
@@ -106,7 +106,7 @@ function needAuth(state) {
   if (state === 'unconfigured') return new Response('fleet view not configured\n', { status: 503 });
   return new Response('authentication required\n', {
     status: 401,
-    headers: { 'WWW-Authenticate': 'Basic realm="FlightRadar fleet", charset="UTF-8"' },
+    headers: { 'WWW-Authenticate': 'Basic realm="Radome fleet", charset="UTF-8"' },
   });
 }
 
@@ -142,7 +142,7 @@ async function fleetPage(env) {
     </tr>`;
   }).join('');
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>FlightRadar fleet</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Radome fleet</title>
 <style>
   body{font:15px/1.4 system-ui,sans-serif;margin:16px;background:#0f1417;color:#e6e6e6}
   table{border-collapse:collapse;width:100%}td,th{padding:8px;border-bottom:1px solid #2a3338;text-align:left;vertical-align:top}
@@ -150,7 +150,7 @@ async function fleetPage(env) {
   input{background:#1b2226;color:#e6e6e6;border:1px solid #2a3338;padding:4px}
   button{background:#23424f;color:#e6e6e6;border:0;padding:5px 10px;margin-left:4px}
 </style></head><body>
-<h1>FlightRadar fleet</h1><p>${rows ? '' : 'No unit has reported yet.'}</p>
+<h1>Radome fleet</h1><p>${rows ? '' : 'No unit has reported yet.'}</p>
 <table><tr><th>Unit</th><th>Version</th><th>Last report</th><th>Uptime</th><th>Status</th><th></th></tr>${rows}</table>
 </body></html>`;
   return new Response(html, {

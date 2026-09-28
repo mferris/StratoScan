@@ -1,6 +1,6 @@
 [Unit]
-Description=FlightRadar shared-memory guard (restarts the kiosk before /dev/shm fills)
-Documentation=https://github.com/mferris/FlightRadar
+Description=Radome shared-memory guard (restarts the kiosk before /dev/shm fills)
+Documentation=https://github.com/mferris/Radome
 
 [Service]
 Type=oneshot

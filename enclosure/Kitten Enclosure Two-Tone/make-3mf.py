@@ -78,7 +78,7 @@ def main():
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<model unit="millimeter" xml:lang="en-US" '
         'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
-        '<metadata name="Application">FlightRadar kitten stand</metadata>'
+        '<metadata name="Application">Radome kitten stand</metadata>'
         f'<resources>{"".join(objects)}</resources>'
         f'<build><item objectid="{assembly_id}"/></build></model>')
 

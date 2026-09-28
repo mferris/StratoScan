@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unprivileged HTTP tier for FlightRadar device setup.
+"""Unprivileged HTTP tier for Radome device setup.
 
 Runs as a normal user and holds no privileges of its own. Anything that
 touches the system is delegated to setupd.py over a unix socket, which
@@ -226,7 +226,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def version_string(self):
-        return "FlightRadar"
+        return "Radome"
 
     def log_message(self, fmt, *args):
         # Never log the query string or body: they carry the WiFi password
@@ -296,7 +296,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._serve_ui()
         if path == "/setup/api/hello":
             return self._send(200, {
-                "product": "FlightRadar",
+                "product": "Radome",
                 "claimed": bool(st.get("claimed")),
                 "steps": st.get("steps", {}),
                 "hasScreen": claim_code() is not None,
@@ -652,7 +652,7 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def version_string(self):
-        return "FlightRadar"
+        return "Radome"
 
     def log_message(self, *a):
         pass  # this endpoint carries the claim code; never log it

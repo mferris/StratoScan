@@ -1,5 +1,5 @@
 [Unit]
-Description=FlightRadar per-aircraft sighting-count shared store
+Description=Radome per-aircraft sighting-count shared store
 After=network.target
 
 [Service]

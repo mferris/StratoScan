@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds the FlightRadar factory image. Run as root on arm64 Linux (GitHub's
+# Builds the Radome factory image. Run as root on arm64 Linux (GitHub's
 # ubuntu-24.04-arm runners), from the repo root:  sudo sh image/build.sh
 #
 # Output in $OUT (default ./image-out):
@@ -57,7 +57,7 @@ mkdir -p "$OUT/src"
 READSB_GIT=$MNT/usr/local/share/adsb-wiki/readsb-install/git
 TAR_GIT=$MNT/usr/local/share/tar1090/git
 {
-  echo "FlightRadar factory image $VERSION (project commit $COMMIT)"
+  echo "Radome factory image $VERSION (project commit $COMMIT)"
   echo "Base: $(basename "$BASE_URL")  sha256 $BASE_SHA256"
   echo "readsb: $(git -C "$READSB_GIT" describe --tags --always 2>/dev/null || echo '?') ($(git -C "$READSB_GIT" rev-parse HEAD 2>/dev/null || echo '?'))"
   echo "tar1090: $(cat "$TAR_GIT/.flightradar-commit")"

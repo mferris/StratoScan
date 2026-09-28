@@ -1,5 +1,5 @@
 [Unit]
-Description=FlightRadar Funnel-facing filtering proxy (rounds receiver.json's coordinates)
+Description=Radome Funnel-facing filtering proxy (rounds receiver.json's coordinates)
 After=network-online.target
 
 [Service]

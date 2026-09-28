@@ -1,5 +1,5 @@
 [Unit]
-Description=Run the FlightRadar network watchdog at boot and every 2 minutes
+Description=Run the Radome network watchdog at boot and every 2 minutes
 
 [Timer]
 # 45s after boot: long enough for NetworkManager to have genuinely tried the

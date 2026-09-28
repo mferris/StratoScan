@@ -1,6 +1,6 @@
 [Unit]
-Description=FlightRadar nightly kiosk restart (bounds the Chromium shm leak)
-Documentation=https://github.com/mferris/FlightRadar
+Description=Radome nightly kiosk restart (bounds the Chromium shm leak)
+Documentation=https://github.com/mferris/Radome
 
 [Service]
 Type=oneshot

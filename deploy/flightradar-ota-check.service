@@ -1,6 +1,6 @@
 [Unit]
-Description=FlightRadar update check (verifies signatures; installs nothing)
-Documentation=https://github.com/mferris/FlightRadar
+Description=Radome update check (verifies signatures; installs nothing)
+Documentation=https://github.com/mferris/Radome
 After=network-online.target
 Wants=network-online.target
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=FlightRadar RDU approach-track shared store
+Description=Radome RDU approach-track shared store
 After=network.target
 
 [Service]

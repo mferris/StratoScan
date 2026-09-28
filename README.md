@@ -1,16 +1,18 @@
-# FlightRadar
+# Radome
+
+*Formerly FlightRadar.*
 
 A live ADS-B flight radar for a wall-mounted round display, built on a
 Raspberry Pi and a cheap SDR dongle — no subscription, no cloud service,
 just a local receiver and a browser.
 
-![FlightRadar running on the physical kiosk display](docs/screenshots/kiosk.png)
+![Radome running on the physical kiosk display](docs/screenshots/kiosk.png)
 
 <sub>Centred on RDU airport. Map: OpenFreeMap © OpenMapTiles, data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).</sub>
 
 ## What it does
 
-Point an RTL-SDR dongle and a small antenna at the sky, and FlightRadar turns
+Point an RTL-SDR dongle and a small antenna at the sky, and Radome turns
 whatever ADS-B traffic it hears into a live circular radar display: bearing,
 range, altitude, speed, heading, airline, aircraft type, route, and (when
 available) a real photo of the airframe. It's designed to run unattended,
@@ -88,7 +90,7 @@ too.
   reset, all without a phone or a shell. This is also the recovery path if
   the admin password is ever forgotten
 - **First-run provisioning for a device you did not configure** — a unit with
-  no known network raises its own `FlightRadar-Setup` WiFi and displays what
+  no known network raises its own `Radome-Setup` WiFi and displays what
   to join, what address to open and a claim code. A captive portal makes the
   setup page open automatically on a phone
 - **Connectivity status** — a pill at the bottom of the display says whether
@@ -137,7 +139,7 @@ too.
 [Antenna] → [RTL-SDR dongle] → [readsb] → aircraft.json (local)
                                                  │
                                                  ▼
-                                   [FlightRadar: fetch + render]
+                                   [Radome: fetch + render]
                                                  │
                                                  ▼
                               [Chromium kiosk, full-screen] → [round display]
@@ -203,7 +205,7 @@ Tailscale auth key.
 
 How a fresh unit behaves:
 
-1. It finds no known WiFi, so after ~45s it raises `FlightRadar-Setup`
+1. It finds no known WiFi, so after ~45s it raises `Radome-Setup`
 2. Its screen shows that network's name and password, the address to open,
    and an 8-character claim code
 3. A phone joining that network gets the setup page automatically, via the
@@ -314,7 +316,7 @@ the dimensional mistakes that are easy to repeat.
 
 **iOS app**: `ios/` is an [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 project. Run `xcodegen generate` inside `ios/` if you change `project.yml`,
-then open `FlightRadar.xcodeproj` in Xcode. Set your own signing team under
+then open `Radome.xcodeproj` in Xcode. Set your own signing team under
 Signing & Capabilities, and point it at your receiver's address in the app's
 Settings screen.
 
@@ -337,7 +339,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes and
 
 ## Data sources
 
-FlightRadar leans entirely on free, no-key-required public data, same as
+Radome leans entirely on free, no-key-required public data, same as
 [tar1090](https://github.com/wiedehopf/tar1090) (GPL-2.0-or-later; it inspired
 several of these choices, but no code is shared):
 

@@ -1,4 +1,4 @@
-# FlightRadar — Project Spec & Shopping List
+# Radome — Project Spec & Shopping List
 *(Pi 5 build, two-wave purchase order)*
 
 A wall-mounted, live ADS-B flight radar on a true round 7" display, built custom (not ported), 3D-printed enclosure on the Bambu H2D.

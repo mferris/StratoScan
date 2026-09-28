@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Root helper for the FlightRadar setup server.
+"""Root helper for the Radome setup server.
 
 This is the privilege boundary. The HTTP server (setup-server.py) runs
 unprivileged and cannot touch the system directly; it asks this process to
@@ -583,7 +583,7 @@ def wifi_rollback():
     if not ok:
         # Last resort: make the device reachable by its own hotspot rather
         # than leaving it dark. This is the path that turns "unrecoverable
-        # brick" into "join FlightRadar-Setup from a phone".
+        # brick" into "join Radome-Setup from a phone".
         with contextlib.suppress(Exception):
             hotspot_start()
     return {"rolledBack": True, "connectivity": ok}
@@ -593,9 +593,9 @@ def hotspot_start():
     run([NMCLI, "connection", "delete", HOTSPOT_PROFILE], timeout=20)
     psk = hotspot_psk()
     run([NMCLI, "device", "wifi", "hotspot", "ifname", "wlan0",
-         "con-name", HOTSPOT_PROFILE, "ssid", "FlightRadar-Setup",
+         "con-name", HOTSPOT_PROFILE, "ssid", "Radome-Setup",
          "password", psk], timeout=45)
-    return {"ssid": "FlightRadar-Setup", "psk": psk}
+    return {"ssid": "Radome-Setup", "psk": psk}
 
 
 def hotspot_psk():
@@ -615,7 +615,7 @@ def hotspot_active():
     """Whether the AP is actually up right now, not merely configured.
 
     The onboarding screen branches on this: telling a recipient to join
-    'FlightRadar-Setup' when the device is already on their WiFi sends them
+    'Radome-Setup' when the device is already on their WiFi sends them
     looking for a network that does not exist.
     """
     p = run([NMCLI, "-t", "-f", "NAME", "connection", "show", "--active"], timeout=15)
@@ -758,7 +758,7 @@ def set_wifi_country(cc):
 # ones do. Entering coordinates by hand remains available for anyone who would
 # rather not send an address anywhere.
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
-GEOCODE_UA = "FlightRadar-kiosk/1.0 (+https://github.com/mferris/FlightRadar)"
+GEOCODE_UA = "Radome-kiosk/1.0 (+https://github.com/mferris/Radome)"
 
 
 def v_query(v):
@@ -1280,7 +1280,7 @@ def reset_full():
     hs = None
     with contextlib.suppress(Exception):
         hs = hotspot_start()
-    return {"reset": "full", "hotspot": (hs or {}).get("ssid", "FlightRadar-Setup"),
+    return {"reset": "full", "hotspot": (hs or {}).get("ssid", "Radome-Setup"),
             "claimCode": code}
 
 
@@ -1293,7 +1293,7 @@ VERBS = {
     "wifi_rollback": lambda p: wifi_rollback(),
     "hotspot_start": lambda p: hotspot_start(),
     "hotspot_stop": lambda p: hotspot_stop(),
-    "hotspot_info": lambda p: {"ssid": "FlightRadar-Setup", "psk": hotspot_psk(),
+    "hotspot_info": lambda p: {"ssid": "Radome-Setup", "psk": hotspot_psk(),
                                "active": hotspot_active(),
                                "address": hotspot_address()},
     "set_location": lambda p: set_location(p.get("lat"), p.get("lon")),

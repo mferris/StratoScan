@@ -3,7 +3,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "FlightRadar's relay: unit heartbeats and fleet health (Cloudflare Worker + D1). See ../docs/ROADMAP.md.",
+  "description": "Radome's relay: unit heartbeats and fleet health (Cloudflare Worker + D1). See ../docs/ROADMAP.md.",
   "scripts": {
     "test": "node --test test/",
     "deploy": "wrangler deploy",

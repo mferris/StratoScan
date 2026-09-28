@@ -1,5 +1,5 @@
 [Unit]
-Description=FlightRadar spoken alerts (local Piper text-to-speech)
+Description=Radome spoken alerts (local Piper text-to-speech)
 After=network.target
 
 [Service]

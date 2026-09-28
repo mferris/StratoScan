@@ -1,4 +1,4 @@
-# FlightRadar relay
+# Radome relay
 
 The one small server the project runs: a Cloudflare Worker with a D1
 database. Today it receives **opt-in health reports** from units and shows

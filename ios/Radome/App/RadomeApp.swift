@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct FlightRadarApp: App {
+struct RadomeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
