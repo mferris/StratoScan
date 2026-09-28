@@ -120,7 +120,8 @@ phone ──(pairing, notification rules)──▶ relay
 | 1.1 RTC battery | Software done: the installer reports the battery; `RTC_RECHARGEABLE=1` enables charging. Cells to be fitted | Fitting a cell and checking the clock survives a power cut |
 | 1.3 Relay | **Done.** Live at stratoscan-relay.example.workers.dev (D1 attached); RDU reporting; fleet page password-protected | — |
 | 1.4 Health reports | **Live**; RDU opted in and reporting every 6 h | — |
-| 1.6 SD re-measure | Scheduled for 2026-09-28 13:00 | — |
+| 1.6 SD re-measure | **Done.** 2.25 GB/day in steady state (was 8.8): about 8 TB over 10 years against a rough 40–70 TB ceiling for a 128 GB card. Last fixes: 2-minute writeback batching, no Chromium shader disk cache. Remaining: journald ~1 GB/day, kept on purpose (logs that survive a crash are worth more) | — |
+| 1.2 Storage off the SD card | **Not needed**, from the 1.6 measurement. Gift units use high-endurance SD cards. The fleet page flags any unit writing over 5 GB/day | Reopen #2 if a unit is ever flagged |
 | 4.1 "What was that?" | Done: rewind button, closest passes from tar1090's in-RAM hour, track on radar | — |
 | 4.2 Notable aircraft | Done: plane-alert-db weekly on each unit; neutral labels; no private names; PIA dropped | — |
 | 4.3 Empty-sky screen | Done: clock, weather (Open-Meteo), today's tally after 30 s of empty sky | — |
