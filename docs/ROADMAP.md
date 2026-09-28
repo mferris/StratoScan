@@ -114,8 +114,8 @@ phone ──(pairing, notification rules)──▶ relay
 
 | Item | State | Waiting on |
 |---|---|---|
-| 1.1 RTC battery | Software done: the installer reports the battery; `RTC_RECHARGEABLE=1` enables charging | ML-2020 cells |
-| 1.3 Relay | **Live** at stratoscan-relay.example.workers.dev (D1 attached); RDU reporting | Fleet-page password (`wrangler secret put FLEET_TOKEN`) |
+| 1.1 RTC battery | Software done: the installer reports the battery; `RTC_RECHARGEABLE=1` enables charging. Cells to be fitted | Fitting a cell and checking the clock survives a power cut |
+| 1.3 Relay | **Done.** Live at stratoscan-relay.example.workers.dev (D1 attached); RDU reporting; fleet page password-protected | — |
 | 1.4 Health reports | **Live**; RDU opted in and reporting every 6 h | — |
 | 1.6 SD re-measure | Scheduled for 2026-09-28 13:00 | — |
 | 4.1 "What was that?" | Done: rewind button, closest passes from tar1090's in-RAM hour, track on radar | — |
@@ -124,4 +124,4 @@ phone ──(pairing, notification rules)──▶ relay
 | 4.4 Spoken announcements | Done: Piper + LJSpeech voice on the unit; setting off by default | — |
 | 4.5 Year in review | Done: per-year counters; RDU's history carried over (44,332 visits in 2026) | — |
 | 4.6 FlightAware feeding | Done: opt-in setup-page card; PiAware relays readsb; remote updates off; FR24 linked, not automated | Owner turns it on and claims the feeder |
-| 1.5 Factory image | Built: CI produces a 1.6 GB image that passes its checks (working unit, no per-unit secrets, GPL sources attached). Not yet published | A spare SD card + Pi to test-flash |
+| 1.5 Factory image | Built: CI produces a 1.6 GB image that passes its checks (working unit, no per-unit secrets, GPL sources attached). Rebuilt as Radome (2026.09.28). Not yet published | A spare SD card + Pi to test-flash |
