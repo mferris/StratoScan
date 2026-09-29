@@ -665,7 +665,10 @@ def dress_offer(offer):
     if not isinstance(offer, dict) or not offer.get("link"):
         return offer
     link = offer["link"]
-    addrs = lan_addresses()
+    # The home-network address, not Tailscale's (100.64.0.0/10) or any other
+    # overlay: the app uses it for the radar view on the owner's WiFi.
+    addrs = [a for a in lan_addresses() if a.startswith(("192.168.", "10.")) or
+             (a.startswith("172.") and a.split(".")[1].isdigit() and 16 <= int(a.split(".")[1]) <= 31)]
     if addrs:
         link += f"&h={addrs[0]}"
     return {**offer, "link": link, "qr": qr_svg(link)}

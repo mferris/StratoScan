@@ -36,7 +36,8 @@ struct PairedRadarsSection: View {
         .sheet(isPresented: $scanning) {
             PairingScannerView { url in
                 scanning = false
-                pairing.handle(url)
+                // Scanned on purpose from this screen: that tap is the confirmation.
+                if let link = PairingStore.parse(url) { Task { await pairing.pair(link) } }
             }
             .ignoresSafeArea()
         }
