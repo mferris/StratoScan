@@ -43,6 +43,8 @@ targets:
         UIStatusBarHidden: true
         UIRequiresFullScreen: false
         UIBackgroundModes: [remote-notification]
+        # Only HTTPS and CryptoKit signing: exempt (App Store export compliance).
+        ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
           - CFBundleURLName: com.NelsonIndustries.radome.pair
             CFBundleURLSchemes: [radome]
