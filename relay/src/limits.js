@@ -8,7 +8,7 @@ export const STALE_AFTER_S = 13 * 3600;  // two missed reports
 
 // Unit events (POST /v1/events). A unit caps itself at 60 ordinary events an
 // hour plus any emergencies; these bound what a misbehaving one can do.
-export const EVENT_KINDS = ['emergency', 'notable', 'low_overhead', 'helicopter', 'test'];
+export const EVENT_KINDS = ['emergency', 'notable', 'low_overhead', 'helicopter', 'test', 'approach', 'approach_end'];
 export const MAX_EVENTS_PER_REQUEST = 20;
 export const EVENTS_PER_HOUR = 120;
 export const EVENTS_PER_UNIT = 500;
@@ -39,6 +39,11 @@ export function cleanEvent(e, requestTs) {
   }
   if (typeof e.hex !== 'string' || !/^[0-9a-f]{6}$/.test(e.hex)) return null;
   out.hex = e.hex;
+  if (e.kind === 'approach_end') return out;
+  if (e.kind === 'approach') {
+    if (!Number.isInteger(e.eta_s) || e.eta_s < 0 || e.eta_s > 600) return null;
+    out.eta_s = e.eta_s;
+  }
   const fields = {
     flight: text(e.flight, 8),
     reg: text(e.reg, 12),
@@ -86,7 +91,7 @@ export function cleanPhoneName(v) {
 }
 
 // Push (roadmap 2.1).
-export const PUSH_KINDS = ['emergency', 'notable', 'low_overhead', 'helicopter'];
+export const PUSH_KINDS = ['emergency', 'notable', 'low_overhead', 'helicopter', 'approach'];
 export const PUSHES_PER_HOUR = 30;      // per phone, ordinary alerts
 export const PUSHES_PER_HOUR_HARD = 60; // per phone, everything: emergencies and tests go past the
                                         // ordinary cap, but a misbehaving unit still cannot flood a phone

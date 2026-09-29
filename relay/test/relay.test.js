@@ -603,3 +603,80 @@ test('a phone paired with nothing is forgotten, token and all', async () => {
   assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM phones WHERE id = ?').get(again.id).n, 0,
     'the unit unpairing everyone forgets them too');
 });
+
+// ---- Live Activities (roadmap 2.4) --------------------------------------------
+
+const LA_TOKEN = 'cd'.repeat(40);
+const ACT_TOKEN = 'ef'.repeat(40);
+
+test('an approaching aircraft starts a Live Activity, and its end ends it', async () => {
+  const { e, a } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  const phone = await pairedPhone(e, u, { kinds: ['approach'] });
+  clock += 1;
+  assert.equal((await register(e, phone, { token: TOKEN, env: 'sandbox', kinds: ['approach'], la_start_token: LA_TOKEN })).status, 200);
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90002', flight: 'N172AB', label: 'Low overhead', eta_s: 160 })]);
+  assert.equal(a.sent.length, 1);
+  const start = a.sent[0];
+  assert.ok(start.url.endsWith(`/3/device/${LA_TOKEN}`), 'sent to the push-to-start token, not the alert token');
+  assert.equal(start.headers['apns-push-type'], 'liveactivity');
+  assert.equal(start.headers['apns-topic'], 'com.example.radome.push-type.liveactivity');
+  assert.equal(start.body.aps.event, 'start');
+  assert.equal(start.body.aps['attributes-type'], 'ApproachAttributes');
+  assert.equal(start.body.aps['content-state'].etaUnix, clock + 160);
+  assert.ok(!JSON.stringify(start.body).match(/"(lat|lon)"/), 'no position');
+
+  clock += 1;
+  const r = await worker.fetch(await signed(phone, JSON.stringify({ unit: u.id, hex: 'a90002', token: ACT_TOKEN }),
+    { path: '/v1/phone/activity', as: 'X-FR-Phone' }), e);
+  assert.equal(r.status, 200);
+  clock += 200;
+  await postEvents(e, u, [evt({ kind: 'approach_end', hex: 'a90002' })]);
+  const end = a.sent.at(-1);
+  assert.ok(end.url.endsWith(`/3/device/${ACT_TOKEN}`), 'ended through the activity\'s own token');
+  assert.equal(end.body.aps.event, 'end');
+  assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM live_activities').get().n, 0);
+});
+
+test('no Live Activity unless the phone asked for one and can start one', async () => {
+  const { e, a } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  await pairedPhone(e, u);                               // alerts only, no push-to-start token
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90002', eta_s: 120 })]);
+  assert.equal(a.sent.length, 0, 'no token: nothing');
+  const p2 = await pairedPhone(e, u, { kinds: ['helicopter'] });
+  clock += 1;
+  await register(e, p2, { token: TOKEN, env: 'sandbox', kinds: ['helicopter'], la_start_token: LA_TOKEN });
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90003', eta_s: 120 })]);
+  assert.equal(a.sent.length, 0, 'not in its chosen kinds: nothing');
+});
+
+test('a dead push-to-start token is forgotten, and the alert token kept', async () => {
+  const { e } = await pushEnv([[410, 'Unregistered']]);
+  const u = await newUnit();
+  clock += 1000;
+  const phone = await pairedPhone(e, u, { kinds: ['approach'] });
+  clock += 1;
+  await register(e, phone, { token: TOKEN, env: 'sandbox', kinds: ['approach'], la_start_token: LA_TOKEN });
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90002', eta_s: 120 })]);
+  assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM live_activity_phones').get().n, 0);
+  assert.equal(e.DB.raw.prepare('SELECT token FROM phones WHERE id = ?').get(phone.id).token, TOKEN);
+});
+
+test('only a paired phone can register an activity; approach events are validated', async () => {
+  const { e } = await pushEnv();
+  const u = await newUnit(), stranger = await newUnit();
+  clock += 1000;
+  const r = await worker.fetch(await signed(stranger, JSON.stringify({ unit: u.id, hex: 'a90002', token: ACT_TOKEN }),
+    { path: '/v1/phone/activity', as: 'X-FR-Phone' }), e);
+  assert.equal(r.status, 403);
+  paired(e, u);
+  clock += 1;
+  assert.equal((await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90002', eta_s: 5000 })])).status, 400, 'eta out of range');
+});

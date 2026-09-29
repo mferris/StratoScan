@@ -173,6 +173,40 @@ check("direction is a compass point, not a bearing", heli["dir"] == "E")
 check("altitude is rounded to 100 ft", heli["alt_ft"] == 1000)
 check("callsign is trimmed", heli["flight"] == "TEST1")
 
+# ---- approaching aircraft (Live Activity) -----------------------------------------
+def inbound(hex_, dist, bearing, track, gs, alt, **k):
+    """An aircraft dist nm away at `bearing` from the antenna, flying `track`."""
+    return ac(hex_, dist=dist, alt=alt, r_dir=bearing, track=track, gs=gs, **k)
+
+d = ev.Detector()
+out = scan(d, inbound("a90002", 8.0, 0, 180, 180, 3000))           # 8 nm north, heading straight at us
+appr = [e for e in out if e["kind"] == "approach"]
+check("a low plane heading our way is an approach", len(appr) == 1 and appr[0]["label"] == "Low overhead")
+check("with the time to the pass (8 nm at 180 kt = 160 s)", appr and appr[0]["eta_s"] == 160)
+check("an approach carries no position", appr and not any(k in appr[0] for k in ("lat", "lon", "r_dst", "r_dir")))
+check("not again while it is on its way", [e for e in scan(d, inbound("a90002", 6.0, 0, 180, 180, 3000), now=1_000_040)
+                                          if e["kind"] == "approach"] == [])
+check("no end before the pass", not any(e["kind"] == "approach_end" for e in scan(d, now=1_000_100)))
+out = scan(d, now=1_000_000 + 160 + ev.APPROACH_END_AFTER_S + 1)
+check("an end shortly after the pass", [e["kind"] for e in out] == ["approach_end"] and out[0]["hex"] == "a90002")
+
+d = ev.Detector()
+check("too far out yet (8 nm at 120 kt = 240 s) is nothing",
+      [e for e in scan(d, inbound("a90002", 8.0, 0, 180, 120, 3000)) if e["kind"] == "approach"] == [])
+check("heading away is nothing",
+      [e for e in scan(d, inbound("a90002", 5.0, 0, 0, 180, 3000)) if e["kind"] == "approach"] == [])
+check("passing 3 nm wide is nothing",       # 5 nm east heading north: closest 5 nm, abeam now
+      [e for e in scan(d, inbound("a90003", 5.0, 90, 0, 180, 3000)) if e["kind"] == "approach"] == [])
+wide = ev.closest_approach({"r_dst": 5.0, "r_dir": 0.0, "track": 270.0, "gs": 180})
+check("the geometry: crossing 5 nm north heading west never comes closer than 5 nm", wide and abs(wide[1] - 5.0) < 0.01 and wide[0] <= 0.5)
+check("a high airliner overhead in 2 minutes is not an approach",
+      [e for e in scan(d, inbound("a90002", 5.0, 0, 180, 180, 33000)) if e["kind"] == "approach"] == [])
+out = scan(d, inbound("aaaac9", 2.8, 90, 270, 80, 1200, category="A7"))   # helicopter 2.8 nm east, heading west
+appr = [e for e in out if e["kind"] == "approach"]
+check("a helicopter heading our way is an approach", appr and appr[0]["label"] == "Helicopter")
+check("a hovering helicopter predicts nothing",
+      ev.closest_approach({"r_dst": 2.0, "r_dir": 0.0, "track": 180.0, "gs": 5}) is None)
+
 # ---- flood control ----------------------------------------------------------------
 d = ev.Detector()
 many = [ac(f"b{i:05x}", dist=1.0, alt=2000) for i in range(80)]

@@ -66,7 +66,19 @@ HELI_RADIUS_NM = 3.0
 # Per aircraft and kind: one event per pass, not one per poll.
 COOLDOWN_S = {"emergency": 30 * 60, "notable": 6 * 3600,
               "low_overhead": 30 * 60, "helicopter": 30 * 60}
+COOLDOWN_S["approach"] = 30 * 60
 MAX_PER_HOUR = 60             # a floor against a bad table or odd traffic; emergencies exempt
+
+# Approaching aircraft (the phone's Live Activity, roadmap 2.4): a plane that
+# qualifies (notable, helicopter or low) and, on its present speed and track,
+# will pass within APPROACH_CPA_NM in the next APPROACH_WARN_S. One event
+# when predicted, carrying the time to the pass (the phone counts down by
+# itself), and one "approach_end" shortly after it.
+APPROACH_WARN_S = 180
+APPROACH_MIN_S = 20           # closer than this, the ordinary alerts already cover it
+APPROACH_CPA_NM = LOW_RADIUS_NM
+APPROACH_MIN_GS = 30          # kt; slower than this (hovering, taxiing) a track predicts nothing
+APPROACH_END_AFTER_S = 45
 
 QUEUE_MAX = 50
 EXPIRE_S = 15 * 60            # a stale alert is worse than none
@@ -316,6 +328,22 @@ def _alt_ft(a):
     return int(alt) if isinstance(alt, (int, float)) else None
 
 
+def closest_approach(a):
+    """(seconds until closest, distance then in nm) on the present track, or None.
+
+    Uses readsb's own distance and bearing from the antenna, so it runs only
+    here on the unit; nothing positional leaves it.
+    """
+    d, b, gs, trk = a.get("r_dst"), a.get("r_dir"), a.get("gs"), a.get("track")
+    if not all(isinstance(v, (int, float)) for v in (d, b, gs, trk)) or gs < APPROACH_MIN_GS:
+        return None
+    x, y = d * math.sin(math.radians(b)), d * math.cos(math.radians(b))     # nm east, north
+    vx, vy = gs * math.sin(math.radians(trk)) / 3600, gs * math.cos(math.radians(trk)) / 3600
+    v2 = vx * vx + vy * vy
+    t = -(x * vx + y * vy) / v2
+    return t, math.hypot(x + vx * t, y + vy * t)
+
+
 def describe(a, info, now):
     """The aircraft part of an event: identity, type, altitude, rounded distance. No position."""
     ev = {"ts": int(now), "hex": a["hex"]}
@@ -340,6 +368,7 @@ class Detector:
         self.types = types or TypeDb()
         self.notable = notable or NotableDb()
         self.fired = {}                        # (hex, kind[, detail]) -> ts
+        self.approaching = {}                  # hex -> expected time of the pass
         self.sent_times = collections.deque()  # non-emergency events in the last hour
 
     def save(self, path=FIRED):
@@ -382,6 +411,34 @@ class Detector:
         ev["kind"] = kind
         out.append(ev)
 
+    def _check_approach(self, out, a, info, dist, alt, now):
+        hex_ = a["hex"]
+        if hex_ in self.approaching or dist <= APPROACH_CPA_NM:
+            return
+        cpa = closest_approach(a)
+        if not cpa:
+            return
+        t, miss = cpa
+        if not (APPROACH_MIN_S <= t <= APPROACH_WARN_S and miss <= APPROACH_CPA_NM):
+            return
+        why = notable_reason(a, info, self.notable)
+        if why:
+            reason = why[0]
+        elif is_rotorcraft(a, info):
+            reason = "Helicopter"
+        elif alt is not None and 0 < alt <= LOW_MAX_ALT_FT:
+            reason = "Low overhead"
+        else:
+            return
+        if not self._due((hex_, "approach"), "approach", now):
+            return
+        ev = describe(a, info, now)
+        ev["label"] = reason[:60]
+        ev["eta_s"] = int(round(t / 10.0)) * 10
+        self._emit(out, (hex_, "approach"), "approach", ev, now)
+        if self.fired.get((hex_, "approach")) == now:       # not held back by the hourly cap
+            self.approaching[hex_] = now + t
+
     def scan(self, doc, now=None):
         """New events for one aircraft.json snapshot."""
         now = now if now is not None else time.time()
@@ -422,12 +479,21 @@ class Detector:
                         ev["operator"] = why[1][:60]
                     self._emit(out, (hex_, "notable"), "notable", ev, now)
 
+            self._check_approach(out, a, info, dist, alt, now)
+
             # A helicopter nearby is a helicopter event, never also a low one.
             if dist <= HELI_RADIUS_NM and is_rotorcraft(a, info):
                 if self._due((hex_, "helicopter"), "helicopter", now):
                     self._emit(out, (hex_, "helicopter"), "helicopter", describe(a, info, now), now)
             elif near_low and self._due((hex_, "low_overhead"), "low_overhead", now):
                 self._emit(out, (hex_, "low_overhead"), "low_overhead", describe(a, info, now), now)
+
+        # An approach is over shortly after its predicted pass (or if the plane
+        # vanished): tell the phone, which ends the Live Activity.
+        for hex_, at in list(self.approaching.items()):
+            if now > at + APPROACH_END_AFTER_S:
+                del self.approaching[hex_]
+                out.append({"kind": "approach_end", "ts": int(now), "hex": hex_})
 
         # forget passes long over, so this never grows without bound
         horizon = max(COOLDOWN_S.values())

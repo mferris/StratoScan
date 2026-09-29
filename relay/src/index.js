@@ -14,6 +14,7 @@
 // POST /v1/phone/unpair          leave a unit
 // POST /v1/phone/register        this phone's push token and which alerts it wants (2.1)
 // POST /v1/phone/test            send this phone a test notification
+// POST /v1/phone/activity        the token of a Live Activity the phone started (to end it later)
 // GET  /fleet          the maintainer's view of every unit (HTTP Basic auth)
 // GET  /fleet.json     the same, as JSON
 // POST /fleet/name     name a unit ("Dad's radar")
@@ -176,7 +177,12 @@ async function deliver(env, unit, evs) {
   for (const phone of results || []) {
     let wants = [];
     try { wants = JSON.parse(phone.kinds); } catch { /* none */ }
-    const mine = ordered.filter(e => e.kind === 'test' || wants.includes(e.kind));
+    // Approaches start and end Live Activities, handled apart from alerts.
+    for (const e of ordered.filter(x => x.kind === 'approach' || x.kind === 'approach_end').slice(0, 2)) {
+      await liveActivity(env, phone, unit, e, wants);
+    }
+    const mine = ordered.filter(e => e.kind !== 'approach' && e.kind !== 'approach_end'
+      && (e.kind === 'test' || wants.includes(e.kind)));
     let dead = false;
     for (const e of mine.slice(0, PUSHES_PER_BATCH)) {
       const r = await pushTo(env, phone, apns.notificationFor(e, unit), e.kind === 'emergency' || e.kind === 'test');
@@ -193,6 +199,23 @@ async function deliver(env, unit, evs) {
   }
 }
 
+async function liveActivity(env, phone, unit, e, wants) {
+  const db = env.DB, now = nowS();
+  if (e.kind === 'approach') {
+    if (!wants.includes('approach')) return;
+    const la = await db.prepare('SELECT start_token FROM live_activity_phones WHERE phone = ?').bind(phone.id).first();
+    if (!la) return;                                    // this phone cannot start one (older iOS, or not allowed)
+    const r = await pushTo(env, phone, apns.approachStart(e, unit, la.start_token, now), false);
+    if (r.dead) await db.prepare('DELETE FROM live_activity_phones WHERE phone = ?').bind(phone.id).run();
+    return;
+  }
+  // approach_end: only if the phone told us about the activity it started.
+  const act = await db.prepare('SELECT token FROM live_activities WHERE phone = ? AND hex = ?').bind(phone.id, e.hex).first();
+  if (!act) return;
+  await pushTo(env, phone, apns.approachEnd(e, act.token, now), true);
+  await db.prepare('DELETE FROM live_activities WHERE phone = ? AND hex = ?').bind(phone.id, e.hex).run();
+}
+
 // One push to one phone, within its hourly allowance. Updates the in-memory
 // row only; the caller writes it back. Marks a token Apple calls dead.
 async function pushTo(env, phone, notification, exempt) {
@@ -202,13 +225,17 @@ async function pushTo(env, phone, notification, exempt) {
   if (phone.window_count >= cap) return { ok: false, reason: 'rate limited' };
   phone.window_count += 1;
   const r = await apns.send(env, phone, notification, now, env.APNS_FETCH || fetch);
-  if (r.dead) phone.dead = true;
+  // A dead Live Activity token says nothing about the phone's alert token.
+  if (r.dead && !notification.token) phone.dead = true;
   return r;
 }
 
 // Forget push details of phones no longer paired with anything.
-const forgetUnpairedPhones = db =>
-  db.prepare('DELETE FROM phones WHERE id NOT IN (SELECT phone FROM pairings)').run();
+const forgetUnpairedPhones = db => db.batch([
+  db.prepare('DELETE FROM phones WHERE id NOT IN (SELECT phone FROM pairings)'),
+  db.prepare('DELETE FROM live_activity_phones WHERE phone NOT IN (SELECT phone FROM pairings)'),
+  db.prepare('DELETE FROM live_activities WHERE phone NOT IN (SELECT phone FROM pairings)'),
+]);
 
 async function phoneRegister(request, env) {
   const { auth, payload, error } = await signedJson(request, 'X-FR-Phone');
@@ -226,11 +253,47 @@ async function phoneRegister(request, env) {
     const paired = await db.prepare('SELECT 1 FROM pairings WHERE phone = ?').bind(auth.unit).first();
     if (!paired) return json(403, { error: 'pair with a radar first' });
   }
-  await db.prepare(
-    `INSERT INTO phones (id, token, env, kinds, updated) VALUES (?1, ?2, ?3, ?4, ?5)
-     ON CONFLICT(id) DO UPDATE SET token = ?2, env = ?3, kinds = ?4, updated = ?5`
-  ).bind(auth.unit, token, payload.env, JSON.stringify(kinds), nowS()).run();
+  const la = payload.la_start_token;
+  if (la !== undefined && la !== null && (typeof la !== 'string' || !/^[0-9a-f]{64,400}$/.test(la))) {
+    return json(400, { error: 'expected a hex push-to-start token' });
+  }
+  await db.batch([
+    db.prepare(
+      `INSERT INTO phones (id, token, env, kinds, updated) VALUES (?1, ?2, ?3, ?4, ?5)
+       ON CONFLICT(id) DO UPDATE SET token = ?2, env = ?3, kinds = ?4, updated = ?5`
+    ).bind(auth.unit, token, payload.env, JSON.stringify(kinds), nowS()),
+    la ? db.prepare(
+      `INSERT INTO live_activity_phones (phone, start_token, updated) VALUES (?1, ?2, ?3)
+       ON CONFLICT(phone) DO UPDATE SET start_token = ?2, updated = ?3`
+    ).bind(auth.unit, la, nowS())
+       : db.prepare('DELETE FROM live_activity_phones WHERE phone = ?').bind(auth.unit),
+  ]);
   return json(200, { ok: true, kinds, push: apns.configured(env) });
+}
+
+// The phone reports the update token of a Live Activity it just started, so
+// the relay can end it after the aircraft has passed.
+async function phoneActivity(request, env) {
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone');
+  if (error) return error;
+  const { unit, hex, token } = payload;
+  if (!isId(unit) || typeof hex !== 'string' || !/^[0-9a-f]{6}$/.test(hex)
+      || typeof token !== 'string' || !/^[0-9a-f]{64,400}$/.test(token)) {
+    return json(400, { error: 'expected unit, hex and a hex token' });
+  }
+  const db = env.DB;
+  const paired = await db.prepare('SELECT 1 FROM pairings WHERE unit = ? AND phone = ?').bind(unit, auth.unit).first();
+  if (!paired) return json(403, { error: 'not paired with that radar' });
+  const now = nowS();
+  await db.batch([
+    db.prepare(
+      `INSERT INTO live_activities (phone, unit, hex, token, created) VALUES (?1, ?2, ?3, ?4, ?5)
+       ON CONFLICT(phone, hex) DO UPDATE SET unit = ?2, token = ?4, created = ?5`
+    ).bind(auth.unit, unit, hex, token, now),
+    // An activity lasts minutes; anything older is stale.
+    db.prepare('DELETE FROM live_activities WHERE created < ?').bind(now - 3600),
+  ]);
+  return json(200, { ok: true });
 }
 
 async function phoneTest(request, env) {
@@ -509,6 +572,7 @@ export default {
     if (pathname === '/v1/phone/unpair' && m === 'POST') return phoneUnpair(request, env);
     if (pathname === '/v1/phone/register' && m === 'POST') return phoneRegister(request, env);
     if (pathname === '/v1/phone/test' && m === 'POST') return phoneTest(request, env);
+    if (pathname === '/v1/phone/activity' && m === 'POST') return phoneActivity(request, env);
     if (pathname === '/fleet' || pathname === '/fleet.json' || pathname === '/fleet/name') {
       const state = maintainer(request, env);
       if (state !== 'ok') return needAuth(state);
