@@ -73,10 +73,36 @@ with tempfile.TemporaryDirectory() as tmp:
     m.check_receiver()
     check("a missing file counts as stale", calls == [["restart", "readsb.service"]])
 
+    # uhubctl present: a hung radio gets its power cut before any reboot.
+    m.UHUBCTL = os.path.join(tmp, "uhubctl")
+    open(m.UHUBCTL, "w").close()
+    m.USB_CYCLED = os.path.join(tmp, "net", "usb-power-cycled")
+    slept = []
+    m.sleep = slept.append
     calls.clear()
     m._write_int(m.RECEIVER_RESTARTS, m.RECEIVER_REBOOT_AFTER)
     m.check_receiver()
-    check("restarts that never help escalate to a reboot", calls == [["reboot"]])
+    offs = [c for c in calls if c[-1] == "off"]
+    ons = [c for c in calls if c[-1] == "on"]
+    check("repeated failures power-cycle USB before rebooting",
+          ["reboot"] not in calls and len(offs) == 4 and len(ons) == 4)
+    first_on = next(i for i, c in enumerate(calls) if c[-1] == "on")
+    check("every hub goes off before any comes back on (the Pi 5's VBUS is shared)",
+          all(i < first_on for i, c in enumerate(calls) if c[-1] == "off"))
+    check("the radio gets time off and time to come back", sum(slept) >= m.USB_OFF_S + m.USB_SETTLE_S)
+    check("then readsb gets one more start", calls[-1] == ["restart", "readsb.service"])
+
+    calls.clear()
+    m.check_receiver()
+    check("a second cycle inside the interval is refused; the reboot follows", calls == [["reboot"]])
+    os.remove(m.LAST_REBOOT)
+    os.remove(m.UHUBCTL)
+    os.remove(m.USB_CYCLED)
+
+    calls.clear()
+    m._write_int(m.RECEIVER_RESTARTS, m.RECEIVER_REBOOT_AFTER)
+    m.check_receiver()
+    check("without uhubctl, restarts that never help escalate to a reboot", calls == [["reboot"]])
 
     calls.clear()
     m.check_receiver()
