@@ -407,7 +407,7 @@ test('a request signed by the iOS app verifies', async () => {
 // Apple is replaced by a recorder (env.APNS_FETCH): real APNs needs HTTP/2
 // from Cloudflare's edge, so it can only be exercised once deployed.
 
-import { PUSHES_PER_HOUR } from '../src/limits.js';
+import { PUSHES_PER_HOUR, PUSHES_PER_HOUR_HARD, PUSHES_PER_BATCH } from '../src/limits.js';
 import * as apns from '../src/apns.js';
 
 async function apnsKey() {
@@ -548,4 +548,56 @@ test('a phone can ask for a test notification', async () => {
   clock += 1;
   assert.equal((await worker.fetch(await signed(p2, '{}', { path: '/v1/phone/test', as: 'X-FR-Phone' }), unset)).status, 503,
     'says plainly when push is not set up');
+});
+
+test('a burst of alerts stays within Cloudflare limits: a few pushes, then one summary', async () => {
+  const { e, a } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  await pairedPhone(e, u);
+  await pairedPhone(e, u);
+  clock += 1;
+  const burst = Array.from({ length: 8 }, (_, i) => evt({ kind: 'low_overhead', hex: (0x200000 + i).toString(16) }));
+  burst.push(evt({ kind: 'emergency', hex: 'aaaaa9', squawk: '7700' }));
+  await postEvents(e, u, burst);
+  assert.equal(a.sent.length, 2 * (PUSHES_PER_BATCH + 1), 'per phone: PUSHES_PER_BATCH alerts and one summary');
+  const first = a.sent[0].body.aps.alert.title;
+  assert.ok(first.startsWith('Emergency'), 'the emergency goes first, not crowded out');
+  assert.equal(a.sent[PUSHES_PER_BATCH].body.aps.alert.body, `${9 - PUSHES_PER_BATCH} more alerts from this radar`);
+});
+
+test('emergencies pass the ordinary cap, but not the hard one', async () => {
+  const { e, a } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  await pairedPhone(e, u, { kinds: ['emergency'] });
+  for (let i = 0; i < PUSHES_PER_HOUR_HARD + 5; i++) {
+    clock += 5;
+    await postEvents(e, u, [evt({ kind: 'emergency', hex: (0x300000 + i).toString(16) })]);
+  }
+  assert.equal(a.sent.length, PUSHES_PER_HOUR_HARD);
+});
+
+test('expired pairing codes never block new ones', async () => {
+  const e = env(), u = await newUnit();
+  const ins = e.DB.raw.prepare('INSERT INTO pairing_offers (unit, secret_hash, expires) VALUES (?, ?, ?)');
+  clock += 1000;
+  for (let i = 0; i < MAX_UNITS; i++) ins.run('old' + i, '0'.repeat(64), clock - 1);
+  assert.equal((await offer(e, u, SECRET)).status, 200);
+  assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM pairing_offers').get().n, 1);
+});
+
+test('a phone paired with nothing is forgotten, token and all', async () => {
+  const { e } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  const phone = await pairedPhone(e, u);
+  clock += 1;
+  await worker.fetch(await signed(phone, JSON.stringify({ unit: u.id }), { path: '/v1/phone/unpair', as: 'X-FR-Phone' }), e);
+  assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM phones').get().n, 0);
+  const again = await pairedPhone(e, u);
+  clock += 1;
+  await worker.fetch(await signed(u, JSON.stringify({ all: true }), { path: '/v1/unit/unpair' }), e);
+  assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM phones WHERE id = ?').get(again.id).n, 0,
+    'the unit unpairing everyone forgets them too');
 });

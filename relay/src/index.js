@@ -30,7 +30,7 @@ import {
   MAX_BODY, MIN_INTERVAL_S, MAX_UNITS, HISTORY_PER_UNIT, assess,
   MAX_EVENTS_PER_REQUEST, EVENTS_PER_HOUR, EVENTS_PER_UNIT, EVENT_RETENTION_S, cleanEvent,
   PAIRING_TTL_S, PAIRING_MAX_ATTEMPTS, MAX_PHONES_PER_UNIT, MAX_UNITS_PER_PHONE, cleanPhoneName,
-  PUSHES_PER_HOUR, cleanKinds,
+  PUSHES_PER_HOUR, PUSHES_PER_HOUR_HARD, PUSHES_PER_BATCH, cleanKinds,
 } from './limits.js';
 import * as apns from './apns.js';
 
@@ -170,28 +170,45 @@ async function deliver(env, unit, evs) {
     `SELECT p.* FROM pairings x JOIN phones p ON p.id = x.phone
       WHERE x.unit = ? AND p.token IS NOT NULL`
   ).bind(unit).all();
+  // Most important first, so a busy batch never crowds out an emergency.
+  const rank = e => (e.kind === 'emergency' ? 0 : e.kind === 'test' ? 1 : 2);
+  const ordered = [...evs].sort((a, b) => rank(a) - rank(b));
   for (const phone of results || []) {
     let wants = [];
     try { wants = JSON.parse(phone.kinds); } catch { /* none */ }
-    for (const e of evs) {
-      if (e.kind !== 'test' && !wants.includes(e.kind)) continue;
-      await pushTo(env, phone, apns.notificationFor(e, unit), e.kind === 'emergency' || e.kind === 'test');
+    const mine = ordered.filter(e => e.kind === 'test' || wants.includes(e.kind));
+    let dead = false;
+    for (const e of mine.slice(0, PUSHES_PER_BATCH)) {
+      const r = await pushTo(env, phone, apns.notificationFor(e, unit), e.kind === 'emergency' || e.kind === 'test');
+      if (r.dead) { dead = true; break; }
     }
+    const rest = mine.length - PUSHES_PER_BATCH;
+    if (!dead && rest > 0) {
+      await pushTo(env, phone, apns.summaryFor(rest, unit), false);
+    }
+    // One write per phone per request: the free plan also caps D1 queries.
+    await db.prepare(
+      `UPDATE phones SET window_start = ?, window_count = ?${phone.dead ? ', token = NULL' : ''} WHERE id = ?`
+    ).bind(phone.window_start, phone.window_count, phone.id).run();
   }
 }
 
-// One push to one phone, within its hourly allowance; forgets dead tokens.
+// One push to one phone, within its hourly allowance. Updates the in-memory
+// row only; the caller writes it back. Marks a token Apple calls dead.
 async function pushTo(env, phone, notification, exempt) {
-  const db = env.DB, now = nowS();
+  const now = nowS();
   if (now - phone.window_start >= 3600) { phone.window_start = now; phone.window_count = 0; }
-  if (!exempt && phone.window_count >= PUSHES_PER_HOUR) return { ok: false, reason: 'rate limited' };
+  const cap = exempt ? PUSHES_PER_HOUR_HARD : PUSHES_PER_HOUR;
+  if (phone.window_count >= cap) return { ok: false, reason: 'rate limited' };
   phone.window_count += 1;
   const r = await apns.send(env, phone, notification, now, env.APNS_FETCH || fetch);
-  await db.prepare(
-    `UPDATE phones SET window_start = ?, window_count = ?${r.dead ? ', token = NULL' : ''} WHERE id = ?`
-  ).bind(phone.window_start, phone.window_count, phone.id).run();
+  if (r.dead) phone.dead = true;
   return r;
 }
+
+// Forget push details of phones no longer paired with anything.
+const forgetUnpairedPhones = db =>
+  db.prepare('DELETE FROM phones WHERE id NOT IN (SELECT phone FROM pairings)').run();
 
 async function phoneRegister(request, env) {
   const { auth, payload, error } = await signedJson(request, 'X-FR-Phone');
@@ -223,7 +240,12 @@ async function phoneTest(request, env) {
   const phone = await env.DB.prepare('SELECT * FROM phones WHERE id = ?').bind(auth.unit).first();
   if (!phone || !phone.token) return json(409, { error: 'This phone has not registered for notifications.' });
   const r = await pushTo(env, phone, apns.notificationFor({ kind: 'test' }, 'test'), true);
-  if (!r.ok) return json(502, { error: `Apple did not accept it (${r.reason || r.status}).` });
+  await env.DB.prepare(
+    `UPDATE phones SET window_start = ?, window_count = ?${phone.dead ? ', token = NULL' : ''} WHERE id = ?`
+  ).bind(phone.window_start, phone.window_count, phone.id).run();
+  if (!r.ok) return json(r.reason === 'rate limited' ? 429 : 502, {
+    error: r.reason === 'rate limited' ? 'Too many notifications this hour; try again later.'
+                                       : `Apple did not accept it (${r.reason || r.status}).` });
   return json(200, { ok: true });
 }
 
@@ -256,6 +278,9 @@ async function unitOffer(request, env) {
     return json(400, { error: 'secret_hash must be a hex SHA-256' });
   }
   const db = env.DB;
+  // Expired codes are dead weight; left in place they would eventually fill
+  // the table and stop every unit from pairing.
+  await db.prepare('DELETE FROM pairing_offers WHERE expires <= ?').bind(nowS()).run();
   const had = await db.prepare('SELECT 1 FROM pairing_offers WHERE unit = ?').bind(auth.unit).first();
   if (!had) {
     const { n } = await db.prepare('SELECT COUNT(*) AS n FROM pairing_offers').first();
@@ -303,6 +328,7 @@ async function unitUnpair(request, env) {
   } else {
     return json(400, { error: 'name a phone, or all: true' });
   }
+  await forgetUnpairedPhones(db);
   return json(200, { ok: true, phones: await phoneCount(db, auth.unit) });
 }
 
@@ -363,6 +389,7 @@ async function phoneUnpair(request, env) {
   if (error) return error;
   if (!isId(payload.unit)) return json(400, { error: 'name a unit' });
   await env.DB.prepare('DELETE FROM pairings WHERE unit = ? AND phone = ?').bind(payload.unit, auth.unit).run();
+  await forgetUnpairedPhones(env.DB);
   return json(200, { ok: true });
 }
 

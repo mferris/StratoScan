@@ -518,39 +518,71 @@ def write_status(detector, sender, on):
         pass
 
 
-def run():
-    detector, sender = Detector(), Sender()
-    detector.load()
-    last_mtime = None
-    print(f"events: watching {AIRCRAFT_JSON}; relay {hb.RELAY_URL or '(none)'}", flush=True)
-    while True:
+def config_mtime():
+    try:
+        return os.path.getmtime(CONFIG)
+    except OSError:
+        return None
+
+
+class Service:
+    """The run loop, one tick at a time (testable without sleeping).
+
+    The service's sandbox makes storage read-only (flightradar-events.service,
+    ProtectSystem=strict), so it never writes the on/off setting itself. When
+    the relay says no phone is paired it pauses instead, until the setting
+    changes: pairing.py, via setupd, owns that file and rewrites it when a
+    phone pairs again.
+    """
+
+    def __init__(self, detector=None, sender=None):
+        self.detector = detector or Detector()
+        self.sender = sender or Sender()
+        self.last_mtime = None
+        self.paused_at = False      # config mtime when paused; False = not paused
+
+    def tick(self):
         on = enabled()
-        if on:
+        if self.paused_at is not False and config_mtime() != self.paused_at:
+            self.paused_at = False  # the setting was rewritten: a phone paired again
+        active = on and self.paused_at is False
+        if active:
             try:
                 m = os.path.getmtime(AIRCRAFT_JSON)
-                if m != last_mtime:
-                    last_mtime = m
+                if m != self.last_mtime:
+                    self.last_mtime = m
                     with open(AIRCRAFT_JSON) as f:
                         doc = json.load(f)
-                    new = detector.scan(doc)
+                    new = self.detector.scan(doc)
                     if new:
-                        detector.save()
+                        self.detector.save()
                     for e in new:
                         print(f"events: {e['kind']} {e.get('flight') or e['hex']}"
                               f" {e.get('label', '')}".rstrip(), flush=True)
-                    sender.add(new)
+                    self.sender.add(new)
             except (OSError, ValueError):
                 pass    # readsb mid-write or restarting; next poll
-            line = sender.flush()
+            line = self.sender.flush()
             if line:
                 print(f"events: {line}", flush=True)
-            if sender.unpaired:
-                set_enabled(False)
-                sender.unpaired = False
+            if self.sender.unpaired:
+                self.sender.unpaired = False
+                self.sender.queue.clear()
+                self.paused_at = config_mtime()
+                print("events: paused until a phone is paired", flush=True)
+                active = False
         else:
-            sender.queue.clear()
-        write_status(detector, sender, on)
-        time.sleep(POLL_S if on else IDLE_POLL_S)
+            self.sender.queue.clear()
+        write_status(self.detector, self.sender, active)
+        return POLL_S if active else IDLE_POLL_S
+
+
+def run():
+    svc = Service()
+    svc.detector.load()
+    print(f"events: watching {AIRCRAFT_JSON}; relay {hb.RELAY_URL or '(none)'}", flush=True)
+    while True:
+        time.sleep(svc.tick())
 
 
 def main(argv):
@@ -570,8 +602,6 @@ def main(argv):
         sender = Sender()
         sender.add([{"kind": "test", "ts": int(time.time()), "label": "Test event from this unit"}])
         print(sender.flush() or "nothing sent (no relay configured)")
-        if sender.unpaired:
-            set_enabled(False)
         return 0 if sender.last and sender.last["status"] and 200 <= sender.last["status"] < 300 else 1
     print("usage: events.py run|status|enable|disable|test", file=sys.stderr)
     return 2
