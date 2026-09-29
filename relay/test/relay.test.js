@@ -287,7 +287,7 @@ const pair = async (e, phone, unit, secret, name = 'Test iPhone') => worker.fetc
 const getAs = async (e, who, path, as = 'X-FR-Unit') => (await worker.fetch(await signed(who, '', { path, method: 'GET', as }), e)).json();
 // A stand-in for the one-time code a unit shows on its screen. Not a credential:
 // real codes are random, made on the unit when pairing starts, and never stored.
-const TEST_PAIRING_CODE = 'test-pairing-code-for-unit-tests';
+const TEST_PAIRING_CODE = 'test-pairing-code-for-unit-tests'; // notsecret
 
 test('a phone that presents the code on screen is paired, once', async () => {
   const e = env(), u = await newUnit(), phone = await newUnit(), late = await newUnit();
@@ -415,7 +415,7 @@ import * as apns from '../src/apns.js';
 async function apnsKey() {
   const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const der = Buffer.from(await crypto.subtle.exportKey('pkcs8', kp.privateKey)).toString('base64');
-  return { pem: `-----BEGIN PRIVATE KEY-----\n${der.match(/.{1,64}/g).join('\n')}\n-----END PRIVATE KEY-----\n`, pub: kp.publicKey };
+  return { pem: `-----BEGIN PRIVATE KEY-----\n${der.match(/.{1,64}/g).join('\n')}\n-----END PRIVATE KEY-----\n`, pub: kp.publicKey }; // notsecret
 }
 
 function apple(replies = []) {
