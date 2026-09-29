@@ -3,12 +3,29 @@
 *Formerly FlightRadar.*
 
 A live ADS-B flight radar for a wall-mounted round display, built on a
-Raspberry Pi and a cheap SDR dongle — no subscription, no cloud service,
-just a local receiver and a browser.
+Raspberry Pi and a cheap SDR dongle — no subscription and no API keys. The
+radar needs nothing but its own receiver and a browser; an optional iPhone
+app brings it to your pocket.
 
 ![Radome running on the physical kiosk display](docs/screenshots/kiosk.png)
 
 <sub>Centred on RDU airport. Map: OpenFreeMap © OpenMapTiles, data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).</sub>
+
+## Status
+
+*As of 2026-09-29.* One unit (RDU) runs around the clock on release
+`2026.09.28.4`. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md) and tracked
+as [issues](https://github.com/mferris/Radome/issues).
+
+| Area | State |
+|---|---|
+| Wall radar (kiosk) | Running unattended; updates itself from signed releases |
+| Phase 4 extras | Done: rewind, notable aircraft, empty-sky screen, spoken announcements, year in review, opt-in FlightAware feeding |
+| Relay (push + fleet health) | Live on Cloudflare Workers |
+| iPhone app | Working on a real iPhone: QR pairing, push alerts, home-screen widget, Live Activity for approaching aircraft, automatic home/away switching, demo mode |
+| Security review | Full scan done 2026-09-28; every finding fixed and verified on the running unit |
+| Factory SD image | Builds and passes its checks in CI; not yet test-flashed or published |
+| Next up | RTC battery fitting, factory image test, StandBy radar, logbook and AR sky view, Apple Watch |
 
 ## What it does
 
@@ -130,8 +147,42 @@ too.
   blocked horizon rather than a deaf receiver
 - **Touch detail panel** — tap any aircraft for registration, squawk, vertical
   rate, and more
-- **Native iOS companion app** — a SwiftUI rebuild of the same radar for
-  iPhone, talking to the same receiver over Tailscale
+- **"What was that?"** — a rewind button lists the closest passes of the last
+  hour and draws the chosen aircraft's track back onto the radar
+- **Notable aircraft** — air ambulances, police, military and historic
+  aircraft are labelled from [plane-alert-db](https://github.com/sdr-enthusiasts/plane-alert-db),
+  refreshed weekly on each unit. Labels are neutral, and private owners'
+  names are never shown
+- **Empty-sky screen** — after 30 seconds with nothing overhead, a clock,
+  the current weather and today's tally
+- **Spoken announcements** (off by default) — a local
+  [Piper](https://github.com/OHF-voice/piper1-gpl) voice names what is
+  passing, generated on the unit with no cloud speech service
+- **Year in review** — per-year counts of what the receiver heard
+- **FlightAware feeding** (opt-in) — a setup-page card installs PiAware to
+  share this receiver's data with FlightAware; it says plainly that the
+  antenna's exact location is shared
+
+### The iPhone app
+
+A native SwiftUI app and widget ([`ios/`](ios/)), paired with a radar by
+scanning a QR code on its screen:
+
+- **The same radar in your pocket** — live aircraft, tap for details, and
+  a label mode that keeps the map readable on a small screen
+- **Alerts wherever you are** — emergency squawks, notable aircraft, low
+  aircraft overhead and helicopters, pushed through the relay. Choose which
+  kinds you want
+- **Live Activity** (opt-in) — when the radar predicts a close pass (within
+  2 miles in the next 3 minutes), a countdown appears on the lock screen and
+  in the Dynamic Island, and closes itself after the pass
+- **Home-screen and lock-screen widget** — how many aircraft are overhead and
+  the nearest few
+- **Home and away** — on your WiFi the app talks to the radar directly; away
+  from home it switches to the radar's public HTTPS page by itself. The away
+  address is learned from the radar
+- **Demo mode** — a few minutes of real traffic recorded near RDU, so the
+  app can be tried without a radar
 
 ## How it works
 
@@ -143,7 +194,19 @@ too.
                                                  │
                                                  ▼
                               [Chromium kiosk, full-screen] → [round display]
+
+ Optional, for the phone app:
+
+ [events.py on the unit] ──signed──▶ [relay: Cloudflare Worker + D1] ──APNs──▶ [iPhone]
+        (what's worth an alert)        (pairing, push, fleet health)     (alerts, Live Activity)
 ```
+
+The **relay** ([`relay/`](relay/)) is the project's one server. Units send it
+signed events and opt-in health reports; it pairs phones with units and holds
+Apple's push key, so no unit ever carries a secret that can act for the whole
+fleet. The radar never depends on it: a unit that cannot reach the relay
+works exactly as before. What it stores, and for how long, is in
+[relay/README.md](relay/README.md).
 
 `readsb` decodes raw ADS-B signals and writes `aircraft.json` to disk.
 `index.html` is a single self-contained page — plain HTML/CSS/JS, Canvas for
@@ -315,23 +378,33 @@ folder's README covers how to export the parts, the interference checks, and
 the dimensional mistakes that are easy to repeat.
 
 **iOS app**: `ios/` is an [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-project. Run `xcodegen generate` inside `ios/` if you change `project.yml`,
-then open `Radome.xcodeproj` in Xcode. Set your own signing team under
-Signing & Capabilities, and point it at your receiver's address in the app's
-Settings screen.
+project (app plus widget extension, iOS 17.2 or later). Run `xcodegen generate`
+inside `ios/` if you change `project.yml`, then open `Radome.xcodeproj` in
+Xcode. To build your own, set your signing team, bundle id and App Group in
+`project.yml`. On the radar, open Settings › Phone & Watch to show a pairing
+code, then scan it from the app. Push alerts need your own relay and an APNs
+key (see [relay/README.md](relay/README.md)); without them the app still
+shows the live radar.
+
+**Relay**: a Cloudflare Worker on the free plan. From `relay/`:
+`npm test`, then `npm run db:init && npx wrangler deploy`. Apple's `.p8` key
+goes in with `wrangler secret put APNS_KEY`, never into the repo.
 
 ## Project structure
 
 ```
 index.html      the whole web app — single file, no build step
 dev-server.py   local-only dev proxy (not deployed)
-deploy/         systemd units, same-origin services, and the setup server
-docs/           hardware/software spec, original prototype, screenshots
+deploy/         systemd units, same-origin services, events, pairing and the setup server
+docs/           roadmap, spec, privacy policy, gifting guide, screenshots
 enclosure/      parametric OpenSCAD source for the printed cases (two designs)
 tests/          regression tests for the security-critical paths
 vendor/         vendored MapLibre GL JS (self-hosted, no CDN dependency)
 sounds/         CC0 audio for the alert sound themes (see sounds/*/CREDITS.md)
-ios/            native SwiftUI companion app
+ios/            native SwiftUI app, widget and Live Activity
+relay/          Cloudflare Worker: pairing, push, fleet health
+scripts/        signed release script
+image/          factory SD-card image build (run in CI)
 ```
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and
@@ -355,6 +428,9 @@ several of these choices, but no code is shared):
 - **[SSEC RealEarth](https://realearth.ssec.wisc.edu/)** (UW-Madison) — satellite-observed lightning strike density (GOES-East GLM)
 - **[Protomaps](https://protomaps.com)** OpenStreetMap builds (© OpenStreetMap contributors, ODbL) — the per-unit offline fallback map built by [`deploy/offline-map.py`](deploy/offline-map.py)
 - **[OurAirports](https://ourairports.com/data/)** (public domain) — the bundled airport table in [`deploy/airports.json`](deploy/airports.json)
+- **[plane-alert-db](https://github.com/sdr-enthusiasts/plane-alert-db)** (ODbL) — the notable-aircraft list
+- **[tar1090-db](https://github.com/wiedehopf/tar1090-db)** — aircraft type and registration from the ICAO address, read from the unit's own tar1090 install
+- **[Open-Meteo](https://open-meteo.com/)** — current weather on the empty-sky screen (free for non-commercial use)
 - **[adsb.lol](https://adsb.lol/)** — community-run ADS-B aggregation, used only by the network comparison, which can be switched off. Queried at most once every 15s no matter how many people are viewing, with coordinates rounded to ~1.1km
 
 Every obligation these carry, and how each is met, is in
@@ -376,7 +452,9 @@ before you do:
   ~0.7 mile precision for public traffic only — your LAN/kiosk always sees
   the exact value, which `readsb` itself needs for its own signal-range math.
   Point your public tunnel at this gateway instead of at `readsb`/lighttpd
-  directly.
+  directly. The gateway also strips each aircraft's distance and bearing
+  *from the antenna* (`r_dst`, `r_dir`) out of the public `aircraft.json`:
+  with two or three aircraft positions, those fields pinpoint the receiver, which undid the rounding entirely.
 - **External data (route text, photo credits, aircraft type) is escaped
   before it touches the DOM.** Some of it — a photographer's display name on
   planespotters.net, for instance — is third-party user-submitted content
@@ -432,9 +510,26 @@ before you do:
   rest of this project does deliberately. `/network` is readable publicly
   but refuses writes, so nobody holding the URL can drive traffic at a
   community-run service on this device's behalf.
-- **No secrets or API keys anywhere.** Every external service this app talks
-  to is free and keyless (see [Data sources](#data-sources) above), so
-  there's nothing to leak.
+- **The display-wake endpoint answers only the device itself.** lighttpd
+  refuses `/wake` from anything but `127.0.0.1` and `::1`, so a LAN device
+  cannot power the panel on or fake the frozen-display heartbeat.
+- **SSH is key-only.** The installer drops
+  [`deploy/10-radome-ssh.conf`](deploy/10-radome-ssh.conf) into
+  `sshd_config.d`: no passwords, no root login, no X11 forwarding. It
+  validates the config with `sshd -t` before reloading.
+- **Downloaded code is pinned.** The Piper speech engine installs with
+  `pip --require-hashes` from
+  [`deploy/tts-requirements.txt`](deploy/tts-requirements.txt), and its voice
+  model is checked against [`deploy/tts-voice.sha256`](deploy/tts-voice.sha256).
+- **Units and phones prove who they are to the relay.** Every unit request is
+  signed with the unit's own Ed25519 key, and every phone request with a key
+  generated on the phone. Pairing takes a one-time code shown on the radar's
+  screen, which expires in 10 minutes or after five wrong guesses. Only a
+  hash of it is stored.
+- **No secrets in the repository or on units.** The radar's data sources are
+  free and keyless (see [Data sources](#data-sources) above). The one secret
+  the project has, Apple's push key, lives only in the relay as a Cloudflare
+  secret.
 - **ATC audio is a link, not an embed.** LiveATC.net's
   [Terms of Use](https://www.liveatc.net/legal/) require consulting them
   before linking directly to a raw audio stream, and separately bar making
@@ -591,14 +686,21 @@ busy sites (SFO, Schiphol) as well as quiet ones:
 - **SD card wear.** The stores keep their data in memory and write at most
   every 10 minutes and on shutdown; they used to rewrite the whole file on
   every sighting (3.5 GB in 17 hours, ~100 GB/day at a busy site once full).
-  Chromium's HTTP cache lives in RAM. The history store evicts the aircraft
-  seen *least recently*, so daily regulars survive a full store.
+  Chromium's HTTP cache lives in RAM, and it keeps no shader cache on disk.
+  Dirty pages are batched for two minutes before writeback. The history store evicts the aircraft
+  seen *least recently*, so daily regulars survive a full store. Measured in
+  steady state: 2.25 GB/day, about 8 TB over ten years, well under a 128 GB
+  high-endurance card's rating.
 - **Recovery without a person.** The hardware watchdog reboots a hung kernel;
   `kernel.panic=10` reboots a panicked one. `net-watchdog.py` also restarts
   `readsb` when its output goes stale and reboots after repeated failed
   restarts, and reboots when the frozen-display watchdog's browser restarts
   keep failing — never more than once every 6 hours, so a fault a reboot
   cannot fix degrades to a few reboots a day, not a loop.
+- **A hung radio is power-cycled, not just rebooted.** The Pi 5 keeps USB
+  power on through a reboot, so a wedged SDR stays wedged. Before rebooting,
+  the watchdog cuts USB power with [uhubctl](https://github.com/mvp/uhubctl)
+  for a few seconds and turns it back on (at most once every 30 minutes).
 - **Security updates** via unattended-upgrades (Debian security and point
   releases, the Raspberry Pi archive, Tailscale), holding Chromium, the
   kernel and firmware — a bad unattended update to those strands a unit.

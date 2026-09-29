@@ -1,8 +1,9 @@
 # Radome relay
 
 The one small server the project runs: a Cloudflare Worker with a D1
-database. Today it receives **opt-in health reports** from units and shows
-the maintainer a fleet page. Phase 2 adds push notifications. The design is
+database. It receives **opt-in health reports** and **events** from units,
+pairs phones with units by QR code, sends push alerts and Live Activities to
+those phones through Apple (APNs), and shows the maintainer a fleet page. The design is
 in [docs/ROADMAP.md](../docs/ROADMAP.md#architecture-the-relay).
 
 **The radar never depends on it.** A unit that can't reach the relay, or has
