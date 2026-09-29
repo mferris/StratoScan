@@ -21,6 +21,7 @@ struct RadomeApp: App {
                 // The widget refreshes on iOS's budget; opening the app is a good moment too.
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     WidgetCenter.shared.reloadAllTimelines()
+                    PushManager.shared.endFinishedActivities()
                 }
         }
     }

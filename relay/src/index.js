@@ -211,7 +211,17 @@ async function liveActivity(env, phone, unit, e, wants) {
   }
   // approach_end: only if the phone told us about the activity it started.
   const act = await db.prepare('SELECT token FROM live_activities WHERE phone = ? AND hex = ?').bind(phone.id, e.hex).first();
-  if (!act) return;
+  if (!act) {
+    // Not reported yet: remember the end, and send it when the token arrives.
+    const had = await db.prepare('SELECT 1 FROM live_activity_phones WHERE phone = ?').bind(phone.id).first();
+    if (had) {
+      await db.prepare(
+        `INSERT INTO live_activity_ends (phone, hex, at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(phone, hex) DO UPDATE SET at = ?3`
+      ).bind(phone.id, e.hex, now).run();
+    }
+    return;
+  }
   await pushTo(env, phone, apns.approachEnd(e, act.token, now), true);
   await db.prepare('DELETE FROM live_activities WHERE phone = ? AND hex = ?').bind(phone.id, e.hex).run();
 }
@@ -235,6 +245,7 @@ const forgetUnpairedPhones = db => db.batch([
   db.prepare('DELETE FROM phones WHERE id NOT IN (SELECT phone FROM pairings)'),
   db.prepare('DELETE FROM live_activity_phones WHERE phone NOT IN (SELECT phone FROM pairings)'),
   db.prepare('DELETE FROM live_activities WHERE phone NOT IN (SELECT phone FROM pairings)'),
+  db.prepare('DELETE FROM live_activity_ends WHERE phone NOT IN (SELECT phone FROM pairings)'),
 ]);
 
 async function phoneRegister(request, env) {
@@ -285,6 +296,22 @@ async function phoneActivity(request, env) {
   const paired = await db.prepare('SELECT 1 FROM pairings WHERE unit = ? AND phone = ?').bind(unit, auth.unit).first();
   if (!paired) return json(403, { error: 'not paired with that radar' });
   const now = nowS();
+  // Did the approach already end before this report? Then end it now.
+  const ended = await db.prepare('SELECT 1 FROM live_activity_ends WHERE phone = ? AND hex = ? AND at > ?')
+    .bind(auth.unit, hex, now - 900).first();
+  if (ended && apns.configured(env)) {
+    const phone = await db.prepare('SELECT * FROM phones WHERE id = ?').bind(auth.unit).first();
+    if (phone) {
+      await pushTo(env, phone, apns.approachEnd({ hex }, token, now), true);
+      await db.prepare('UPDATE phones SET window_start = ?, window_count = ? WHERE id = ?')
+        .bind(phone.window_start, phone.window_count, phone.id).run();
+    }
+    await db.batch([
+      db.prepare('DELETE FROM live_activity_ends WHERE phone = ? AND hex = ?').bind(auth.unit, hex),
+      db.prepare('DELETE FROM live_activity_ends WHERE at < ?').bind(now - 900),
+    ]);
+    return json(200, { ok: true, ended: true });
+  }
   await db.batch([
     db.prepare(
       `INSERT INTO live_activities (phone, unit, hex, token, created) VALUES (?1, ?2, ?3, ?4, ?5)
@@ -292,6 +319,7 @@ async function phoneActivity(request, env) {
     ).bind(auth.unit, unit, hex, token, now),
     // An activity lasts minutes; anything older is stale.
     db.prepare('DELETE FROM live_activities WHERE created < ?').bind(now - 3600),
+    db.prepare('DELETE FROM live_activity_ends WHERE at < ?').bind(now - 900),
   ]);
   return json(200, { ok: true });
 }

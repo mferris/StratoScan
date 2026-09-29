@@ -680,3 +680,25 @@ test('only a paired phone can register an activity; approach events are validate
   clock += 1;
   assert.equal((await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90002', eta_s: 5000 })])).status, 400, 'eta out of range');
 });
+
+test('an end that beats the phone\'s report is kept, and sent when the report arrives', async () => {
+  const { e, a } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  const phone = await pairedPhone(e, u, { kinds: ['approach'] });
+  clock += 1;
+  await register(e, phone, { token: TOKEN, env: 'sandbox', kinds: ['approach'], la_start_token: LA_TOKEN });
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90002', eta_s: 60 })]);
+  clock += 110;
+  await postEvents(e, u, [evt({ kind: 'approach_end', hex: 'a90002' })]);       // before the phone reported
+  assert.equal(a.sent.length, 1, 'nothing to end yet');
+  clock += 20;
+  const r = await worker.fetch(await signed(phone, JSON.stringify({ unit: u.id, hex: 'a90002', token: ACT_TOKEN }),
+    { path: '/v1/phone/activity', as: 'X-FR-Phone' }), e);
+  assert.deepEqual(await r.json(), { ok: true, ended: true });
+  const end = a.sent.at(-1);
+  assert.ok(end.url.endsWith(`/3/device/${ACT_TOKEN}`) && end.body.aps.event === 'end', 'ended as soon as the token arrived');
+  assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM live_activities').get().n, 0);
+  assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM live_activity_ends').get().n, 0);
+});

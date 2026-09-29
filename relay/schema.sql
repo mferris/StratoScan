@@ -86,3 +86,13 @@ CREATE TABLE IF NOT EXISTS live_activities (
   created  INTEGER NOT NULL,
   PRIMARY KEY (phone, hex)
 );
+
+-- An approach can end before the phone has reported its Live Activity's
+-- token (the phone reports it within about a minute of the start). The end
+-- is kept here briefly and sent the moment the token arrives.
+CREATE TABLE IF NOT EXISTS live_activity_ends (
+  phone  TEXT NOT NULL,
+  hex    TEXT NOT NULL,
+  at     INTEGER NOT NULL,
+  PRIMARY KEY (phone, hex)
+);

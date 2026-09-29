@@ -121,15 +121,34 @@ final class PushManager: ObservableObject {
             }
         }
         // Each activity the relay starts: report its own token, used to end it.
+        // Ones that already exist (started while the app was not running)
+        // as well as new ones.
+        for activity in Activity<ApproachAttributes>.activities { report(activity) }
         Task {
-            for await activity in Activity<ApproachAttributes>.activityUpdates {
-                Task {
-                    for await data in activity.pushTokenUpdates {
-                        let hex = data.map { String(format: "%02x", $0) }.joined()
-                        try? await relay.reportActivity(unit: activity.attributes.unit,
-                                                        hex: activity.attributes.hex, token: hex)
-                    }
-                }
+            for await activity in Activity<ApproachAttributes>.activityUpdates { report(activity) }
+        }
+        endFinishedActivities()
+    }
+
+    private func report(_ activity: Activity<ApproachAttributes>) {
+        Task {
+            for await data in activity.pushTokenUpdates {
+                let hex = data.map { String(format: "%02x", $0) }.joined()
+                try? await relay.reportActivity(unit: activity.attributes.unit,
+                                                hex: activity.attributes.hex, token: hex)
+            }
+        }
+    }
+
+    /// A backstop for the relay's end: any card whose pass is over by more
+    /// than two minutes is taken down whenever the app runs.
+    func endFinishedActivities() {
+        let cutoff = Date().addingTimeInterval(-120)
+        for activity in Activity<ApproachAttributes>.activities where activity.content.state.eta < cutoff {
+            Task {
+                var done = activity.content.state
+                done.passed = true
+                await activity.end(ActivityContent(state: done, staleDate: nil), dismissalPolicy: .immediate)
             }
         }
     }
