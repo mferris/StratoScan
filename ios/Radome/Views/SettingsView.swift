@@ -26,6 +26,10 @@ struct SettingsView: View {
                 } footer: {
                     Text("Where the live radar view on this screen reads from. Pairing fills in the radar's home address, which works on your home WiFi. Away from home, use the radar's Tailscale name if you set one up. Alerts don't depend on this: they come through the Radome service wherever you are.")
                 }
+
+                Section {
+                    NavigationLink("About & credits") { CreditsView() }
+                }
             }
             // Saved however the sheet closes, Done or a swipe down.
             .onDisappear { save() }
