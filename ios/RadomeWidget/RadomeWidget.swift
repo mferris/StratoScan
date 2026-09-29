@@ -101,6 +101,13 @@ struct RadomeWidgetView: View {
 }
 
 @main
+struct RadomeWidgets: WidgetBundle {
+    var body: some Widget {
+        RadomeWidget()
+        ApproachLiveActivity()
+    }
+}
+
 struct RadomeWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "RadomeNearby", provider: Provider()) { entry in

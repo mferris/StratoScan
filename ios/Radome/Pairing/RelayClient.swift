@@ -29,8 +29,15 @@ struct RelayClient {
         _ = try await send("POST", "/v1/phone/unpair", ["unit": unit])
     }
 
-    func register(token: String, environment: String, kinds: [String]) async throws {
-        _ = try await send("POST", "/v1/phone/register", ["token": token, "env": environment, "kinds": kinds])
+    func register(token: String, environment: String, kinds: [String], liveActivityToken: String?) async throws {
+        var body: [String: Any] = ["token": token, "env": environment, "kinds": kinds]
+        if let la = liveActivityToken { body["la_start_token"] = la }
+        _ = try await send("POST", "/v1/phone/register", body)
+    }
+
+    /// The update token of a Live Activity the relay just started, so it can end it.
+    func reportActivity(unit: String, hex: String, token: String) async throws {
+        _ = try await send("POST", "/v1/phone/activity", ["unit": unit, "hex": hex, "token": token])
     }
 
     func testPush() async throws {
