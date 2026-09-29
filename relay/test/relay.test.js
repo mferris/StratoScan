@@ -285,18 +285,20 @@ const offer = async (e, u, secret) => worker.fetch(await signed(u,
 const pair = async (e, phone, unit, secret, name = 'Test iPhone') => worker.fetch(await signed(phone,
   JSON.stringify({ unit: unit.id, secret, name }), { path: '/v1/pair', as: 'X-FR-Phone' }), e);
 const getAs = async (e, who, path, as = 'X-FR-Unit') => (await worker.fetch(await signed(who, '', { path, method: 'GET', as }), e)).json();
-const SECRET = 'test-pairing-code-for-unit-tests';
+// A stand-in for the one-time code a unit shows on its screen. Not a credential:
+// real codes are random, made on the unit when pairing starts, and never stored.
+const TEST_PAIRING_CODE = 'test-pairing-code-for-unit-tests';
 
 test('a phone that presents the code on screen is paired, once', async () => {
   const e = env(), u = await newUnit(), phone = await newUnit(), late = await newUnit();
   clock += 1000;
-  assert.equal((await offer(e, u, SECRET)).status, 200);
+  assert.equal((await offer(e, u, TEST_PAIRING_CODE)).status, 200);
   const offered = await getAs(e, u, '/v1/unit/phones');
   assert.ok(offered.offer && offered.offer.expires === clock + PAIRING_TTL_S);
-  assert.equal(e.DB.raw.prepare('SELECT secret_hash FROM pairing_offers').get().secret_hash.includes(SECRET), false,
+  assert.equal(e.DB.raw.prepare('SELECT secret_hash FROM pairing_offers').get().secret_hash.includes(TEST_PAIRING_CODE), false,
     'the relay never stores the secret itself');
 
-  const r = await pair(e, phone, u, SECRET);
+  const r = await pair(e, phone, u, TEST_PAIRING_CODE);
   assert.equal(r.status, 200);
   assert.deepEqual(await r.json(), { ok: true, unit: u.id });
   const list = await getAs(e, u, '/v1/unit/phones');
@@ -305,37 +307,37 @@ test('a phone that presents the code on screen is paired, once', async () => {
   assert.deepEqual((await getAs(e, phone, '/v1/phone/units', 'X-FR-Phone')).units.map(x => x.unit), [u.id]);
 
   clock += 1;
-  assert.equal((await pair(e, late, u, SECRET)).status, 404, 'a second phone cannot reuse the same code');
+  assert.equal((await pair(e, late, u, TEST_PAIRING_CODE)).status, 404, 'a second phone cannot reuse the same code');
 });
 
 test('a wrong, expired or guessed code pairs nothing', async () => {
   const e = env(), u = await newUnit(), phone = await newUnit();
   clock += 1000;
-  await offer(e, u, SECRET);
+  await offer(e, u, TEST_PAIRING_CODE);
   assert.equal((await pair(e, phone, u, 'wrong-secret-0123456')).status, 403);
   for (let i = 1; i < PAIRING_MAX_ATTEMPTS; i++) { clock += 1; await pair(e, phone, u, 'wrong-secret-0123456'); }
   clock += 1;
-  assert.equal((await pair(e, phone, u, SECRET)).status, 404, 'too many wrong guesses void the offer');
+  assert.equal((await pair(e, phone, u, TEST_PAIRING_CODE)).status, 404, 'too many wrong guesses void the offer');
 
-  await offer(e, u, SECRET);
+  await offer(e, u, TEST_PAIRING_CODE);
   clock += PAIRING_TTL_S + 1;
-  assert.equal((await pair(e, phone, u, SECRET)).status, 404, 'expired');
+  assert.equal((await pair(e, phone, u, TEST_PAIRING_CODE)).status, 404, 'expired');
   assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM pairings').get().n, 0);
 
   clock += 1;
-  await offer(e, u, SECRET);
-  const forged = await signed(phone, JSON.stringify({ unit: u.id, secret: SECRET }), { path: '/v1/pair', as: 'X-FR-Unit' });
+  await offer(e, u, TEST_PAIRING_CODE);
+  const forged = await signed(phone, JSON.stringify({ unit: u.id, secret: TEST_PAIRING_CODE }), { path: '/v1/pair', as: 'X-FR-Unit' });
   assert.equal((await worker.fetch(forged, e)).status, 401, 'a phone must name itself as a phone');
 });
 
 test('the unit can withdraw a code, and remove one phone or all', async () => {
   const e = env(), u = await newUnit(), a = await newUnit(), b = await newUnit();
   clock += 1000;
-  await offer(e, u, SECRET);
+  await offer(e, u, TEST_PAIRING_CODE);
   assert.equal((await worker.fetch(await signed(u, '{}', { path: '/v1/unit/pairing/cancel' }), e)).status, 200);
-  assert.equal((await pair(e, a, u, SECRET)).status, 404, 'withdrawn');
+  assert.equal((await pair(e, a, u, TEST_PAIRING_CODE)).status, 404, 'withdrawn');
 
-  for (const p of [a, b]) { clock += 1; await offer(e, u, SECRET); await pair(e, p, u, SECRET); }
+  for (const p of [a, b]) { clock += 1; await offer(e, u, TEST_PAIRING_CODE); await pair(e, p, u, TEST_PAIRING_CODE); }
   clock += 1;
   let r = await worker.fetch(await signed(u, JSON.stringify({ phone: a.id }), { path: '/v1/unit/unpair' }), e);
   assert.deepEqual(await r.json(), { ok: true, phones: 1 });
@@ -350,7 +352,7 @@ test('the unit can withdraw a code, and remove one phone or all', async () => {
 test('a phone can leave a unit, and only its own pairing', async () => {
   const e = env(), u = await newUnit(), a = await newUnit(), b = await newUnit();
   clock += 1000;
-  for (const p of [a, b]) { clock += 1; await offer(e, u, SECRET); await pair(e, p, u, SECRET); }
+  for (const p of [a, b]) { clock += 1; await offer(e, u, TEST_PAIRING_CODE); await pair(e, p, u, TEST_PAIRING_CODE); }
   clock += 1;
   const r = await worker.fetch(await signed(a, JSON.stringify({ unit: u.id }), { path: '/v1/phone/unpair', as: 'X-FR-Phone' }), e);
   assert.equal(r.status, 200);
@@ -362,15 +364,15 @@ test('pairing is bounded', async () => {
   const ins = e.DB.raw.prepare('INSERT INTO pairings (unit, phone, name, created) VALUES (?, ?, NULL, 0)');
   for (let i = 0; i < MAX_PHONES_PER_UNIT; i++) ins.run(u.id, String(i).padStart(43, 'x'));
   clock += 1000;
-  await offer(e, u, SECRET);
-  assert.equal((await pair(e, await newUnit(), u, SECRET)).status, 409);
+  await offer(e, u, TEST_PAIRING_CODE);
+  assert.equal((await pair(e, await newUnit(), u, TEST_PAIRING_CODE)).status, 409);
 });
 
 test('a phone name is made safe', async () => {
   const e = env(), u = await newUnit(), phone = await newUnit();
   clock += 1000;
-  await offer(e, u, SECRET);
-  await pair(e, phone, u, SECRET, 'Mike\u0000s\u2028 phone' + 'x'.repeat(80));
+  await offer(e, u, TEST_PAIRING_CODE);
+  await pair(e, phone, u, TEST_PAIRING_CODE, 'Mike\u0000s\u2028 phone' + 'x'.repeat(80));
   const name = e.DB.raw.prepare('SELECT name FROM pairings').get().name;
   assert.ok(name.startsWith('Mikes phone') && name.length <= 40);
 });
@@ -439,7 +441,7 @@ const register = async (e, phone, body) => worker.fetch(await signed(phone, JSON
 
 async function pairedPhone(e, u, opts = {}) {
   const phone = await newUnit();
-  await offer(e, u, SECRET); await pair(e, phone, u, SECRET);
+  await offer(e, u, TEST_PAIRING_CODE); await pair(e, phone, u, TEST_PAIRING_CODE);
   clock += 1;
   const r = await register(e, phone, { token: opts.token || TOKEN, env: opts.env || 'sandbox', kinds: opts.kinds });
   assert.equal(r.status, 200);
@@ -583,7 +585,7 @@ test('expired pairing codes never block new ones', async () => {
   const ins = e.DB.raw.prepare('INSERT INTO pairing_offers (unit, secret_hash, expires) VALUES (?, ?, ?)');
   clock += 1000;
   for (let i = 0; i < MAX_UNITS; i++) ins.run('old' + i, '0'.repeat(64), clock - 1);
-  assert.equal((await offer(e, u, SECRET)).status, 200);
+  assert.equal((await offer(e, u, TEST_PAIRING_CODE)).status, 200);
   assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM pairing_offers').get().n, 1);
 });
 
