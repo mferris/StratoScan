@@ -2,7 +2,7 @@ name: Radome
 options:
   bundleIdPrefix: com.NelsonIndustries
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "17.2"
   createIntermediateGroups: true
 
 packages:
@@ -14,7 +14,7 @@ targets:
   Radome:
     type: application
     platform: iOS
-    deploymentTarget: "16.0"
+    deploymentTarget: "17.2"
     sources:
       - path: Radome
       - path: Shared
@@ -49,6 +49,7 @@ targets:
         UIStatusBarHidden: true
         UIRequiresFullScreen: false
         UIBackgroundModes: [remote-notification]
+        NSSupportsLiveActivities: true
         # Only HTTPS and CryptoKit signing: exempt (App Store export compliance).
         ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
@@ -70,7 +71,7 @@ targets:
   RadomeWidget:
     type: app-extension
     platform: iOS
-    deploymentTarget: "16.0"
+    deploymentTarget: "17.2"
     sources:
       - path: RadomeWidget
       - path: Shared

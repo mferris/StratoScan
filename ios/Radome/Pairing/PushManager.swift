@@ -1,3 +1,4 @@
+import ActivityKit
 import SwiftUI
 import UIKit
 import UserNotifications
@@ -11,7 +12,7 @@ final class PushManager: ObservableObject {
     static let shared = PushManager()
 
     enum Kind: String, CaseIterable, Identifiable {
-        case emergency, notable, low_overhead, helicopter
+        case emergency, notable, low_overhead, helicopter, approach
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -19,6 +20,7 @@ final class PushManager: ObservableObject {
             case .notable: return "Notable aircraft"
             case .low_overhead: return "Low overhead"
             case .helicopter: return "Helicopters"
+            case .approach: return "Approaching aircraft"
             }
         }
         var detail: String {
@@ -27,6 +29,7 @@ final class PushManager: ObservableObject {
             case .notable: return "Military, rare and listed aircraft within 30 nm"
             case .low_overhead: return "Anything within 2 miles below 5,000 ft"
             case .helicopter: return "Within about 3 miles"
+            case .approach: return "A live countdown on your lock screen when one of the above is about to pass over"
             }
         }
     }
@@ -43,6 +46,8 @@ final class PushManager: ObservableObject {
 
     private let kindsKey = "radome.alertKinds"
     private var token: String?
+    private var liveActivityToken: String?
+    private var watchingActivities = false
     private let relay = RelayClient()
 
     /// Development builds (run from Xcode) get sandbox tokens; TestFlight and
@@ -58,7 +63,8 @@ final class PushManager: ObservableObject {
 
     private init() {
         let saved = UserDefaults.standard.stringArray(forKey: "radome.alertKinds")
-        kinds = Set((saved ?? Kind.allCases.map(\.rawValue)).compactMap(Kind.init(rawValue:)))
+        // Approaching aircraft is opt-in: near an airport it can be frequent.
+        kinds = Set((saved ?? Kind.allCases.filter { $0 != .approach }.map(\.rawValue)).compactMap(Kind.init(rawValue:)))
     }
 
     func refreshPermission() async {
@@ -90,13 +96,41 @@ final class PushManager: ObservableObject {
     private func sendRegistration() async {
         guard let token else { return }
         do {
-            try await relay.register(token: token, environment: environment, kinds: kinds.map(\.rawValue))
+            try await relay.register(token: token, environment: environment, kinds: kinds.map(\.rawValue),
+                                     liveActivityToken: liveActivityToken)
             registered = true
         } catch {
             // Not paired yet is expected before the first pairing; anything
             // else is worth showing.
             registered = false
             message = error.localizedDescription
+        }
+    }
+
+    /// Live Activities for approaching aircraft. Set up at every launch: the
+    /// relay can start one while the app is not running, and iOS then wakes
+    /// the app briefly so it can report that activity's token.
+    func watchLiveActivities() {
+        guard !watchingActivities else { return }
+        watchingActivities = true
+        // The token that lets the relay start an activity on this phone.
+        Task {
+            for await data in Activity<ApproachAttributes>.pushToStartTokenUpdates {
+                liveActivityToken = data.map { String(format: "%02x", $0) }.joined()
+                await sendRegistration()
+            }
+        }
+        // Each activity the relay starts: report its own token, used to end it.
+        Task {
+            for await activity in Activity<ApproachAttributes>.activityUpdates {
+                Task {
+                    for await data in activity.pushTokenUpdates {
+                        let hex = data.map { String(format: "%02x", $0) }.joined()
+                        try? await relay.reportActivity(unit: activity.attributes.unit,
+                                                        hex: activity.attributes.hex, token: hex)
+                    }
+                }
+            }
         }
     }
 
@@ -115,6 +149,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        Task { @MainActor in PushManager.shared.watchLiveActivities() }
         return true
     }
 

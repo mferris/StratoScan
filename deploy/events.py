@@ -30,6 +30,7 @@ expire. Nothing is written to storage while it runs.
   events.py enable    turn events on (pairing a phone does this: pairing.py)
   events.py disable   turn them off
   events.py test      send one synthetic "test" event now
+  events.py test-approach   a pretend approach (and its end), to try a phone's Live Activity
 """
 import collections
 import glob
@@ -669,7 +670,25 @@ def main(argv):
         sender.add([{"kind": "test", "ts": int(time.time()), "label": "Test event from this unit"}])
         print(sender.flush() or "nothing sent (no relay configured)")
         return 0 if sender.last and sender.last["status"] and 200 <= sender.last["status"] < 300 else 1
-    print("usage: events.py run|status|enable|disable|test", file=sys.stderr)
+    if cmd == "test-approach":
+        # A pretend aircraft "passing in 90 s", then its end, through the real
+        # path: relay, Apple, the phone's Live Activity. For checking a phone
+        # works without waiting for real traffic.
+        sender = Sender()
+        now = int(time.time())
+        sender.add([{"kind": "approach", "ts": now, "hex": "abcdef", "flight": "TEST1",
+                     "type": "Test aircraft", "label": "Test approach", "alt_ft": 2000,
+                     "dist_nm": 4.0, "dir": "N", "eta_s": 90}])
+        print(sender.flush() or "nothing sent (no relay configured)")
+        if not (sender.last and sender.last["status"] and 200 <= sender.last["status"] < 300):
+            return 1
+        print("ending it in 100 s...", flush=True)
+        time.sleep(100)
+        sender.next_try = 0
+        sender.add([{"kind": "approach_end", "ts": int(time.time()), "hex": "abcdef"}])
+        print(sender.flush() or "end not sent")
+        return 0
+    print("usage: events.py run|status|enable|disable|test|test-approach", file=sys.stderr)
     return 2
 
 
