@@ -57,12 +57,22 @@ final class PairingStore: ObservableObject {
         return Link(unit: u, secret: s, host: h)
     }
 
+    /// A link waiting for the owner to confirm. Any web page or message can
+    /// open a radome:// link, so nothing pairs without an explicit yes.
+    @Published var pendingLink: Link?
+
     /// Handles a scanned or opened link. Returns false when it is not ours.
     @discardableResult
     func handle(_ url: URL) -> Bool {
         guard let link = Self.parse(url) else { return false }
-        Task { await pair(link) }
+        pendingLink = link
         return true
+    }
+
+    func confirmPending() {
+        guard let link = pendingLink else { return }
+        pendingLink = nil
+        Task { await pair(link) }
     }
 
     func pair(_ link: Link) async {

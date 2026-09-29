@@ -96,6 +96,15 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(pairing).environmentObject(PushManager.shared)
         }
+        .confirmationDialog("Pair with this radar?", isPresented: Binding(
+            get: { pairing.pendingLink != nil },
+            set: { if !$0 { pairing.pendingLink = nil } }), titleVisibility: .visible) {
+            Button("Pair") { pairing.confirmPending() }
+            Button("Cancel", role: .cancel) { pairing.pendingLink = nil }
+        } message: {
+            Text("Only pair with a code shown on your own radar's screen. This phone will get that radar's alerts."
+                 + (pairing.pendingLink?.host.map { "\nRadar at \($0)" } ?? ""))
+        }
         .alert(pairing.message ?? "", isPresented: Binding(
             get: { pairing.message != nil && !showSettings },
             set: { if !$0 { pairing.message = nil } })) {
