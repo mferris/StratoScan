@@ -48,7 +48,13 @@ struct ContentView: View {
                 VStack {
                     hud
                     Spacer()
-                    if viewModel.isDemo {
+                    if viewModel.viaAway && !viewModel.isStale {
+                        Text("AWAY · VIA THE RADAR'S PUBLIC PAGE")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .tracking(2)
+                            .foregroundColor(Color(hex: "#5b7278"))
+                            .padding(.bottom, geo.size.height * 0.08)
+                    } else if viewModel.isDemo {
                         Text("DEMO · TRAFFIC RECORDED NEAR RDU")
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
                             .tracking(2)

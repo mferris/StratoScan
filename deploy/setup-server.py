@@ -300,6 +300,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "claimed": bool(st.get("claimed")),
                 "steps": st.get("steps", {}),
                 "hasScreen": claim_code() is not None,
+                # The public (Funnel) address, if one is live: the phone app
+                # uses it away from home. Already public by definition, and
+                # this route is refused on the Funnel itself.
+                "publicUrl": public_url(),
             })
         if path == "/setup/api/claim" and self.command == "POST":
             return self._claim(st)
@@ -661,6 +665,13 @@ def qr_svg(text):
     return img.to_string(encoding="unicode")
 
 
+def public_url():
+    """The unit's public HTTPS address when its Funnel is on, else None."""
+    ts = _onboard_probe()[2] or {}
+    u = ts.get("publicUrl") if ts.get("funnel") else None
+    return u if isinstance(u, str) and u.startswith("https://") else None
+
+
 def dress_offer(offer):
     if not isinstance(offer, dict) or not offer.get("link"):
         return offer
@@ -671,6 +682,10 @@ def dress_offer(offer):
              (a.startswith("172.") and a.split(".")[1].isdigit() and 16 <= int(a.split(".")[1]) <= 31)]
     if addrs:
         link += f"&h={addrs[0]}"
+    pub = public_url()
+    if pub:
+        from urllib.parse import quote
+        link += f"&p={quote(pub, safe='')}"
     return {**offer, "link": link, "qr": qr_svg(link)}
 
 

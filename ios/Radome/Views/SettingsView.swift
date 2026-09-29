@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var pairing: PairingStore
     @State private var baseURL: String = APIConfig.baseURL
+    @State private var awayURL: String = APIConfig.awayURL ?? ""
 
     var body: some View {
         NavigationView {
@@ -13,19 +14,24 @@ struct SettingsView: View {
                 if !pairing.radars.isEmpty { AlertsSection() }
 
                 Section {
-                    TextField("http://<radar>", text: $baseURL)
-                        .keyboardType(.URL)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                    if let host = pairedHost, baseURL != "http://\(host)" {
-                        Button("Use this radar's home address (\(host))") {
-                            baseURL = "http://\(host)"
-                        }
+                    LabeledContent("At home") {
+                        TextField("http://<radar>", text: $baseURL)
+                            .multilineTextAlignment(.trailing)
+                            .keyboardType(.URL).autocapitalization(.none).disableAutocorrection(true)
                     }
+                    if let host = pairedHost, baseURL != "http://\(host)" {
+                        Button("Use this radar's home address (\(host))") { baseURL = "http://\(host)" }
+                    }
+                    LabeledContent("Away") {
+                        TextField("https://… (optional)", text: $awayURL)
+                            .multilineTextAlignment(.trailing)
+                            .keyboardType(.URL).autocapitalization(.none).disableAutocorrection(true)
+                    }
+                    LabeledContent("Using now", value: viewModel.isDemo ? "Demo" : (viewModel.viaAway ? "Away address" : "Home address"))
                 } header: {
-                    Text("Radar view address")
+                    Text("Radar view")
                 } footer: {
-                    Text("Where the live radar view on this screen reads from. Pairing fills in the radar's home address, which works on your home WiFi. Away from home, use the radar's Tailscale name if you set one up. Alerts don't depend on this: they come through the Radome service wherever you are.")
+                    Text("The app uses the home address on your WiFi and switches to the away address, the radar's public HTTPS page, when you leave. The away address is filled in automatically when the radar has one: turn on its public page in the radar's setup under Remote access. Alerts don't depend on either; they arrive wherever you are.")
                 }
 
                 Section {
@@ -57,8 +63,13 @@ extension SettingsView {
 
     private func save() {
         let t = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return }
-        APIConfig.baseURL = t.hasPrefix("http://") || t.hasPrefix("https://") ? t : "http://\(t)"
+        if !t.isEmpty {
+            let v = t.hasPrefix("http://") || t.hasPrefix("https://") ? t : "http://\(t)"
+            if v != APIConfig.baseURL { APIConfig.baseURL = v }
+        }
+        let a = awayURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let away = a.isEmpty ? nil : (a.hasPrefix("https://") ? a : "https://\(a)")
+        if away != APIConfig.awayURL { APIConfig.awayURL = away }
     }
 }
 

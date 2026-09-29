@@ -23,6 +23,8 @@ final class RadarViewModel: ObservableObject {
     @Published private(set) var aircraftCount: Int = 0
     @Published private(set) var runwayGeoJSON: Data?
     @Published private(set) var isDemo = DemoFeed.isOn
+    /// True while the radar is being read through its public (away) address.
+    @Published private(set) var viaAway = false
 
     /// The aircraft whose details are open, by hex.
     @Published var selectedHex: String?
@@ -121,6 +123,8 @@ final class RadarViewModel: ObservableObject {
             let raw = try await AircraftFeedClient.fetchAircraft()
             lastGoodFetch = Date()
             connected = true
+            let away = !DemoFeed.isOn && Endpoint.shared.whereNow == .away
+            if away != viaAway { viaAway = away }
             applyUpdate(raw)
         } catch {
             connected = false
