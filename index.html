@@ -1374,6 +1374,7 @@ const PRIVATE_COLOR = '#44494e';
 // hasn't decoded yet, not a confirmed GA tail number. See normalizeAircraft.
 const ACQUIRING_LABEL = 'Identifying…';
 const ACQUIRING_COLOR = '#33393e';
+const MILITARY_COLOR = '#4b5a3c';
 
 // scheduled/charter flights are 3 letters + a number (e.g. DAL1234); GA tail
 // numbers (N1182D) correctly don't match and get labeled "Private Aircraft".
@@ -1399,7 +1400,13 @@ function realCallsign(flight) {
   return /[A-Za-z]/.test(cs) ? cs : null;
 }
 
-function airlineFor(cs, hasCallsign) {
+// Military outranks the callsign here too, as in operatorClassOf: an Army
+// Apache calling itself ZEUS41 has a real callsign that is not an airline's,
+// and was badged "Private Aircraft" -- which also queued an owner lookup for
+// it. The hex block says who is flying, whatever the crew typed.
+function airlineFor(cs, hasCallsign, hex) {
+  const mil = hex ? militaryOperator(hex) : null;
+  if (mil) return { icao: null, label: mil, color: MILITARY_COLOR };
   const m = hasCallsign ? /^([A-Z]{3})\d/.exec(cs) : null;
   const icao = m ? m[1] : null;
   const airline = icao ? (AIRLINES[icao] || null) : null;
@@ -3763,7 +3770,7 @@ function classifyGhost(t) {
   const cs0 = realCallsign(t.flight);
   const hasCallsign = !!cs0;
   const cs = cs0 || t.hex.toUpperCase();
-  const airline = airlineFor(cs, hasCallsign);
+  const airline = airlineFor(cs, hasCallsign, t.hex);
   classifySighting({
     hex: t.hex, cs, hasCallsign,
     airlineIcao: airline.icao, airlineLabel: airline.label,
@@ -3940,7 +3947,7 @@ function showGhostPanel(g) {
   // Same badge a local contact gets. The source is named in the note below
   // and by the tag above, so spending the badge on it too would cost the one
   // line that says who is flying.
-  const { label: airlineLabel, color: badgeColor } = airlineFor(title, hasCallsign);
+  const { label: airlineLabel, color: badgeColor } = airlineFor(title, hasCallsign, g.hex);
   const isPrivate = airlineLabel === PRIVATE_LABEL;
   // Sightings are this receiver's own history, keyed by hex. A ghost being
   // absent right now says nothing about whether we have logged it before,
@@ -4615,7 +4622,7 @@ function normalizeAircraft(a) {
   const hasCallsign = !!callsign;
   const cs = callsign || a.hex.toUpperCase();
 
-  const { icao: airlineIcao, label: airlineLabel, color: badgeColor } = airlineFor(cs, hasCallsign);
+  const { icao: airlineIcao, label: airlineLabel, color: badgeColor } = airlineFor(cs, hasCallsign, a.hex);
 
   return {
     hex: a.hex, cs, hasCallsign, bearing, range, alt, hdg, realHdg, speed: a.gs ?? null,
