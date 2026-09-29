@@ -55,7 +55,3 @@ struct NormalizedAircraft {
     }
 }
 
-struct Coordinate {
-    let lat: Double
-    let lon: Double
-}

@@ -8,9 +8,20 @@ enum APIConfig {
     private static let key = "flightradar.baseURL"
     static let defaultBaseURL = "http://radome.local"
 
+    /// Shared with the widget (same App Group), so it reads the same radar.
+    static let appGroup = "group.com.NelsonIndustries.radome"
+    static let shared: UserDefaults = {
+        let d = UserDefaults(suiteName: appGroup) ?? .standard
+        // One-time move of settings saved before the widget existed.
+        if d.string(forKey: key) == nil, let old = UserDefaults.standard.string(forKey: key) {
+            d.set(old, forKey: key)
+        }
+        return d
+    }()
+
     static var baseURL: String {
-        get { UserDefaults.standard.string(forKey: key) ?? defaultBaseURL }
-        set { UserDefaults.standard.set(newValue, forKey: key) }
+        get { shared.string(forKey: key) ?? defaultBaseURL }
+        set { shared.set(newValue, forKey: key) }
     }
 
     static func url(_ path: String) -> URL {

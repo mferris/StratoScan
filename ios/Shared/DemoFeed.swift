@@ -8,8 +8,11 @@ enum DemoFeed {
     private static let key = "radome.demoMode"
 
     static var isOn: Bool {
-        get { UserDefaults.standard.bool(forKey: key) }
-        set { UserDefaults.standard.set(newValue, forKey: key) }
+        get { APIConfig.shared.bool(forKey: key) || UserDefaults.standard.bool(forKey: key) }
+        set {
+            APIConfig.shared.set(newValue, forKey: key)
+            UserDefaults.standard.removeObject(forKey: key)
+        }
     }
 
     private struct Recording: Decodable {

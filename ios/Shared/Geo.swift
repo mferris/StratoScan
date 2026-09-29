@@ -1,5 +1,10 @@
 import Foundation
 
+struct Coordinate {
+    let lat: Double
+    let lon: Double
+}
+
 enum Geo {
     struct BearingRange {
         let bearing: Double

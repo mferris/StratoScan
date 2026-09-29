@@ -17,9 +17,11 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: Radome
+      - path: Shared
     dependencies:
       - package: MapLibre
         product: MapLibre
+      - target: RadomeWidget
     entitlements:
       path: Radome/App/Radome.entitlements
       properties:
@@ -28,6 +30,8 @@ targets:
         aps-environment: development
         # Lets an emergency squawk break through Focus modes.
         com.apple.developer.usernotifications.time-sensitive: true
+        # Shared settings with the widget (the radar's address, demo mode).
+        com.apple.security.application-groups: [group.com.NelsonIndustries.radome]
     info:
       path: Radome/App/Info.plist
       properties:
@@ -60,3 +64,32 @@ targets:
         SWIFT_VERSION: "5.10"
         TARGETED_DEVICE_FAMILY: "1,2"
         ENABLE_PREVIEWS: true
+
+  RadomeWidget:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: RadomeWidget
+      - path: Shared
+    info:
+      path: RadomeWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Radome
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+    entitlements:
+      path: RadomeWidget/RadomeWidget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.NelsonIndustries.radome]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.NelsonIndustries.radome.widget
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.10"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        DEVELOPMENT_TEAM: XXXXXXXXXX
+        CODE_SIGN_STYLE: Automatic
