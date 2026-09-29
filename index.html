@@ -5301,7 +5301,7 @@ function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES', aler
       <div class="dp-field"><div class="dp-label">Speed</div><div class="dp-value">${speedTxt}</div></div>
       <div class="dp-field"><div class="dp-label">Heading</div><div class="dp-value">${hdgTxt}</div></div>
       <div class="dp-field"><div class="dp-label">Vert. rate</div><div class="dp-value">${vrateLabel(p.vrate)}</div></div>
-      <div class="dp-field"><div class="dp-label">Squawk</div><div class="dp-value">${p.squawk ?? '—'}</div></div>
+      <div class="dp-field"><div class="dp-label">Squawk</div><div class="dp-value">${esc(p.squawk ?? '—')}</div></div>
       <div class="dp-field"><div class="dp-label">Range / Brg</div><div class="dp-value">${rangeTxt}</div></div>
       ${!p.rareReason ? '' : `<div class="dp-field dp-rare"><div class="dp-label">Notable</div><div class="dp-value">${esc(p.rareReason.label)}${p.rareReason.operator ? ' · ' + esc(p.rareReason.operator) : ''}</div></div>`}
       <div class="dp-field"><div class="dp-label">Sightings</div><div class="dp-value">${counts.total}</div></div>
