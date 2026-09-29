@@ -11,7 +11,9 @@ final class RadarViewModel: ObservableObject {
     // web version's index.html.
     static let homeOverride: Coordinate? = nil
 
-    let rangeNm: Double = 40
+    // The same outer ring as the kiosk (index.html RANGE_NM), so the phone
+    // and the radar count the same aircraft.
+    let rangeNm: Double = 20
     let fetchInterval: TimeInterval = 1.0
     let staleInterval: TimeInterval = 15
     let dropInterval: TimeInterval = 45
@@ -20,6 +22,26 @@ final class RadarViewModel: ObservableObject {
     @Published private(set) var connected: Bool = false
     @Published private(set) var aircraftCount: Int = 0
     @Published private(set) var runwayGeoJSON: Data?
+    /// The aircraft whose details are open, by hex.
+    @Published var selectedHex: String?
+
+    /// How much each label says. Tapping a plane shows everything, so the
+    /// default keeps the map readable.
+    enum LabelMode: String, CaseIterable {
+        case compact, full, off
+        var next: LabelMode { Self.allCases[(Self.allCases.firstIndex(of: self)! + 1) % Self.allCases.count] }
+        var symbol: String {
+            switch self {
+            case .compact: return "tag"
+            case .full: return "tag.fill"
+            case .off: return "tag.slash"
+            }
+        }
+    }
+    @Published var labelMode: LabelMode =
+        LabelMode(rawValue: UserDefaults.standard.string(forKey: "radome.labelMode") ?? "") ?? .compact {
+        didSet { UserDefaults.standard.set(labelMode.rawValue, forKey: "radome.labelMode") }
+    }
 
     /// True when bearing/range should come from readsb's own r_dst/r_dir.
     /// Always false while a HOME_OVERRIDE is active — see NormalizedAircraft.
@@ -123,6 +145,20 @@ final class RadarViewModel: ObservableObject {
 
         planes = planes.filter { seen.contains($0.key) }
         aircraftCount = planes.values.filter { $0.range <= rangeNm }.count
+    }
+
+    /// The aircraft under a tap: its label first (the big target), then the
+    /// nearest blip within a finger's width. Positions are the ones RadarView
+    /// drew last frame, in the same coordinate space as the tap.
+    func plane(at point: CGPoint) -> PlaneState? {
+        let visible = planes.values.filter { $0.range <= rangeNm }
+        if let hit = visible.first(where: {
+            guard let x = $0.labelX, let y = $0.labelY else { return false }
+            return CGRect(x: x, y: y, width: $0.labelW, height: $0.labelH).insetBy(dx: -6, dy: -6).contains(point)
+        }) { return hit }
+        let nearest = visible.min { hypot($0.anchorX - point.x, $0.anchorY - point.y) < hypot($1.anchorX - point.x, $1.anchorY - point.y) }
+        if let n = nearest, hypot(n.anchorX - point.x, n.anchorY - point.y) < 30 { return n }
+        return nil
     }
 
     private func checkStale() {

@@ -27,6 +27,7 @@
 		B6702FB094B782BC253305C4 /* RadomeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 253708C4759FB636D54CE7FE /* RadomeApp.swift */; };
 		B9B67C3F95E4E43F6BE9CE9E /* PairedRadarsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F02A218B8D94A0157BAD495 /* PairedRadarsSection.swift */; };
 		C69753DE205589E999B71F62 /* RunwayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F19B466EF642F0BCA2029A /* RunwayClient.swift */; };
+		E064CE1110E590F29DEC6F4B /* AircraftDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB1E9DB1392DDDD2FF260B0 /* AircraftDetailView.swift */; };
 		E764625CF5C646B99B879887 /* RelayIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B15F58F7CE332E6A86D2E21 /* RelayIdentity.swift */; };
 		E8B7CB368AB535FDD5EDC6A6 /* RelayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CCEAAB1034430480327F85E /* RelayClient.swift */; };
 		EB80C2098169E49EFA266123 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291E986AEF670EDAD724B1DC /* SettingsView.swift */; };
@@ -60,6 +61,7 @@
 		9FA4F22EA60A35820DF1F1DD /* RouteLookupClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteLookupClient.swift; sourceTree = "<group>"; };
 		A1830CD86FA2C8BA2A10B2FE /* NormalizedAircraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NormalizedAircraft.swift; sourceTree = "<group>"; };
 		A5CD506C01DF1BB9E8ADF899 /* Geo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geo.swift; sourceTree = "<group>"; };
+		BBB1E9DB1392DDDD2FF260B0 /* AircraftDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftDetailView.swift; sourceTree = "<group>"; };
 		C61F1870157C6C22B86BEFBC /* RadarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarViewModel.swift; sourceTree = "<group>"; };
 		E19D2A0D7427942DE7CE2C0A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -79,6 +81,7 @@
 		0584F7E5156EAB31491A005A /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				BBB1E9DB1392DDDD2FF260B0 /* AircraftDetailView.swift */,
 				96A6B94C53EE213482818502 /* AlertsSection.swift */,
 				82D0550591B3A5D10B447D6B /* ContentView.swift */,
 				59D8472601E7A87932540E37 /* MapBackgroundView.swift */,
@@ -259,6 +262,7 @@
 			files = (
 				02D44458B240373C158F99BA /* APIConfig.swift in Sources */,
 				026C830A71C6C9FFF6476AEF /* Aircraft.swift in Sources */,
+				E064CE1110E590F29DEC6F4B /* AircraftDetailView.swift in Sources */,
 				AB1FD195DD76E4F0E485649D /* AircraftFeedClient.swift in Sources */,
 				0DE14D91681F7C764E922EDB /* AircraftTypeClient.swift in Sources */,
 				F116F0F02DB64AF8485758E5 /* AirlineTable.swift in Sources */,
