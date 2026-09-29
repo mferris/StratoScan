@@ -60,6 +60,15 @@ struct ContentView: View {
 
                 VStack {
                     HStack {
+                        // Labels: compact → full → off.
+                        Button {
+                            viewModel.labelMode = viewModel.labelMode.next
+                        } label: {
+                            Image(systemName: viewModel.labelMode.symbol)
+                                .foregroundColor(Color(hex: "#5b7278"))
+                                .padding(10)
+                        }
+                        .accessibilityLabel("Labels: \(viewModel.labelMode.rawValue)")
                         Spacer()
                         Button {
                             showSettings = true
@@ -77,6 +86,13 @@ struct ContentView: View {
         .statusBarHidden(true)
         .onAppear { viewModel.start() }
         .onDisappear { viewModel.stop() }
+        .sheet(item: Binding(
+            get: { viewModel.selectedHex.map(SelectedAircraft.init) },
+            set: { viewModel.selectedHex = $0?.id })) { sel in
+            AircraftDetailView(viewModel: viewModel, hex: sel.id)
+                .presentationDetents([.medium, .large])
+                .preferredColorScheme(.dark)
+        }
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(pairing).environmentObject(PushManager.shared)
         }
@@ -108,6 +124,8 @@ struct ContentView: View {
         return String(format: "%.4f°%@ %.4f°%@ · %.0fNM", abs(home.lat), ns, abs(home.lon), ew, viewModel.rangeNm)
     }
 }
+
+private struct SelectedAircraft: Identifiable { let id: String }
 
 #Preview {
     ContentView().environmentObject(PairingStore())

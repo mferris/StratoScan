@@ -34,6 +34,10 @@ struct RadarView: View {
             }
         }
         .drawingGroup()
+        .contentShape(Rectangle())
+        .gesture(SpatialTapGesture().onEnded { tap in
+            viewModel.selectedHex = viewModel.plane(at: tap.location)?.hex
+        })
     }
 
     private func render(context: inout GraphicsContext, canvasSize: CGSize, now: Date) {
@@ -132,7 +136,12 @@ struct RadarView: View {
             drawBlip(&context, p: p)
         }
 
-        let visible = inRange.filter { $0.range <= viewModel.rangeNm }
+        let inView = inRange.filter { $0.range <= viewModel.rangeNm }
+        // Labels off: only the tapped plane keeps one.
+        let visible = viewModel.labelMode == .off ? inView.filter { $0.hex == viewModel.selectedHex } : inView
+        for p in inView where !visible.contains(where: { $0 === p }) {
+            p.labelX = nil; p.labelY = nil
+        }
 
         // pass 2: measure labels, ease toward desired position
         for p in visible {
@@ -206,6 +215,10 @@ struct RadarView: View {
     }
 
     private func drawBlip(_ context: inout GraphicsContext, p: PlaneState) {
+        if p.hex == viewModel.selectedHex {
+            let ring = Path(ellipseIn: CGRect(x: p.anchorX - 16, y: p.anchorY - 16, width: 32, height: 32))
+            context.stroke(ring, with: .color(.white.opacity(0.85)), lineWidth: 1.5)
+        }
         var tri = Path()
         tri.move(to: CGPoint(x: 0, y: -9))
         tri.addLine(to: CGPoint(x: 6, y: 7))
@@ -240,6 +253,10 @@ struct RadarView: View {
         if let route = viewModel.routeClient.cache[p.cs], let r = route {
             routeLine = "\(r.from) → \(r.to)"
         }
+        if viewModel.labelMode != .full && p.hex != viewModel.selectedHex {
+            return LabelContent(callsign: p.cs, callsignColor: p.color, badgeText: "", badgeColor: p.badgeColor,
+                                typeLine: nil, altLine: PlaneState.altLabel(p.alt), routeLine: nil)
+        }
         return LabelContent(
             callsign: p.cs, callsignColor: p.color,
             badgeText: p.airlineLabel, badgeColor: p.badgeColor,
@@ -258,7 +275,8 @@ struct RadarView: View {
 
     private func measure(_ c: LabelContent, context: GraphicsContext) -> LabelMetrics {
         let pad: CGFloat = 6
-        var lines: [(String, Font)] = [(c.callsign, fontCallsign), (c.badgeText, fontBadge)]
+        var lines: [(String, Font)] = [(c.callsign, fontCallsign)]
+        if !c.badgeText.isEmpty { lines.append((c.badgeText, fontBadge)) }
         if let t = c.typeLine { lines.append((t, fontLine)) }
         lines.append((c.altLine, fontLine))
         if let rt = c.routeLine { lines.append((rt, fontLine)) }
@@ -299,15 +317,17 @@ struct RadarView: View {
         context.draw(csText, at: CGPoint(x: x, y: y), anchor: .topLeading)
         y += csSize + 2
 
-        // badge pill
-        let badgeResolved = context.resolve(Text(content.badgeText).font(fontBadge).foregroundColor(.white))
-        let badgeTextSize = badgeResolved.measure(in: CGSize(width: 400, height: 100))
-        let badgeRect = CGRect(x: x, y: y, width: badgeTextSize.width + 8, height: metrics.lineHeights[1] + 3)
-        context.fill(Path(roundedRect: badgeRect, cornerRadius: 2), with: .color(content.badgeColor))
-        context.draw(badgeResolved, at: CGPoint(x: badgeRect.minX + 4, y: badgeRect.minY + 1.5), anchor: .topLeading)
-        y += badgeRect.height + 2
-
-        var lineIdx = 2
+        var lineIdx = 1
+        if !content.badgeText.isEmpty {
+            // badge pill
+            let badgeResolved = context.resolve(Text(content.badgeText).font(fontBadge).foregroundColor(.white))
+            let badgeTextSize = badgeResolved.measure(in: CGSize(width: 400, height: 100))
+            let badgeRect = CGRect(x: x, y: y, width: badgeTextSize.width + 8, height: metrics.lineHeights[1] + 3)
+            context.fill(Path(roundedRect: badgeRect, cornerRadius: 2), with: .color(content.badgeColor))
+            context.draw(badgeResolved, at: CGPoint(x: badgeRect.minX + 4, y: badgeRect.minY + 1.5), anchor: .topLeading)
+            y += badgeRect.height + 2
+            lineIdx = 2
+        }
         if let t = content.typeLine {
             let text = context.resolve(Text(t).font(fontLine).foregroundColor(colorTextDim))
             context.draw(text, at: CGPoint(x: x, y: y), anchor: .topLeading)
