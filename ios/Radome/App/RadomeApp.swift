@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 @main
 struct RadomeApp: App {
@@ -17,6 +18,10 @@ struct RadomeApp: App {
                 .onOpenURL { pairing.handle($0) }
                 // Push tokens can change; re-register whenever a radar is paired.
                 .task { if !pairing.radars.isEmpty { await push.enable() } }
+                // The widget refreshes on iOS's budget; opening the app is a good moment too.
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                    WidgetCenter.shared.reloadAllTimelines()
+                }
         }
     }
 }
