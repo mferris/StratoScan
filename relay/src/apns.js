@@ -38,10 +38,12 @@ export const configured = env => !!(env.APNS_KEY && env.APNS_KEY_ID && env.APNS_
 // for the other environment) and should be forgotten.
 export async function send(env, phone, notification, nowS, fetchImpl = fetch) {
   const host = phone.env === 'sandbox' ? 'api.sandbox.push.apple.com' : 'api.push.apple.com';
+  const live = notification.liveActivity === true;
   const headers = {
     authorization: `bearer ${await providerToken(env, nowS)}`,
-    'apns-topic': env.APNS_TOPIC,
-    'apns-push-type': 'alert',
+    // Live Activity pushes have their own type and topic.
+    'apns-topic': live ? `${env.APNS_TOPIC}.push-type.liveactivity` : env.APNS_TOPIC,
+    'apns-push-type': live ? 'liveactivity' : 'alert',
     'apns-priority': notification.urgent ? '10' : '5',
     // A stale "helicopter nearby" is worse than none.
     'apns-expiration': String(nowS + (notification.urgent ? 3600 : 600)),
@@ -49,7 +51,7 @@ export async function send(env, phone, notification, nowS, fetchImpl = fetch) {
   if (notification.collapseId) headers['apns-collapse-id'] = notification.collapseId.slice(0, 64);
   let r;
   try {
-    r = await fetchImpl(`https://${host}/3/device/${phone.token}`, {
+    r = await fetchImpl(`https://${host}/3/device/${notification.token || phone.token}`, {
       method: 'POST', headers, body: JSON.stringify(notification.payload),
     });
   } catch (e) {
@@ -115,6 +117,54 @@ export function summaryFor(n, unit) {
       aps: { alert: { title: 'More aircraft', body: `${n} more alert${n === 1 ? '' : 's'} from this radar` },
              'thread-id': unit, 'interruption-level': 'passive' },
       radome: { unit, kind: 'summary' },
+    },
+  };
+}
+
+// ---- Live Activity: an aircraft about to pass over ------------------------------
+// ContentState and Attributes mirror ios/Shared/ApproachActivity.swift exactly.
+// The card counts down on the phone by itself; the relay only starts and ends it.
+
+function approachState(e, nowS, passed) {
+  const s = { etaUnix: nowS + (e.eta_s || 0), passed };
+  if (typeof e.alt_ft === 'number') s.altFt = e.alt_ft;
+  if (typeof e.dist_nm === 'number') s.distNm = e.dist_nm;
+  if (e.dir) s.dir = e.dir;
+  return s;
+}
+
+export function approachStart(e, unit, startToken, nowS) {
+  const who = e.flight || e.reg || e.hex.toUpperCase();
+  return {
+    liveActivity: true,
+    urgent: true,
+    token: startToken,
+    payload: {
+      aps: {
+        timestamp: nowS,
+        event: 'start',
+        'attributes-type': 'ApproachAttributes',
+        attributes: { unit, hex: e.hex, callsign: who, type: e.type || '', reason: e.label || '' },
+        'content-state': approachState(e, nowS, false),
+        'stale-date': nowS + (e.eta_s || 0) + 120,
+        alert: { title: `${e.label || 'Aircraft'} approaching`, body: `${who}${e.type ? ' · ' + e.type : ''} · overhead in about ${Math.max(1, Math.round((e.eta_s || 0) / 60))} min` },
+      },
+    },
+  };
+}
+
+export function approachEnd(e, activityToken, nowS) {
+  return {
+    liveActivity: true,
+    urgent: false,
+    token: activityToken,
+    payload: {
+      aps: {
+        timestamp: nowS,
+        event: 'end',
+        'content-state': { etaUnix: nowS, passed: true },
+        'dismissal-date': nowS + 120,
+      },
     },
   };
 }

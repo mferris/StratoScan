@@ -68,3 +68,21 @@ CREATE TABLE IF NOT EXISTS phones (
   window_start  INTEGER NOT NULL DEFAULT 0,   -- per-phone push rate limit
   window_count  INTEGER NOT NULL DEFAULT 0
 );
+
+-- Live Activities (roadmap 2.4): a card on the phone's lock screen for an
+-- aircraft about to pass over. A phone's push-to-start token lets the relay
+-- start one; each running activity then has its own token, used to end it.
+CREATE TABLE IF NOT EXISTS live_activity_phones (
+  phone        TEXT PRIMARY KEY,
+  start_token  TEXT NOT NULL,        -- APNs push-to-start token (hex)
+  updated      INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS live_activities (
+  phone    TEXT NOT NULL,
+  unit     TEXT NOT NULL,
+  hex      TEXT NOT NULL,            -- the aircraft
+  token    TEXT NOT NULL,            -- this activity's update token (hex)
+  created  INTEGER NOT NULL,
+  PRIMARY KEY (phone, hex)
+);
