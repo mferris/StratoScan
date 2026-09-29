@@ -182,6 +182,19 @@ echo "== long-life hardening (security updates, panic reboot, logs) =="
 install -m 0644 deploy/20auto-upgrades                   /etc/apt/apt.conf.d/20auto-upgrades
 install -m 0644 deploy/52flightradar-unattended-upgrades /etc/apt/apt.conf.d/52flightradar-unattended-upgrades
 install -m 0644 deploy/90-flightradar-sysctl.conf        /etc/sysctl.d/90-flightradar-sysctl.conf
+# SSH by key only (see the file for why). Validated before sshd is touched:
+# a config sshd rejects must never take remote access down with it.
+install -d -m 0755 /etc/ssh/sshd_config.d
+install -m 0644 deploy/10-radome-ssh.conf /etc/ssh/sshd_config.d/10-radome.conf
+if live && command -v sshd >/dev/null 2>&1; then
+  if sshd -t 2>/dev/null; then
+    systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+    echo "  ssh: key-only"
+  else
+    rm -f /etc/ssh/sshd_config.d/10-radome.conf
+    echo "  ssh: config rejected by sshd -t; left unchanged"
+  fi
+fi
 install -d -m 0755 /etc/systemd/journald.conf.d
 install -m 0644 deploy/journald-flightradar.conf /etc/systemd/journald.conf.d/flightradar.conf
 # Applying sysctl in the image build would change the BUILD machine's kernel;
@@ -224,9 +237,21 @@ echo "== spoken alerts (Piper text-to-speech, offline) =="
 TTS=/opt/flightradar/tts
 install -d -m 0755 "$TTS" "$TTS/voices"
 [ -x "$TTS/venv/bin/python" ] || python3 -m venv "$TTS/venv"
-"$TTS/venv/bin/pip" install -q "piper-tts==$PIPER_VERSION"
+# Every package pinned by version AND hash (deploy/tts-requirements.txt):
+# this runs as root, so a tampered upload of any dependency must fail the
+# install rather than run.
+"$TTS/venv/bin/pip" install -q --require-hashes -r deploy/tts-requirements.txt
+grep -q "^piper-tts==$PIPER_VERSION " deploy/tts-requirements.txt \
+  || { echo "  PIPER_VERSION and tts-requirements.txt disagree"; exit 1; }
 [ -f "$TTS/voices/$VOICE.onnx" ] || \
   "$TTS/venv/bin/python" -m piper.download_voices "$VOICE" --data-dir "$TTS/voices"
+# The voice files, against the checksums recorded when this voice was chosen.
+VOICE_SUMS="$(pwd)/deploy/tts-voice.sha256"
+if ! (cd "$TTS/voices" && sha256sum -c --quiet "$VOICE_SUMS"); then
+  rm -f "$TTS/voices/$VOICE.onnx" "$TTS/voices/$VOICE.onnx.json"
+  echo "  voice files do not match deploy/tts-voice.sha256; removed"
+  exit 1
+fi
 chmod -R a+rX "$TTS"
 
 echo "== the kiosk (desktop user: ${KIOSK_USER:-none}) =="
