@@ -51,6 +51,34 @@ enum AirlineTable {
 
     static let privateLabel = "Private Aircraft"
     static let privateColor = Color(hex: "#44494e")
+    static let militaryColor = Color(hex: "#4b5a3c")
+
+    /// ICAO address blocks allocated to military/government airframes — a copy
+    /// of MILITARY_HEX_RANGES in the web version's index.html; keep the two in
+    /// sync. Deliberately a conservative subset: a missing range costs a
+    /// missed label, a wrong one mislabels a civil aircraft.
+    static let militaryHexRanges: [(lo: UInt32, hi: UInt32, who: String)] = [
+        (0x33ff00, 0x33ffff, "Italian military"),
+        (0x350000, 0x37ffff, "Spanish military"),
+        (0x3aa000, 0x3affff, "French military"),
+        (0x3b7000, 0x3bffff, "French military"),
+        (0x3ea000, 0x3ebfff, "German military"),
+        (0x3f4000, 0x3fbfff, "German military"),
+        (0x400000, 0x40003f, "UK military"),
+        (0x43c000, 0x43cfff, "UK military"),
+        (0x480000, 0x480fff, "Dutch military"),
+        (0x4b7000, 0x4b7fff, "Swiss military"),
+        (0xadf7c8, 0xafffff, "US military"),
+        (0xc20000, 0xc3ffff, "Canadian military"),
+        (0xe40000, 0xe41fff, "Brazilian military"),
+    ]
+
+    /// The military operator an ICAO address belongs to, if any. Keys off the
+    /// hex block, which a crew cannot change by typing a different callsign.
+    static func militaryOperator(hex: String) -> String? {
+        guard let v = UInt32(hex, radix: 16) else { return nil }
+        return militaryHexRanges.first { v >= $0.lo && v <= $0.hi }?.who
+    }
 }
 
 extension Color {

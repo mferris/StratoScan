@@ -16,6 +16,8 @@ struct NormalizedAircraft {
     let lon: Double?
     let airlineIcao: String?
     let airline: Airline?
+    /// The military operator named by the hex block ("US military"), if any.
+    let military: String?
 
     /// - Parameter trustPrecomputed: false when a HOME_OVERRIDE is active —
     ///   r_dst/r_dir are relative to the receiver's real antenna position,
@@ -42,15 +44,22 @@ struct NormalizedAircraft {
         // scheduled/charter flights are 3 letters + a number (e.g. DAL1234);
         // GA tail numbers (N1182D) and hex-fallback callsigns won't match,
         // and correctly get labeled "Private Aircraft" with no route lookup
+        //
+        // Military outranks the callsign, as in the web version: an Army
+        // Apache calling itself ZEUS41 has a callsign that is not an
+        // airline's, and was labelled "Private Aircraft". The hex block
+        // says who is flying, whatever the crew typed.
+        let military = AirlineTable.militaryOperator(hex: a.hex)
         var airlineIcao: String? = nil
-        if let range3 = cs.range(of: #"^[A-Z]{3}\d"#, options: .regularExpression) {
+        if military == nil, let range3 = cs.range(of: #"^[A-Z]{3}\d"#, options: .regularExpression) {
             airlineIcao = String(cs[cs.startIndex..<range3.upperBound].dropLast())
         }
         let airline = airlineIcao.flatMap { AirlineTable.byICAO[$0] }
 
         return NormalizedAircraft(
             hex: a.hex, cs: cs, bearing: bearing, range: range, alt: alt, hdg: hdg,
-            speed: a.gs, lat: a.lat, lon: a.lon, airlineIcao: airlineIcao, airline: airline
+            speed: a.gs, lat: a.lat, lon: a.lon, airlineIcao: airlineIcao, airline: airline,
+            military: military
         )
     }
 }

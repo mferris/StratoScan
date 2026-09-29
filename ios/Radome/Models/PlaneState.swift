@@ -55,8 +55,13 @@ final class PlaneState: Identifiable {
         lat = n.lat
         lon = n.lon
         airlineIcao = n.airlineIcao
-        airlineLabel = n.airline?.name ?? AirlineTable.privateLabel
-        badgeColor = n.airline?.color ?? AirlineTable.privateColor
+        if let military = n.military {
+            airlineLabel = military
+            badgeColor = AirlineTable.militaryColor
+        } else {
+            airlineLabel = n.airline?.name ?? AirlineTable.privateLabel
+            badgeColor = n.airline?.color ?? AirlineTable.privateColor
+        }
         lastSeen = Date()
     }
 
