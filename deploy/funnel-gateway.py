@@ -29,6 +29,14 @@ import urllib.request
 UPSTREAM = "http://127.0.0.1:80"
 LISTEN = ("127.0.0.1", 8085)
 ROUNDED_PATH = "/tar1090/data/receiver.json"
+# readsb puts every aircraft's distance and bearing FROM THE ANTENNA in
+# aircraft.json (r_dst, r_dir). With the aircraft's own lat/lon, that locates
+# the antenna exactly: measured 2026-09-28 against RDU's public URL, three
+# aircraft put it within 54 m, which made rounding receiver.json pointless.
+# Public requests get the feed without them; the page falls back to
+# computing range from the (rounded) receiver position.
+STRIPPED_PATH = "/tar1090/data/aircraft.json"
+STRIPPED_FIELDS = ("r_dst", "r_dir")
 COORD_PRECISION = 2  # decimal places -- ~0.7mi at this latitude
 
 # Paths refused for public (Funnel) traffic. /wake physically powers the
@@ -74,6 +82,16 @@ assert "/wake" in LOCAL_ONLY_PATHS and "/setup" in LOCAL_ONLY_PATHS, \
 # these prefixes.
 def _matches(base, paths):
     return any(base.startswith(p) for p in paths)
+
+
+def strip_antenna_relative(data):
+    """aircraft.json without the fields measured from the antenna (STRIPPED_FIELDS)."""
+    if isinstance(data, dict) and isinstance(data.get("aircraft"), list):
+        for a in data["aircraft"]:
+            if isinstance(a, dict):
+                for k in STRIPPED_FIELDS:
+                    a.pop(k, None)
+    return data
 
 
 def forward_headers(items):
@@ -181,6 +199,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         if self.command == "GET" and self._is_rounded_receiver_json(self.path):
             self._serve_rounded_receiver_json()
+        elif self.command in ("GET", "HEAD") and self._normalise(self.path) == STRIPPED_PATH:
+            self._serve_stripped_aircraft_json()
         else:
             self._proxy()
 
@@ -245,6 +265,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._send_security_headers()
         self.end_headers()
         self.wfile.write(body)
+
+    def _serve_stripped_aircraft_json(self):
+        try:
+            with _opener.open(UPSTREAM + STRIPPED_PATH, timeout=5) as upstream:
+                data = json.loads(upstream.read())
+        except Exception:
+            self.send_response(502)
+            self.end_headers()
+            return
+        body = json.dumps(strip_antenna_relative(data), separators=(",", ":")).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self._send_security_headers()
+        self.end_headers()
+        if self.command == "GET":
+            self.wfile.write(body)
 
     def _proxy(self):
         length = int(self.headers.get("Content-Length", 0) or 0)

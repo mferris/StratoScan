@@ -146,10 +146,32 @@ def main():
     if is_rounded_receiver_json("/tar1090/data/receiver.jsonx"):
         failures.append("wrongly matched: '/tar1090/data/receiver.jsonx'")
 
+    # aircraft.json carries each aircraft's distance and bearing from the
+    # antenna (r_dst, r_dir), which locate it exactly (54 m from three
+    # aircraft on RDU's public URL, 2026-09-28). Every spelling that reaches
+    # the file must be served stripped. These variants all returned the raw
+    # feed through the live tunnel before the fix.
+    strip_checks = 0
+    for p in ["/tar1090/data/aircraft.json", "/tar1090//data/aircraft.json",
+              "/tar1090/data/./aircraft.json", "/tar1090/data/aircraft.json?x=1",
+              "/tar1090/data/aircraft%2Ejson", "/x/../tar1090/data/aircraft.json"]:
+        strip_checks += 1
+        if fg.Handler._normalise(p) != fg.STRIPPED_PATH:
+            failures.append(f"NOT STRIPPED (location leak): {p!r}")
+    sample = {"now": 1, "aircraft": [{"hex": "abc123", "lat": 35.9, "lon": -78.7, "r_dst": 3.2, "r_dir": 41.0},
+                                     {"hex": "def456", "alt_baro": 3000}]}
+    out = fg.strip_antenna_relative(sample)
+    strip_checks += 1
+    if any(k in a for a in out["aircraft"] for k in ("r_dst", "r_dir")):
+        failures.append("strip_antenna_relative left r_dst/r_dir in place")
+    strip_checks += 1
+    if out["aircraft"][0].get("lat") != 35.9 or out["aircraft"][1].get("alt_baro") != 3000:
+        failures.append("strip_antenna_relative removed something else")
+
     for f in failures:
         print("FAIL:", f)
     total = (len(MUST_BLOCK) + len(MUST_ALLOW) + len(MUST_BE_READ_ONLY)
-             + marker_checks + round_checks)
+             + marker_checks + round_checks + strip_checks)
     print(f"{total - len(failures)}/{total} path checks passed")
     return 1 if failures else 0
 
