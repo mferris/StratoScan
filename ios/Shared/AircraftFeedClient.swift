@@ -3,10 +3,20 @@ import Foundation
 enum AircraftFeedClient {
     static func fetchAircraft() async throws -> [RawAircraft] {
         if DemoFeed.isOn { return DemoFeed.aircraft() }
+        await Endpoint.shared.resolve()
         var req = URLRequest(url: APIConfig.url("/tar1090/data/aircraft.json"))
         req.cachePolicy = .reloadIgnoringLocalCacheData
-        let (data, response) = try await URLSession.shared.data(for: req)
+        req.timeoutInterval = 8
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: req)
+        } catch {
+            Endpoint.shared.invalidate()   // perhaps we just left (or came) home
+            throw error
+        }
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            Endpoint.shared.invalidate()
             throw URLError(.badServerResponse)
         }
         return try JSONDecoder().decode(AircraftFeedResponse.self, from: data).aircraft
@@ -14,8 +24,10 @@ enum AircraftFeedClient {
 
     static func fetchReceiver() async throws -> Coordinate? {
         if DemoFeed.isOn { return DemoFeed.home }
+        await Endpoint.shared.resolve()
         var req = URLRequest(url: APIConfig.url("/tar1090/data/receiver.json"))
         req.cachePolicy = .reloadIgnoringLocalCacheData
+        req.timeoutInterval = 8      // not iOS's default 60 s: the widget must not hang
         let (data, response) = try await URLSession.shared.data(for: req)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             throw URLError(.badServerResponse)

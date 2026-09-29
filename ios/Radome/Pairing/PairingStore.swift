@@ -40,6 +40,7 @@ final class PairingStore: ObservableObject {
         let unit: String
         let secret: String
         let host: String?
+        var publicURL: String? = nil
     }
 
     /// A pairing link, or nil for anything else. Strict about shapes: the
@@ -54,7 +55,12 @@ final class PairingStore: ObservableObject {
         else { return nil }
         let hostChars = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
         let h = q("h").flatMap { $0.count <= 253 && $0.unicodeScalars.allSatisfy(hostChars.contains) ? $0 : nil }
-        return Link(unit: u, secret: s, host: h)
+        // The radar's public address (its Tailscale Funnel), HTTPS only.
+        let p = q("p").flatMap { v -> String? in
+            guard v.count <= 200, let u = URL(string: v), u.scheme == "https", u.host != nil else { return nil }
+            return v
+        }
+        return Link(unit: u, secret: s, host: h, publicURL: p)
     }
 
     /// A link waiting for the owner to confirm. Any web page or message can
@@ -90,6 +96,7 @@ final class PairingStore: ObservableObject {
             if let h = link.host, APIConfig.baseURL == APIConfig.defaultBaseURL {
                 APIConfig.baseURL = "http://\(h)"
             }
+            if let p = link.publicURL { APIConfig.awayURL = p }
             message = "Paired. Alerts from this radar will come to this phone."
             // Now the reason for notifications is obvious; ask (once) and register.
             await PushManager.shared.enable()
