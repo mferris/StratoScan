@@ -1,14 +1,12 @@
 import Foundation
 
-/// Where the Pi is reached. `raspberrypi.local` is Raspberry Pi OS's own
-/// default mDNS hostname, so this works out of the box on most home
-/// networks without editing anything -- override it in Settings with your
-/// own Tailscale MagicDNS hostname (resolves privately over the tailnet, and
-/// over plain internet too if Funnel is enabled on it) or a direct LAN
-/// address for lower latency at home.
+/// Where the radar view reads from. Pairing sets it to the radar's home
+/// address (carried in the QR code). Before that, `radome.local` is the
+/// factory image's own mDNS name, which works on most home networks. Away
+/// from home, a Tailscale name can be entered in Settings.
 enum APIConfig {
     private static let key = "flightradar.baseURL"
-    static let defaultBaseURL = "http://raspberrypi.local"
+    static let defaultBaseURL = "http://radome.local"
 
     static var baseURL: String {
         get { UserDefaults.standard.string(forKey: key) ?? defaultBaseURL }
