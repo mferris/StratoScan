@@ -10,6 +10,9 @@
     "db:init": "wrangler d1 execute flightradar-relay --remote --file=schema.sql"
   },
   "devDependencies": {
-    "wrangler": "^4"
+    "wrangler": "^4.143.0"
+  },
+  "overrides": {
+    "undici": "7.30.0"
   }
 }

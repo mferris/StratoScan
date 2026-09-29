@@ -43,7 +43,9 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true
+          # Plain HTTP only to the local network (the radar at home: IP addresses,
+          # .local names, Tailscale short names). Everything else must be HTTPS.
+          NSAllowsLocalNetworking: true
         UIStatusBarHidden: true
         UIRequiresFullScreen: false
         UIBackgroundModes: [remote-notification]
@@ -79,7 +81,9 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
         NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true
+          # Plain HTTP only to the local network (the radar at home: IP addresses,
+          # .local names, Tailscale short names). Everything else must be HTTPS.
+          NSAllowsLocalNetworking: true
     entitlements:
       path: RadomeWidget/RadomeWidget.entitlements
       properties:
