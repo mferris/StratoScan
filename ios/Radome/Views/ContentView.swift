@@ -48,12 +48,25 @@ struct ContentView: View {
                 VStack {
                     hud
                     Spacer()
-                    if viewModel.isStale {
-                        Text("NO SIGNAL — CHECK RECEIVER")
+                    if viewModel.isDemo {
+                        Text("DEMO · TRAFFIC RECORDED NEAR RDU")
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
                             .tracking(2)
-                            .foregroundColor(Color(hex: "#ff5d5d"))
+                            .foregroundColor(Color(hex: "#5b7278"))
                             .padding(.bottom, geo.size.height * 0.08)
+                    } else if viewModel.isStale {
+                        VStack(spacing: 10) {
+                            Text("NO SIGNAL — CHECK RECEIVER")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .tracking(2)
+                                .foregroundColor(Color(hex: "#ff5d5d"))
+                            if pairing.radars.isEmpty {
+                                Button("No radar yet? Try the demo") { viewModel.setDemo(true) }
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(Color(hex: "#4fd6c8"))
+                            }
+                        }
+                        .padding(.bottom, geo.size.height * 0.08)
                     }
                 }
                 .padding(.top, geo.safeAreaInsets.top + 8)
@@ -94,7 +107,7 @@ struct ContentView: View {
                 .preferredColorScheme(.dark)
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView().environmentObject(pairing).environmentObject(PushManager.shared)
+            SettingsView(viewModel: viewModel).environmentObject(pairing).environmentObject(PushManager.shared)
         }
         .confirmationDialog("Pair with this radar?", isPresented: Binding(
             get: { pairing.pendingLink != nil },
