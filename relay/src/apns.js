@@ -105,3 +105,16 @@ export function notificationFor(event, unit) {
     },
   };
 }
+
+// When one request carries more alerts than a phone should get at once.
+export function summaryFor(n, unit) {
+  return {
+    urgent: false,
+    collapseId: `summary-${unit.slice(0, 20)}`,
+    payload: {
+      aps: { alert: { title: 'More aircraft', body: `${n} more alert${n === 1 ? '' : 's'} from this radar` },
+             'thread-id': unit, 'interruption-level': 'passive' },
+      radome: { unit, kind: 'summary' },
+    },
+  };
+}

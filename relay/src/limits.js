@@ -87,7 +87,11 @@ export function cleanPhoneName(v) {
 
 // Push (roadmap 2.1).
 export const PUSH_KINDS = ['emergency', 'notable', 'low_overhead', 'helicopter'];
-export const PUSHES_PER_HOUR = 30;      // per phone; emergencies and tests are exempt
+export const PUSHES_PER_HOUR = 30;      // per phone, ordinary alerts
+export const PUSHES_PER_HOUR_HARD = 60; // per phone, everything: emergencies and tests go past the
+                                        // ordinary cap, but a misbehaving unit still cannot flood a phone
+export const PUSHES_PER_BATCH = 3;      // per phone per request; the rest become one summary. Bounds the
+                                        // outbound requests one invocation makes (Workers free plan: 50)
 
 export function cleanKinds(v) {
   if (v === undefined) return [...PUSH_KINDS];

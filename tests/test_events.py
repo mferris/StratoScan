@@ -19,6 +19,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 failures, checks = [], 0
@@ -229,6 +230,49 @@ s = ev.Sender(post=lambda batch: (200, b'{"ok":true,"stored":0,"phones":0}'))
 s.add([{"kind": "notable", "ts": now, "hex": "000004"}, {"kind": "notable", "ts": now, "hex": "000005"}])
 line = s.flush(now)
 check("a relay with no paired phone turns events off", s.unpaired and "events off" in line and not s.queue)
+
+# ---- unpaired: pause, never write (the service's storage is read-only) -------------
+os.makedirs(ev.hb.STATE_DIR, exist_ok=True)
+with open(ev.CONFIG, "w") as f:
+    json.dump({"enabled": True}, f)
+air = os.path.join(tmp, "aircraft.json")
+ev.AIRCRAFT_JSON = air
+posts = []
+reply = {"body": b'{"ok":true,"stored":0,"phones":0}'}
+svc = ev.Service(detector=ev.Detector(), sender=ev.Sender(post=lambda b: (posts.append(b), (200, reply["body"]))[1]))
+real_set = ev.set_enabled
+ev.set_enabled = lambda on: (_ for _ in ()).throw(OSError(30, "Read-only file system"))
+
+
+def feed(hex_):
+    with open(air, "w") as f:
+        json.dump({"aircraft": [ac(hex_, dist=1.0, alt=2000)]}, f)
+    t = os.path.getmtime(air) + 1
+    os.utime(air, (t, t))
+
+
+try:
+    feed("dd0001")
+    svc.tick()
+    check("an unpaired reply pauses the service without writing the setting", svc.paused_at is not False and len(posts) == 1)
+    feed("dd0002")
+    svc.sender.next_try = 0
+    svc.tick()
+    check("while paused, nothing more is sent", len(posts) == 1)
+    time.sleep(0.01)
+    with open(ev.CONFIG, "w") as f:
+        json.dump({"enabled": True}, f)
+    t = os.path.getmtime(ev.CONFIG) + 5
+    os.utime(ev.CONFIG, (t, t))
+    reply["body"] = b'{"ok":true,"stored":1,"phones":1}'
+    feed("dd0003")
+    svc.sender.next_try = 0
+    svc.tick()
+    check("pairing again (the setting rewritten) resumes it", svc.paused_at is False and len(posts) == 2)
+finally:
+    ev.set_enabled = real_set
+    with open(ev.CONFIG, "w") as f:
+        json.dump({"enabled": False}, f)
 
 # ---- a restart does not report the same pass again ----------------------------------
 fired = os.path.join(tmp, "fired.json")
