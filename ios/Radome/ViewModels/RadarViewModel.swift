@@ -22,6 +22,8 @@ final class RadarViewModel: ObservableObject {
     @Published private(set) var connected: Bool = false
     @Published private(set) var aircraftCount: Int = 0
     @Published private(set) var runwayGeoJSON: Data?
+    @Published private(set) var isDemo = DemoFeed.isOn
+
     /// The aircraft whose details are open, by hex.
     @Published var selectedHex: String?
 
@@ -73,6 +75,18 @@ final class RadarViewModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: UInt64(self.fetchInterval * 1_000_000_000))
             }
         }
+    }
+
+    /// Switch between the owner's radar and the demo recording.
+    func setDemo(_ on: Bool) {
+        DemoFeed.isOn = on
+        isDemo = on
+        planes.removeAll()
+        aircraftCount = 0
+        selectedHex = nil
+        home = nil
+        runwayGeoJSON = nil
+        Task { await loadHome() }
     }
 
     func stop() {

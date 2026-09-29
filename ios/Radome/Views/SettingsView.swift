@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @ObservedObject var viewModel: RadarViewModel
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var pairing: PairingStore
     @State private var baseURL: String = APIConfig.baseURL
@@ -25,6 +26,12 @@ struct SettingsView: View {
                     Text("Radar view address")
                 } footer: {
                     Text("Where the live radar view on this screen reads from. Pairing fills in the radar's home address, which works on your home WiFi. Away from home, use the radar's Tailscale name if you set one up. Alerts don't depend on this: they come through the Radome service wherever you are.")
+                }
+
+                Section {
+                    Toggle("Demo mode", isOn: Binding(get: { viewModel.isDemo }, set: { viewModel.setDemo($0) }))
+                } footer: {
+                    Text("Plays a few minutes of real traffic recorded near RDU airport, so you can see Radome working without a radar.")
                 }
 
                 Section {
@@ -56,5 +63,5 @@ extension SettingsView {
 }
 
 #Preview {
-    SettingsView().environmentObject(PairingStore()).environmentObject(PushManager.shared)
+    SettingsView(viewModel: RadarViewModel()).environmentObject(PairingStore()).environmentObject(PushManager.shared)
 }

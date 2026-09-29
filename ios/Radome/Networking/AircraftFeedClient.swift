@@ -2,6 +2,7 @@ import Foundation
 
 enum AircraftFeedClient {
     static func fetchAircraft() async throws -> [RawAircraft] {
+        if DemoFeed.isOn { return DemoFeed.aircraft() }
         var req = URLRequest(url: APIConfig.url("/tar1090/data/aircraft.json"))
         req.cachePolicy = .reloadIgnoringLocalCacheData
         let (data, response) = try await URLSession.shared.data(for: req)
@@ -12,6 +13,7 @@ enum AircraftFeedClient {
     }
 
     static func fetchReceiver() async throws -> Coordinate? {
+        if DemoFeed.isOn { return DemoFeed.home }
         var req = URLRequest(url: APIConfig.url("/tar1090/data/receiver.json"))
         req.cachePolicy = .reloadIgnoringLocalCacheData
         let (data, response) = try await URLSession.shared.data(for: req)
