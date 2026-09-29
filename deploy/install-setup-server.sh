@@ -39,7 +39,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 echo "== packages =="
 apt-get install -y -q lighttpd git curl ca-certificates python3-venv python3-cryptography \
-  python3-qrcode unattended-upgrades javascript-common >/dev/null
+  python3-qrcode uhubctl unattended-upgrades javascript-common >/dev/null
 echo "  ok"
 
 echo "== receiver: readsb $READSB_TAG =="

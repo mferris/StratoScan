@@ -4496,6 +4496,38 @@ async function lookupType(hex) {
 }
 
 // ---- Data loading --------------------------------------------------
+// The receiver is the only source of the radar's location, so a receiver
+// that dies (RDU 2026-09-28: the SDR hung and readsb could not start) used to
+// leave the screen with no map at all -- just "LOCATING..." -- and the map
+// then had to start from nothing when data came back. The last known
+// location is remembered here (written only when it changes), so the map
+// stays up through an outage and says NO SIGNAL instead.
+const HOME_CACHE_KEY = 'flightradar_home_v1';
+let homeFromCache = false;
+
+function cachedHome() {
+  try {
+    const h = JSON.parse(localStorage.getItem(HOME_CACHE_KEY) || 'null');
+    return h && typeof h.lat === 'number' && typeof h.lon === 'number' ? h : null;
+  } catch (e) { return null; }
+}
+
+function rememberHome(h) {
+  const c = cachedHome();
+  if (c && c.lat === h.lat && c.lon === h.lon) return;
+  try { localStorage.setItem(HOME_CACHE_KEY, JSON.stringify({ lat: h.lat, lon: h.lon })); } catch (e) {}
+}
+
+function useCachedHome() {
+  if (home || HOME_OVERRIDE) return;
+  const c = cachedHome();
+  if (!c) return;
+  home = c;
+  homeFromCache = true;
+  locEl.textContent = formatLoc();
+  initMap();
+}
+
 async function loadHome() {
   if (HOME_OVERRIDE) {
     home = HOME_OVERRIDE;
@@ -4507,7 +4539,16 @@ async function loadHome() {
     const res = await fetch(RECEIVER_URL, { cache: 'no-store' });
     const data = await res.json();
     if (typeof data.lat === 'number' && typeof data.lon === 'number') {
-      home = { lat: data.lat, lon: data.lon };
+      const real = { lat: data.lat, lon: data.lon };
+      rememberHome(real);
+      if (homeFromCache && (Math.abs(home.lat - real.lat) > 0.001 || Math.abs(home.lon - real.lon) > 0.001)) {
+        // The unit was moved while its receiver was down: start clean on
+        // the new location rather than re-centring every layer in place.
+        location.reload();
+        return;
+      }
+      home = real;
+      homeFromCache = false;
       locEl.textContent = formatLoc();
       initMap();
     }
@@ -7409,10 +7450,11 @@ async function start() {
   refreshNetworkCompare();
   setInterval(refreshNetworkCompare, NETWORK_POLL_MS);
   await loadHome();
-  if (!home) {
+  if (!home) useCachedHome();
+  if (!home || homeFromCache) {
     // keep retrying receiver info in the background until it succeeds
     const retryHome = setInterval(async () => {
-      if (home) { clearInterval(retryHome); return; }
+      if (home && !homeFromCache) { clearInterval(retryHome); return; }
       await loadHome();
     }, FETCH_INTERVAL_MS);
   }

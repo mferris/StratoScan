@@ -69,6 +69,17 @@ RECEIVER_STALE_S = 180
 RECEIVER_BOOT_GRACE_S = 300
 RECEIVER_RESTARTS = "/run/flightradar-net/receiver-restarts"
 RECEIVER_REBOOT_AFTER = 3          # restarts that did not bring data back
+# A radio whose chip has hung (seen on RDU 2026-09-28: the FlyCatcher stopped
+# answering USB) needs its power cut. A Pi 5 reboot does NOT cut USB power, so
+# rebooting alone left it hung. The Pi 5's four onboard hubs share one VBUS
+# switch: it only goes off when every hub's ports are off (uhubctl README).
+UHUBCTL = "/usr/sbin/uhubctl"
+USB_HUBS = ("1", "2", "3", "4")
+USB_CYCLED = "/run/flightradar-net/usb-power-cycled"
+MIN_USB_CYCLE_INTERVAL_S = 30 * 60
+USB_OFF_S = 3
+USB_SETTLE_S = 6
+sleep = time.sleep                 # patched by the tests
 # wake-listener.py (the frozen-display watchdog) runs as the desktop user and
 # can only restart the browser. It counts restarts that did not bring a
 # painted frame back and leaves the count here; past the limit the fault is
@@ -258,6 +269,31 @@ def watchdog_reboot(reason):
     run([SYSTEMCTL, "reboot"], timeout=30)
 
 
+def power_cycle_usb():
+    """Cut power to every USB port for a few seconds. True if it was done.
+
+    Everything on USB drops briefly (the radio, and a USB touchscreen or
+    keyboard if there is one), which is why this comes after readsb restarts
+    and is rate-limited. It is still far lighter than a reboot, and unlike a
+    reboot it actually resets a hung radio.
+    """
+    if not os.path.exists(UHUBCTL):
+        return False
+    try:
+        if time.time() - os.path.getmtime(USB_CYCLED) < MIN_USB_CYCLE_INTERVAL_S:
+            return False
+    except OSError:
+        pass
+    touch_runtime(USB_CYCLED)
+    for hub in USB_HUBS:
+        run([UHUBCTL, "-l", hub, "-a", "off"], timeout=20)
+    sleep(USB_OFF_S)
+    for hub in USB_HUBS:
+        run([UHUBCTL, "-l", hub, "-a", "on"], timeout=20)
+    sleep(USB_SETTLE_S)            # let the radio enumerate before readsb opens it
+    return True
+
+
 def check_receiver():
     if _uptime() < RECEIVER_BOOT_GRACE_S:
         return
@@ -273,6 +309,14 @@ def check_receiver():
     what = "missing" if age == float("inf") else f"stale for {int(age)}s"
     restarts = _read_int(RECEIVER_RESTARTS)
     if restarts >= RECEIVER_REBOOT_AFTER:
+        if power_cycle_usb():
+            # One more readsb start on a freshly powered radio; if data is
+            # still missing next time, the cycle is rate-limited and the
+            # reboot below follows.
+            print(f"health: receiver data {what} after {restarts} readsb restarts; "
+                  "power-cycled USB", flush=True)
+            run([SYSTEMCTL, "restart", "readsb.service"], timeout=60)
+            return
         watchdog_reboot(f"receiver data {what} after {restarts} readsb restarts")
         return
     print(f"health: receiver data {what}; restarting readsb", flush=True)
