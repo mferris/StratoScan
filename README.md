@@ -14,8 +14,9 @@ app brings it to your pocket.
 ## Status
 
 *As of 2026-09-29.* One unit (RDU) runs around the clock on release
-`2026.09.28.4`. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md) and tracked
-as [issues](https://github.com/mferris/Radome/issues).
+`2026.09.28.4`. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md), tracked
+as [issues](https://github.com/mferris/Radome/issues), and the parts it still
+needs are in the [shopping list](docs/SHOPPING.md).
 
 | Area | State |
 |---|---|
