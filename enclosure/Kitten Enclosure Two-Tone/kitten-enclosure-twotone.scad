@@ -270,13 +270,11 @@ back_lip_skip = 9;      // degrees of clearance either side of each post
 // bulkhead on the plate at all: its coax comes in through the antenna
 // mount's own cable bore.
 //
-// !!! THESE NUMBERS ARE A PLACEHOLDER AND MUST BE MEASURED !!!
-// The listing for the panel-mount USB-C cable this is cut for publishes no
-// cutout dimensions, so these are the common values for that style of part,
-// not measured ones. Print part="usbc_gauge" -- a 5-minute coupon carrying
-// this cutout plus four neighbouring sizes -- and fit the connector to it
-// BEFORE committing a whole back plate. Then set the three numbers below to
-// whichever window fits and re-export.
+// Fitted against the real connector on 2026-09-29: it fits this window, and
+// its mounting holes are 16.5mm apart, centre to centre. The listing
+// publishes no cutout size, so these started as the usual values for that
+// style of part; part="usbc_gauge" (this window plus four neighbours) is
+// still the quick way to re-fit a different connector.
 usbc_cut_w       = 11.0;   // window width  (across the connector body)
 usbc_cut_h       = 6.5;    // window height (through the connector body)
 usbc_cut_r       = 1.2;    // corner radius
