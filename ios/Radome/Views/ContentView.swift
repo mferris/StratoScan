@@ -121,7 +121,7 @@ struct ContentView: View {
         .sheet(item: Binding(
             get: { viewModel.selectedHex.map(SelectedAircraft.init) },
             set: { viewModel.selectedHex = $0?.id })) { sel in
-            AircraftDetailView(viewModel: viewModel, hex: sel.id)
+            AircraftDetailView(viewModel: viewModel, location: location, hex: sel.id)
                 .presentationDetents([.medium, .large])
                 .preferredColorScheme(.dark)
         }
