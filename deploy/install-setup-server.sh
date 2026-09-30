@@ -229,6 +229,29 @@ if [ "${RTC_RECHARGEABLE:-0}" = "1" ]; then
   fi
 fi
 
+# Fan steps. The Pi 5 defaults step the fan up at 50/60/67.5/75C and back
+# down 5C below each. In the retro case the kiosk sits at 65-68C, right on
+# the 67.5 step, so the fan kept audibly shifting between ~6000 and ~7700rpm
+# (measured on RDU, 2026-09-30). Moving the third step to 70C keeps normal
+# running on one steady speed; the top step moves only to 77C, so full speed
+# still arrives 3C before the Pi's 80C soft limit -- this case has reached
+# 84.5C on busy days, so it goes no further than that.
+CFG=/boot/firmware/config.txt
+if [ -f "$CFG" ] && ! grep -q '^dtparam=fan_temp2=' "$CFG"; then
+  printf '\n# Radome: steadier fan steps in the case (default 67.5C / 75C)\ndtparam=fan_temp2=70000\ndtparam=fan_temp3=77000\n' >> "$CFG"
+  echo "  fan steps set to 70C / 77C in config.txt"
+fi
+# The trip points are writable at runtime, so apply now rather than waiting
+# for a reboot. trip_point_3/4 are fan_temp2/3 (0 is the critical trip).
+if live; then
+  TZ0=/sys/class/thermal/thermal_zone0
+  if [ "$(cat $TZ0/trip_point_3_temp 2>/dev/null)" = "67500" ]; then
+    echo 70000 > $TZ0/trip_point_3_temp 2>/dev/null || true
+    echo 77000 > $TZ0/trip_point_4_temp 2>/dev/null || true
+  fi
+  echo "  fan steps now: $(cat $TZ0/trip_point_3_temp 2>/dev/null) / $(cat $TZ0/trip_point_4_temp 2>/dev/null)"
+fi
+
 echo "== spoken alerts (Piper text-to-speech, offline) =="
 # Piper (GPL-3.0-or-later) runs as its own program in its own virtualenv,
 # installed from PyPI rather than shipped in this repository. The voice is
