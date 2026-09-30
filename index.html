@@ -758,6 +758,23 @@
     flex-shrink: 0;
   }
   #settingsPanel .sp-switch.on { background: var(--mid); }
+  /* Quiet-hours time stepper: two round buttons around the time. Big enough
+     for a fingertip on the round panel, which is why it is not a native
+     <input type=time> -- that pops up a tiny spinner meant for a mouse. */
+  #settingsPanel .sp-stepper { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  #settingsPanel .sp-step {
+    position: relative;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--panel-border);
+    background: var(--switch-track-off);
+    color: var(--text);
+    font: inherit;
+    font-size: 1rem;
+    line-height: 1;
+  }
+  #settingsPanel .sp-step::before { content: ''; position: absolute; inset: -8px; }
+  #settingsPanel .sp-step-value { min-width: 3.2em; text-align: center; font-variant-numeric: tabular-nums; }
   /* Invisible hit expander. The visible switch stays 42x24, but tapping
      within ~14px of it counts -- these controls became the only tappable
      thing in a row once the row body was handed over to scrolling. */
@@ -3221,7 +3238,7 @@ const ALERT_SETTINGS_KEY = 'flightradar_alert_settings_v1';
 // volume is a plain 0..1 multiplier on the master gain; muted is kept separate
 // rather than being volume 0, so silencing it for an evening does not throw
 // away the level someone settled on. soundTheme picks the voice alerts speak in.
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, voice: false, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic' };
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, voice: false, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic', quietHours: false, quietFrom: 1320, quietTo: 420, quietSunset: false, quietLetEmergencies: true };
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -3265,6 +3282,14 @@ if (typeof alertSettings.volume !== 'number' || !isFinite(alertSettings.volume))
   alertSettings.volume = DEFAULT_ALERT_SETTINGS.volume;
 }
 alertSettings.volume = Math.min(VOLUME_MAX, Math.max(0, alertSettings.volume));
+// Quiet-hours times are minutes after local midnight. Same reasoning as the
+// volume clamp: a bad stored value would silence the unit at the wrong hours
+// with nothing on the settings screen to say so.
+for (const k of ['quietFrom', 'quietTo']) {
+  const v = alertSettings[k];
+  if (typeof v !== 'number' || !isFinite(v)) alertSettings[k] = DEFAULT_ALERT_SETTINGS[k];
+  alertSettings[k] = ((Math.round(alertSettings[k] / 30) * 30) % 1440 + 1440) % 1440;
+}
 // Force-correct a stored 'atc: true' on the kiosk itself -- this is exactly
 // the value that got left behind by testing the feature directly on the
 // physical hardware before ensureAtcAudio's own IS_KIOSK guard existed.
@@ -3389,8 +3414,61 @@ function getMasterGain() {
 // have read a lie. Called on every change instead.
 function applyVolume() {
   if (!masterGain) return;
-  masterGain.gain.value = alertSettings.muted ? 0 : alertSettings.volume;
+  masterGain.gain.value = soundAllowedNow() ? alertSettings.volume : 0;
 }
+
+// ---- Quiet hours (roadmap 4.7) --------------------------------------------
+// Silences the unit's SOUNDS inside a window -- a set time range, or sunset
+// to sunrise -- while every alert still appears on screen. Everything audible
+// goes through the one master gain (tones, theme samples, the lightning chime,
+// speech), so this is a gain decision made in applyVolume(), not a check
+// scattered through every player. Times are the unit's local time, which is
+// the time zone chosen during setup.
+let quietEmergencyUntil = 0;     // Date.now() until which an emergency may sound
+const QUIET_EMERGENCY_WINDOW_MS = 20 * 1000;   // chime + a generated spoken line
+
+function minutesToClock(m) {
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+function inQuietHours(now = new Date()) {
+  if (!alertSettings.quietHours) return false;
+  if (alertSettings.quietSunset) return isNightAtReceiver(now);
+  const m = now.getHours() * 60 + now.getMinutes();
+  const from = alertSettings.quietFrom, to = alertSettings.quietTo;
+  if (from === to) return false;                          // an empty window, not all day
+  return from < to ? (m >= from && m < to) : (m >= from || m < to);   // may cross midnight
+}
+
+function soundAllowedNow() {
+  if (alertSettings.muted) return false;
+  if (!inQuietHours()) return true;
+  return Date.now() < quietEmergencyUntil;
+}
+
+// Opens a short window in which quiet hours step aside, then closes it on its
+// own. Used for an emergency (the chime and the spoken line after it) and for
+// a sound someone asked for on the settings screen -- a preview that plays
+// nothing during quiet hours reads as a broken speaker.
+function allowThroughQuiet(ms) {
+  if (!inQuietHours()) return;
+  quietEmergencyUntil = Math.max(quietEmergencyUntil, Date.now() + ms);
+  applyVolume();
+  setTimeout(applyVolume, ms + 100);
+}
+
+// What the settings screen says about it right now.
+function quietStatusText() {
+  if (!alertSettings.quietHours) return null;
+  if (!inQuietHours()) {
+    return alertSettings.quietSunset ? 'Quiet from sunset' : `Quiet from ${minutesToClock(alertSettings.quietFrom)}`;
+  }
+  return alertSettings.quietSunset ? 'Quiet now, until sunrise' : `Quiet now, until ${minutesToClock(alertSettings.quietTo)}`;
+}
+
+// The window has to open and close on time without a reload, so the gain is
+// re-decided every minute, not only when a setting changes.
+setInterval(applyVolume, 60 * 1000);
 stage.addEventListener('pointerdown', () => { getAudioCtx().resume().catch(() => {}); }, { once: true });
 
 // Shared tone-sequence player -- each note is [freq, startOffset, dur, peakGain].
@@ -3497,7 +3575,7 @@ function announcementFor(pl, lead) {
 
 const spokenBuffers = new Map();   // phrase -> Promise<AudioBuffer>, bounded
 function speak(text, delayMs = 1100) {
-  if (!alertSettings.voice || alertSettings.muted || !text) return;
+  if (!alertSettings.voice || !soundAllowedNow() || !text) return;
   let p = spokenBuffers.get(text);
   if (!p) {
     p = fetch('/tts?text=' + encodeURIComponent(text.slice(0, 240)), { signal: AbortSignal.timeout(15000) })
@@ -3618,6 +3696,7 @@ function playAlertSound() {
 // nearby-aircraft chime -- deliberately reads as more urgent, since this
 // fires for actual emergency squawks (7500/7600/7700), not routine traffic.
 function playEmergencySound() {
+  if (alertSettings.quietLetEmergencies) allowThroughQuiet(QUIET_EMERGENCY_WINDOW_MS);
   soundTheme().emergency();
 }
 
@@ -5705,6 +5784,38 @@ function renderSettingsPanel() {
       <div class="sp-sub">100% is where the sounds were mastered; past that is
         amplified and gently limited so it gets louder, not distorted.</div>
     </div>
+    <div class="sp-section-title">Quiet hours</div>
+    <div class="sp-row" data-quiet="quietHours">
+      <div>
+        <div class="sp-label">Quiet hours</div>
+        <div class="sp-sub">${esc(quietStatusText() || 'Silence alert sounds overnight. Alerts still appear on screen')}</div>
+      </div>
+      <div class="sp-switch${alertSettings.quietHours ? ' on' : ''}"></div>
+    </div>
+    ${!alertSettings.quietHours ? '' : `
+    <div class="sp-row" data-quiet="quietSunset">
+      <div>
+        <div class="sp-label">Sunset to sunrise</div>
+        <div class="sp-sub">Follows the sun at this radar instead of set times</div>
+      </div>
+      <div class="sp-switch${alertSettings.quietSunset ? ' on' : ''}"></div>
+    </div>
+    ${alertSettings.quietSunset ? '' : [['quietFrom', 'From'], ['quietTo', 'Until']].map(([k, label]) => `
+    <div class="sp-row">
+      <div class="sp-label">${label}</div>
+      <div class="sp-stepper">
+        <button class="sp-step" data-quiet-step="${k}" data-dir="-1" aria-label="${label} 30 minutes earlier">−</button>
+        <span class="sp-label sp-step-value">${minutesToClock(alertSettings[k])}</span>
+        <button class="sp-step" data-quiet-step="${k}" data-dir="1" aria-label="${label} 30 minutes later">+</button>
+      </div>
+    </div>`).join('')}
+    <div class="sp-row" data-quiet="quietLetEmergencies">
+      <div>
+        <div class="sp-label">Let emergencies through</div>
+        <div class="sp-sub">A 7500, 7600 or 7700 squawk still sounds during quiet hours</div>
+      </div>
+      <div class="sp-switch${alertSettings.quietLetEmergencies ? ' on' : ''}"></div>
+    </div>`}
     <div class="sp-section-title">Alert sounds</div>` + Object.entries(SOUND_THEMES).map(([k, t]) => `
       <div class="sp-theme-row${alertSettings.soundTheme === k ? ' selected' : ''}" data-sound-theme="${k}">
         <div class="sp-theme-label">
@@ -7332,7 +7443,26 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     // playAlertSound() below happens to preview -- so a real alert on the
     // OTHER two sounds does not pay a decode the first time it matters.
     preloadSoundTheme(soundTheme());
-    if (!alertSettings.muted) playAlertSound();
+    if (!alertSettings.muted) { allowThroughQuiet(3000); playAlertSound(); }
+    renderSettingsPanel();
+    return;
+  }
+  const quietStep = e.target.closest('[data-quiet-step]');
+  if (quietStep) {
+    const k = quietStep.dataset.quietStep;
+    alertSettings[k] = (alertSettings[k] + 30 * Number(quietStep.dataset.dir) + 1440) % 1440;
+    saveAlertSettings();
+    applyVolume();
+    renderSettingsPanel();
+    return;
+  }
+  const quietRow = e.target.closest('[data-quiet]');
+  if (quietRow) {
+    if (!e.target.closest('.sp-switch')) return; // row body is for scrolling
+    const k = quietRow.dataset.quiet;
+    alertSettings[k] = !alertSettings[k];
+    saveAlertSettings();
+    applyVolume();
     renderSettingsPanel();
     return;
   }
@@ -7342,7 +7472,7 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     alertSettings.muted = !alertSettings.muted;
     saveAlertSettings();
     applyVolume();
-    if (!alertSettings.muted) playAlertSound();   // prove it came back
+    if (!alertSettings.muted) { allowThroughQuiet(3000); playAlertSound(); }   // prove it came back
     renderSettingsPanel();
     return;
   }
