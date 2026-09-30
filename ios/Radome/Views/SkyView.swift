@@ -25,6 +25,7 @@ struct SkyView: View {
     @StateObject private var camera = SkyCamera()
     @State private var cameraDenied = false
     @State private var selected: String?
+    @State private var sideways: SidewaysDetail?
     @AppStorage("stratoscan.skyNearMe") private var nearMeOn = false
     @Environment(\.dismiss) private var dismiss
 
@@ -62,6 +63,7 @@ struct SkyView: View {
                     }
                 }
                 .padding(.horizontal).padding(.top, 56).padding(.bottom, 40)
+                if let d = sideways { sidewaysPanel(d, in: geo.size) }
             }
             .ignoresSafeArea()
         }
@@ -71,7 +73,6 @@ struct SkyView: View {
             camera.start { granted in cameraDenied = !granted }
         }
         .onDisappear {
-            OrientationLock.allow(.portrait, turningTo: .portrait)
             motion.stop()
             camera.stop()
             viewModel.nearMe = [:]
@@ -84,8 +85,7 @@ struct SkyView: View {
                 try? await Task.sleep(for: .seconds(5))
             }
         }
-        .sheet(item: Binding(get: { selected.map(SkySelection.init) }, set: { selected = $0?.id }),
-               onDismiss: { OrientationLock.allow(.portrait, turningTo: .portrait) }) { sel in
+        .sheet(item: Binding(get: { selected.map(SkySelection.init) }, set: { selected = $0?.id })) { sel in
             AircraftDetailView(viewModel: viewModel, location: location, hex: sel.id)
                 .preferredColorScheme(.dark)
         }
@@ -110,6 +110,33 @@ struct SkyView: View {
         if location.coordinate == nil { return "Aimed from the radar." }
         if isAway && nearMeOn { return "Aircraft around you, from adsb.lol." }
         return "Point the phone at the sky."
+    }
+
+    /// An aircraft's details, turned a quarter to read upright with the phone
+    /// held sideways. Tap outside it, or the close button, to go back.
+    @ViewBuilder
+    private func sidewaysPanel(_ d: SidewaysDetail, in size: CGSize) -> some View {
+        let close = { withAnimation(.easeOut(duration: 0.2)) { sideways = nil } }
+        Color.black.opacity(0.35).onTapGesture(perform: close).transition(.opacity)
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Button(action: close) {
+                    Image(systemName: "xmark.circle.fill").font(.title2).foregroundStyle(.white, .gray.opacity(0.4))
+                }
+                .accessibilityLabel("Close details")
+            }
+            .padding([.top, .horizontal], 12)
+            AircraftDetailView(viewModel: viewModel, location: location, hex: d.hex)
+        }
+        // its width runs along the phone's long side
+        .frame(width: size.height - 100, height: size.width - 24)
+        .background(Color.black.opacity(0.9))
+        .environment(\.colorScheme, .dark)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .rotationEffect(d.angle)
+        .position(x: size.width / 2, y: size.height / 2)
+        .transition(.opacity)
     }
 
     private func settingsPrompt(_ text: String) -> some View {
@@ -173,9 +200,15 @@ struct SkyView: View {
         return ZStack {
             ForEach(placed, id: \.0.hex) { p, pt, range in
                 Button {
-                    // Held sideways, the details open sideways too.
-                    if let side = motion.heldSideways { OrientationLock.allow(.allButUpsideDown, turningTo: side) }
-                    selected = p.hex
+                    // Held sideways, the details open sideways too: a panel
+                    // turned to face the viewer, as the labels are. Turning
+                    // the whole app instead showed it portrait first, then
+                    // swung round -- and swung the camera picture with it.
+                    if let angle = motion.sidewaysAngle {
+                        withAnimation(.easeOut(duration: 0.2)) { sideways = SidewaysDetail(hex: p.hex, angle: angle) }
+                    } else {
+                        selected = p.hex
+                    }
                 } label: {
                     // The ring sits on the aircraft; the text hangs below it,
                     // and the pair turns about the ring to stay upright
@@ -215,24 +248,8 @@ struct SkyView: View {
 }
 
 private struct SkySelection: Identifiable { let id: String }
+private struct SidewaysDetail: Equatable { let hex: String; let angle: Angle }
 
-/// Lets the portrait app turn for a moment, and back.
-enum OrientationLock {
-    @MainActor static func allow(_ mask: UIInterfaceOrientationMask, turningTo side: UIInterfaceOrientationMask) {
-        guard AppDelegate.orientations != mask || mask == .portrait else { return }
-        AppDelegate.orientations = mask
-        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
-            for window in scene.windows {
-                var vc = window.rootViewController
-                while let c = vc {
-                    c.setNeedsUpdateOfSupportedInterfaceOrientations()
-                    vc = c.presentedViewController
-                }
-            }
-            scene.requestGeometryUpdate(.iOS(interfaceOrientations: side)) { _ in }
-        }
-    }
-}
 
 /// Aircraft around the phone, from adsb.lol's public API -- the same source
 /// the radar's network comparison uses.
@@ -292,12 +309,12 @@ final class SkyMotion: ObservableObject {
     /// Gravity across the screen, last reading.
     private var lastGravity = SIMD2<Double>(0, -1)
 
-    /// Which landscape the phone is held in, if it is. Gravity pulling toward
-    /// the phone's right edge means it has been turned clockwise, home side
-    /// on the left: UIKit's landscapeLeft.
-    var heldSideways: UIInterfaceOrientationMask? {
-        if lastGravity.x > 0.6 { return .landscapeLeft }
-        if lastGravity.x < -0.6 { return .landscapeRight }
+    /// When the phone is held sideways, the quarter turn that makes a panel
+    /// read upright: gravity toward the phone's right edge means it has been
+    /// turned clockwise, so the panel turns back the other way.
+    var sidewaysAngle: Angle? {
+        if lastGravity.x > 0.6 { return .degrees(-90) }
+        if lastGravity.x < -0.6 { return .degrees(90) }
         return nil
     }
 
