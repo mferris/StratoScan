@@ -281,7 +281,7 @@ usbc_cut_w       = 11.0;   // window width  (across the connector body)
 usbc_cut_h       = 6.5;    // window height (through the connector body)
 usbc_cut_r       = 1.2;    // corner radius
 usbc_screw_pitch = 16.5;   // centre-to-centre of the two mounting screws
-usbc_screw_dia   = 2.3;    // M2 clearance
+usbc_screw_dia   = screw_clear_dia;   // M3 clearance (3.4), same as every other M3 hole
 usbc_cut_pos     = [60, -14];
 
 // ---- Antenna-mount inserts (inside face) -----------------------------

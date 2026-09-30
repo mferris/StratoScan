@@ -19,7 +19,7 @@ speaker_angles=[0,180]; back_plate_t=3;
 // A stale value here checks geometry the design no longer has, and passes.
 back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9; post_od=9;
 back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40; ant_mount_y=88;
-ant_bolt_d=3.4; usbc_cut_pos=[60,-14]; usbc_screw_pitch=16.5; usbc_screw_dia=2.3; usbc_cut_w=11.0; usbc_cut_h=6.5;
+ant_bolt_d=3.4; usbc_cut_pos=[60,-14]; usbc_screw_pitch=16.5; usbc_screw_dia=3.4; usbc_cut_w=11.0; usbc_cut_h=6.5;
 mount_hole_x=58; mount_hole_y=49; stand_angle=18;
 ant_stub_len=30; ant_barrel_len=14; ant_socket_dia=33; ant_socket_depth=6;
 cradle_id=outer_dia+2; cradle_od=cradle_id+26; base_h=16;

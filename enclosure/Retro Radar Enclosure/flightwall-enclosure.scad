@@ -158,7 +158,7 @@ usbc_cut_w       = 11.0;
 usbc_cut_h       = 6.5;
 usbc_cut_r       = 1.2;
 usbc_screw_pitch = 16.5;   // centre-to-centre of the two mounting screws
-usbc_screw_dia   = 2.3;
+usbc_screw_dia   = screw_clear_dia;   // M3 clearance (3.4), same as every other M3 hole
 usbc_cut_pos     = [60, -14];
 
 // ---- Antenna-mount inserts (inside face) -----------------------------
