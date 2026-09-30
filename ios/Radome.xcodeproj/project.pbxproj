@@ -32,6 +32,7 @@
 		69C56A89CFA9070DEACFC984 /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */; };
 		6C1237AB31DFA25D8C05037F /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 3235AA9CD83A6D560C73BCB9 /* MapLibre */; };
 		6F86ADE723B1ACAA1C0B3267 /* ApproachActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ED9AA2CE9A2C6B5AE180774 /* ApproachActivity.swift */; };
+		7056B0F6E0348755EBB9F237 /* SkyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C3E56FB9DE77414343CF22 /* SkyView.swift */; };
 		726737634573DF876A6D429D /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 672BD01CB737B65682F25750 /* AircraftFeedClient.swift */; };
 		743522892CB30F81B4D69FF4 /* CompassView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B7C1945CDB64FA07423EC2E /* CompassView.swift */; };
 		7CAFC7B414B1C56CD1390D4D /* AlertsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96A6B94C53EE213482818502 /* AlertsSection.swift */; };
@@ -165,6 +166,7 @@
 		928AFA66090FE5F082D66E43 /* RadomeWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadomeWidget.swift; sourceTree = "<group>"; };
 		960596F02F0A26C2C5BB3E9C /* PairingScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingScannerView.swift; sourceTree = "<group>"; };
 		96A6B94C53EE213482818502 /* AlertsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertsSection.swift; sourceTree = "<group>"; };
+		99C3E56FB9DE77414343CF22 /* SkyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkyView.swift; sourceTree = "<group>"; };
 		9CCEAAB1034430480327F85E /* RelayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayClient.swift; sourceTree = "<group>"; };
 		9F6A1715C56DD3725E841B89 /* demo-traffic.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "demo-traffic.json"; sourceTree = "<group>"; };
 		9FA4F22EA60A35820DF1F1DD /* RouteLookupClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteLookupClient.swift; sourceTree = "<group>"; };
@@ -205,6 +207,7 @@
 				3F02A218B8D94A0157BAD495 /* PairedRadarsSection.swift */,
 				89B487FEB78297D897DBF514 /* RadarView.swift */,
 				291E986AEF670EDAD724B1DC /* SettingsView.swift */,
+				99C3E56FB9DE77414343CF22 /* SkyView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -593,6 +596,7 @@
 				045525804441022B5E807489 /* RouteLookupClient.swift in Sources */,
 				C69753DE205589E999B71F62 /* RunwayClient.swift in Sources */,
 				EB80C2098169E49EFA266123 /* SettingsView.swift in Sources */,
+				7056B0F6E0348755EBB9F237 /* SkyView.swift in Sources */,
 				42627FAB6D3F32515C9A9668 /* WatchSync.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
