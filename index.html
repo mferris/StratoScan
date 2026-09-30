@@ -1240,10 +1240,33 @@
 
 <script src="vendor/maplibre-gl.js"></script>
 <script>
+// ---- Saved settings from before the rename -----------------------------
+// Everything this page keeps in localStorage was stored under 'flightradar'
+// keys until the project became StratoScan. Copy each one across once, before
+// anything below reads them, so a kiosk keeps its theme, alert settings,
+// quiet hours, cached home and runways through the update instead of quietly
+// resetting to defaults. A key already set under the new name wins.
+try {
+  for (const [from, to] of [
+    ['flightradar.lastCounted', 'stratoscan.lastCounted'],
+    ['flightradar_runways_v1', 'stratoscan_runways_v1'],
+    ['flightradar_alert_settings_v1', 'stratoscan_alert_settings_v1'],
+    ['flightradar_nearby_repair_v1', 'stratoscan_nearby_repair_v1'],
+    ['flightradar_theme_v1', 'stratoscan_theme_v1'],
+    ['flightradar_home_v1', 'stratoscan_home_v1'],
+  ]) {
+    const old = localStorage.getItem(from);
+    if (old !== null) {
+      if (localStorage.getItem(to) === null) localStorage.setItem(to, old);
+      localStorage.removeItem(from);
+    }
+  }
+} catch (e) { /* storage unavailable: nothing to carry over */ }
+
 // ---- Config ------------------------------------------------------
 const DATA_URL = '/tar1090/data/aircraft.json';
 const RECEIVER_URL = '/tar1090/data/receiver.json';
-// Set by deploy/flightradar-kiosk.service's launch URL (?kiosk=1) -- the
+// Set by deploy/stratoscan-kiosk.service's launch URL (?kiosk=1) -- the
 // physical kiosk's Chromium runs --kiosk, a single locked-down fullscreen
 // window with no tab bar/window switcher reachable by touch. Learned the
 // hard way: window.open() there can leave the display stuck on whatever it
@@ -1841,7 +1864,7 @@ function approachCeilingFt() { return AIRPORT.elevFt + 6000; } // ignore traffic
 const AIRPORT_APPROACH_CONFIRM_RADIUS_NM = 4;
 function approachConfirmAltFt() { return AIRPORT.elevFt + 3000; }
 // Backed by a small same-origin service (deploy/approach-store.py, proxied
-// at /approaches -- see 91-flightradar-approach-store.conf) instead of
+// at /approaches -- see 91-stratoscan-approach-store.conf) instead of
 // localStorage. localStorage is scoped per-browser/per-device, so the
 // kiosk's own accumulated picture would never be visible to anyone
 // checking in from a separate browser (their laptop, phone, the Funnel
@@ -1905,7 +1928,7 @@ const SIGHTING_COOLDOWN_MS = 5 * 60 * 1000;
 // a day (shm-guard, the 04:00 restart) and an in-memory map started empty
 // each time -- counting every aircraft on screen at that moment as a brand
 // new visit.
-const COUNTED_KEY = 'flightradar.lastCounted';
+const COUNTED_KEY = 'stratoscan.lastCounted';
 const lastCountedAt = new Map(); // hex -> { total: ts, nearby: ts, network: ts }
 try {
   const saved = JSON.parse(localStorage.getItem(COUNTED_KEY) || '{}');
@@ -2675,7 +2698,7 @@ function extendedApproachLines(runwayGeojson) {
 // in the background regardless to self-heal the cache if OSM data ever
 // changes, and a failed refresh just leaves the already-displayed cached
 // copy alone.
-const RUNWAY_CACHE_KEY = 'flightradar_runways_v1';
+const RUNWAY_CACHE_KEY = 'stratoscan_runways_v1';
 
 // Shared by both the cache-hit path (synchronous, fires before the other
 // map.on('load', ...) handlers below get their turn) and the network-fetch
@@ -3178,7 +3201,7 @@ document.getElementById('onboard').addEventListener('pointerup', (e) => {
 // typed in twice a year (sunset here swings from ~17:00 in December to
 // ~20:30 in June). Pixels only -- this Pi exposes no backlight control, so
 // the backlight stays lit; the real power-off is the separate screensaver
-// service (deploy/flightradar-screensaver.service).
+// service (deploy/stratoscan-screensaver.service).
 const NIGHT_DIM_CHECK_MS = 60 * 1000;
 const NIGHT_WAKE_MS = 60 * 1000;   // how long an alert holds the screen bright
 let nightWakeUntil = 0;
@@ -3263,7 +3286,7 @@ const ALERT_CLEAR_RADIUS_NM = 2.0;  // slightly wider exit threshold, so a
 // the shared server-side stores used elsewhere (sightings, approach track)
 // -- this is a personal display preference for whoever's looking at this
 // particular screen, not data that should be the same for every viewer.
-const ALERT_SETTINGS_KEY = 'flightradar_alert_settings_v1';
+const ALERT_SETTINGS_KEY = 'stratoscan_alert_settings_v1';
 // volume is a plain 0..1 multiplier on the master gain; muted is kept separate
 // rather than being volume 0, so silencing it for an evening does not throw
 // away the level someone settled on. soundTheme picks the voice alerts speak in.
@@ -3335,7 +3358,7 @@ if (IS_KIOSK && alertSettings.atc) {
 // is the one that got silently switched off on any device used before that
 // fix. Restores it once per device, leaving every other choice untouched;
 // after that the toggle behaves normally and can be turned off for good.
-const NEARBY_REPAIR_KEY = 'flightradar_nearby_repair_v1';
+const NEARBY_REPAIR_KEY = 'stratoscan_nearby_repair_v1';
 try {
   if (!localStorage.getItem(NEARBY_REPAIR_KEY)) {
     if (!alertSettings.nearby) {
@@ -3359,7 +3382,7 @@ function saveAlertSettings() {
 // and re-reads the canvas-side color copies (COLORS, see refreshCanvasColors
 // above), since canvas drawing can't read CSS at draw time the way DOM
 // elements can.
-const THEME_KEY = 'flightradar_theme_v1';
+const THEME_KEY = 'stratoscan_theme_v1';
 // swatchBg/swatchAccent are only for the small preview dot in the settings
 // panel -- a deliberate, small duplication of each theme's --bg/--sweep
 // value from the [data-theme] CSS blocks (can't read another theme's CSS
@@ -3406,7 +3429,7 @@ applyTheme(uiTheme); // set before the first frame renders, not just on a later 
 // on the very first tap (well before any real alert is likely to fire) --
 // on the kiosk itself, which may never get an incidental tap, Chromium is
 // instead launched with --autoplay-policy=no-user-gesture-required (see
-// deploy/flightradar-kiosk.service) so it isn't blocked there at all.
+// deploy/stratoscan-kiosk.service) so it isn't blocked there at all.
 let audioCtx = null;
 let masterGain = null;
 function getAudioCtx() {
@@ -4426,7 +4449,7 @@ function ensureAtcAudio() {
   const url = liveAtcUrl();
   if (!url) return; // relocated unit with no configured feed -- see AIRPORT.atcMount
   if (atcWindow && !atcWindow.closed) return;
-  atcWindow = window.open(url, 'flightradar_atc');
+  atcWindow = window.open(url, 'stratoscan_atc');
 }
 
 function closeAtcAudio() {
@@ -4628,7 +4651,7 @@ async function lookupType(hex) {
 // then had to start from nothing when data came back. The last known
 // location is remembered here (written only when it changes), so the map
 // stays up through an outage and says NO SIGNAL instead.
-const HOME_CACHE_KEY = 'flightradar_home_v1';
+const HOME_CACHE_KEY = 'stratoscan_home_v1';
 let homeFromCache = false;
 
 function cachedHome() {

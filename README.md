@@ -286,7 +286,7 @@ next person can claim it.
 
 Two services run as `systemctl --user` rather than system units (the
 screensaver and display-wake endpoint) because they need the graphical
-session's `WAYLAND_DISPLAY`. A `flightradar-netwatchdog` timer rolls back any
+session's `WAYLAND_DISPLAY`. A `stratoscan-netwatchdog` timer rolls back any
 unconfirmed network change at boot and raises the hotspot when there is no
 usable connection — so a mistyped WiFi password reverts itself rather than
 stranding the device.
@@ -296,12 +296,12 @@ leaks unlinked `/dev/shm` mappings at roughly 200–300 MB/h of daytime
 rendering. Left alone it fills the 4GB tmpfs in five to twelve hours, GPU
 allocations start failing with `TransferBuffer::Initialize() failed`, and the
 panel freezes on a stale frame — twice in one 34-hour stretch here.
-`flightradar-kiosk-restart.timer` restarts the kiosk at 04:00, when the panel
+`stratoscan-kiosk-restart.timer` restarts the kiosk at 04:00, when the panel
 is already blanked and the sky is empty, returning `/dev/shm` from ~2GB to
 ~200MB. The frozen-display watchdog in `wake-listener.py` stays as the
 backstop.
 
-A second timer, `flightradar-shmguard`, closes the gap the daily restart
+A second timer, `stratoscan-shmguard`, closes the gap the daily restart
 leaves: it samples every five minutes and acts on the measurement rather than
 the clock. **It reloads the page before it restarts the browser.** Tearing
 down the document releases a third to a half of the accumulated shared memory
@@ -515,7 +515,7 @@ before you do:
   refuses `/wake` from anything but `127.0.0.1` and `::1`, so a LAN device
   cannot power the panel on or fake the frozen-display heartbeat.
 - **SSH is key-only.** The installer drops
-  [`deploy/10-radome-ssh.conf`](deploy/10-radome-ssh.conf) into
+  [`deploy/10-stratoscan-ssh.conf`](deploy/10-stratoscan-ssh.conf) into
   `sshd_config.d`: no passwords, no root login, no X11 forwarding. It
   validates the config with `sshd -t` before reloading.
 - **Downloaded code is pinned.** The Piper speech engine installs with
@@ -657,7 +657,7 @@ it.
 
 The paint check refuses to run at all if the heartbeat file is missing, rather
 than rolling back every update. That, too, is from experience: the stamp
-originally lived in `/run/flightradar`, which is setupd's `RuntimeDirectory=`
+originally lived in `/run/stratoscan`, which is setupd's `RuntimeDirectory=`
 — systemd recreates it root-owned whenever the root helper restarts, so the
 kiosk user silently lost the ability to write it, and a perfectly good release
 was reverted because nothing could record that the screen was painting. It now

@@ -25,13 +25,13 @@
 # safe outcome -- the release stays staged and the next run tries again.
 set -eu
 
-WAKE_URL="${FLIGHTRADAR_WAKE_URL:-http://127.0.0.1/wake}"
-KIOSK_USER="${FLIGHTRADAR_KIOSK_USER:-mferris}"
-OTA="${FLIGHTRADAR_OTA:-/opt/flightradar/ota.py}"
-PAINT_WAIT_S="${FLIGHTRADAR_PAINT_WAIT_S:-60}"
+WAKE_URL="${STRATOSCAN_WAKE_URL:-http://127.0.0.1/wake}"
+KIOSK_USER="${STRATOSCAN_KIOSK_USER:-mferris}"
+OTA="${STRATOSCAN_OTA:-/opt/stratoscan/ota.py}"
+PAINT_WAIT_S="${STRATOSCAN_PAINT_WAIT_S:-60}"
 
 uid=$(id -u "$KIOSK_USER" 2>/dev/null || echo "")
-STAMP="${FLIGHTRADAR_PAINT_STAMP:-/run/user/${uid}/flightradar-painted}"
+STAMP="${STRATOSCAN_PAINT_STAMP:-/run/user/${uid}/stratoscan-painted}"
 
 stamp_mtime() {
     # 0 when the file is absent, which is also what ota.py treats as "cannot

@@ -7,7 +7,7 @@
 # On a running unit, from the repo root, as the kiosk (desktop) user:
 #   sudo sh deploy/install-setup-server.sh
 # Inside the factory-image build (nothing is started; first boot re-runs it):
-#   FLIGHTRADAR_CHROOT=1 KIOSK_USER=flightradar sh deploy/install-setup-server.sh
+#   STRATOSCAN_CHROOT=1 KIOSK_USER=stratoscan sh deploy/install-setup-server.sh
 #
 # This used to install only the setup server and grew piece by piece; the
 # first unit was partly assembled by hand, so a fresh unit built from it was
@@ -16,7 +16,7 @@
 set -e
 cd "$(dirname "$0")/.."
 
-CHROOT="${FLIGHTRADAR_CHROOT:-0}"
+CHROOT="${STRATOSCAN_CHROOT:-0}"
 KIOSK_USER="${KIOSK_USER:-${SUDO_USER:-}}"
 live() { [ "$CHROOT" != "1" ]; }
 # Enable a system unit; on a running unit also (re)start it now.
@@ -28,6 +28,12 @@ lighttpd_conf() {
   install -m 0644 "deploy/$1" /etc/lighttpd/conf-available/
   ln -sf "/etc/lighttpd/conf-available/$1" "/etc/lighttpd/conf-enabled/$1"
 }
+
+# Units installed before the rename to StratoScan carry 'flightradar' names
+# for their programs, services, data and config. Move them first, so what
+# follows installs over the moved data rather than beside a stale copy.
+# Nothing happens on a fresh install or a unit already moved.
+KIOSK_USER="$KIOSK_USER" sh deploy/migrate-names.sh
 
 # Pinned third-party installs. Changing a version is a deliberate edit here.
 READSB_INSTALLER_COMMIT=f933123935631da855a7f8a16c0cb7ad4eedca48   # wiedehopf/adsb-scripts (MIT)
@@ -94,13 +100,13 @@ PY
 install -m 0644 deploy/blacklist-rtlsdr.conf /etc/modprobe.d/blacklist-rtlsdr.conf
 
 echo "== map history: tar1090 ${TAR1090_COMMIT%${TAR1090_COMMIT#???????}} =="
-if [ "$(cat /usr/local/share/tar1090/git/.flightradar-commit 2>/dev/null)" != "$TAR1090_COMMIT" ]; then
+if [ "$(cat /usr/local/share/tar1090/git/.stratoscan-commit 2>/dev/null)" != "$TAR1090_COMMIT" ]; then
   rm -rf /tmp/tar1090-src
   git clone -q https://github.com/wiedehopf/tar1090.git /tmp/tar1090-src
   git -C /tmp/tar1090-src checkout -q "$TAR1090_COMMIT"
   git_source=/tmp/tar1090-src bash /tmp/tar1090-src/install.sh /run/readsb >/tmp/tar1090-install.log 2>&1 \
     || { tail -30 /tmp/tar1090-install.log; exit 1; }
-  echo "$TAR1090_COMMIT" > /usr/local/share/tar1090/git/.flightradar-commit
+  echo "$TAR1090_COMMIT" > /usr/local/share/tar1090/git/.stratoscan-commit
   rm -rf /tmp/tar1090-src
   echo "  installed"
 else
@@ -108,23 +114,23 @@ else
 fi
 
 echo "== service accounts =="
-if ! getent group frsetup >/dev/null; then groupadd --system frsetup; fi
-if ! getent passwd frsetup >/dev/null; then
-  useradd --system --gid frsetup --no-create-home --shell /usr/sbin/nologin frsetup
+if ! getent group scsetup >/dev/null; then groupadd --system scsetup; fi
+if ! getent passwd scsetup >/dev/null; then
+  useradd --system --gid scsetup --no-create-home --shell /usr/sbin/nologin scsetup
 fi
 
 echo "== programs =="
-install -d -m 0755 /opt/flightradar
+install -d -m 0755 /opt/stratoscan
 for f in setupd.py setup-server.py funnel-gateway.py offline-map.py heartbeat.py notable-db.py \
          events.py pairing.py feeding.py ota.py ota-auto.sh net-watchdog.py sighting-store.py approach-store.py \
          network-compare.py photo-proxy.py tts-service.py shm-guard.sh wake-listener.py; do
-  install -m 0755 "deploy/$f" "/opt/flightradar/$f"
+  install -m 0755 "deploy/$f" "/opt/stratoscan/$f"
 done
-install -m 0644 deploy/setup-ui.html deploy/airports.json /opt/flightradar/
+install -m 0644 deploy/setup-ui.html deploy/airports.json /opt/stratoscan/
 # The trust root. Must already be on the device before it ships: fetching the
 # key over the same channel as the update would make the signature pointless.
 # NOT installable by an update, deliberately -- see deploy/allowed_signers.
-install -m 0644 deploy/allowed_signers /opt/flightradar/allowed_signers
+install -m 0644 deploy/allowed_signers /opt/stratoscan/allowed_signers
 
 echo "== the radar page =="
 # Signed updates keep these current afterwards; this is the first copy.
@@ -139,23 +145,23 @@ for d in sounds/*/; do
 done
 
 echo "== system services and web routing =="
-for u in flightradar-setupd.service flightradar-setup.service flightradar-funnel-gateway.service \
-         flightradar-sighting-store.service flightradar-approach-store.service \
-         flightradar-network.service flightradar-photo-proxy.service flightradar-tts.service \
-         flightradar-events.service \
-         flightradar-ota-check.service flightradar-ota-check.timer \
-         flightradar-ota-auto.service flightradar-ota-auto.timer \
-         flightradar-netwatchdog.service flightradar-netwatchdog.timer; do
+for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-gateway.service \
+         stratoscan-sighting-store.service stratoscan-approach-store.service \
+         stratoscan-network.service stratoscan-photo-proxy.service stratoscan-tts.service \
+         stratoscan-events.service \
+         stratoscan-ota-check.service stratoscan-ota-check.timer \
+         stratoscan-ota-auto.service stratoscan-ota-auto.timer \
+         stratoscan-netwatchdog.service stratoscan-netwatchdog.timer; do
   install -m 0644 "deploy/$u" /etc/systemd/system/
 done
-for c in 86-flightradar-nocache.conf 89-flightradar-photo-proxy.conf 91-flightradar-approach-store.conf \
-         93-flightradar-sighting-store.conf 95-flightradar-network.conf 96-flightradar-wake.conf \
-         97-flightradar-tts.conf 98-flightradar-setup.conf 99-flightradar-captive.conf; do
+for c in 86-stratoscan-nocache.conf 89-stratoscan-photo-proxy.conf 91-stratoscan-approach-store.conf \
+         93-stratoscan-sighting-store.conf 95-stratoscan-network.conf 96-stratoscan-wake.conf \
+         97-stratoscan-tts.conf 98-stratoscan-setup.conf 99-stratoscan-captive.conf; do
   lighttpd_conf "$c"
 done
 # Captive portal DNS for the setup hotspot (so phones stop using cellular).
 install -d -m 0755 /etc/NetworkManager/dnsmasq-shared.d
-install -m 0644 deploy/flightradar-captive-dns.conf /etc/NetworkManager/dnsmasq-shared.d/flightradar-captive.conf
+install -m 0644 deploy/stratoscan-captive-dns.conf /etc/NetworkManager/dnsmasq-shared.d/stratoscan-captive.conf
 lighttpd -tt -f /etc/lighttpd/lighttpd.conf
 
 echo "== remote access: Tailscale (used only if the owner signs in from setup) =="
@@ -180,26 +186,26 @@ echo "== long-life hardening (security updates, panic reboot, logs) =="
 # unattended-upgrades -- the first unit went unpatched for months behind an
 # "enabled" timer.
 install -m 0644 deploy/20auto-upgrades                   /etc/apt/apt.conf.d/20auto-upgrades
-install -m 0644 deploy/52flightradar-unattended-upgrades /etc/apt/apt.conf.d/52flightradar-unattended-upgrades
-install -m 0644 deploy/90-flightradar-sysctl.conf        /etc/sysctl.d/90-flightradar-sysctl.conf
+install -m 0644 deploy/52stratoscan-unattended-upgrades /etc/apt/apt.conf.d/52stratoscan-unattended-upgrades
+install -m 0644 deploy/90-stratoscan-sysctl.conf        /etc/sysctl.d/90-stratoscan-sysctl.conf
 # SSH by key only (see the file for why). Validated before sshd is touched:
 # a config sshd rejects must never take remote access down with it.
 install -d -m 0755 /etc/ssh/sshd_config.d
-install -m 0644 deploy/10-radome-ssh.conf /etc/ssh/sshd_config.d/10-radome.conf
+install -m 0644 deploy/10-stratoscan-ssh.conf /etc/ssh/sshd_config.d/10-stratoscan.conf
 if live && command -v sshd >/dev/null 2>&1; then
   if sshd -t 2>/dev/null; then
     systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
     echo "  ssh: key-only"
   else
-    rm -f /etc/ssh/sshd_config.d/10-radome.conf
+    rm -f /etc/ssh/sshd_config.d/10-stratoscan.conf
     echo "  ssh: config rejected by sshd -t; left unchanged"
   fi
 fi
 install -d -m 0755 /etc/systemd/journald.conf.d
-install -m 0644 deploy/journald-flightradar.conf /etc/systemd/journald.conf.d/flightradar.conf
+install -m 0644 deploy/journald-stratoscan.conf /etc/systemd/journald.conf.d/stratoscan.conf
 # Applying sysctl in the image build would change the BUILD machine's kernel;
 # the image picks the file up at boot.
-if live; then sysctl -q -p /etc/sysctl.d/90-flightradar-sysctl.conf; fi
+if live; then sysctl -q -p /etc/sysctl.d/90-stratoscan-sysctl.conf; fi
 # Checked cheaply, not with `unattended-upgrade --dry-run`: on a Pi that
 # simulates every pending upgrade one at a time and ran past 40 minutes on the
 # first unit. `apt-config dump` fails on a syntax error in any apt.conf.d
@@ -257,7 +263,7 @@ echo "== spoken alerts (Piper text-to-speech, offline) =="
 # installed from PyPI rather than shipped in this repository. The voice is
 # LJSpeech, trained on a public-domain dataset -- many Piper voices are not
 # licensed for redistribution or commercial use, so it is pinned.
-TTS=/opt/flightradar/tts
+TTS=/opt/stratoscan/tts
 install -d -m 0755 "$TTS" "$TTS/voices"
 [ -x "$TTS/venv/bin/python" ] || python3 -m venv "$TTS/venv"
 # Every package pinned by version AND hash (deploy/tts-requirements.txt):
@@ -286,16 +292,16 @@ if [ -n "$KIOSK_USER" ] && [ "$KIOSK_USER" != "root" ]; then
   UDIR="$KHOME/.config/systemd/user"
   install -d -o "$KIOSK_USER" -g "$KIOSK_USER" "$KHOME/.config" "$UDIR" \
     "$UDIR/default.target.wants" "$UDIR/timers.target.wants"
-  for u in flightradar-kiosk.service flightradar-kiosk-restart.service \
-           flightradar-kiosk-restart.timer flightradar-shmguard.service \
-           flightradar-shmguard.timer flightradar-screensaver.service \
-           flightradar-wake.service; do
+  for u in stratoscan-kiosk.service stratoscan-kiosk-restart.service \
+           stratoscan-kiosk-restart.timer stratoscan-shmguard.service \
+           stratoscan-shmguard.timer stratoscan-screensaver.service \
+           stratoscan-wake.service; do
     install -m 0644 -o "$KIOSK_USER" -g "$KIOSK_USER" "deploy/$u" "$UDIR/$u"
   done
-  for u in flightradar-kiosk.service flightradar-screensaver.service flightradar-wake.service; do
+  for u in stratoscan-kiosk.service stratoscan-screensaver.service stratoscan-wake.service; do
     ln -sfn "../$u" "$UDIR/default.target.wants/$u"
   done
-  for u in flightradar-kiosk-restart.timer flightradar-shmguard.timer; do
+  for u in stratoscan-kiosk-restart.timer stratoscan-shmguard.timer; do
     ln -sfn "../$u" "$UDIR/timers.target.wants/$u"
   done
   chown -h "$KIOSK_USER:$KIOSK_USER" "$UDIR"/*.wants/* 2>/dev/null || true
@@ -305,6 +311,13 @@ if [ -n "$KIOSK_USER" ] && [ "$KIOSK_USER" != "root" ]; then
       systemctl --user daemon-reload 2>/dev/null \
       && echo "  user units installed; they take effect on the next kiosk restart" \
       || echo "  user units installed; they take effect at the next login"
+    # Start any that aren't running -- after the rename there are none, since
+    # migrate-names.sh stopped the old kiosk. 'start' leaves running ones
+    # alone, so an ordinary re-run doesn't blank the display.
+    runuser -u "$KIOSK_USER" -- env XDG_RUNTIME_DIR="/run/user/$KUID" \
+      systemctl --user start stratoscan-kiosk.service stratoscan-screensaver.service \
+        stratoscan-wake.service stratoscan-kiosk-restart.timer stratoscan-shmguard.timer 2>/dev/null \
+      && echo "  kiosk services running" || echo "  kiosk services start at the next login"
   else
     echo "  user units installed and enabled"
   fi
@@ -313,20 +326,20 @@ else
 fi
 
 echo "== data (fetched now if online; otherwise net-watchdog retries) =="
-python3 /opt/flightradar/notable-db.py ensure && echo "  notable-aircraft list: ready" \
+python3 /opt/stratoscan/notable-db.py ensure && echo "  notable-aircraft list: ready" \
   || echo "  notable-aircraft list: will be fetched when online"
-python3 /opt/flightradar/offline-map.py ensure \
+python3 /opt/stratoscan/offline-map.py ensure \
   && { [ -f /var/www/html/offline-map/meta.json ] && echo "  offline map: ready" \
          || echo "  offline map: built once a location is set"; } \
   || echo "  offline map: will be built when online"
 
 echo "== enabling =="
 if live; then systemctl daemon-reload; fi
-for u in flightradar-setupd.service flightradar-setup.service flightradar-funnel-gateway.service \
-         flightradar-sighting-store.service flightradar-approach-store.service \
-         flightradar-network.service flightradar-photo-proxy.service flightradar-tts.service \
-         flightradar-events.service \
-         flightradar-ota-check.timer flightradar-ota-auto.timer flightradar-netwatchdog.timer \
+for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-gateway.service \
+         stratoscan-sighting-store.service stratoscan-approach-store.service \
+         stratoscan-network.service stratoscan-photo-proxy.service stratoscan-tts.service \
+         stratoscan-events.service \
+         stratoscan-ota-check.timer stratoscan-ota-auto.timer stratoscan-netwatchdog.timer \
          lighttpd.service readsb.service; do
   enable_unit "$u"
 done
@@ -337,10 +350,10 @@ fi
 systemctl reload lighttpd
 # A re-run installs new code over running services; enabling alone does not
 # restart them, so without this a re-run left the previous code running.
-for u in flightradar-setupd.service flightradar-setup.service flightradar-funnel-gateway.service \
-         flightradar-sighting-store.service flightradar-approach-store.service \
-         flightradar-network.service flightradar-photo-proxy.service flightradar-tts.service \
-         flightradar-events.service; do
+for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-gateway.service \
+         stratoscan-sighting-store.service stratoscan-approach-store.service \
+         stratoscan-network.service stratoscan-photo-proxy.service stratoscan-tts.service \
+         stratoscan-events.service; do
   restart_unit "$u"
 done
 systemctl restart systemd-journald
@@ -357,5 +370,5 @@ done
 
 echo
 echo "Setup page:  http://$(hostname -I | awk '{print $1}')/setup"
-echo "Claim code:  shown below (also in /run/flightradar/claim-code)"
-cat /run/flightradar/claim-code 2>/dev/null || echo "  (not generated yet)"
+echo "Claim code:  shown below (also in /run/stratoscan/claim-code)"
+cat /run/stratoscan/claim-code 2>/dev/null || echo "  (not generated yet)"

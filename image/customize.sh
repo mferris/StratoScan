@@ -8,7 +8,7 @@
 #     (/etc/sudoers.d/010_wiz-nopasswd);
 #   - SSH is not enabled (and stays that way on a gifted unit).
 set -eu
-KIOSK_USER=flightradar
+KIOSK_USER=stratoscan
 
 echo "== kiosk user: pi -> $KIOSK_USER (password locked; it only ever auto-logs-in)"
 if id pi >/dev/null 2>&1; then
@@ -28,16 +28,16 @@ systemctl disable userconfig.service >/dev/null 2>&1 || true
 
 echo "== hostname"
 echo stratoscan > /etc/hostname
-sed -i -E 's/^127\.0\.1\.1\s.*/127.0.1.1\tflightradar/' /etc/hosts
+sed -i -E 's/^127\.0\.1\.1\s.*/127.0.1.1\tstratoscan/' /etc/hosts
 
 echo "== StratoScan itself (installer, chroot mode)"
 apt-get update -q >/dev/null
-cd /opt/flightradar-src
-FLIGHTRADAR_CHROOT=1 KIOSK_USER="$KIOSK_USER" sh deploy/install-setup-server.sh
+cd /opt/stratoscan-src
+STRATOSCAN_CHROOT=1 KIOSK_USER="$KIOSK_USER" sh deploy/install-setup-server.sh
 
 echo "== first boot finishes the job live"
-install -m 0644 image/flightradar-firstboot.service /etc/systemd/system/
-systemctl enable flightradar-firstboot.service >/dev/null
+install -m 0644 image/stratoscan-firstboot.service /etc/systemd/system/
+systemctl enable stratoscan-firstboot.service >/dev/null
 
 echo "== tidy"
 apt-get clean

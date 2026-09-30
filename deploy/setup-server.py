@@ -31,12 +31,12 @@ import threading
 import time
 
 LISTEN = ("127.0.0.1", 8086)
-SOCK_PATH = "/run/flightradar/setupd.sock"
-STATE_DIR = "/var/lib/flightradar-setup"
+SOCK_PATH = "/run/stratoscan/setupd.sock"
+STATE_DIR = "/var/lib/stratoscan-setup"
 STATE_FILE = os.path.join(STATE_DIR, "setup.json")
-CLAIM_FILE = "/run/flightradar/claim-code"
-AIRPORTS_JSON = "/opt/flightradar/airports.json"
-UI_FILE = "/opt/flightradar/setup-ui.html"
+CLAIM_FILE = "/run/stratoscan/claim-code"
+AIRPORTS_JSON = "/opt/stratoscan/airports.json"
+UI_FILE = "/opt/stratoscan/setup-ui.html"
 
 MAX_BODY = 64 * 1024
 SESSION_TTL = 8 * 3600

@@ -37,7 +37,7 @@ with tempfile.TemporaryDirectory() as tmp:
     m.AIRCRAFT_JSON = os.path.join(tmp, "aircraft.json")
     m.RECEIVER_RESTARTS = os.path.join(tmp, "net", "receiver-restarts")
     m.LAST_REBOOT = os.path.join(tmp, "state", "last-watchdog-reboot")
-    m.KIOSK_STUCK_GLOB = os.path.join(tmp, "user", "*", "flightradar-kiosk-stuck")
+    m.KIOSK_STUCK_GLOB = os.path.join(tmp, "user", "*", "stratoscan-kiosk-stuck")
     calls = []
     m.run = lambda argv, timeout=45: calls.append(argv[1:])
     uptime = [10_000.0]
@@ -112,7 +112,7 @@ with tempfile.TemporaryDirectory() as tmp:
     os.remove(m.LAST_REBOOT)
     stuck_dir = os.path.join(tmp, "user", "1000")
     os.makedirs(stuck_dir)
-    stuck = os.path.join(stuck_dir, "flightradar-kiosk-stuck")
+    stuck = os.path.join(stuck_dir, "stratoscan-kiosk-stuck")
 
     m._write_int(stuck, m.KIOSK_REBOOT_AFTER - 1)
     m.check_kiosk()

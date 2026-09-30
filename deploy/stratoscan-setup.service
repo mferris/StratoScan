@@ -1,7 +1,7 @@
 [Unit]
 Description=StratoScan setup web server (unprivileged)
-After=flightradar-setupd.service
-Wants=flightradar-setupd.service
+After=stratoscan-setupd.service
+Wants=stratoscan-setupd.service
 # StartLimitIntervalSec belongs in [Unit], not [Service]. Sitting in the
 # wrong section it was silently ignored, so the start-limit exemption
 # this recovery-critical unit is meant to have was never in effect: five
@@ -12,9 +12,9 @@ StartLimitIntervalSec=0
 # Deliberately NOT root. Everything privileged goes through the unix socket
 # to setupd.py, which re-validates every parameter. This process only parses
 # HTTP -- the part most exposed to hostile input.
-User=frsetup
-Group=frsetup
-ExecStart=/usr/bin/python3 /opt/flightradar/setup-server.py
+User=scsetup
+Group=scsetup
+ExecStart=/usr/bin/python3 /opt/stratoscan/setup-server.py
 Restart=always
 RestartSec=5
 NoNewPrivileges=yes
@@ -28,7 +28,7 @@ ProtectControlGroups=yes
 # page on. This only shows up under the real sandbox -- running the same code
 # by hand as the same user works fine, which is a good way to be misled.
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
-StateDirectory=flightradar-setup
+StateDirectory=stratoscan-setup
 StateDirectoryMode=0700
 
 [Install]

@@ -4,10 +4,10 @@ Documentation=https://github.com/mferris/StratoScan
 After=network-online.target readsb.service
 
 [Service]
-ExecStart=/usr/bin/python3 /opt/flightradar/events.py run
+ExecStart=/usr/bin/python3 /opt/stratoscan/events.py run
 Restart=always
 RestartSec=10
-# Root only so it can read the unit key (/var/lib/flightradar-relay, 0700
+# Root only so it can read the unit key (/var/lib/stratoscan-relay, 0700
 # root). It holds no capabilities, sees the filesystem read-only apart from
 # its own tmpfs status file, and only ever makes outbound HTTPS requests.
 CapabilityBoundingSet=
@@ -28,7 +28,7 @@ RestrictRealtime=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-RuntimeDirectory=flightradar-events
+RuntimeDirectory=stratoscan-events
 # Keeps what was already reported across a restart (events.py FIRED).
 RuntimeDirectoryPreserve=restart
 MemoryMax=150M

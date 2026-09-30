@@ -79,10 +79,10 @@ def run_case(name, *, update_available, paint_behaviour):
         env = dict(os.environ)
         env.update({
             "PATH": f"{bindir}:{env['PATH']}",
-            "FLIGHTRADAR_OTA": str(fake),
-            "FLIGHTRADAR_PAINT_STAMP": str(stamp),
-            "FLIGHTRADAR_PAINT_WAIT_S": "6",
-            "FLIGHTRADAR_WAKE_URL": "http://127.0.0.1/wake",
+            "STRATOSCAN_OTA": str(fake),
+            "STRATOSCAN_PAINT_STAMP": str(stamp),
+            "STRATOSCAN_PAINT_WAIT_S": "6",
+            "STRATOSCAN_WAKE_URL": "http://127.0.0.1/wake",
         })
         p = subprocess.run(["sh", str(SCRIPT)], env=env,
                            capture_output=True, text=True, timeout=90)

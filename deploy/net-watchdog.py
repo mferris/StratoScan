@@ -29,7 +29,7 @@ import subprocess
 import sys
 import time
 
-STATE_DIR = "/var/lib/flightradar-setup"
+STATE_DIR = "/var/lib/stratoscan-setup"
 PENDING = os.path.join(STATE_DIR, "pending.json")
 HOTSPOT_PROFILE = "fr-hotspot"
 AP_PERIOD_S = 300          # how long to hold the AP up before retrying real networks
@@ -47,14 +47,14 @@ AP_PERIOD_S = 300          # how long to hold the AP up before retrying real net
 # a phone in front of a radar they just unboxed.
 REPAIR_AFTER_FAILS = 2     # try reconnecting wlan0
 AP_AFTER_FAILS = 4         # only then fall back to the setup hotspot
-# Deliberately NOT under /run/flightradar: that is flightradar-setupd's
+# Deliberately NOT under /run/stratoscan: that is stratoscan-setupd's
 # RuntimeDirectory, so systemd deletes it every time that unit restarts --
 # which would silently reset this watchdog's patience counter and, if setupd
 # were flapping, mean the escalation below never fired at all. /run is still
 # right: a reboot SHOULD start the count over. It just must not be a
 # directory whose lifetime belongs to somebody else.
-FAILCOUNT = "/run/flightradar-net/failcount"
-HOTSPOT_SINCE = "/run/flightradar-net/hotspot-since"
+FAILCOUNT = "/run/stratoscan-net/failcount"
+HOTSPOT_SINCE = "/run/stratoscan-net/hotspot-since"
 ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
 NMCLI = "/usr/bin/nmcli"
 SYSTEMCTL = "/usr/bin/systemctl"
@@ -67,7 +67,7 @@ SYSTEMCTL = "/usr/bin/systemctl"
 AIRCRAFT_JSON = "/run/readsb/aircraft.json"
 RECEIVER_STALE_S = 180
 RECEIVER_BOOT_GRACE_S = 300
-RECEIVER_RESTARTS = "/run/flightradar-net/receiver-restarts"
+RECEIVER_RESTARTS = "/run/stratoscan-net/receiver-restarts"
 RECEIVER_REBOOT_AFTER = 3          # restarts that did not bring data back
 # A radio whose chip has hung (seen on RDU 2026-09-28: the FlyCatcher stopped
 # answering USB) needs its power cut. A Pi 5 reboot does NOT cut USB power, so
@@ -75,7 +75,7 @@ RECEIVER_REBOOT_AFTER = 3          # restarts that did not bring data back
 # switch: it only goes off when every hub's ports are off (uhubctl README).
 UHUBCTL = "/usr/sbin/uhubctl"
 USB_HUBS = ("1", "2", "3", "4")
-USB_CYCLED = "/run/flightradar-net/usb-power-cycled"
+USB_CYCLED = "/run/stratoscan-net/usb-power-cycled"
 MIN_USB_CYCLE_INTERVAL_S = 30 * 60
 USB_OFF_S = 3
 USB_SETTLE_S = 6
@@ -84,7 +84,7 @@ sleep = time.sleep                 # patched by the tests
 # can only restart the browser. It counts restarts that did not bring a
 # painted frame back and leaves the count here; past the limit the fault is
 # below Chromium (compositor, GPU driver) and only a reboot clears it.
-KIOSK_STUCK_GLOB = "/run/user/*/flightradar-kiosk-stuck"
+KIOSK_STUCK_GLOB = "/run/user/*/stratoscan-kiosk-stuck"
 # The count includes the restart just issued, so 4 means three restarts each
 # had their full 15 minutes to bring a frame back and none did.
 KIOSK_REBOOT_AFTER = 4
@@ -92,9 +92,9 @@ KIOSK_REBOOT_AFTER = 4
 # reboot cannot fix (a missing SDR stick) must degrade to "reboots a few
 # times a day", not a loop that makes the unit unusable.
 LAST_REBOOT = os.path.join(STATE_DIR, "last-watchdog-reboot")
-OFFLINE_MAP = "/opt/flightradar/offline-map.py"
-HEARTBEAT = "/opt/flightradar/heartbeat.py"
-NOTABLE_DB = "/opt/flightradar/notable-db.py"
+OFFLINE_MAP = "/opt/stratoscan/offline-map.py"
+HEARTBEAT = "/opt/stratoscan/heartbeat.py"
+NOTABLE_DB = "/opt/stratoscan/notable-db.py"
 MIN_REBOOT_INTERVAL_S = 6 * 3600
 
 
@@ -111,7 +111,7 @@ def call_setupd(verb, params=None, timeout=120):
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(timeout)
     try:
-        s.connect("/run/flightradar/setupd.sock")
+        s.connect("/run/stratoscan/setupd.sock")
         s.sendall((json.dumps({"verb": verb, "params": params or {}}) + "\n").encode())
         buf = b""
         while not buf.endswith(b"\n"):
@@ -202,7 +202,7 @@ def touch_runtime(path):
     """Write a marker under /run, creating the directory if it is not there.
 
     Derived from the path rather than hardcoded: an earlier version wrote the
-    fail counter after os.makedirs("/run/flightradar") and swallowed any
+    fail counter after os.makedirs("/run/stratoscan") and swallowed any
     error, so on a system where that directory was missing the counter never
     incremented -- and a claimed unit that had genuinely lost its network
     would have sat at "1 failed check" forever and never fallen back to the
@@ -364,7 +364,7 @@ def maybe_build_offline_map():
     if mod.needs_build() is None:
         return
     print("health: offline map missing or out of date; building", flush=True)
-    run(["systemd-run", "--quiet", "--collect", "--unit", "flightradar-offline-map",
+    run(["systemd-run", "--quiet", "--collect", "--unit", "stratoscan-offline-map",
          "--property=Type=oneshot", "--property=Nice=10",
          "/usr/bin/python3", OFFLINE_MAP, "ensure"], timeout=30)
 
@@ -383,7 +383,7 @@ def maybe_refresh_notable_db():
     spec.loader.exec_module(mod)
     if not mod.needs_refresh():
         return
-    run(["systemd-run", "--quiet", "--collect", "--unit", "flightradar-notable-db",
+    run(["systemd-run", "--quiet", "--collect", "--unit", "stratoscan-notable-db",
          "--property=Type=oneshot", "--property=Nice=10",
          "/usr/bin/python3", NOTABLE_DB, "ensure"], timeout=30)
 

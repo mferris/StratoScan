@@ -2,14 +2,14 @@
 """
 Local-only (127.0.0.1) endpoint that powers the kiosk display back on.
 
-The screensaver (deploy/flightradar-screensaver.service) uses swayidle +
+The screensaver (deploy/stratoscan-screensaver.service) uses swayidle +
 wlopm to genuinely power the panel off when idle -- the only real "off"
 available, since this Pi exposes no backlight control. Touch wakes it,
 because touch is ordinary compositor input. An *alert*, though, happens
 inside the browser, which has no way to reach the compositor. This is that
 way: index.html POSTs /wake when an alert fires and "Alerts wake the
 screen" is on (see wakeScreenForAlert), and lighttpd proxies it here
-(95-flightradar-wake.conf).
+(95-stratoscan-wake.conf).
 
 Runs as a --user service, unlike the other stores here: it needs the
 session's WAYLAND_DISPLAY to talk to the compositor at all, which a
@@ -33,8 +33,8 @@ import threading
 import time
 
 LISTEN = ("127.0.0.1", 8084)
-SCREENSAVER_UNIT = "flightradar-screensaver.service"
-KIOSK_UNIT = "flightradar-kiosk.service"
+SCREENSAVER_UNIT = "stratoscan-screensaver.service"
+KIOSK_UNIT = "stratoscan-kiosk.service"
 # One real wake per this many seconds. The endpoint is reachable from the
 # public internet via Funnel (though funnel-gateway.py refuses it there),
 # and a burst of alerts shouldn't mean a burst of unit restarts.
@@ -74,7 +74,7 @@ _started_at = time.monotonic()
 # root watchdog (net-watchdog.py, which can reboot) reads it; a painted frame
 # clears it. In the runtime dir, so a reboot starts the count over.
 STUCK_FILE = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"),
-                          "flightradar-kiosk-stuck")
+                          "stratoscan-kiosk-stuck")
 _unrecovered_restarts = 0
 
 
@@ -161,8 +161,8 @@ def _wake():
 # painted a frame at least this recently" -- the same signal the frozen-display
 # watchdog uses, reused so an update that blanks the screen is caught by the
 # thing already watching the screen.
-# In the USER's runtime directory, not /run/flightradar. That one is setupd's
-# RuntimeDirectory= (root:frsetup, 0750) and systemd recreates it with those
+# In the USER's runtime directory, not /run/stratoscan. That one is setupd's
+# RuntimeDirectory= (root:scsetup, 0750) and systemd recreates it with those
 # owners every time setupd restarts -- so a stamp written there stopped being
 # writable the moment the root helper was restarted, and this service, which
 # runs as the desktop user, silently could not write it again.
@@ -171,9 +171,9 @@ def _wake():
 # a new build renders, so a stamp that cannot be written makes every update
 # look like it failed to paint, and roll back a build that was fine.
 PAINT_STAMP = os.environ.get(
-    "FLIGHTRADAR_PAINT_STAMP",
+    "STRATOSCAN_PAINT_STAMP",
     os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"),
-                 "flightradar-painted"))
+                 "stratoscan-painted"))
 
 
 def _mark_painted():
@@ -186,7 +186,7 @@ def _mark_painted():
 
 
 RELOAD_REQUEST = os.path.join(
-    os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "flightradar-reload-request")
+    os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "stratoscan-reload-request")
 
 
 def _take_reload_request():

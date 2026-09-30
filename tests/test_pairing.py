@@ -37,10 +37,10 @@ def check(label, cond):
 
 
 tmp = tempfile.mkdtemp()
-os.environ["FLIGHTRADAR_RELAY_STATE"] = os.path.join(tmp, "relay")
-os.environ["FLIGHTRADAR_RELAY_URL"] = "https://relay.example"
-os.environ["FLIGHTRADAR_PAIRING_RUN"] = os.path.join(tmp, "run")
-os.environ["FLIGHTRADAR_EVENTS_RUN"] = os.path.join(tmp, "events-run")
+os.environ["STRATOSCAN_RELAY_STATE"] = os.path.join(tmp, "relay")
+os.environ["STRATOSCAN_RELAY_URL"] = "https://relay.example"
+os.environ["STRATOSCAN_PAIRING_RUN"] = os.path.join(tmp, "run")
+os.environ["STRATOSCAN_EVENTS_RUN"] = os.path.join(tmp, "events-run")
 spec = importlib.util.spec_from_file_location("pairing", os.path.join(HERE, "..", "deploy", "pairing.py"))
 pairing = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pairing)
@@ -112,7 +112,7 @@ if have_crypto:
           and secret not in json.dumps(relay.calls))
     mode = stat.S_IMODE(os.stat(pairing.OFFER).st_mode)
     check("the open code is readable by root only", mode == 0o600)
-    check("the open code is kept in /run, not on storage", pairing.OFFER.startswith(os.environ["FLIGHTRADAR_PAIRING_RUN"]))
+    check("the open code is kept in /run, not on storage", pairing.OFFER.startswith(os.environ["STRATOSCAN_PAIRING_RUN"]))
 
     st = pairing.status()
     check("an open code shows while the relay still holds it", st["offer"] and st["offer"]["link"] == offer["link"])

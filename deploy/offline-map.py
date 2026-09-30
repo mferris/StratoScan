@@ -42,9 +42,9 @@ import sys
 import time
 import urllib.request
 
-WEB_ROOT = os.environ.get("FLIGHTRADAR_WEB_ROOT", "/var/www/html")
+WEB_ROOT = os.environ.get("STRATOSCAN_WEB_ROOT", "/var/www/html")
 OUT_DIR = os.path.join(WEB_ROOT, "offline-map")
-STATE_DIR = os.environ.get("FLIGHTRADAR_OFFLINE_STATE", "/var/lib/flightradar-offline-map")
+STATE_DIR = os.environ.get("STRATOSCAN_OFFLINE_STATE", "/var/lib/stratoscan-offline-map")
 FAILED_STAMP = os.path.join(STATE_DIR, "last-failure")
 RECEIVER_JSON = "/run/readsb/receiver.json"
 
