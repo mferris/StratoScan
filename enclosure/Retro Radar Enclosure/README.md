@@ -12,7 +12,7 @@ the rest follows.
 | `shell` | the body: Pi, dongle, wiring, speakers |
 | `front_trim` | bezel in front of the glass, rabbeted so it seats flush |
 | `retainer` | ring behind the glass; the glass rests on its front face |
-| `stand` | desk cradle — two ring-arc arms on a plinth |
+| `stand` | desk cradle — two ring-arc arms on a plinth with two ridges all the way round, standing 4mm proud so the slicer supports their undersides (BambuStudio skipped the old 1mm strips and they printed rough) |
 | `back_plate` | removable back — locating lip, PCB standoffs, both vent grilles, one USB-C pass-through, antenna-mount inserts |
 | `antenna_mount` | bolt-on arm carrying the antenna socket (identical to the kitten's) |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |

@@ -21,6 +21,7 @@ back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9; post_od=9;
 back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40; ant_mount_y=88;
 ant_bolt_d=3.4; usbc_cut_pos=[60,-14]; usbc_screw_pitch=16.5; usbc_screw_dia=3.4; usbc_cut_w=11.0; usbc_cut_h=6.5;
 mount_hole_x=58; mount_hole_y=49; stand_angle=18;
+base_w=outer_dia*0.86; base_d=150; plinth_rib_h=4; plinth_rib_w=3; plinth_rib_z=[3.5, 9.5];
 ant_stub_len=30; ant_barrel_len=14; ant_socket_dia=33; ant_socket_depth=6;
 cradle_id=outer_dia+2; cradle_od=cradle_id+26; base_h=16;
 ant_conn_dia=9.15; ant_boss_dia=45; ant_socket_lead=2;
@@ -43,6 +44,21 @@ ant_sma_boss_d=22; ant_sma_boss_h=10; ant_sma_cavity_d=25;
 
 // The plate and the shell meet at a butt joint; neither may intrude on the
 // other.
+// ---- plinth ridges (roadmap 5.4) ---------------------------------------
+// A probe just outside each face of the stand's plinth, spanning the middle
+// half of that face and the ridge heights. Each must find ridge material, so
+// a ridge missing from any side fails. The old strips (front only, 1mm proud,
+// short of where these probes start) came out empty on all four.
+module plinth_side_probe(side) {
+    z0 = min(plinth_rib_z); z1 = max(plinth_rib_z) + plinth_rib_w;
+    if (side == "front" || side == "back")
+        translate([-base_w/4, (side == "front" ? -1 : 1) * (base_d/2 + plinth_rib_h/2) - plinth_rib_h/4, z0])
+            cube([base_w/2, plinth_rib_h/2, z1 - z0]);
+    else
+        translate([(side == "left" ? -1 : 1) * (base_w/2 + plinth_rib_h/2) - plinth_rib_h/4, -base_d/4, z0])
+            cube([plinth_rib_h/2, base_d/2, z1 - z0]);
+}
+
 if (check=="plate_vs_shell") {
   intersection() { back_plate(); shell(); }
 }
@@ -300,6 +316,10 @@ else if (check=="ribs_unbroken") {
 // to evaluate produces, or a probe that never reaches the wall -- and this
 // check would then pass for a case with no ribs at all. The ribs must exist
 // and have real volume.
+else if (check=="plinth_ribs_front") { intersection() { stand(); plinth_side_probe("front"); } }
+else if (check=="plinth_ribs_back")  { intersection() { stand(); plinth_side_probe("back"); } }
+else if (check=="plinth_ribs_left")  { intersection() { stand(); plinth_side_probe("left"); } }
+else if (check=="plinth_ribs_right") { intersection() { stand(); plinth_side_probe("right"); } }
 else if (check=="ribs_present") {
   ribs();
 }
