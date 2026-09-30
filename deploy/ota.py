@@ -42,10 +42,23 @@ REPO = os.environ.get("STRATOSCAN_OTA_REPO", "mferris/StratoScan")
 # exercised against a local server in tests. The default is the real thing;
 # nothing about the trust model depends on this being GitHub.
 API_BASE = os.environ.get("STRATOSCAN_OTA_API", "https://api.github.com")
-NAMESPACE = "flightradar"
 ALLOWED_SIGNERS = os.environ.get(
     "STRATOSCAN_ALLOWED_SIGNERS", "/opt/stratoscan/allowed_signers")
-SIGNER_ID = "flightradar-release"
+# Release signing moved from the project's old 'flightradar' names to
+# 'stratoscan' (2026-09-30): the signature's namespace, and the key's name in
+# allowed_signers. Same key throughout. During the move a release carries a
+# signature in each namespace: updaters from before it read only
+# manifest.json.sig ('flightradar'); this one prefers the new signature and
+# falls back to the old. It also accepts the key under either name, because
+# allowed_signers changes only when the installer runs -- never by an update,
+# since an update must not be able to replace the key that vouches for it.
+# Both are the same key, so neither fallback lowers the bar: a release is
+# still accepted only if that private key signed it.
+SIGNATURES = (                           # (release asset, namespace), preferred first
+    ("manifest.stratoscan.sig", "stratoscan"),
+    ("manifest.json.sig", "flightradar"),
+)
+SIGNER_IDS = ("stratoscan-release", "flightradar-release")
 STATE_DIR = os.environ.get("STRATOSCAN_OTA_STATE", "/var/lib/stratoscan-ota")
 INSTALLED = os.path.join(STATE_DIR, "installed.json")
 STATUS = os.path.join(STATE_DIR, "status.json")
@@ -280,32 +293,49 @@ def latest_release():
     data = json.loads(fetch(
         f"{API_BASE}/repos/{REPO}/releases/latest", 1 << 20))
     assets = {a["name"]: a["browser_download_url"] for a in data.get("assets", [])}
-    for need in ("manifest.json", "manifest.json.sig"):
-        if need not in assets:
-            raise Fail(f"release {data.get('tag_name')} has no {need}")
+    if "manifest.json" not in assets:
+        raise Fail(f"release {data.get('tag_name')} has no manifest.json")
+    if not any(name in assets for name, _ in SIGNATURES):
+        raise Fail(f"release {data.get('tag_name')} has no signature")
     return data.get("tag_name", "?"), assets
 
 
-def verify_manifest(raw_manifest, raw_sig):
+def verify_manifest(raw_manifest, raw_sig, namespace):
     """ssh-keygen -Y verify, or refuse. Nothing downstream runs without this."""
+    errors = []
     with tempfile.TemporaryDirectory() as td:
         sig = os.path.join(td, "m.sig")
         with open(sig, "wb") as f:
             f.write(raw_sig)
-        p = subprocess.run(
-            ["ssh-keygen", "-Y", "verify", "-f", ALLOWED_SIGNERS,
-             "-I", SIGNER_ID, "-n", NAMESPACE, "-s", sig],
-            input=raw_manifest, capture_output=True, timeout=30)
-    if p.returncode != 0:
-        raise Fail("signature rejected: "
-                   + (p.stderr or b"").decode("utf-8", "replace").strip())
-    return json.loads(raw_manifest.decode("utf-8"))
+        for signer in SIGNER_IDS:
+            p = subprocess.run(
+                ["ssh-keygen", "-Y", "verify", "-f", ALLOWED_SIGNERS,
+                 "-I", signer, "-n", namespace, "-s", sig],
+                input=raw_manifest, capture_output=True, timeout=30)
+            if p.returncode == 0:
+                return json.loads(raw_manifest.decode("utf-8"))
+            errors.append((p.stderr or b"").decode("utf-8", "replace").strip())
+    raise Fail("signature rejected: " + " | ".join(e for e in errors if e))
+
+
+def verified_manifest(assets):
+    """The release's manifest, verified by the first signature that checks
+    out, in SIGNATURES order. Refuses if none does."""
+    raw = fetch(assets["manifest.json"], 1 << 20)
+    errors = []
+    for name, namespace in SIGNATURES:
+        if name not in assets:
+            continue
+        try:
+            return verify_manifest(raw, fetch(assets[name], 1 << 16), namespace)
+        except Fail as e:
+            errors.append(f"{name}: {e}")
+    raise Fail("; ".join(errors) or "no signature")
 
 
 def check():
     tag, assets = latest_release()
-    manifest = verify_manifest(fetch(assets["manifest.json"], 1 << 20),
-                               fetch(assets["manifest.json.sig"], 1 << 16))
+    manifest = verified_manifest(assets)
     have, want = installed_serial(), int(manifest["serial"])
     newer = want > have
     write_status(state="checked", tag=tag, version=manifest["version"],
