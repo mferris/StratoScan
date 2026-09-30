@@ -1,4 +1,4 @@
-name = "flightradar-relay"
+name = "stratoscan-relay"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
 
@@ -12,10 +12,10 @@ workers_dev = true
 
 [[d1_databases]]
 binding = "DB"
-database_name = "flightradar-relay"
+database_name = "stratoscan-relay"
 # Created once per maintainer account; see relay/README.md. Not a secret: a
 # D1 id is useless without the account's own credentials.
-database_id = "bc652644-4181-433c-b177-ea59c2473d64"
+database_id = "00000000-0000-0000-0000-000000000000"
 
 # Push (roadmap 2.1). Not secret: they identify the key, and are useless
 # without it. A fork uses its own team's values.

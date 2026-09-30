@@ -72,12 +72,12 @@ miles"), which is why events are opt-in and kept so briefly.
 cd relay
 npm install
 npx wrangler login                                  # opens a browser
-npx wrangler d1 create flightradar-relay            # copy the id into wrangler.toml
+npx wrangler d1 create stratoscan-relay             # copy the id into wrangler.toml
 npm run db:init                                     # applies schema.sql
 npx wrangler secret put FLEET_TOKEN                 # choose a long random password
 npx wrangler secret put APNS_KEY < AuthKey_XXXX.p8  # the APNs auth key from developer.apple.com
                                                     # (key id, team id and app id go in wrangler.toml [vars])
-npm run deploy                                      # prints https://flightradar-relay.<you>.workers.dev
+npm run deploy                                      # serves the custom domain in wrangler.toml (and https://stratoscan-relay.<you>.workers.dev)
 ```
 
 After a change to `schema.sql` (new tables only, never altered ones), run
