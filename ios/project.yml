@@ -38,8 +38,13 @@ targets:
       path: Radome/App/Info.plist
       properties:
         UILaunchScreen: {}
+        # Portrait everywhere; AppDelegate.orientations lets Sky view's
+        # aircraft details turn to landscape, which iOS only allows for
+        # orientations listed here.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UISupportedInterfaceOrientations~ipad:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft

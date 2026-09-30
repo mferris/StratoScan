@@ -71,6 +71,7 @@ struct SkyView: View {
             camera.start { granted in cameraDenied = !granted }
         }
         .onDisappear {
+            OrientationLock.allow(.portrait, turningTo: .portrait)
             motion.stop()
             camera.stop()
             viewModel.nearMe = [:]
@@ -83,7 +84,8 @@ struct SkyView: View {
                 try? await Task.sleep(for: .seconds(5))
             }
         }
-        .sheet(item: Binding(get: { selected.map(SkySelection.init) }, set: { selected = $0?.id })) { sel in
+        .sheet(item: Binding(get: { selected.map(SkySelection.init) }, set: { selected = $0?.id }),
+               onDismiss: { OrientationLock.allow(.portrait, turningTo: .portrait) }) { sel in
             AircraftDetailView(viewModel: viewModel, location: location, hex: sel.id)
                 .preferredColorScheme(.dark)
         }
@@ -170,7 +172,11 @@ struct SkyView: View {
         }()
         return ZStack {
             ForEach(placed, id: \.0.hex) { p, pt, range in
-                Button { selected = p.hex } label: {
+                Button {
+                    // Held sideways, the details open sideways too.
+                    if let side = motion.heldSideways { OrientationLock.allow(.allButUpsideDown, turningTo: side) }
+                    selected = p.hex
+                } label: {
                     // The ring sits on the aircraft; the text hangs below it,
                     // and the pair turns about the ring to stay upright
                     // however the phone is held (the app itself is portrait).
@@ -209,6 +215,24 @@ struct SkyView: View {
 }
 
 private struct SkySelection: Identifiable { let id: String }
+
+/// Lets the portrait app turn for a moment, and back.
+enum OrientationLock {
+    @MainActor static func allow(_ mask: UIInterfaceOrientationMask, turningTo side: UIInterfaceOrientationMask) {
+        guard AppDelegate.orientations != mask || mask == .portrait else { return }
+        AppDelegate.orientations = mask
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            for window in scene.windows {
+                var vc = window.rootViewController
+                while let c = vc {
+                    c.setNeedsUpdateOfSupportedInterfaceOrientations()
+                    vc = c.presentedViewController
+                }
+            }
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: side)) { _ in }
+        }
+    }
+}
 
 /// Aircraft around the phone, from adsb.lol's public API -- the same source
 /// the radar's network comparison uses.
@@ -265,6 +289,17 @@ final class SkyMotion: ObservableObject {
     var available: Bool { manager.isDeviceMotionAvailable }
     /// Which way round CoreMotion's matrix goes, settled from gravity (below).
     private var transposed: Bool?
+    /// Gravity across the screen, last reading.
+    private var lastGravity = SIMD2<Double>(0, -1)
+
+    /// Which landscape the phone is held in, if it is. Gravity pulling toward
+    /// the phone's right edge means it has been turned clockwise, home side
+    /// on the left: UIKit's landscapeLeft.
+    var heldSideways: UIInterfaceOrientationMask? {
+        if lastGravity.x > 0.6 { return .landscapeLeft }
+        if lastGravity.x < -0.6 { return .landscapeRight }
+        return nil
+    }
 
     func start() {
         guard manager.isDeviceMotionAvailable, !manager.isDeviceMotionActive else { return }
@@ -297,6 +332,7 @@ final class SkyMotion: ObservableObject {
         // Upright on screen is against gravity's pull across the screen. Held
         // almost flat (pointing straight up) that pull is too small to say,
         // so the last angle stands.
+        lastGravity = SIMD2(g.x, g.y)
         if hypot(g.x, g.y) > 0.3 {
             upright = .radians(atan2(-g.x, -g.y))
         }
