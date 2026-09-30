@@ -114,7 +114,10 @@ if [ -n "$DRY" ]; then
     exit 0
 fi
 
-gh release create "$VERSION" \
+# Tag the commit this was built from, not whatever main points at on GitHub:
+# a release cut from an earlier commit would otherwise be tagged with code it
+# doesn't contain.
+gh release create "$VERSION" --target "$(git rev-parse HEAD)" \
     "$OUT/$BUNDLE" "$OUT/manifest.json" "$OUT/manifest.json.sig" \
     --title "$VERSION" --notes "StratoScan $VERSION (serial $SERIAL)"
 echo "  published $VERSION"
