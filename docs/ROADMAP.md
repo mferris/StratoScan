@@ -98,6 +98,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 4.4 | Spoken announcements with offline TTS (Piper; **voice license checked**, permissive only) | Claude | Announces real traffic with no internet |
 | 4.5 | Yearly "Wrapped" from the sighting store, shareable from the app | Claude | Generated from RDU's real history |
 | 4.6 | Opt-in feeding to FlightAware / FR24 (their feeder licenses checked; precise-location sharing is explicit) | Claude · recipient (their accounts) | A unit feeds; the perk account activates |
+| 4.7 | Quiet hours: silence the unit's alert sounds (chimes and speech) in a set window or sunset to sunrise; alerts still show on screen; emergencies can still sound | Claude | No sound inside the window on RDU, and sound returns on time |
 
 ## Phase 5: hardware v2
 
