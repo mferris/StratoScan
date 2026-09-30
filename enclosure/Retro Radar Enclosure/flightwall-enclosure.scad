@@ -282,6 +282,18 @@ cradle_arc = 130;                          // degrees of arc each arm wraps: 65d
 arm_w   = 16;                              // width of each arm along the case's depth axis
 arm_gap = 26;                              // gap between the two arms
 base_w = outer_dia*0.86; base_d = 150; base_h = 16;
+// ---------- PLINTH RIDGES ----------
+// Two raised bands round the plinth, echoing the case's own ribs. They were
+// two strips across the FRONT only, standing 1mm proud: an overhang that
+// small is under BambuStudio's support threshold, so the underside printed
+// unsupported and rough -- the same failure the case ribs had at 2.2mm,
+// fixed by going to 4mm (rib_h). So these match it: 4mm proud, all the way
+// round, as one band per level so the corners are mitred rather than two
+// strips butting into each other. Tops stay under z=13, where the cradle
+// arms and keel fuse into the plinth (arm_lift puts them at base_h - 3).
+plinth_rib_h = 4;           // how far each band stands out from the plinth
+plinth_rib_w = 3;           // height of each band
+plinth_rib_z = [3.5, 9.5];  // bottom of each band: 3.5-6.5 and 9.5-12.5
 // ---------- CRADLE STYLING ----------
 // The arms were bare ring segments ending in sawn-off square faces, which
 // read as unfinished next to the case's riveted, ribbed body -- and the tips
@@ -764,6 +776,18 @@ module cradle_front_rivets() {
     }
 }
 
+// The plinth's ridges: for each level, a ring the shape of the plinth's
+// footprint, plinth_rib_h wide, standing out from all four faces.
+module plinth_ribs() {
+    for (z = plinth_rib_z)
+        translate([0, 0, z])
+            linear_extrude(height = plinth_rib_w)
+                difference() {
+                    offset(delta = plinth_rib_h) square([base_w, base_d], center = true);
+                    square([base_w, base_d], center = true);
+                }
+}
+
 module stand() {
     // The arms are ring segments built in the XY plane (axis along Z).
     // To cradle a cylinder lying on its side, that axis has to end up
@@ -787,12 +811,7 @@ module stand() {
         translate([-base_w/2, -base_d/2, 0])
             cube([base_w, base_d, base_h]);
 
-        // shallow grooves across the plinth's front face, echoing the
-        // case's own ribs for a matching look
-        for (z = [base_h*0.35, base_h*0.65]) {
-            translate([-base_w/2 - 1, -base_d/2 - 1, z])
-                cube([base_w + 2, 3, 2]);
-        }
+        plinth_ribs();
 
         // the two cradle arms, laid horizontal and tipped back, plus a
         // keel below the bowl tying them to each other and down into
