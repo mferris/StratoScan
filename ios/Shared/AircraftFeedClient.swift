@@ -85,6 +85,9 @@ struct Nearby {
         let altitudeText: String
         let distanceNm: Double
         let direction: String
+        /// Degrees from the radar, for drawing it on a radar (the StandBy widget).
+        var bearing: Double = 0
+        var isNetwork = false
     }
     let count: Int
     let planes: [Plane]
@@ -105,7 +108,8 @@ struct Nearby {
             case .feet(let ft): alt = ft >= 18000 ? "FL\(Int((ft / 100).rounded()))" : "\(Int(ft).formatted()) ft"
             }
             let dir = points[Int(((br.bearing.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360) / 45).rounded()) % 8]
-            return Plane(callsign: cs.isEmpty ? a.hex.uppercased() : cs, altitudeText: alt, distanceNm: br.range, direction: dir)
+            return Plane(callsign: cs.isEmpty ? a.hex.uppercased() : cs, altitudeText: alt, distanceNm: br.range, direction: dir,
+                         bearing: br.bearing, isNetwork: a.isNetwork)
         }
         .sorted { $0.distanceNm < $1.distanceNm }
         return Nearby(count: planes.count, planes: planes)

@@ -104,7 +104,57 @@ struct RadomeWidgetView: View {
 struct RadomeWidgets: WidgetBundle {
     var body: some Widget {
         RadomeWidget()
+        RadarWidget()
         ApproachLiveActivity()
+    }
+}
+
+/// The radar as a widget (roadmap 2.4): the aircraft as dots around the
+/// radar, and the count. Made for StandBy -- an iPhone charging on its side
+/// at night -- where iOS shows it large and tints it red in the dark; it
+/// works on the home screen too. Refreshes on iOS's widget budget, so it's a
+/// picture of the last few minutes, not a live radar.
+struct RadarWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "StratoScanRadar", provider: Provider()) { entry in
+            RadarWidgetView(entry: entry).containerBackground(.black, for: .widget)
+        }
+        .configurationDisplayName("Radar")
+        .description("The aircraft around your StratoScan radar, as a radar. Good in StandBy.")
+        .supportedFamilies([.systemSmall, .systemLarge])
+    }
+}
+
+struct RadarWidgetView: View {
+    let entry: Entry
+    private let teal = Color(red: 0.31, green: 0.84, blue: 0.78)
+    private let amber = Color(red: 1.0, green: 0.69, blue: 0.13)
+
+    var body: some View {
+        ZStack {
+            Canvas { ctx, size in
+                let c = CGPoint(x: size.width / 2, y: size.height / 2)
+                let r = min(size.width, size.height) / 2 - 2
+                for f in [0.5, 1.0] {
+                    ctx.stroke(Path(ellipseIn: CGRect(x: c.x - r * f, y: c.y - r * f, width: 2 * r * f, height: 2 * r * f)),
+                               with: .color(teal.opacity(0.35)), lineWidth: 1)
+                }
+                ctx.fill(Path(ellipseIn: CGRect(x: c.x - 2.5, y: c.y - 2.5, width: 5, height: 5)), with: .color(amber))
+                for p in entry.nearby?.planes ?? [] {
+                    let ang = (p.bearing - 90) * .pi / 180
+                    let d = CGFloat(p.distanceNm / Nearby.rangeNm) * r
+                    let pt = CGPoint(x: c.x + d * cos(ang), y: c.y + d * sin(ang))
+                    let dot = Path(ellipseIn: CGRect(x: pt.x - 3.5, y: pt.y - 3.5, width: 7, height: 7))
+                    ctx.fill(dot, with: .color(Color(red: 0.65, green: 0.55, blue: 0.98)))
+                }
+            }
+            VStack {
+                Spacer()
+                Text(entry.nearby.map { "\($0.count) AIRCRAFT" } ?? "STRATOSCAN")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(teal)
+            }
+        }
     }
 }
 
