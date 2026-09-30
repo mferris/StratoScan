@@ -1,5 +1,5 @@
 {
-  "name": "flightradar-relay",
+  "name": "stratoscan-relay",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -7,7 +7,7 @@
   "scripts": {
     "test": "node --test test/",
     "deploy": "wrangler deploy",
-    "db:init": "wrangler d1 execute flightradar-relay --remote --file=schema.sql"
+    "db:init": "wrangler d1 execute stratoscan-relay --remote --file=schema.sql"
   },
   "devDependencies": {
     "wrangler": "^4.143.0"
