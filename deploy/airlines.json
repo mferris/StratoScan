@@ -1,0 +1,170 @@
+{
+ "_note": "ICAO airline designator -> display name, IATA code and badge colour. Read by deploy/labels.py; tests/test_labels.py keeps it identical to AIRLINES in index.html until the page reads it from here (roadmap 1.9).",
+ "airlines": {
+  "AAL": {
+   "color": "#a5342a",
+   "iata": "AA",
+   "name": "American Airlines"
+  },
+  "AAY": {
+   "color": "#1a3a6b",
+   "iata": "G4",
+   "name": "Allegiant Air"
+  },
+  "ABX": {
+   "color": "#43494f",
+   "iata": "GB",
+   "name": "ABX Air"
+  },
+  "ACA": {
+   "color": "#7a1420",
+   "iata": "AC",
+   "name": "Air Canada"
+  },
+  "AFR": {
+   "color": "#1a3a7a",
+   "iata": "AF",
+   "name": "Air France"
+  },
+  "ASA": {
+   "color": "#0f766e",
+   "iata": "AS",
+   "name": "Alaska Airlines"
+  },
+  "ASH": {
+   "color": "#3a4a5a",
+   "iata": "ZW",
+   "name": "Air Wisconsin"
+  },
+  "BAW": {
+   "color": "#1a2a5e",
+   "iata": "BA",
+   "name": "British Airways"
+  },
+  "DAL": {
+   "color": "#9c1238",
+   "iata": "DL",
+   "name": "Delta Air Lines"
+  },
+  "DLH": {
+   "color": "#0d3a5c",
+   "iata": "LH",
+   "name": "Lufthansa"
+  },
+  "EDV": {
+   "color": "#3a4a5a",
+   "iata": "9E",
+   "name": "Endeavor Air"
+  },
+  "EJA": {
+   "color": "#43494f",
+   "iata": "EJ",
+   "name": "NetJets"
+  },
+  "ENY": {
+   "color": "#3a4a5a",
+   "iata": "MQ",
+   "name": "Envoy Air"
+  },
+  "FDX": {
+   "color": "#4b1f7a",
+   "iata": "FX",
+   "name": "FedEx Express"
+  },
+  "FFT": {
+   "color": "#1a7a3c",
+   "iata": "F9",
+   "name": "Frontier Airlines"
+  },
+  "GJS": {
+   "color": "#3a4a5a",
+   "iata": "G7",
+   "name": "GoJet Airlines"
+  },
+  "GTI": {
+   "color": "#43494f",
+   "iata": "5Y",
+   "name": "Atlas Air"
+  },
+  "HAL": {
+   "color": "#6a1b4d",
+   "iata": "HA",
+   "name": "Hawaiian Airlines"
+  },
+  "JBU": {
+   "color": "#146fa0",
+   "iata": "B6",
+   "name": "JetBlue Airways"
+  },
+  "JIA": {
+   "color": "#3a4a5a",
+   "iata": "OH",
+   "name": "PSA Airlines"
+  },
+  "KLM": {
+   "color": "#0a5c9e",
+   "iata": "KL",
+   "name": "KLM Royal Dutch Airlines"
+  },
+  "LXJ": {
+   "color": "#43494f",
+   "iata": "LX",
+   "name": "Flexjet"
+  },
+  "NKS": {
+   "color": "#a68a00",
+   "iata": "NK",
+   "name": "Spirit Airlines"
+  },
+  "PDT": {
+   "color": "#3a4a5a",
+   "iata": "PT",
+   "name": "Piedmont Airlines"
+  },
+  "QTR": {
+   "color": "#5a1030",
+   "iata": "QR",
+   "name": "Qatar Airways"
+  },
+  "RPA": {
+   "color": "#3a4a5a",
+   "iata": "YX",
+   "name": "Republic Airways"
+  },
+  "SCX": {
+   "color": "#0e5c3a",
+   "iata": "SY",
+   "name": "Sun Country Airlines"
+  },
+  "SKW": {
+   "color": "#3a4a5a",
+   "iata": "OO",
+   "name": "SkyWest Airlines"
+  },
+  "SWA": {
+   "color": "#b5860f",
+   "iata": "WN",
+   "name": "Southwest Airlines"
+  },
+  "UAE": {
+   "color": "#a3151e",
+   "iata": "EK",
+   "name": "Emirates"
+  },
+  "UAL": {
+   "color": "#1f5fa8",
+   "iata": "UA",
+   "name": "United Airlines"
+  },
+  "UPS": {
+   "color": "#4a3510",
+   "iata": "5X",
+   "name": "UPS Airlines"
+  },
+  "VIR": {
+   "color": "#7a1030",
+   "iata": "VS",
+   "name": "Virgin Atlantic"
+  }
+ }
+}
