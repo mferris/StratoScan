@@ -38,9 +38,16 @@ enum Geo {
 
     /// Zoom level whose ground scale at `lat` matches `rangeNm` across `pixels`,
     /// so the map's visible extent lines up with the radar's outer ring.
+    ///
+    /// 156543.03392 is metres per pixel at zoom 0 for 256-pixel tiles; MapLibre
+    /// counts zoom in 512-point tiles, so one level fewer is needed. The kiosk
+    /// has always had the "- 1"; this copy didn't, and drew the map at twice
+    /// the radar's scale -- Durham, 9 nm from RDU, showed at the 18 nm mark --
+    /// which zooming and dragging made plain: the map slid twice as far as
+    /// the finger.
     static func zoomForRange(rangeNm: Double, lat: Double, pixels: Double) -> Double {
         let metersPerPixel = (rangeNm * 1852) / pixels
-        return log2(156543.03392 * cos(lat * .pi / 180) / metersPerPixel)
+        return log2(156543.03392 * cos(lat * .pi / 180) / metersPerPixel) - 1
     }
 
     /// Bounding box `rangeNm` around (lat, lon), for the runway Overpass query.

@@ -197,13 +197,17 @@ struct ContentView: View {
         return String(format: "%.4f°%@ %.4f°%@ · ", abs(home.lat), ns, abs(home.lon), ew) + range
     }
 
-    /// The map follows the view: the radar, or a followed aircraft's position.
+    /// The map follows the view: the radar, a followed aircraft, the phone,
+    /// or wherever the owner has pinched or dragged to.
     private func mapCentre(_ home: Coordinate) -> Coordinate {
         if let h = viewModel.followHex, let p = viewModel.planes[h], let lat = p.lat, let lon = p.lon {
             return Coordinate(lat: lat, lon: lon)
         }
         if viewModel.centreOnMe, let me = viewModel.me { return me }
-        return home
+        // nm to degrees: flat is plenty within the 20 nm ring
+        let p = viewModel.pan
+        return Coordinate(lat: home.lat + p.north / 60,
+                          lon: home.lon + p.east / (60 * cos(home.lat * .pi / 180)))
     }
 }
 
