@@ -4,8 +4,10 @@ import SwiftUI
 /// every second from the live plane state, like the kiosk's detail panel.
 struct AircraftDetailView: View {
     @ObservedObject var viewModel: RadarViewModel
+    @ObservedObject var location: PhoneLocation
     let hex: String
     @State private var photo: Photo?
+    @State private var showCompass = false
     @Environment(\.dismiss) private var dismiss
 
     struct Photo: Decodable {
@@ -35,6 +37,9 @@ struct AircraftDetailView: View {
                             }
                         }
                         .buttonStyle(.bordered)
+                        // Point the phone at it (roadmap 3.4).
+                        Button("Compass") { showCompass = true }
+                            .buttonStyle(.bordered)
                     }
                     photoView
                     if let p {
@@ -49,6 +54,10 @@ struct AircraftDetailView: View {
             }
         }
         .task(id: hex) { await loadPhoto() }
+        .sheet(isPresented: $showCompass) {
+            CompassView(viewModel: viewModel, location: location, hex: hex)
+                .preferredColorScheme(.dark)
+        }
     }
 
     private func header(_ p: PlaneState?) -> some View {

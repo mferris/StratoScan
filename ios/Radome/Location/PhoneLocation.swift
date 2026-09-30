@@ -10,6 +10,12 @@ final class PhoneLocation: NSObject, ObservableObject, CLLocationManagerDelegate
     @Published private(set) var coordinate: Coordinate?
     /// The owner said no (or restrictions apply): say so rather than spin.
     @Published private(set) var denied = false
+    /// Which way the top of the phone points, in degrees (roadmap 3.4's
+    /// compass). True north when iOS knows it, magnetic otherwise.
+    @Published private(set) var heading: Double?
+    @Published private(set) var headingIsTrue = false
+    /// Worse than this many degrees and the compass says it needs calibrating.
+    @Published private(set) var headingAccuracy: Double?
 
     private let manager = CLLocationManager()
     private var started = false
@@ -36,6 +42,26 @@ final class PhoneLocation: NSObject, ObservableObject, CLLocationManagerDelegate
     func stop() {
         started = false
         manager.stopUpdatingLocation()
+    }
+
+    func startHeading() {
+        start()
+        guard CLLocationManager.headingAvailable() else { return }
+        manager.headingFilter = 1
+        manager.startUpdatingHeading()
+    }
+
+    func stopHeading() { manager.stopUpdatingHeading() }
+
+    nonisolated func locationManager(_ m: CLLocationManager, didUpdateHeading h: CLHeading) {
+        let isTrue = h.trueHeading >= 0
+        let value = isTrue ? h.trueHeading : h.magneticHeading
+        let accuracy = h.headingAccuracy
+        Task { @MainActor in
+            heading = value
+            headingIsTrue = isTrue
+            headingAccuracy = accuracy >= 0 ? accuracy : nil
+        }
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ m: CLLocationManager) {
