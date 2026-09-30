@@ -76,10 +76,11 @@ the bore does not locate anything, it just stops the plate seating.
 
 The two cable glands are gone, replaced by a single opening for a panel-mount
 USB-C cable; the antenna's coax comes in through the mount's own bore
-instead. **The cutout dimensions are a placeholder** — the connector's
-listing publishes no cutout size — so print `usbc_gauge`, a coupon carrying
-the nominal cutout plus four neighbours at ±0.5 and ±1.0mm, and fit the
-connector before committing a plate.
+instead. **The cutout has been fitted to the real
+connector** (2026-09-29): it fits, its two M3 mounting screws are 16.5mm
+apart, and the holes are M3 clearance. For a different connector, print
+`usbc_gauge`, a coupon carrying the cutout plus four neighbours at ±0.5 and
+±1.0mm, and fit it before committing a plate.
 
 The mount screws into three M3 heat-set inserts on the plate's inner face
 rather than through bare holes, so it can be removed without holding a nut

@@ -116,12 +116,12 @@ opening for a panel-mount USB-C cable. The antenna no longer needs a bulkhead
 here at all — its coax comes in through the antenna mount's own cable bore,
 inside the bolt circle.
 
-**The cutout dimensions are a placeholder.** The connector's listing
-publishes no cutout size, so `usbc_cut_w`/`usbc_cut_h`/`usbc_screw_pitch` are
-the usual values for that style of part rather than measured ones. Print
-`usbc_gauge` — a coupon carrying the nominal cutout plus four neighbours at
-±0.5 and ±1.0mm — and fit the connector to it before committing a back plate.
-A coupon is minutes; a plate is hours.
+**The cutout has been fitted to the real connector** (2026-09-29): it fits
+the window, and its two mounting screws are 16.5mm apart. Those screws are
+M3, so the holes are M3 clearance (3.4mm) like every other screw hole. The
+listing publishes no cutout size, so for a different connector print
+`usbc_gauge` — the cutout plus four neighbours at ±0.5 and ±1.0mm — and fit
+it before committing a back plate. A coupon is minutes; a plate is hours.
 
 ### The antenna mounts on the back, and the turret is gone
 

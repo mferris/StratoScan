@@ -148,12 +148,11 @@ back_lip_skip = 9;
 // gland that used to sit side by side. The antenna no longer needs a
 // bulkhead here: its coax comes in through the antenna mount's cable bore.
 //
-// !!! THESE NUMBERS ARE A PLACEHOLDER AND MUST BE MEASURED !!!
-// The listing for the panel-mount USB-C cable publishes no cutout
-// dimensions, so these are the usual values for that style of part, not
-// measured ones. Print part="usbc_gauge" -- a coupon carrying this cutout
-// plus four neighbouring sizes -- and fit the connector before committing a
-// whole back plate.
+// Fitted against the real connector on 2026-09-29: it fits this window, and
+// its mounting holes are 16.5mm apart, centre to centre. The listing
+// publishes no cutout size, so these started as the usual values for that
+// style of part; part="usbc_gauge" (this window plus four neighbours) is
+// still the quick way to re-fit a different connector.
 usbc_cut_w       = 11.0;
 usbc_cut_h       = 6.5;
 usbc_cut_r       = 1.2;
