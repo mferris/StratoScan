@@ -133,6 +133,7 @@ struct SkyView: View {
                 }
                 .padding([.top, .horizontal], 12)
                 AircraftDetailView(viewModel: viewModel, location: location, hex: d.hex)
+                    .noScrollEdgeBlur()
             }
             .background(Color.black.opacity(0.9))
             .environment(\.colorScheme, .dark)
@@ -253,6 +254,19 @@ struct SkyView: View {
 
 private struct SkySelection: Identifiable { let id: String }
 private struct SidewaysDetail: Equatable { let hex: String; let angle: Angle }
+
+private extension View {
+    /// iOS 26 blurs scrolling content where it meets a bar or the edge of the
+    /// screen. In the turned panel there is no bar, and that blur lay over
+    /// the top of the details: text and photo went soft as they scrolled up.
+    @ViewBuilder func noScrollEdgeBlur() -> some View {
+        if #available(iOS 26, *) {
+            scrollEdgeEffectHidden(true, for: .all)
+        } else {
+            self
+        }
+    }
+}
 
 /// Shows SwiftUI content turned a quarter, by giving it the swapped bounds
 /// and a UIKit transform.
