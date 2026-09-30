@@ -1684,69 +1684,96 @@ function classifyAircraft(p) {
   return 'unknown';
 }
 
-// Each draw*() assumes the canvas is already translated to the blip's
+// Each draw*() draws into context c, assumed already translated to the blip's
 // position and rotated so "forward" is -Y, with fillStyle/strokeStyle/
 // shadowColor/shadowBlur already set to the plane's color by the caller.
-function drawKite(scale) {
-  ctx.beginPath();
-  ctx.moveTo(0, -9 * scale);
-  ctx.lineTo(6 * scale, 7 * scale);
-  ctx.lineTo(0, 3 * scale);
-  ctx.lineTo(-6 * scale, 7 * scale);
-  ctx.closePath();
-  ctx.fill();
+function drawKite(c, scale) {
+  c.beginPath();
+  c.moveTo(0, -9 * scale);
+  c.lineTo(6 * scale, 7 * scale);
+  c.lineTo(0, 3 * scale);
+  c.lineTo(-6 * scale, 7 * scale);
+  c.closePath();
+  c.fill();
 }
 
-function drawProp() {
-  ctx.beginPath();
-  ctx.moveTo(-1.5, -9);
-  ctx.lineTo(1.5, -9);
-  ctx.lineTo(1.5, -1.5);
-  ctx.lineTo(9, 1.5);
-  ctx.lineTo(9, 3.5);
-  ctx.lineTo(1.5, 1);
-  ctx.lineTo(1.5, 8);
-  ctx.lineTo(-1.5, 8);
-  ctx.lineTo(-1.5, 1);
-  ctx.lineTo(-9, 3.5);
-  ctx.lineTo(-9, 1.5);
-  ctx.lineTo(-1.5, -1.5);
-  ctx.closePath();
-  ctx.fill();
+function drawProp(c) {
+  c.beginPath();
+  c.moveTo(-1.5, -9);
+  c.lineTo(1.5, -9);
+  c.lineTo(1.5, -1.5);
+  c.lineTo(9, 1.5);
+  c.lineTo(9, 3.5);
+  c.lineTo(1.5, 1);
+  c.lineTo(1.5, 8);
+  c.lineTo(-1.5, 8);
+  c.lineTo(-1.5, 1);
+  c.lineTo(-9, 3.5);
+  c.lineTo(-9, 1.5);
+  c.lineTo(-1.5, -1.5);
+  c.closePath();
+  c.fill();
 }
 
-function drawHeli() {
-  ctx.beginPath();
-  ctx.arc(0, -2, 7, 0, Math.PI * 2);
-  ctx.lineWidth = 1.6;
-  ctx.strokeStyle = ctx.fillStyle;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(-1.3, 4);
-  ctx.lineTo(1.3, 4);
-  ctx.lineTo(0.8, 11);
-  ctx.lineTo(-0.8, 11);
-  ctx.closePath();
-  ctx.fill();
+function drawHeli(c) {
+  c.beginPath();
+  c.arc(0, -2, 7, 0, Math.PI * 2);
+  c.lineWidth = 1.6;
+  c.strokeStyle = c.fillStyle;
+  c.stroke();
+  c.beginPath();
+  c.moveTo(-1.3, 4);
+  c.lineTo(1.3, 4);
+  c.lineTo(0.8, 11);
+  c.lineTo(-0.8, 11);
+  c.closePath();
+  c.fill();
 }
 
-function drawBlimp() {
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 5, 11, 0, 0, Math.PI * 2);
-  ctx.fill();
+function drawBlimp(c) {
+  c.beginPath();
+  c.ellipse(0, 0, 5, 11, 0, 0, Math.PI * 2);
+  c.fill();
 }
 
-function drawBlipShape(kind) {
+function drawBlipShape(c, kind) {
   switch (kind) {
-    case 'heavy': drawKite(1.55); break;
-    case 'prop': drawProp(); break;
-    case 'heli': drawHeli(); break;
-    case 'lta': drawBlimp(); break;
+    case 'heavy': drawKite(c, 1.55); break;
+    case 'prop': drawProp(c); break;
+    case 'heli': drawHeli(c); break;
+    case 'lta': drawBlimp(c); break;
     case 'jet':
     case 'unknown':
-    default: drawKite(1); break;
+    default: drawKite(c, 1); break;
   }
 }
+
+// ---- Glow sprites ----------------------------------------------------------
+// shadowBlur was the costliest thing this page drew. On the Pi's GPU every
+// blurred shape is its own offscreen blur pass, on every frame, and shrinking
+// the moving-things canvas to 1px took the GPU process from ~96% of a core to
+// ~21% (#35). A glowing shape only changes when its colour or size does, so
+// each one is drawn once, glow and all, into a small canvas, and a frame just
+// stamps copies: the same pixels, no blur per frame.
+const glowSprites = new Map();
+function glowSprite(key, extent, blur, draw) {
+  let s = glowSprites.get(key);
+  if (s) return s;
+  const half = Math.ceil(extent + blur * 2);   // a shadowBlur fades out within about 2x its value
+  s = document.createElement('canvas');
+  s.width = s.height = half * 2;
+  const c = s.getContext('2d');
+  c.translate(half, half);
+  draw(c);
+  s.half = half;
+  if (glowSprites.size > 300) glowSprites.clear();   // colours follow the theme; don't grow forever
+  glowSprites.set(key, s);
+  return s;
+}
+
+// Sizes step in 5% (blips) or half pixels (rings) so the cache stays small;
+// nobody can see a 2% difference in a blip.
+const quantizeScale = (v) => Math.round(v * 20) / 20;
 
 function polarToXY(bearingDeg, rangeNm) {
   const angle = (bearingDeg - 90) * Math.PI / 180; // 0deg = up (north)
@@ -4023,24 +4050,28 @@ function drawGhosts() {
   // hollow and dashed, which is what keeps it distinguishable from a real
   // contact; being faint was never what did that.
   ctx.lineWidth = 3;
-  ctx.setLineDash([5, 3]);
   ctx.strokeStyle = COLORS.ghost;
+  const ghostColor = COLORS.ghost;
   for (const g of ghosts) {
     const { x, y } = polarToXY(g.bearing, g.range);
     const bs = blipScale(g.alt === 'ground' ? 'ground' : g.alt);
-    const r = 13 * bs;
+    const r = Math.round(13 * bs * 2) / 2;
     ctx.globalAlpha = g.fade ?? 1;
-    // A glow, the same trick the real blips use. A thin outline is legible
-    // in a screenshot and easy to lose on the actual panel, which is the
-    // only place that matters.
-    ctx.shadowColor = COLORS.ghost;
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.stroke();
+    // A dashed ring with a glow, the same trick the real blips use. A thin
+    // outline is legible in a screenshot and easy to lose on the actual
+    // panel, which is the only place that matters.
+    const ring = glowSprite(`g|${ghostColor}|${r}`, r + 2, 8, c => {
+      c.lineWidth = 3;
+      c.setLineDash([5, 3]);
+      c.strokeStyle = ghostColor;
+      c.shadowColor = ghostColor;
+      c.shadowBlur = 8;
+      c.beginPath();
+      c.arc(0, 0, r, 0, Math.PI * 2);
+      c.stroke();
+    });
+    ctx.drawImage(ring, x - ring.half, y - ring.half);
     // a filled core, so it reads as an object rather than an empty annulus
-    ctx.shadowBlur = 0;
-    ctx.setLineDash([]);
     ctx.globalAlpha = 0.6 * (g.fade ?? 1);
     ctx.fillStyle = COLORS.ghost;
     ctx.beginPath();
@@ -4056,7 +4087,6 @@ function drawGhosts() {
       ctx.lineTo(x + (r + 10) * Math.cos(a), y + (r + 10) * Math.sin(a));
       ctx.stroke();
     }
-    ctx.setLineDash([5, 3]);
   }
   ctx.restore();
 }
@@ -5114,14 +5144,19 @@ function drawPlanes(dt) {
     ctx.globalAlpha = p.opacity;
     ctx.translate(x, y);
     ctx.rotate((p.hdg) * Math.PI / 180);
-    ctx.scale(bscale, bscale);
-    ctx.fillStyle = color;
-    ctx.shadowColor = color;
-    // shadowBlur is NOT scaled by ctx.scale -- it is in device space. Left
-    // at 10 deliberately so a low, small blip keeps the same glow and does
-    // not fade out on the map exactly where traffic matters most.
-    ctx.shadowBlur = 10;
-    drawBlipShape(classifyAircraft(p));
+    const kind = classifyAircraft(p);
+    const q = quantizeScale(bscale);
+    const blip = glowSprite(`b|${kind}|${color}|${q}`, 15 * q, 10, c => {
+      c.scale(q, q);
+      c.fillStyle = color;
+      c.shadowColor = color;
+      // shadowBlur is NOT scaled by c.scale -- it is in device space. Left
+      // at 10 deliberately so a low, small blip keeps the same glow and does
+      // not fade out on the map exactly where traffic matters most.
+      c.shadowBlur = 10;
+      drawBlipShape(c, kind);
+    });
+    ctx.drawImage(blip, -blip.half, -blip.half);
     ctx.restore();
 
     if (airportPhase) {
@@ -5131,16 +5166,21 @@ function drawPlanes(dt) {
       ctx.save();
       ctx.globalAlpha = p.opacity;
       ctx.translate(x, y);
-      ctx.strokeStyle = COLORS.airportHighlight;
-      ctx.lineWidth = 2;
-      ctx.shadowColor = COLORS.airportHighlight;
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
       // tracks the blip's own size, or it would stand off a shrunken
       // low-altitude blip -- and this ring only ever fires on aircraft that
       // are landing or departing, i.e. the smallest ones on screen
-      ctx.arc(0, 0, 13 * bscale, 0, Math.PI * 2);
-      ctx.stroke();
+      const q = quantizeScale(bscale);
+      const hi = COLORS.airportHighlight;
+      const ring = glowSprite(`a|${hi}|${q}`, 13 * q + 1, 8, c => {
+        c.strokeStyle = hi;
+        c.lineWidth = 2;
+        c.shadowColor = hi;
+        c.shadowBlur = 8;
+        c.beginPath();
+        c.arc(0, 0, 13 * q, 0, Math.PI * 2);
+        c.stroke();
+      });
+      ctx.drawImage(ring, -ring.half, -ring.half);
       ctx.restore();
     }
 
