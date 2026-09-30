@@ -6,6 +6,7 @@ struct AircraftDetailView: View {
     @ObservedObject var viewModel: RadarViewModel
     let hex: String
     @State private var photo: Photo?
+    @Environment(\.dismiss) private var dismiss
 
     struct Photo: Decodable {
         let found: Bool
@@ -21,6 +22,20 @@ struct AircraftDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header(p)
+                    if p != nil {
+                        // Keep this aircraft in the middle of the radar and map,
+                        // zoomed in, to see exactly where it is (roadmap 2.9).
+                        Button(viewModel.followHex == hex ? "Stop following" : "Follow on the radar") {
+                            if viewModel.followHex == hex {
+                                viewModel.followHex = nil
+                            } else {
+                                viewModel.followHex = hex
+                                if viewModel.rangeNm > 5 { viewModel.setRange(5) }
+                                dismiss()
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
                     photoView
                     if let p {
                         grid(p)

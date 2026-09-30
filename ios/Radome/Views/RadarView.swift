@@ -14,6 +14,7 @@ struct RadarView: View {
     let diameter: CGFloat
 
     private let rangeRings = 4
+    @State private var pinchStart: Double?
     private let sweepSpeed: Double = 0.008 * 60 // radians/sec (web version: 0.008/frame @ ~60fps)
     private let smoothTau = 0.35
     private let labelGap: CGFloat = 10
@@ -35,9 +36,19 @@ struct RadarView: View {
         }
         .drawingGroup()
         .contentShape(Rectangle())
-        .gesture(SpatialTapGesture().onEnded { tap in
+        // Double-tap zooms in a step; a single tap picks an aircraft; a pinch
+        // zooms from the full ring down to about a mile (roadmap 2.9).
+        .gesture(SpatialTapGesture(count: 2).onEnded { _ in
+            viewModel.setRange(viewModel.rangeNm / 2)
+        }.exclusively(before: SpatialTapGesture().onEnded { tap in
             viewModel.selectedHex = viewModel.plane(at: tap.location)?.hex
-        })
+        }))
+        .simultaneousGesture(MagnificationGesture()
+            .onChanged { scale in
+                if pinchStart == nil { pinchStart = viewModel.rangeNm }
+                viewModel.setRange(pinchStart! / Double(scale))
+            }
+            .onEnded { _ in pinchStart = nil })
     }
 
     private func render(context: inout GraphicsContext, canvasSize: CGSize, now: Date) {
@@ -70,8 +81,8 @@ struct RadarView: View {
             path.addEllipse(in: CGRect(x: cx - ringR, y: cy - ringR, width: ringR * 2, height: ringR * 2))
             context.stroke(path, with: .color(i == rangeRings ? colorRingBright : colorRing), lineWidth: 1)
 
-            let nm = Int((viewModel.rangeNm / Double(rangeRings) * Double(i)).rounded())
-            let label = Text("\(nm)nm").font(.system(size: 10, design: .monospaced)).foregroundColor(Color(hex: "#3d5a5f"))
+            let nm = viewModel.rangeNm / Double(rangeRings) * Double(i)
+            let label = Text(nm >= 5 ? "\(Int(nm.rounded()))nm" : String(format: "%.1fnm", nm)).font(.system(size: 10, design: .monospaced)).foregroundColor(Color(hex: "#3d5a5f"))
             context.draw(label, at: CGPoint(x: cx + 6, y: cy - ringR + 8), anchor: .topLeading)
         }
 
@@ -120,7 +131,8 @@ struct RadarView: View {
     private func drawPlanes(_ context: inout GraphicsContext, cx: CGFloat, cy: CGFloat, r: CGFloat, canvasSize: CGSize, dt: Double) {
         let alpha = 1 - exp(-dt / smoothTau)
         let springAlpha = 1 - exp(-dt / labelSpringTau)
-        let inRange = viewModel.planes.values.filter { $0.range <= viewModel.rangeNm || $0.targetRange <= viewModel.rangeNm }
+        let c = viewModel.viewCentre
+        let inRange = viewModel.planes.values.filter { viewModel.distanceFromCentre($0) <= viewModel.rangeNm * 1.05 }
 
         // pass 1: motion + blips
         for p in inRange {
@@ -128,15 +140,25 @@ struct RadarView: View {
             p.range += (p.targetRange - p.range) * alpha
             p.color = PlaneState.altColor(p.alt)
 
-            let angle = (p.bearing - 90) * .pi / 180
-            let radius = CGFloat(p.range / viewModel.rangeNm) * r
-            p.anchorX = cx + radius * CGFloat(cos(angle))
-            p.anchorY = cy + radius * CGFloat(sin(angle))
+            // Placed relative to the view's centre -- the radar, or a followed
+            // aircraft -- at the view's zoom (roadmap 2.9).
+            let o = RadarViewModel.offset(p)
+            p.anchorX = cx + CGFloat((o.east - c.east) / viewModel.rangeNm) * r
+            p.anchorY = cy - CGFloat((o.north - c.north) / viewModel.rangeNm) * r
 
             drawBlip(&context, p: p)
         }
 
-        let inView = inRange.filter { $0.range <= viewModel.rangeNm }
+        let inView = inRange.filter { viewModel.distanceFromCentre($0) <= viewModel.rangeNm }
+        // When the view is centred on an aircraft, mark where the radar is.
+        if c.east != 0 || c.north != 0 {
+            let rx = cx - CGFloat(c.east / viewModel.rangeNm) * r
+            let ry = cy + CGFloat(c.north / viewModel.rangeNm) * r
+            if hypot(rx - cx, ry - cy) <= r {
+                let mark = Path(ellipseIn: CGRect(x: rx - 5, y: ry - 5, width: 10, height: 10))
+                context.stroke(mark, with: .color(colorSweep), lineWidth: 1.5)
+            }
+        }
         // Labels off: only the tapped plane keeps one.
         let visible = viewModel.labelMode == .off ? inView.filter { $0.hex == viewModel.selectedHex } : inView
         for p in inView where !visible.contains(where: { $0 === p }) {
