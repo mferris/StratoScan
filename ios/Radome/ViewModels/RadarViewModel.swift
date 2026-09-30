@@ -126,6 +126,7 @@ final class RadarViewModel: ObservableObject {
     func setDemo(_ on: Bool) {
         DemoFeed.isOn = on
         isDemo = on
+        WatchSync.shared.push()
         planes.removeAll()
         aircraftCount = 0
         selectedHex = nil
