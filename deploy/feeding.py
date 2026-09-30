@@ -78,7 +78,7 @@ def piaware_installed():
 def install_piaware():
     progress("downloading FlightAware's repository package")
     with urllib.request.urlopen(urllib.request.Request(
-            REPO_DEB_URL, headers={"User-Agent": "Radome/1.0"}), timeout=60) as r:
+            REPO_DEB_URL, headers={"User-Agent": "StratoScan/1.0"}), timeout=60) as r:
         data = r.read(1_000_000)
     got = hashlib.sha256(data).hexdigest()
     if got != REPO_DEB_SHA256:

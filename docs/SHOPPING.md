@@ -1,6 +1,6 @@
 # Shopping list
 
-Everything you need to build a Radome from nothing: the radar, the case, and
+Everything you need to build a StratoScan from nothing: the radar, the case, and
 optionally the iPhone app. After that is what is still to come for the
 features in progress.
 
@@ -9,7 +9,7 @@ needs one, and moved along as it is ordered and fitted.
 
 *Last updated 2026-09-30. Prices are approximate, in US dollars.*
 
-## Build one Radome
+## Build one StratoScan
 
 ### 1. The radar: receiver, computer, power
 
@@ -18,7 +18,7 @@ browser, before any display or case.
 
 | Part | Qty | Approx. | Notes |
 |---|---|---|---|
-| [Raspberry Pi 5, 8 GB](https://www.raspberrypi.com/products/raspberry-pi-5/) | 1 | $80 | What Radome is developed and measured on. The kiosk browser needs the headroom |
+| [Raspberry Pi 5, 8 GB](https://www.raspberrypi.com/products/raspberry-pi-5/) | 1 | $80 | What StratoScan is developed and measured on. The kiosk browser needs the headroom |
 | [Raspberry Pi Active Cooler](https://www.raspberrypi.com/products/active-cooler/) | 1 | $5 | Needed: it drives the radar full-time, and the case holds heat in |
 | [Raspberry Pi 27 W USB-C power supply](https://www.raspberrypi.com/products/27w-power-supply/) | 1 | $12 | A weaker supply causes under-voltage and USB drop-outs |
 | High-endurance microSD card, 64–128 GB | 1 | $15–25 | For example SanDisk High Endurance or Samsung PRO Endurance. Writes measure about 2.25 GB/day, fine for about 10 years on an endurance card |
@@ -90,8 +90,8 @@ starts before buying:** the exact part may change.
 
 | Part | For | Approx. |
 |---|---|---|
-| [Adafruit VEML7700 lux sensor (#4162)](https://www.adafruit.com/product/4162) and [STEMMA QT cable (#4397)](https://www.adafruit.com/product/4397) | [5.5 light sensor](https://github.com/mferris/Radome/issues/27) | $6 |
-| Rotary encoder | [5.1 rotating bezel](https://github.com/mferris/Radome/issues/22) | ~$5 |
-| Presence sensor: LD2410 mmWave, or a PIR | [5.2 presence wake](https://github.com/mferris/Radome/issues/23) | ~$10 |
-| 978 MHz SDR, for example FlightAware's 978 MHz Pro Stick Plus (the antenna is already in the bundle above) | [5.3 UAT receiver, US only](https://github.com/mferris/Radome/issues/24) | ~$25–40 |
+| [Adafruit VEML7700 lux sensor (#4162)](https://www.adafruit.com/product/4162) and [STEMMA QT cable (#4397)](https://www.adafruit.com/product/4397) | [5.5 light sensor](https://github.com/mferris/StratoScan/issues/27) | $6 |
+| Rotary encoder | [5.1 rotating bezel](https://github.com/mferris/StratoScan/issues/22) | ~$5 |
+| Presence sensor: LD2410 mmWave, or a PIR | [5.2 presence wake](https://github.com/mferris/StratoScan/issues/23) | ~$10 |
+| 978 MHz SDR, for example FlightAware's 978 MHz Pro Stick Plus (the antenna is already in the bundle above) | [5.3 UAT receiver, US only](https://github.com/mferris/StratoScan/issues/24) | ~$25–40 |
 

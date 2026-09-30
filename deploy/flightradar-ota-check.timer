@@ -1,5 +1,5 @@
 [Unit]
-Description=Look for Radome updates twice a day
+Description=Look for StratoScan updates twice a day
 
 [Timer]
 OnBootSec=10min

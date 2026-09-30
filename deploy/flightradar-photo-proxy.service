@@ -1,5 +1,5 @@
 [Unit]
-Description=Radome aircraft photo proxy (planespotters.net)
+Description=StratoScan aircraft photo proxy (planespotters.net)
 After=network-online.target
 
 [Service]

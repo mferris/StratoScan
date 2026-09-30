@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Radome</title>
+<title>StratoScan</title>
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
@@ -1211,7 +1211,7 @@ const RECEIVER_URL = '/tar1090/data/receiver.json';
 const IS_KIOSK = new URLSearchParams(location.search).get('kiosk') === '1';
 // Overrides the receiver's actual configured position for DISPLAY purposes
 // only (readsb keeps using its own real antenna position internally for
-// signal-range/MLAT math — this only changes what Radome centers on).
+// signal-range/MLAT math — this only changes what StratoScan centers on).
 // Set to null to go back to auto-detecting the receiver's real position
 // from receiver.json. When set, bearing/range are always computed via
 // haversine from raw lat/lon rather than trusting readsb's r_dst/r_dir,
@@ -3080,7 +3080,7 @@ async function refreshOnboarding() {
   const steps = [];
   // Branch on whether the AP is actually UP, not merely on whether it has a
   // name: if the radar is already on a network, sending someone to look for
-  // "Radome-Setup" sends them hunting for a network that isn't there.
+  // "StratoScan-Setup" sends them hunting for a network that isn't there.
   if (hs.active && hs.ssid) {
     steps.push(`On your phone, join the WiFi network <b>${esc(hs.ssid)}</b>` +
                (hs.psk ? ` using password <b>${esc(hs.psk)}</b>` : ''));
@@ -5601,7 +5601,7 @@ const SETTINGS_GROUPS = [
   { key: 'display',  label: 'Display',      sub: 'Night dimming and colour theme' },
   { key: 'audio',    label: 'ATC audio',    sub: 'Live tower feed for the home airport' },
   { key: 'stats',    label: 'Statistics',   sub: 'What has flown over, and how well you hear it' },
-  { key: 'phone',    label: 'Phone & Watch', sub: 'Pair the Radome app for alerts on your phone' },
+  { key: 'phone',    label: 'Phone & Watch', sub: 'Pair the StratoScan app for alerts on your phone' },
   { key: 'device',   label: 'Device setup',  sub: 'WiFi, location, home airport, reset' },
 ];
 let settingsSection = null;  // null = the menu; otherwise a group key
@@ -5741,7 +5741,7 @@ async function deviceApi(path, opts = {}) {
   return b;
 }
 
-// ---- Phone & Watch: pairing the Radome app (roadmap 2.3) -------------------
+// ---- Phone & Watch: pairing the StratoScan app (roadmap 2.3) -------------------
 // The code on screen is a one-time secret (deploy/pairing.py) and reaches this
 // page only over the loopback-only listener above, so nothing else on the
 // network can read it. Scanning it with the iPhone Camera opens the app,
@@ -5807,7 +5807,7 @@ function renderPhone() {
       : `<div class="sp-sub" style="padding:10px 0">QR codes need a software update on this radar.</div>`;
     return head + `
       <div class="sp-sub" style="padding:8px 0;line-height:1.6">Point your iPhone's Camera at this code,
-        then tap the Radome banner. Or scan it from the Radome app.</div>
+        then tap the StratoScan banner. Or scan it from the StratoScan app.</div>
       ${qr}
       <div class="sp-sub" style="text-align:center;padding:4px 0 8px">Code works once, for ${mm}:${ss} more</div>
       ${msg}
@@ -5824,9 +5824,9 @@ function renderPhone() {
   return head + msg + (phones || `<div class="sp-sub" style="padding:8px 0">No phone is paired yet.</div>`) + `
     <div class="sp-menu-row" data-pact="start">
       <div><div class="sp-label">${phoneBusy ? 'Working…' : 'Pair a phone'}</div>
-           <div class="sp-sub">Shows a code to scan with the Radome app</div></div>
+           <div class="sp-sub">Shows a code to scan with the StratoScan app</div></div>
       <div class="sp-chevron">&#8250;</div></div>
-    <div class="sp-sub" style="padding:12px 0 4px;line-height:1.6">Alerts reach paired phones through the Radome
+    <div class="sp-sub" style="padding:12px 0 4px;line-height:1.6">Alerts reach paired phones through the StratoScan
       service. They say what flew by and roughly how far away, never where this radar is.</div>`;
 }
 
@@ -6950,7 +6950,7 @@ async function handleDeviceTap(row) {
   }
 
   if (act === 'remote-start') {
-    const name = await openKeyboard('NAME FOR THIS RADAR  (letters, digits, -)', 'radome');
+    const name = await openKeyboard('NAME FOR THIS RADAR  (letters, digits, -)', 'stratoscan');
     if (name === null) return;
     deviceBusy = true; renderSettingsPanel();
     try {

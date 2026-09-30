@@ -6,7 +6,7 @@ because it signs with the unit key (heartbeat.py owns it).
   1. The owner taps "Pair a phone" on the radar's own screen. start() makes a
      one-time secret, tells the relay only its SHA-256, and returns a link the
      screen shows as a QR code:  radome://pair?u=<unit id>&s=<secret>
-  2. The phone scans it (the Camera app opens the Radome app), and presents
+  2. The phone scans it (the Camera app opens the StratoScan app), and presents
      the secret to the relay with its own signed request. The relay links the
      two and spends the code; it expires anyway after 10 minutes.
   3. status() sees the new phone and turns this unit's events on
@@ -61,10 +61,10 @@ class RelayError(Exception):
 def _call(method, path, payload=None):
     """A request signed with the unit key. Returns the decoded JSON reply."""
     if not hb.RELAY_URL:
-        raise RelayError("No Radome service is configured on this radar.")
+        raise RelayError("No StratoScan service is configured on this radar.")
     key = hb.load_key(create=True)
     body = b"" if method == "GET" else json.dumps(payload or {}, separators=(",", ":")).encode()
-    headers = {"User-Agent": "Radome-unit/1 (+https://github.com/mferris/Radome)"}
+    headers = {"User-Agent": "StratoScan-unit/1 (+https://github.com/mferris/StratoScan)"}
     if method != "GET":
         headers["Content-Type"] = "application/json"
     headers.update(hb.sign_headers(key, method, path, body))
@@ -80,7 +80,7 @@ def _call(method, path, payload=None):
             msg = None
         raise RelayError(msg or f"HTTP {e.code}")
     except (urllib.error.URLError, OSError, ValueError) as e:
-        raise RelayError("Could not reach the Radome service. Is this radar online?")
+        raise RelayError("Could not reach the StratoScan service. Is this radar online?")
 
 
 def _events():

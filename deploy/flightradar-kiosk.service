@@ -1,5 +1,5 @@
 [Unit]
-Description=Radome Chromium Kiosk
+Description=StratoScan Chromium Kiosk
 After=graphical-session.target
 
 [Service]

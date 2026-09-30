@@ -315,7 +315,7 @@ def check_pairing_verbs(fails):
         @staticmethod
         def remove(phone): removed.append(phone); return {"phones": 0}
         @staticmethod
-        def start(): raise FakeRelayError("Could not reach the Radome service. Is this radar online?")
+        def start(): raise FakeRelayError("Could not reach the StratoScan service. Is this radar online?")
 
     real = d._pairing
     d._pairing = lambda: FakePairing

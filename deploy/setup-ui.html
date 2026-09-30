@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Radome setup</title>
+<title>StratoScan setup</title>
 <style>
   :root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--text:#e6edf3;--dim:#8b949e;
         --accent:#2f81f7;--ok:#3fb950;--warn:#d29922;--err:#f85149}
@@ -41,7 +41,7 @@
 </style>
 </head>
 <body>
-<h1>Radome setup</h1>
+<h1>StratoScan setup</h1>
 <div class="sub" id="sub">Getting started…</div>
 
 <!-- claim / login -->
@@ -191,7 +191,7 @@
   <!-- phone pairing (roadmap 2.3) -->
   <div class="card">
     <h2>Phone app</h2>
-    <p class="note">Pair the Radome iPhone app to get alerts from this radar: emergencies,
+    <p class="note">Pair the StratoScan iPhone app to get alerts from this radar: emergencies,
       notable aircraft, helicopters and anything low overhead. Alerts say what flew by and
       roughly how far away, <b>never</b> where this radar is.</p>
     <div id="pairList" class="note"></div>
@@ -227,7 +227,7 @@
     <label>Tailscale auth key</label>
     <input id="authKey" autocomplete="off" placeholder="tskey-auth-…">
     <label>Device name</label>
-    <input id="tsHost" autocomplete="off" placeholder="radome" autocapitalize="none">
+    <input id="tsHost" autocomplete="off" placeholder="stratoscan" autocapitalize="none">
     <label><input type="checkbox" id="funnel" style="width:auto"> Also publish a public https page</label>
     <button id="remBtn">Connect</button>
     <div class="msg" id="remMsg"></div>
@@ -698,7 +698,7 @@ $('otaApplyBtn').onclick = async () => {
   } catch (e) { show($('otaMsg'), 'err', e.message); $('otaApplyBtn').disabled = false; }
 };
 
-// On a phone, "Pair this phone" opens the Radome app straight from the link;
+// On a phone, "Pair this phone" opens the StratoScan app straight from the link;
 // on anything else the same one-time code is shown as a QR to scan.
 const ON_PHONE = /iPhone|iPad|iPod/.test(navigator.userAgent);
 let pairTimer = null;
@@ -727,7 +727,7 @@ function pairRender(st) {
   if (o && !ON_PHONE) {
     if (o.qr) $('pairQr').src = 'data:image/svg+xml;base64,' + btoa(o.qr);
     const left = Math.max(0, Math.round(o.expires - Date.now() / 1000));
-    $('pairNote').textContent = `Scan with the iPhone Camera or the Radome app. Works once, for ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} more.`;
+    $('pairNote').textContent = `Scan with the iPhone Camera or the StratoScan app. Works once, for ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} more.`;
   }
   clearTimeout(pairTimer);
   if (o) pairTimer = setTimeout(pairLoad, 3000);

@@ -488,7 +488,7 @@ def apply_records(store, hexcode, entry, payload):
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def version_string(self):
-        return "Radome"
+        return "StratoScan"
 
     def _json(self, code, payload):
         body = json.dumps(payload).encode()

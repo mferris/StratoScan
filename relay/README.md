@@ -1,4 +1,4 @@
-# Radome relay
+# StratoScan relay
 
 The one small server the project runs: a Cloudflare Worker with a D1
 database. It receives **opt-in health reports** and **events** from units,

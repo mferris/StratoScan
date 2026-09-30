@@ -1,5 +1,5 @@
 [Unit]
-Description=Radome RDU approach-track shared store
+Description=StratoScan RDU approach-track shared store
 After=network.target
 
 [Service]

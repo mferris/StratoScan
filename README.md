@@ -1,13 +1,13 @@
-# Radome
+# StratoScan
 
-*Formerly FlightRadar.*
+*Formerly Radome, and before that FlightRadar.*
 
 A live ADS-B flight radar for a wall-mounted round display, built on a
 Raspberry Pi and a cheap SDR dongle — no subscription and no API keys. The
 radar needs nothing but its own receiver and a browser; an optional iPhone
 app brings it to your pocket.
 
-![Radome running on the physical kiosk display](docs/screenshots/kiosk.png)
+![StratoScan running on the physical kiosk display](docs/screenshots/kiosk.png)
 
 <sub>Centred on RDU airport. Map: OpenFreeMap © OpenMapTiles, data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).</sub>
 
@@ -15,7 +15,7 @@ app brings it to your pocket.
 
 *As of 2026-09-29.* One unit (RDU) runs around the clock on release
 `2026.09.28.4`. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md), tracked
-as [issues](https://github.com/mferris/Radome/issues), and the parts it still
+as [issues](https://github.com/mferris/StratoScan/issues), and the parts it still
 needs are in the [shopping list](docs/SHOPPING.md).
 
 | Area | State |
@@ -30,7 +30,7 @@ needs are in the [shopping list](docs/SHOPPING.md).
 
 ## What it does
 
-Point an RTL-SDR dongle and a small antenna at the sky, and Radome turns
+Point an RTL-SDR dongle and a small antenna at the sky, and StratoScan turns
 whatever ADS-B traffic it hears into a live circular radar display: bearing,
 range, altitude, speed, heading, airline, aircraft type, route, and (when
 available) a real photo of the airframe. It's designed to run unattended,
@@ -108,7 +108,7 @@ too.
   reset, all without a phone or a shell. This is also the recovery path if
   the admin password is ever forgotten
 - **First-run provisioning for a device you did not configure** — a unit with
-  no known network raises its own `Radome-Setup` WiFi and displays what
+  no known network raises its own `StratoScan-Setup` WiFi and displays what
   to join, what address to open and a claim code. A captive portal makes the
   setup page open automatically on a phone
 - **Connectivity status** — a pill at the bottom of the display says whether
@@ -191,7 +191,7 @@ scanning a QR code on its screen:
 [Antenna] → [RTL-SDR dongle] → [readsb] → aircraft.json (local)
                                                  │
                                                  ▼
-                                   [Radome: fetch + render]
+                                   [StratoScan: fetch + render]
                                                  │
                                                  ▼
                               [Chromium kiosk, full-screen] → [round display]
@@ -269,7 +269,7 @@ Tailscale auth key.
 
 How a fresh unit behaves:
 
-1. It finds no known WiFi, so after ~45s it raises `Radome-Setup`
+1. It finds no known WiFi, so after ~45s it raises `StratoScan-Setup`
 2. Its screen shows that network's name and password, the address to open,
    and an 8-character claim code
 3. A phone joining that network gets the setup page automatically, via the
@@ -413,7 +413,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes and
 
 ## Data sources
 
-Radome leans entirely on free, no-key-required public data, same as
+StratoScan leans entirely on free, no-key-required public data, same as
 [tar1090](https://github.com/wiedehopf/tar1090) (GPL-2.0-or-later; it inspired
 several of these choices, but no code is shared):
 

@@ -1,4 +1,4 @@
-// Radome: unattended security updates for a unit nobody will ever SSH
+// StratoScan: unattended security updates for a unit nobody will ever SSH
 // into again. Installed to /etc/apt/apt.conf.d/ by install-setup-server.sh.
 //
 // Without this the kernel, OpenSSL, ca-certificates, tzdata and tailscaled

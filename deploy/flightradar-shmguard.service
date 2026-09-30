@@ -1,6 +1,6 @@
 [Unit]
-Description=Radome shared-memory guard (restarts the kiosk before /dev/shm fills)
-Documentation=https://github.com/mferris/Radome
+Description=StratoScan shared-memory guard (restarts the kiosk before /dev/shm fills)
+Documentation=https://github.com/mferris/StratoScan
 
 [Service]
 Type=oneshot

@@ -41,7 +41,7 @@ FAILED_STAMP = os.path.join(STATE_DIR, "last-failure")
 REFRESH_EVERY_S = 7 * 86400
 RETRY_AFTER_FAILURE_S = 6 * 3600
 MAX_BYTES = 20_000_000
-USER_AGENT = "Radome/1.0 (+https://github.com/mferris/Radome; weekly notable-aircraft refresh)"
+USER_AGENT = "StratoScan/1.0 (+https://github.com/mferris/StratoScan; weekly notable-aircraft refresh)"
 
 SKIP_CATEGORIES = {"PIA"}
 # Categories about private people or companies: never keep a name.

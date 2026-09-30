@@ -206,7 +206,7 @@ def _take_reload_request():
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def version_string(self):
-        return "Radome"
+        return "StratoScan"
 
     def do_POST(self):
         global _last_wake, _last_beat, _unrecovered_restarts

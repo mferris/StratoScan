@@ -1,5 +1,5 @@
 [Unit]
-Description=Radome display blanking (idle -> panel off)
+Description=StratoScan display blanking (idle -> panel off)
 After=graphical-session.target
 PartOf=graphical-session.target
 

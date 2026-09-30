@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import Security
 
-/// This phone's identity with the Radome relay: an Ed25519 key made on the
+/// This phone's identity with the StratoScan relay: an Ed25519 key made on the
 /// phone and kept in its Keychain, never synced or backed up. Its public key
 /// is the phone's id -- the same scheme units use (deploy/heartbeat.py,
 /// relay/src/auth.js), so the relay verifies both the same way.

@@ -1,6 +1,6 @@
 import Foundation
 
-/// The Radome relay (relay/ in this repository): pairing now, notifications
+/// The StratoScan relay (relay/ in this repository): pairing now, notifications
 /// from roadmap 2.1. Someone running their own relay changes `baseURL`.
 struct RelayClient {
     static let baseURL = URL(string: "https://stratoscan-relay.example.workers.dev")!
@@ -61,12 +61,12 @@ struct RelayClient {
         do {
             (data, response) = try await URLSession.shared.data(for: req)
         } catch {
-            throw Failure(message: "Could not reach the Radome service. Check your connection.")
+            throw Failure(message: "Could not reach the StratoScan service. Check your connection.")
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            throw Failure(message: msg ?? "The Radome service said no (HTTP \(status)).")
+            throw Failure(message: msg ?? "The StratoScan service said no (HTTP \(status)).")
         }
         return data
     }

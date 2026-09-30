@@ -59,7 +59,7 @@ jobs:
           [ "$SIZE" -lt 2147483648 ] || { echo "image is over GitHub's 2 GiB asset limit"; exit 1; }
           gh release create "image-$VERSION" --prerelease --latest=false \
             --title "Factory image $VERSION" \
-            --notes "SD-card image for a new Radome unit. Flash it with Raspberry Pi Imager (\"Use custom\"), and do NOT apply Imager's OS customisation. First boot finishes setup, then raises the Radome-Setup hotspot. The GPL source offer is in SOURCES.md; versions and every package are in MANIFEST.txt. This is not an over-the-air update, and units ignore it." \
+            --notes "SD-card image for a new StratoScan unit. Flash it with Raspberry Pi Imager (\"Use custom\"), and do NOT apply Imager's OS customisation. First boot finishes setup, then raises the StratoScan-Setup hotspot. The GPL source offer is in SOURCES.md; versions and every package are in MANIFEST.txt. This is not an over-the-air update, and units ignore it." \
             "$IMG" "$IMG.sha256" image-out/MANIFEST.txt image-out/SOURCES.md image-out/src/*
           gh api "repos/${{ github.repository }}/releases/latest" -q .tag_name | grep -v "^image-" \
             || { echo "an image release became 'latest'; units would see it"; exit 1; }

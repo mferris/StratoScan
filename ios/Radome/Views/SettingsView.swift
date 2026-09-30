@@ -37,7 +37,7 @@ struct SettingsView: View {
                 Section {
                     Toggle("Demo mode", isOn: Binding(get: { viewModel.isDemo }, set: { viewModel.setDemo($0) }))
                 } footer: {
-                    Text("Plays a few minutes of real traffic recorded near RDU airport, so you can see Radome working without a radar.")
+                    Text("Plays a few minutes of real traffic recorded near RDU airport, so you can see StratoScan working without a radar.")
                 }
 
                 Section {

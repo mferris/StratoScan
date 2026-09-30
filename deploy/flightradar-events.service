@@ -1,6 +1,6 @@
 [Unit]
-Description=Radome unit events for paired phones (emergency, notable, low, helicopter)
-Documentation=https://github.com/mferris/Radome
+Description=StratoScan unit events for paired phones (emergency, notable, low, helicopter)
+Documentation=https://github.com/mferris/StratoScan
 After=network-online.target readsb.service
 
 [Service]

@@ -1,4 +1,4 @@
--- Radome relay: the only server the project runs. See docs/ROADMAP.md.
+-- StratoScan relay: the only server the project runs. See docs/ROADMAP.md.
 -- Nothing here identifies where a unit is: units never send a location.
 
 CREATE TABLE IF NOT EXISTS units (

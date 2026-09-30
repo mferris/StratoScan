@@ -10,7 +10,7 @@
 set -e
 LOG=/var/log/flightradar-firstboot.log
 {
-  echo "== Radome first boot: $(date -Is)"
+  echo "== StratoScan first boot: $(date -Is)"
   # Raspberry Pi OS keeps WiFi blocked until a country is set, which would
   # stop the setup hotspot from ever appearing. Default to US; the owner
   # sets the real one in setup (setupd's set_wifi_country).
