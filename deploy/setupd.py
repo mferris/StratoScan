@@ -1192,8 +1192,8 @@ def tailscale_funnel(enabled):
         # setting a hostname during setup does) leaves the old config bound to
         # the PREVIOUS name -- serve status then shows a hostname the device no
         # longer has, funnel is off, and the public URL simply does not exist.
-        # Observed exactly that after a rename from flightwall to
-        # flightradar-rdu.
+        # Observed exactly that on the first unit, both times its node was
+        # renamed (the second time on 2026-09-30, to stratoscan-rdu).
         # Tailscale 1.5x changed this CLI. The old `funnel <port> on` form now
         # exits with "the CLI for serve and funnel has changed" -- and because
         # nothing checked that exit code, the device reported success while

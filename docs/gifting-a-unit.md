@@ -59,7 +59,7 @@ The tag must exist in `tagOwners` *before* any node can advertise it.
 ```jsonc
 {
   "tagOwners": {
-    "tag:flightradar": ["autogroup:admin"],
+    "tag:stratoscan": ["autogroup:admin"],
   },
 
   "acls": [
@@ -69,10 +69,10 @@ The tag must exist in `tagOwners` *before* any node can advertise it.
     {
       "action": "accept",
       "src":    ["autogroup:member"],
-      "dst":    ["tag:flightradar:22,80"],
+      "dst":    ["tag:stratoscan:22,80"],
     },
 
-    // There is deliberately NO rule with "src": ["tag:flightradar"].
+    // There is deliberately NO rule with "src": ["tag:stratoscan"].
     // Tailscale default-denies, so a gifted unit can reach nothing on the
     // tailnet. That absence is the security control -- adding a broad rule
     // later silently undoes this whole document.
@@ -82,7 +82,7 @@ The tag must exist in `tagOwners` *before* any node can advertise it.
   // Without this the public URL stops working the moment you tag the unit.
   "nodeAttrs": [
     {
-      "target": ["tag:flightradar"],
+      "target": ["tag:stratoscan"],
       "attr":   ["funnel"],
     },
   ],
@@ -92,7 +92,7 @@ The tag must exist in `tagOwners` *before* any node can advertise it.
 ### Step 2 — on the unit
 
 ```bash
-sudo tailscale up --advertise-tags=tag:flightradar --reset
+sudo tailscale up --advertise-tags=tag:stratoscan --reset
 ```
 
 This re-authenticates the node. Expect to approve it once in a browser.
