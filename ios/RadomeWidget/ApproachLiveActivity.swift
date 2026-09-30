@@ -9,9 +9,18 @@ struct ApproachLiveActivity: Widget {
     private let teal = Color(red: 0.31, green: 0.84, blue: 0.78)
 
     var body: some WidgetConfiguration {
+        // On iOS 18, the small family also puts it in the Apple Watch's Smart
+        // Stack (roadmap 3.2): watchOS mirrors the phone's Live Activity.
+        if #available(iOS 18.0, *) {
+            return configuration.supplementalActivityFamilies([.small])
+        } else {
+            return configuration
+        }
+    }
+
+    private var configuration: ActivityConfiguration<ApproachAttributes> {
         ActivityConfiguration(for: ApproachAttributes.self) { context in
-            lockScreen(context)
-                .padding(16)
+            ApproachCard(teal: teal, context: context, full: lockScreen(context), small: small(context))
                 .activityBackgroundTint(Color.black.opacity(0.85))
                 .activitySystemActionForegroundColor(teal)
         } dynamicIsland: { context in
@@ -81,6 +90,20 @@ struct ApproachLiveActivity: Widget {
         .frame(width: 34, height: 34)
     }
 
+    /// The Watch's Smart Stack, and anywhere else space is short.
+    private func small(_ context: ActivityViewContext<ApproachAttributes>) -> some View {
+        HStack(spacing: 8) {
+            if context.state.trk != nil { dial(context) } else {
+                Image(systemName: icon(context.attributes)).foregroundColor(teal)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(context.attributes.callsign).font(.headline).lineLimit(1)
+                countdown(context).font(.caption.monospacedDigit()).foregroundColor(teal)
+            }
+        }
+        .foregroundColor(.white)
+    }
+
     private func lockScreen(_ context: ActivityViewContext<ApproachAttributes>) -> some View {
         HStack(spacing: 14) {
             if context.state.trk != nil {
@@ -100,5 +123,33 @@ struct ApproachLiveActivity: Widget {
             }
         }
         .foregroundColor(.white)
+    }
+}
+
+/// Picks the full card or the small one by the family being drawn. The
+/// family is only known from iOS 18, which is also when the small one exists.
+private struct ApproachCard<Full: View, Small: View>: View {
+    let teal: Color
+    let context: ActivityViewContext<ApproachAttributes>
+    let full: Full
+    let small: Small
+
+    var body: some View {
+        if #available(iOS 18.0, *) {
+            FamilyAware(full: full, small: small)
+        } else {
+            full.padding(16)
+        }
+    }
+}
+
+@available(iOS 18.0, *)
+private struct FamilyAware<Full: View, Small: View>: View {
+    let full: Full
+    let small: Small
+    @Environment(\.activityFamily) private var family
+
+    var body: some View {
+        if family == .small { small.padding(8) } else { full.padding(16) }
     }
 }
