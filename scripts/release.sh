@@ -18,8 +18,10 @@
 # Usage: sh scripts/release.sh <version> [--dry-run]
 set -eu
 
-KEY="${STRATOSCAN_SIGNING_KEY:-${FLIGHTRADAR_SIGNING_KEY:-$HOME/.ssh/flightradar-signing}}"   # the old variable still works
-NAMESPACE=flightradar
+# The key file was ~/.ssh/flightradar-signing before the rename; same key.
+DEFAULT_KEY="$HOME/.ssh/stratoscan-signing"
+[ -f "$DEFAULT_KEY" ] || DEFAULT_KEY="$HOME/.ssh/flightradar-signing"
+KEY="${STRATOSCAN_SIGNING_KEY:-${FLIGHTRADAR_SIGNING_KEY:-$DEFAULT_KEY}}"   # the old variable still works
 REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 VERSION="${1:-}"
 DRY=""
@@ -97,16 +99,25 @@ with open(os.path.join(out, "manifest.json"), "w") as f:
 print(f"  version {version}  serial {serial}  {len(files)} files")
 PY
 
-ssh-keygen -Y sign -f "$KEY" -n "$NAMESPACE" "$OUT/manifest.json" >/dev/null
-echo "  signed manifest.json -> manifest.json.sig"
+# Two signatures while units move over (2026-09-30): the 'stratoscan' one that
+# current updaters prefer, and the 'flightradar' one that updaters from before
+# the rename can read (they only look for manifest.json.sig). Same key.
+ssh-keygen -Y sign -f "$KEY" -n stratoscan "$OUT/manifest.json" >/dev/null
+mv "$OUT/manifest.json.sig" "$OUT/manifest.stratoscan.sig"
+ssh-keygen -Y sign -f "$KEY" -n flightradar "$OUT/manifest.json" >/dev/null
+echo "  signed manifest.json -> manifest.stratoscan.sig, manifest.json.sig"
 
 # Verify what was just produced, with the PUBLIC key the devices carry, exactly
-# as a device would. Signing and then shipping without checking is how a
-# release that no device will accept gets published.
-ssh-keygen -Y verify -f "$REPO_ROOT/deploy/allowed_signers" \
-    -I flightradar-release -n "$NAMESPACE" \
-    -s "$OUT/manifest.json.sig" < "$OUT/manifest.json" >/dev/null \
-  && echo "  self-check: a device would accept this" \
+# as a device would -- each signature as the updater that reads it would.
+# Signing and then shipping without checking is how a release that no device
+# will accept gets published.
+check_sig() {  # <signature file> <namespace> <signer name>
+    ssh-keygen -Y verify -f "$REPO_ROOT/deploy/allowed_signers" -I "$3" -n "$2" \
+        -s "$1" < "$OUT/manifest.json" >/dev/null
+}
+check_sig "$OUT/manifest.stratoscan.sig" stratoscan stratoscan-release \
+  && check_sig "$OUT/manifest.json.sig" flightradar flightradar-release \
+  && echo "  self-check: both current and pre-rename updaters would accept this" \
   || { echo "  SELF-CHECK FAILED -- not publishing" >&2; exit 1; }
 
 if [ -n "$DRY" ]; then
@@ -118,6 +129,6 @@ fi
 # a release cut from an earlier commit would otherwise be tagged with code it
 # doesn't contain.
 gh release create "$VERSION" --target "$(git rev-parse HEAD)" \
-    "$OUT/$BUNDLE" "$OUT/manifest.json" "$OUT/manifest.json.sig" \
+    "$OUT/$BUNDLE" "$OUT/manifest.json" "$OUT/manifest.stratoscan.sig" "$OUT/manifest.json.sig" \
     --title "$VERSION" --notes "StratoScan $VERSION (serial $SERIAL)"
 echo "  published $VERSION"

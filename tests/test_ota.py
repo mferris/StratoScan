@@ -58,7 +58,7 @@ class Server(http.server.BaseHTTPRequestHandler):
 
 
 def build_release(tmp, key, serial=2, version="9.9.9", payload=b"<html>new</html>",
-                  member="index.html"):
+                  member="index.html", sigs=("new", "old"), old_key=None):
     """Produce a signed release exactly as scripts/release.sh does."""
     src = os.path.join(tmp, "src")
     os.makedirs(src, exist_ok=True)
@@ -89,12 +89,21 @@ def build_release(tmp, key, serial=2, version="9.9.9", payload=b"<html>new</html
     # survives, the next case verifies a stale signature, and every test after
     # the first fails with "signature rejected" -- a real refusal, for entirely
     # the wrong reason, which is worse than no test at all.
+    # As release.sh does since the rename: manifest.stratoscan.sig in the
+    # 'stratoscan' namespace ("new") and manifest.json.sig in 'flightradar'
+    # ("old", what pre-rename updaters read). A test can publish either alone.
     sig = mpath + ".sig"
-    if os.path.exists(sig):
-        os.unlink(sig)
-    subprocess.run(["ssh-keygen", "-Y", "sign", "-f", key, "-n", "flightradar",
-                    mpath], check=True, capture_output=True)
-    assert os.path.exists(sig), "ssh-keygen produced no signature"
+    new_sig = os.path.join(tmp, "manifest.stratoscan.sig")
+    for f in (sig, new_sig):
+        if os.path.exists(f):
+            os.unlink(f)
+    if "new" in sigs:
+        subprocess.run(["ssh-keygen", "-Y", "sign", "-f", key, "-n", "stratoscan",
+                        mpath], check=True, capture_output=True)
+        os.rename(sig, new_sig)
+    if "old" in sigs:
+        subprocess.run(["ssh-keygen", "-Y", "sign", "-f", old_key or key, "-n", "flightradar",
+                        mpath], check=True, capture_output=True)
     return manifest
 
 
@@ -122,6 +131,12 @@ def main():
                        check=True, capture_output=True)
     allowed = os.path.join(keydir, "allowed_signers")
     with open(allowed, "w") as f:
+        f.write("stratoscan-release " + open(good + ".pub").read())
+        f.write("flightradar-release " + open(good + ".pub").read())
+    # A unit whose allowed_signers predates the rename: the key under its old
+    # name only. It must still accept releases signed in the new namespace.
+    allowed_old = os.path.join(keydir, "allowed_signers_old")
+    with open(allowed_old, "w") as f:
         f.write("flightradar-release " + open(good + ".pub").read())
 
     rel = os.path.join(tmp, "rel")
@@ -136,13 +151,14 @@ def main():
         for f in os.listdir(rel):
             os.unlink(os.path.join(rel, f))
         m = build_release(tmp, kw.pop("key", good), **kw)
-        for n in ("manifest.json", "manifest.json.sig", "b.tar.gz"):
-            src = os.path.join(tmp, n if n != "b.tar.gz" else "b.tar.gz")
-            shutil.copy(src, os.path.join(rel, n))
+        names = [n for n in ("manifest.json", "manifest.stratoscan.sig", "manifest.json.sig", "b.tar.gz")
+                 if os.path.exists(os.path.join(tmp, n))]
+        for n in names:
+            shutil.copy(os.path.join(tmp, n), os.path.join(rel, n))
         httpd.release = {"tag_name": m["version"], "assets": [
             {"name": n, "browser_download_url":
              f"http://127.0.0.1:{port}/{n}"}
-            for n in ("manifest.json", "manifest.json.sig", "b.tar.gz")]}
+            for n in names]}
         return m
 
     # --- positive control: a properly signed release must be accepted -------
@@ -152,6 +168,23 @@ def main():
     ok(r.returncode == 0, "a correctly signed release must stage")
     ok(os.path.isfile(os.path.join(st, "staging", "index.html")),
        "staging must contain the payload")
+
+    # --- the signing rename (2026-09-30): every combination a unit may meet --
+    publish(serial=5, sigs=("old",))
+    r = run(ctx, "stage", os.path.join(tmp, "sr1"), allowed)
+    ok(r.returncode == 0, "a pre-rename release (old signature only) must still stage")
+    publish(serial=5, sigs=("new",))
+    r = run(ctx, "stage", os.path.join(tmp, "sr2"), allowed)
+    ok(r.returncode == 0, "a release with only the new signature must stage")
+    publish(serial=5, sigs=("new",))
+    r = run(ctx, "stage", os.path.join(tmp, "sr3"), allowed_old)
+    ok(r.returncode == 0, "a unit whose allowed_signers names the key only by its old name must accept the new signature")
+    publish(serial=5, sigs=("new", "old"), key=evil)   # new sig by the wrong key, old by the right one
+    r = run(ctx, "stage", os.path.join(tmp, "sr4"), allowed)
+    ok(r.returncode != 0, "both signatures by the wrong key must be refused")
+    publish(serial=5, sigs=("new", "old"), key=evil, old_key=good)
+    r = run(ctx, "stage", os.path.join(tmp, "sr5"), allowed)
+    ok(r.returncode == 0, "a bad new signature falls back to a valid old one (same trusted key signed it)")
 
     # --- signed by the WRONG key -------------------------------------------
     publish(serial=6, key=evil)
