@@ -65,6 +65,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 1.4 | Unit side: keypair generation, opt-in heartbeat (setup toggle), sent every 6 h | Claude | RDU reports; turning it off stops it |
 | 1.5 | Factory image: pi-gen build in GitHub Actions (Arm runner); first boot runs the installer; GPL source offer for readsb/tar1090 included | Claude | A fresh SD flashed from the release boots to the setup hotspot |
 | 1.6 | Re-measure SD writes after the storage fixes (scheduled 2026-09-28) | Claude | Result recorded; any remaining large writer fixed |
+| 1.7 | Recover a hung radio without a human: the watchdog power-cycles USB (uhubctl) before it reboots, since a Pi 5 reboot keeps USB powered | Claude | A hung SDR comes back on its own on a real unit |
 
 ## Phase 2: the pocket
 
@@ -76,6 +77,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 2.4 | iOS app v2: notification rules, home and lock-screen widgets, Live Activity (inbound overhead), StandBy radar | Claude | Each feature working on a real phone |
 | 2.5 | iOS app v2: away mode (community feed when not home), logbook/collection, AR sky view fed by the unit | Claude | Each feature working on a real phone |
 | 2.6 | App Store readiness: bundle IDs, privacy labels, credits screen (MapLibre Native BSD-2, map attribution), screenshots, review notes | Claude | Approved on the App Store |
+| 2.7 | Location-aware app: a "You" marker relative to the antenna and a centre-on-me map; opt-in alerts for aircraft approaching the phone, its location end-to-end encrypted to the paired radar, which runs the prediction | Claude | Alerts for aircraft near the phone arrive on a real iPhone away from home, within the radar's coverage |
 
 ## Phase 3: the wrist
 
@@ -84,6 +86,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 3.1 | watchOS app: nearest-plane complication, glance radar | Claude | Complication live on a real Watch |
 | 3.2 | Distinct wrist taps per alert type; Smart Stack Live Activity | Claude | Felt on a real Watch |
 | 3.3 | "Look up" mode: a compass arrow toward the aircraft, and a countdown to overhead | Claude | Arrow points correctly outdoors |
+| 3.4 | Approach compass on the phone as well as the Watch: where the aircraft is, where it is coming from and heading, in the notification, a north-up dial on the Live Activity, and a live compass in the app | Claude | The needle points at a real aircraft outdoors, on a phone and a Watch |
 
 ## Phase 4: delight
 
@@ -103,12 +106,16 @@ phone ──(pairing, notification rules)──▶ relay
 | 5.1 | Rotating bezel (rotary encoder) for range and paging: enclosure redesign plus input handling | Claude (CAD, code) | Turning the bezel changes range on the kiosk |
 | 5.2 | Presence wake (LD2410 mmWave over UART, or PIR) replacing the 20-min idle timer | Claude (code) | The screen wakes on approach and sleeps when the room is empty |
 | 5.3 | 978 MHz UAT receiver for US units (dump978 into readsb) | Claude (code) | UAT-only GA aircraft appear on the radar |
+| 5.4 | Retro stand: ridges all the way round the plinth, standing out ~4 mm so the slicer supports them (as the case ribs were fixed) | Claude (CAD) | Printed, with clean ridges on all four sides |
+| 5.5 | Ambient light sensor: dim the display with the room, with an adjustable darkest level; a sensor window on both cases; first find a real backlight control (the panel's HID report 9, or DDC) | Claude (CAD, code) | The display follows the room on RDU, down to the owner's floor |
 
 ## Order and dependencies
 
 - 1.3 comes before 1.4 and 2.1–2.3.
 - 2.1 and 2.3 come before 2.4.
 - 2.x comes before 3.x.
+- 2.7 builds on 2.4 (approach alerts) and 2.5 (away mode).
+- 3.4 extends 3.3. Its phone half needs only 2.4 and can come first; its Watch half needs 3.1.
 - 1.5 should come after 1.1, 1.2 and 1.4 settle, so the image carries them.
 - Phase 4 items are independent, and can be interleaved whenever Phase 1–3
   items are blocked on an owner action.
@@ -133,4 +140,6 @@ phone ──(pairing, notification rules)──▶ relay
 | 2.1 Relay push | **Done.** Token-based APNs from the relay. Verified in the simulator, then on a real iPhone paired with RDU: the test notification arrived (2026-09-28) | — |
 | 2.4 Widgets, Live Activity, StandBy | Widget done. **Live Activity done** and verified on a real iPhone (2026-09-28): RDU predicts a close pass (low, helicopter or notable, within 2 mi in the next 3 min), the relay starts a lock-screen / Dynamic Island countdown by push-to-start and ends it after the pass. Opt-in (Settings › Alerts › Approaching aircraft). Also: tap-for-details, compact labels, demo mode | StandBy radar |
 | 2.5 Away mode, logbook, AR sky view | Away mode done and verified on a real iPhone (2026-09-28): the app and widget switch between the radar's home address and its public HTTPS page (Tailscale Funnel) as the phone leaves and rejoins home WiFi; the away address is learned from the radar. Logbook and AR sky view not started | — |
+| 1.7 Hung-radio recovery | Code done and installed on RDU (uhubctl sees hubs 1–4; the FlyCatcher is on hub 3) | A live hang, to watch it recover |
+| 2.7, 3.4, 5.4, 5.5 | Planned 2026-09-29 as issues #29, #28, #26, #27 | — |
 | 1.5 Factory image | Built: CI produces a 1.6 GB image that passes its checks (working unit, no per-unit secrets, GPL sources attached). Rebuilt as Radome (2026.09.28). Not yet published | A spare SD card + Pi to test-flash |
