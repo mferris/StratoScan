@@ -31,9 +31,10 @@ struct SkyView: View {
     /// Further than this from the radar, its own aircraft no longer cover
     /// the sky overhead, so Sky view offers the ones around the phone.
     private static let awayNm = 3.0
-    /// A label's frame; its ring's centre sits 11 pt below the top.
-    private static let labelSize = CGSize(width: 150, height: 72)
-    private static let ringAnchor = UnitPoint(x: 0.5, y: 11 / 72)
+    /// A label's frame (room for callsign, type, altitude and range); its
+    /// ring's centre sits 11 pt below the top.
+    private static let labelSize = CGSize(width: 180, height: 88)
+    private static let ringAnchor = UnitPoint(x: 0.5, y: 11 / 88)
 
     var body: some View {
         GeometryReader { geo in
@@ -177,10 +178,16 @@ struct SkyView: View {
                         Circle().stroke(PlaneState.altColor(p.alt), lineWidth: 2).frame(width: 22, height: 22)
                         VStack(spacing: 1) {
                             Text(p.cs).font(.system(size: 14, weight: .bold, design: .monospaced))
+                            // What it is, when known: "Boeing 737-900", or
+                            // just the code ("P32R") for aircraft around you
+                            if let type = p.typeLabel {
+                                Text(type).font(.system(size: 11)).lineLimit(1).truncationMode(.tail)
+                                    .frame(maxWidth: Self.labelSize.width - 12)
+                            }
                             Text("\(PlaneState.altLabel(p.alt)) · \(String(format: "%.1f", range)) nm")
                                 .font(.system(size: 11, design: .monospaced))
                         }
-                        .fixedSize()
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 6).padding(.vertical, 3)
                         .background(.black.opacity(0.4)).clipShape(RoundedRectangle(cornerRadius: 6))
                         .padding(.top, 26)
@@ -195,7 +202,7 @@ struct SkyView: View {
                 // put the ring's centre, not the frame's, on the aircraft
                 .offset(y: Self.labelSize.height / 2 - 11)
                 .position(pt)
-                .accessibilityLabel("\(p.cs), \(PlaneState.altLabel(p.alt)), \(String(format: "%.1f", range)) nautical miles")
+                .accessibilityLabel("\(p.cs), \(p.typeLabel.map { "\($0), " } ?? "")\(PlaneState.altLabel(p.alt)), \(String(format: "%.1f", range)) nautical miles")
             }
         }
     }
