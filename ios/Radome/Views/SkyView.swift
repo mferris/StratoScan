@@ -118,23 +118,27 @@ struct SkyView: View {
     private func sidewaysPanel(_ d: SidewaysDetail, in size: CGSize) -> some View {
         let close = { withAnimation(.easeOut(duration: 0.2)) { sideways = nil } }
         Color.black.opacity(0.35).onTapGesture(perform: close).transition(.opacity)
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Button(action: close) {
-                    Image(systemName: "xmark.circle.fill").font(.title2).foregroundStyle(.white, .gray.opacity(0.4))
+        // Turned by UIKit, not .rotationEffect: on a real phone SwiftUI drew
+        // the turned panel as a flattened picture and its text came out soft
+        // (the photo, already a picture, didn't). A view transform keeps the
+        // text drawn at full resolution.
+        TurnedHost(angle: d.angle.radians, content:
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button(action: close) {
+                        Image(systemName: "xmark.circle.fill").font(.title2).foregroundStyle(.white, .gray.opacity(0.4))
+                    }
+                    .accessibilityLabel("Close details")
                 }
-                .accessibilityLabel("Close details")
+                .padding([.top, .horizontal], 12)
+                AircraftDetailView(viewModel: viewModel, location: location, hex: d.hex)
             }
-            .padding([.top, .horizontal], 12)
-            AircraftDetailView(viewModel: viewModel, location: location, hex: d.hex)
-        }
-        // its width runs along the phone's long side
-        .frame(width: size.height - 100, height: size.width - 24)
-        .background(Color.black.opacity(0.9))
-        .environment(\.colorScheme, .dark)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .rotationEffect(d.angle)
+            .background(Color.black.opacity(0.9))
+            .environment(\.colorScheme, .dark)
+            .clipShape(RoundedRectangle(cornerRadius: 16)))
+        // the screen space it takes, upright; inside, it runs along the long side
+        .frame(width: size.width - 24, height: size.height - 100)
         .position(x: size.width / 2, y: size.height / 2)
         .transition(.opacity)
     }
@@ -249,6 +253,51 @@ struct SkyView: View {
 
 private struct SkySelection: Identifiable { let id: String }
 private struct SidewaysDetail: Equatable { let hex: String; let angle: Angle }
+
+/// Shows SwiftUI content turned a quarter, by giving it the swapped bounds
+/// and a UIKit transform.
+private struct TurnedHost<Content: View>: UIViewControllerRepresentable {
+    let angle: Double
+    let content: Content
+
+    func makeUIViewController(context: Context) -> TurnedController<Content> {
+        TurnedController(root: content, angle: angle)
+    }
+    func updateUIViewController(_ vc: TurnedController<Content>, context: Context) {
+        vc.host.rootView = content
+    }
+}
+
+private final class TurnedController<Content: View>: UIViewController {
+    let host: UIHostingController<Content>
+    private let angle: CGFloat
+
+    init(root: Content, angle: Double) {
+        host = UIHostingController(rootView: root)
+        self.angle = angle
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .clear
+        host.view.backgroundColor = .clear
+        host.safeAreaRegions = []   // the phone's safe areas are the wrong way round in here
+        addChild(host)
+        view.addSubview(host.view)
+        host.didMove(toParent: self)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let b = view.bounds
+        host.view.transform = .identity
+        host.view.bounds = CGRect(x: 0, y: 0, width: b.height, height: b.width)
+        host.view.center = CGPoint(x: b.midX, y: b.midY)
+        host.view.transform = CGAffineTransform(rotationAngle: angle)
+    }
+}
 
 
 /// Aircraft around the phone, from adsb.lol's public API -- the same source
