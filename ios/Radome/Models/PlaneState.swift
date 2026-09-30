@@ -25,6 +25,14 @@ final class PlaneState: Identifiable {
     var badgeColor: Color = AirlineTable.privateColor
     var typeLabel: String?
     var lastSeen: Date = Date()
+    /// Reported by a public network, not heard by this radar (roadmap 2.8).
+    var isNetwork = false
+    /// Route, registration and owner as the core feed has them, if it does.
+    var feedRoute: FeedRoute?
+    var reg: String?
+    var owner: FeedOwner?
+    /// True when the core feed labelled this aircraft, so the app needn't.
+    var fromFeed = false
 
     // Screen-space layout state, recomputed every frame by RadarView.
     var anchorX: CGFloat = 0
@@ -55,7 +63,18 @@ final class PlaneState: Identifiable {
         lat = n.lat
         lon = n.lon
         airlineIcao = n.airlineIcao
-        if let military = n.military {
+        isNetwork = n.raw.isNetwork
+        fromFeed = n.raw.feedOperator != nil
+        feedRoute = n.raw.feedRoute
+        if let r = n.raw.reg { reg = r }
+        owner = n.raw.owner
+        if let name = n.raw.feedType?.name ?? n.raw.feedType?.code { typeLabel = name }
+        if let op = n.raw.feedOperator {
+            // The radar's own label (deploy/labels.py): the same rules as below,
+            // but one copy, shared with the kiosk and the alerts.
+            airlineLabel = op.label
+            badgeColor = Color(hex: op.color)
+        } else if let military = n.military {
             airlineLabel = military
             badgeColor = AirlineTable.militaryColor
         } else {

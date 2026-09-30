@@ -32,6 +32,10 @@ struct CreditsView: View {
                 credit("Routes from the adsb.im route API", nil, "https://adsb.im/")
                 credit("Aircraft types from the tar1090 aircraft database, read from your radar",
                        nil, "https://github.com/wiedehopf/tar1090-db")
+                credit("Aircraft your radar didn't hear: network data © ADSB.lol contributors",
+                       "Available under the Open Database Licence.", "https://www.adsb.lol/")
+                credit("Registered owners of private aircraft from adsbdb",
+                       nil, "https://www.adsbdb.com/")
             }
 
             Section {

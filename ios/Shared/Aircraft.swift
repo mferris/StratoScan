@@ -19,7 +19,21 @@ enum Altitude: Equatable {
 struct AircraftFeedResponse: Decodable {
     let aircraft: [RawAircraft]
     let now: Double?
+    /// Only from the core feed (/api/aircraft): the 20 nm ring's counts,
+    /// worked out on the radar exactly as the kiosk counts.
+    var counts: FeedCounts? = nil
 }
+
+// ---- The core feed's labels (roadmap 1.8 / 2.8) -----------------------------
+// /api/aircraft carries these alongside readsb's fields, worked out once on
+// the radar (deploy/labels.py) so the app, the kiosk and the alerts label an
+// aircraft the same way. From plain aircraft.json they are all nil and the
+// app labels for itself, as before.
+struct FeedCounts: Decodable { let heard: Int?; let notHeard: Int? }
+struct FeedOperator: Decodable { let kind: String; let label: String; let color: String }
+struct FeedRoute: Decodable { let text: String; let plausible: Bool? }
+struct FeedType: Decodable { let code: String?; let name: String?; let desc: String? }
+struct FeedOwner: Decodable { let name: String; let country: String? }
 
 /// Raw shape of one entry in aircraft.json, decoded permissively — most
 /// fields are optional since readsb omits whatever it hasn't received yet.
@@ -37,9 +51,21 @@ struct RawAircraft: Decodable {
     let calcTrack: Double?
     let rDst: Double?
     let rDir: Double?
+    // Core feed only; see FeedOperator above.
+    let source: String?          // "antenna" or "network"
+    let feedOperator: FeedOperator?
+    let feedRoute: FeedRoute?
+    let feedType: FeedType?
+    let reg: String?
+    let owner: FeedOwner?
+
+    var isNetwork: Bool { source == "network" }
 
     enum CodingKeys: String, CodingKey {
-        case hex, flight, lat, lon, gs, track
+        case hex, flight, lat, lon, gs, track, source, reg, owner, alt
+        case feedOperator = "operator"
+        case feedRoute = "route"
+        case feedType = "type"
         case altBaro = "alt_baro"
         case altGeom = "alt_geom"
         case trueHeading = "true_heading"
@@ -62,8 +88,14 @@ struct RawAircraft: Decodable {
         calcTrack = try c.decodeIfPresent(Double.self, forKey: .calcTrack)
         rDst = try c.decodeIfPresent(Double.self, forKey: .rDst)
         rDir = try c.decodeIfPresent(Double.self, forKey: .rDir)
-        altBaro = try Self.decodeAltitude(c, .altBaro)
+        altBaro = try Self.decodeAltitude(c, .altBaro) ?? Self.decodeAltitude(c, .alt)   // the core feed says "alt"
         altGeom = try Self.decodeAltitude(c, .altGeom)
+        source = try? c.decodeIfPresent(String.self, forKey: .source)
+        feedOperator = try? c.decodeIfPresent(FeedOperator.self, forKey: .feedOperator)
+        feedRoute = try? c.decodeIfPresent(FeedRoute.self, forKey: .feedRoute)
+        feedType = try? c.decodeIfPresent(FeedType.self, forKey: .feedType)   // readsb's "type" is a string: nil
+        reg = try? c.decodeIfPresent(String.self, forKey: .reg)
+        owner = try? c.decodeIfPresent(FeedOwner.self, forKey: .owner)
     }
 
     private static func decodeAltitude(_ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) throws -> Altitude? {

@@ -18,6 +18,8 @@ struct NormalizedAircraft {
     let airline: Airline?
     /// The military operator named by the hex block ("US military"), if any.
     let military: String?
+    /// From the core feed (nil from plain aircraft.json): see RawAircraft.
+    let raw: RawAircraft
 
     /// - Parameter trustPrecomputed: false when a HOME_OVERRIDE is active —
     ///   r_dst/r_dir are relative to the receiver's real antenna position,
@@ -59,7 +61,7 @@ struct NormalizedAircraft {
         return NormalizedAircraft(
             hex: a.hex, cs: cs, bearing: bearing, range: range, alt: alt, hdg: hdg,
             speed: a.gs, lat: a.lat, lon: a.lon, airlineIcao: airlineIcao, airline: airline,
-            military: military
+            military: military, raw: a
         )
     }
 }

@@ -138,7 +138,9 @@ struct ContentView: View {
                 .tracking(1.5)
                 .foregroundColor(Color(hex: "#5b7278"))
                 .textCase(.uppercase)
-            Text("\(viewModel.aircraftCount) AIRCRAFT")
+            Text(viewModel.notHeardCount > 0
+                 ? "\(viewModel.aircraftCount) AIRCRAFT · \(viewModel.notHeardCount) NOT HEARD"
+                 : "\(viewModel.aircraftCount) AIRCRAFT")
                 .font(.system(size: 15, design: .monospaced))
                 .tracking(1)
                 .foregroundColor(Color(hex: "#cfe8ea"))
