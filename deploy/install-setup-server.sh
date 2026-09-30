@@ -123,10 +123,11 @@ echo "== programs =="
 install -d -m 0755 /opt/stratoscan
 for f in setupd.py setup-server.py funnel-gateway.py offline-map.py heartbeat.py notable-db.py \
          events.py pairing.py feeding.py ota.py ota-auto.sh net-watchdog.py sighting-store.py approach-store.py \
-         network-compare.py photo-proxy.py tts-service.py shm-guard.sh wake-listener.py; do
+         network-compare.py photo-proxy.py tts-service.py shm-guard.sh wake-listener.py \
+         core-feed.py labels.py; do
   install -m 0755 "deploy/$f" "/opt/stratoscan/$f"
 done
-install -m 0644 deploy/setup-ui.html deploy/airports.json /opt/stratoscan/
+install -m 0644 deploy/setup-ui.html deploy/airports.json deploy/airlines.json /opt/stratoscan/
 # The trust root. Must already be on the device before it ships: fetching the
 # key over the same channel as the update would make the signature pointless.
 # NOT installable by an update, deliberately -- see deploy/allowed_signers.
@@ -148,14 +149,14 @@ echo "== system services and web routing =="
 for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-gateway.service \
          stratoscan-sighting-store.service stratoscan-approach-store.service \
          stratoscan-network.service stratoscan-photo-proxy.service stratoscan-tts.service \
-         stratoscan-events.service \
+         stratoscan-events.service stratoscan-core.service \
          stratoscan-ota-check.service stratoscan-ota-check.timer \
          stratoscan-ota-auto.service stratoscan-ota-auto.timer \
          stratoscan-netwatchdog.service stratoscan-netwatchdog.timer; do
   install -m 0644 "deploy/$u" /etc/systemd/system/
 done
 for c in 86-stratoscan-nocache.conf 89-stratoscan-photo-proxy.conf 91-stratoscan-approach-store.conf \
-         93-stratoscan-sighting-store.conf 95-stratoscan-network.conf 96-stratoscan-wake.conf \
+         93-stratoscan-sighting-store.conf 94-stratoscan-core.conf 95-stratoscan-network.conf 96-stratoscan-wake.conf \
          97-stratoscan-tts.conf 98-stratoscan-setup.conf 99-stratoscan-captive.conf; do
   lighttpd_conf "$c"
 done
@@ -338,7 +339,7 @@ if live; then systemctl daemon-reload; fi
 for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-gateway.service \
          stratoscan-sighting-store.service stratoscan-approach-store.service \
          stratoscan-network.service stratoscan-photo-proxy.service stratoscan-tts.service \
-         stratoscan-events.service \
+         stratoscan-events.service stratoscan-core.service \
          stratoscan-ota-check.timer stratoscan-ota-auto.timer stratoscan-netwatchdog.timer \
          lighttpd.service readsb.service; do
   enable_unit "$u"
@@ -353,7 +354,7 @@ systemctl reload lighttpd
 for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-gateway.service \
          stratoscan-sighting-store.service stratoscan-approach-store.service \
          stratoscan-network.service stratoscan-photo-proxy.service stratoscan-tts.service \
-         stratoscan-events.service; do
+         stratoscan-events.service stratoscan-core.service; do
   restart_unit "$u"
 done
 systemctl restart systemd-journald

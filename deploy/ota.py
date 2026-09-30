@@ -154,6 +154,9 @@ DEPLOY_ALLOWED = {
     "events.py",
     # Phone pairing; loaded fresh by setupd on each call, so no restart.
     "pairing.py",
+    # The core feed (roadmap 1.8), and what it and events.py label aircraft
+    # with. events.py imports labels.py, so the two must always ship together.
+    "core-feed.py", "labels.py", "airlines.json",
     # ota-auto.sh decides whether an unattended update may proceed, running as
     # root on a timer on a device in someone else's house. Omitting it would
     # ship it in the bundle and then refuse to install it -- which is the same
@@ -465,6 +468,11 @@ SERVICE_FOR = {
     "wake-listener.py":   ("user",   "stratoscan-wake.service"),
     "tts-service.py":     ("system", "stratoscan-tts.service"),
     "events.py":          ("system", "stratoscan-events.service"),
+    "core-feed.py":       ("system", "stratoscan-core.service"),
+    "airlines.json":      ("system", "stratoscan-core.service"),
+    # Shared: both services import it at start, so both restart.
+    "labels.py":          [("system", "stratoscan-core.service"),
+                           ("system", "stratoscan-events.service")],
 }
 # Where the installer puts system units. An update can deliver a program
 # before the installer has put its service on that unit; restarting a unit
@@ -479,9 +487,10 @@ def services_to_restart(dests):
     for dest in dests:
         if os.path.dirname(dest) != OPT_ROOT:
             continue
-        pair = SERVICE_FOR.get(os.path.basename(dest))
-        if pair and pair not in units:
-            units.append(pair)
+        entry = SERVICE_FOR.get(os.path.basename(dest))
+        for pair in (entry if isinstance(entry, list) else [entry] if entry else []):
+            if pair not in units:
+                units.append(pair)
     return units
 
 

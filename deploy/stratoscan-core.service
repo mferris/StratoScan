@@ -1,0 +1,27 @@
+[Unit]
+Description=StratoScan core feed: one labelled aircraft list for every screen (roadmap 1.8)
+After=network-online.target lighttpd.service readsb.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/stratoscan/core-feed.py
+Restart=always
+RestartSec=5
+# 127.0.0.1-only listener, like the other stores. It reads readsb's files and
+# the notable list, and makes outbound HTTPS requests for routes and owners,
+# so it needs AF_INET/AF_INET6 and nothing else. No state on disk: its caches
+# are in memory, which also keeps it off the SD card.
+DynamicUser=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=default.target

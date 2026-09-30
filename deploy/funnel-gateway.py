@@ -57,7 +57,7 @@ LOCAL_ONLY_PATHS = ("/wake", "/setup", "/tts")
 # approach heatmap, which is months of accumulated data.
 #
 # Reads stay open, because the page itself needs them from public viewers.
-READ_ONLY_PUBLIC_PATHS = ("/sightings", "/approaches", "/network")
+READ_ONLY_PUBLIC_PATHS = ("/sightings", "/approaches", "/network", "/api")
 
 # A future edit that empties or mistypes this list would silently expose the
 # device's privileged endpoints to the public internet. Fail loudly instead.
