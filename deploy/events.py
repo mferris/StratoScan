@@ -193,6 +193,11 @@ def describe(a, info, now):
         ev["dist_nm"] = round(a["r_dst"] * 2) / 2
     if isinstance(a.get("r_dir"), (int, float)):
         ev["dir"] = COMPASS[int((a["r_dir"] % 360) / 45 + 0.5) % 8]
+    # Which way it's travelling (roadmap 3.4): what the aircraft broadcasts, so
+    # nothing about the receiver. Lets the phone say "coming from the SW,
+    # heading NE" and draw it.
+    if isinstance(a.get("track"), (int, float)):
+        ev["trk"] = int(round(a["track"])) % 360
     return ev
 
 

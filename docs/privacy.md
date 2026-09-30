@@ -25,7 +25,8 @@ turn on:
 - **Phone alerts** (on when you pair a phone): short messages about notable
   aircraft, emergencies, helicopters and low aircraft nearby. Each message
   names the aircraft and gives its distance rounded to half a nautical
-  mile with a compass direction. It never includes a position.
+  mile with a compass direction, and the direction the aircraft is
+  travelling (which it broadcasts itself). It never includes a position.
 - **Health reports** (off unless you turn them on): software version,
   receiver health, storage wear, temperature. No location, no network
   details, nothing about what flew over.

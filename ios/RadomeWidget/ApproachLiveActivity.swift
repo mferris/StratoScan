@@ -53,14 +53,42 @@ struct ApproachLiveActivity: Widget {
         var parts = [context.attributes.reason]
         if !context.attributes.type.isEmpty { parts.append(context.attributes.type) }
         if let ft = context.state.altFt { parts.append("\(ft.formatted()) ft") }
-        if let dir = context.state.dir { parts.append("from the \(dir)") }
+        // dir is where the aircraft IS, seen from the radar; from/to are
+        // which way it's travelling. "from the N" used to read as the latter.
+        if let dir = context.state.dir { parts.append("\(dir) of the radar") }
+        if let f = context.state.from, let t = context.state.to { parts.append("coming from the \(f), heading \(t)") }
         return parts.joined(separator: " · ")
+    }
+
+    /// A small north-up dial (widgets can't read the compass): a dot where the
+    /// aircraft is, seen from the radar, and an arrow the way it's going.
+    @ViewBuilder
+    private func dial(_ context: ActivityViewContext<ApproachAttributes>) -> some View {
+        let points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+        let pos = context.state.dir.flatMap { points.firstIndex(of: $0) }.map { Double($0) * 45 }
+        ZStack {
+            Circle().stroke(teal.opacity(0.5), lineWidth: 1.5)
+            Text("N").font(.system(size: 7, weight: .bold)).foregroundColor(teal).offset(y: -13)
+            if let pos {
+                Circle().fill(Color.white).frame(width: 5, height: 5)
+                    .offset(y: -12).rotationEffect(.degrees(pos))
+            }
+            if let trk = context.state.trk {
+                Image(systemName: "arrow.up").font(.system(size: 12, weight: .bold))
+                    .foregroundColor(teal).rotationEffect(.degrees(Double(trk)))
+            }
+        }
+        .frame(width: 34, height: 34)
     }
 
     private func lockScreen(_ context: ActivityViewContext<ApproachAttributes>) -> some View {
         HStack(spacing: 14) {
-            Image(systemName: icon(context.attributes))
-                .font(.title2).foregroundColor(teal)
+            if context.state.trk != nil {
+                dial(context)
+            } else {
+                Image(systemName: icon(context.attributes))
+                    .font(.title2).foregroundColor(teal)
+            }
             VStack(alignment: .leading, spacing: 3) {
                 Text(context.attributes.callsign).font(.headline)
                 Text(detail(context)).font(.caption).foregroundColor(.secondary).lineLimit(2)

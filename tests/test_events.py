@@ -165,8 +165,17 @@ d = ev.Detector()
 out = scan(d, ac("abc123", dist=1.3, alt=1049, r_dir=100.0),
            ac("aaaaa1", dist=3.2, alt=1234, squawk="7700"))
 text = json.dumps(out).lower()
-for word in ('"lat"', '"lon"', "latitude", "longitude", "r_dst", "r_dir", '"track"'):
+for word in ('"lat"', '"lon"', "latitude", "longitude", "r_dst", "r_dir"):
     check(f"no event carries {word}", word not in text)
+# The aircraft's own track may leave (as "trk", whole degrees): it's what the
+# aircraft broadcasts about itself, and says nothing about where the receiver
+# is beyond the rounded distance and compass point already sent. It lets the
+# phone say "coming from the SW, heading NE" (roadmap 3.4).
+t = ev.describe({"hex": "abc123", "flight": "TEST1", "track": 45.4, "r_dst": 1.3, "r_dir": 100.0,
+                 "alt_baro": 1000}, {}, 1_000_000)
+check("the aircraft's track is sent as whole degrees", t.get("trk") == 45)
+check("a track of 359.6 wraps to 0", ev.describe({"hex": "abc123", "track": 359.6}, {}, 1)["trk"] == 0)
+check("no track, no trk", "trk" not in ev.describe({"hex": "abc123"}, {}, 1))
 heli = [e for e in out if e["kind"] == "helicopter"][0]
 check("distance is rounded to half a mile", heli["dist_nm"] == 1.5)
 check("direction is a compass point, not a bearing", heli["dir"] == "E")
