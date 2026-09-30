@@ -3,7 +3,7 @@ import Foundation
 /// The StratoScan relay (relay/ in this repository): pairing now, notifications
 /// from roadmap 2.1. Someone running their own relay changes `baseURL`.
 struct RelayClient {
-    static let baseURL = URL(string: "https://stratoscan-relay.example.workers.dev")!
+    static let baseURL = URL(string: "https://relay.stratoscan.io")!
 
     struct Failure: LocalizedError {
         let message: String
