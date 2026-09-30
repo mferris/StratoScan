@@ -66,6 +66,10 @@ phone ──(pairing, notification rules)──▶ relay
 | 1.5 | Factory image: pi-gen build in GitHub Actions (Arm runner); first boot runs the installer; GPL source offer for readsb/tar1090 included | Claude | A fresh SD flashed from the release boots to the setup hotspot |
 | 1.6 | Re-measure SD writes after the storage fixes (scheduled 2026-09-28) | Claude | Result recorded; any remaining large writer fixed |
 | 1.7 | Recover a hung radio without a human: the watchdog power-cycles USB (uhubctl) before it reboots, since a Pi 5 reboot keeps USB powered | Claude | A hung SDR comes back on its own on a real unit |
+| 1.8 | Core feed on the device: one service merges the antenna's and the network's aircraft, labels them once (operator, type, route, owner, notable), caches the lookups, and serves `/api/aircraft` to every screen; no antenna-relative fields | Claude | Live on RDU; labels match the kiosk's on a recorded sample |
+| 1.9 | Kiosk and public page read the core feed; route and owner lookups move off visitors' browsers onto the unit | Claude | Same picture as before; public visitors no longer contact adsb.im or adsbdb |
+| 1.10 | `events.py` reads the core feed; the copied classification tables are deleted | Claude | Same alerts from the same fixtures, with no tables of its own |
+| 1.11 | Cut the radar's drawing cost: static layers drawn once, the sweep rotated by the compositor, only moving things redrawn | Claude | Measured on RDU: the GPU process well under half its current ~94% of a core, and cooler |
 
 ## Phase 2: the pocket
 
@@ -116,6 +120,7 @@ phone ──(pairing, notification rules)──▶ relay
 - 1.3 comes before 1.4 and 2.1–2.3.
 - 2.1 and 2.3 come before 2.4.
 - 2.x comes before 3.x.
+- 1.8 comes before 1.9, 1.10 and 2.8 (the app reads the core feed). 1.11 is independent.
 - 2.7 builds on 2.4 (approach alerts) and 2.5 (away mode).
 - 3.4 extends 3.3. Its phone half needs only 2.4 and can come first; its Watch half needs 3.1.
 - 1.5 should come after 1.1, 1.2 and 1.4 settle, so the image carries them.
