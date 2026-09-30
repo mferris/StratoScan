@@ -80,6 +80,7 @@ extension SettingsView {
         let a = awayURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let away = a.isEmpty ? nil : (a.hasPrefix("https://") ? a : "https://\(a)")
         if away != APIConfig.awayURL { APIConfig.awayURL = away }
+        WatchSync.shared.push()
     }
 }
 

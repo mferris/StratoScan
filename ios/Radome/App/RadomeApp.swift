@@ -7,6 +7,8 @@ struct RadomeApp: App {
     @StateObject private var pairing = PairingStore()
     @StateObject private var push = PushManager.shared
 
+    init() { WatchSync.shared.start() }   // tells the Watch app which radar to read
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -22,6 +24,7 @@ struct RadomeApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     WidgetCenter.shared.reloadAllTimelines()
                     PushManager.shared.endFinishedActivities()
+                    WatchSync.shared.push()
                 }
         }
     }

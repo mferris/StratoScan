@@ -10,7 +10,11 @@
 		045525804441022B5E807489 /* RouteLookupClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FA4F22EA60A35820DF1F1DD /* RouteLookupClient.swift */; };
 		08244F03D833C06145FB9B5F /* PlaneState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07EB33AD4B25EBAB71D4C610 /* PlaneState.swift */; };
 		09BDC78A861DEF82784989E0 /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDEF15D87D8BAE690A77DC40 /* Geo.swift */; };
+		0C13992AE7E3EF7D44CFDF36 /* RadomeWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFE8C9677953B5B9D8EF4F39 /* RadomeWatchApp.swift */; };
+		0D0DE80B7C370E69F214CBD9 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F7AEE53D7B021629485B1A /* APIConfig.swift */; };
 		0DE14D91681F7C764E922EDB /* AircraftTypeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 769D50FEEB254553EEC84466 /* AircraftTypeClient.swift */; };
+		121BD62F0A9CE279318F29C0 /* demo-traffic.json in Resources */ = {isa = PBXBuildFile; fileRef = 9F6A1715C56DD3725E841B89 /* demo-traffic.json */; };
+		1C299E759C4FC525A8F7068C /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */; };
 		250F2BE3ED0A0540AF10F808 /* PairingScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 960596F02F0A26C2C5BB3E9C /* PairingScannerView.swift */; };
 		25C6604554AF94DA469EA92F /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */; };
 		25FC95561C8C8EC59463D039 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82D0550591B3A5D10B447D6B /* ContentView.swift */; };
@@ -18,31 +22,45 @@
 		34B5E252D752396C044ED735 /* RadomeWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 928AFA66090FE5F082D66E43 /* RadomeWidget.swift */; };
 		3CFA92203001AC55818F67CE /* PhoneLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABDBFE3DD4DBEE94C6853950 /* PhoneLocation.swift */; };
 		3FAD0E8926CAEDF90E4DB73F /* CreditsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A6D09E9B61F4ACDAD3AEEA7 /* CreditsView.swift */; };
+		42627FAB6D3F32515C9A9668 /* WatchSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = F818F871D11FA58401811013 /* WatchSync.swift */; };
 		46DF2C05F1480FCBC02C6BD5 /* RadomeWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7E9DC61D7A09BED0AFB04882 /* RadomeWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		4B803966945202AE11749225 /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 672BD01CB737B65682F25750 /* AircraftFeedClient.swift */; };
 		52B97D347E2A8632F33A8EF4 /* RadarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B487FEB78297D897DBF514 /* RadarView.swift */; };
 		578DBB05588D4DCA41A3E7A7 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F7AEE53D7B021629485B1A /* APIConfig.swift */; };
 		6328BE0CDA6056A768B7613A /* demo-traffic.json in Resources */ = {isa = PBXBuildFile; fileRef = 9F6A1715C56DD3725E841B89 /* demo-traffic.json */; };
 		69219F6CAF423A69A720293A /* PairingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CE87BBB53C711586B6EC6E5 /* PairingStore.swift */; };
+		69C56A89CFA9070DEACFC984 /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */; };
 		6C1237AB31DFA25D8C05037F /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 3235AA9CD83A6D560C73BCB9 /* MapLibre */; };
 		6F86ADE723B1ACAA1C0B3267 /* ApproachActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ED9AA2CE9A2C6B5AE180774 /* ApproachActivity.swift */; };
 		726737634573DF876A6D429D /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 672BD01CB737B65682F25750 /* AircraftFeedClient.swift */; };
 		743522892CB30F81B4D69FF4 /* CompassView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B7C1945CDB64FA07423EC2E /* CompassView.swift */; };
 		7CAFC7B414B1C56CD1390D4D /* AlertsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96A6B94C53EE213482818502 /* AlertsSection.swift */; };
+		827FBF2FC0D304F6813867D5 /* RadomeWatchWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E8D4E7EBFFDEE5864973BA91 /* RadomeWatchWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		86A23D183EC9805CED42C8A6 /* ApproachActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ED9AA2CE9A2C6B5AE180774 /* ApproachActivity.swift */; };
+		88BFBBAE01D34D6E52743CA7 /* demo-traffic.json in Resources */ = {isa = PBXBuildFile; fileRef = 9F6A1715C56DD3725E841B89 /* demo-traffic.json */; };
 		8C0C1472DE073B3D43272768 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E19D2A0D7427942DE7CE2C0A /* Assets.xcassets */; };
 		9114ECA97E1D2692D209912F /* PushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61C08B59305FFE4DF7259DCE /* PushManager.swift */; };
+		915A08AB7160583E5511B2BF /* RadomeWatchWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739BC588C4ECB15ADF0CC3A5 /* RadomeWatchWidget.swift */; };
 		91C2BCF8BF0A780884396FAB /* MapBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59D8472601E7A87932540E37 /* MapBackgroundView.swift */; };
+		96622DF96117F50AC7165848 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F7AEE53D7B021629485B1A /* APIConfig.swift */; };
+		99FA1A152BF6A9A9B5D69A78 /* RadomeWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 840555C58A2570BC9178F17F /* RadomeWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A02D5C7CCC59C4240DEDE855 /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDEF15D87D8BAE690A77DC40 /* Geo.swift */; };
 		A10B30F1CAED66BDF721A147 /* demo-traffic.json in Resources */ = {isa = PBXBuildFile; fileRef = 9F6A1715C56DD3725E841B89 /* demo-traffic.json */; };
 		A2C7AD80930A7B9E7EC2FB0F /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */; };
 		A3B5845981B37B60BD0088A0 /* Aircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5364E64D7A6AB4EC7F36A762 /* Aircraft.swift */; };
+		B31CF0C21C60C642EE61410A /* Aircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5364E64D7A6AB4EC7F36A762 /* Aircraft.swift */; };
 		B6702FB094B782BC253305C4 /* RadomeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 253708C4759FB636D54CE7FE /* RadomeApp.swift */; };
 		B9B67C3F95E4E43F6BE9CE9E /* PairedRadarsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F02A218B8D94A0157BAD495 /* PairedRadarsSection.swift */; };
 		BB108B6E46FA39B8F7793550 /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 672BD01CB737B65682F25750 /* AircraftFeedClient.swift */; };
 		BCCB582D19914CF9197B0275 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6119DE8FF601795FF50E7980 /* PrivacyInfo.xcprivacy */; };
+		BF48DD9B81945F2C3ADC43FF /* Aircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5364E64D7A6AB4EC7F36A762 /* Aircraft.swift */; };
 		C69753DE205589E999B71F62 /* RunwayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F19B466EF642F0BCA2029A /* RunwayClient.swift */; };
 		CA5C1540FB8252CF32A4D689 /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDEF15D87D8BAE690A77DC40 /* Geo.swift */; };
+		CD1E1D43817A12186D11B28C /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDEF15D87D8BAE690A77DC40 /* Geo.swift */; };
 		D1F5F69DB780397F097AEB5B /* ApproachLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 058603B167FDF5E7978DDA98 /* ApproachLiveActivity.swift */; };
 		E064CE1110E590F29DEC6F4B /* AircraftDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB1E9DB1392DDDD2FF260B0 /* AircraftDetailView.swift */; };
+		E3494CCD507B093C6B770C16 /* WatchRadarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF91D723B0AD16296EBEB5E /* WatchRadarView.swift */; };
+		E3C42B52D87C81C12AA755FB /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 672BD01CB737B65682F25750 /* AircraftFeedClient.swift */; };
 		E764625CF5C646B99B879887 /* RelayIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B15F58F7CE332E6A86D2E21 /* RelayIdentity.swift */; };
 		E8B7CB368AB535FDD5EDC6A6 /* RelayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CCEAAB1034430480327F85E /* RelayClient.swift */; };
 		EB80C2098169E49EFA266123 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291E986AEF670EDAD724B1DC /* SettingsView.swift */; };
@@ -60,6 +78,20 @@
 			remoteGlobalIDString = 0163C9BE78C8E7F6A47B6129;
 			remoteInfo = RadomeWidget;
 		};
+		B9C00CF135E375EEBFAC4033 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DC6586927B5F9AD425E547FA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E249B965B93BD3015FAA2373;
+			remoteInfo = RadomeWatch;
+		};
+		CF6D2D6F9D301CECEF295C7D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DC6586927B5F9AD425E547FA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 14867450A5231A8ABA12FF13;
+			remoteInfo = RadomeWatchWidget;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -74,14 +106,38 @@
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F2433312F038B73C9DE74243 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				99FA1A152BF6A9A9B5D69A78 /* RadomeWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F6FB2A08405CB367A6197CA7 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				827FBF2FC0D304F6813867D5 /* RadomeWatchWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		058603B167FDF5E7978DDA98 /* ApproachLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproachLiveActivity.swift; sourceTree = "<group>"; };
 		07EB33AD4B25EBAB71D4C610 /* PlaneState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaneState.swift; sourceTree = "<group>"; };
 		0A6D09E9B61F4ACDAD3AEEA7 /* CreditsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditsView.swift; sourceTree = "<group>"; };
+		0BF91D723B0AD16296EBEB5E /* WatchRadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRadarView.swift; sourceTree = "<group>"; };
 		0CE87BBB53C711586B6EC6E5 /* PairingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingStore.swift; sourceTree = "<group>"; };
 		13B3D352D5EFF08433519043 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		2534DE47A15B9009A7DBA41B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		253708C4759FB636D54CE7FE /* RadomeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadomeApp.swift; sourceTree = "<group>"; };
 		26F19B466EF642F0BCA2029A /* RunwayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayClient.swift; sourceTree = "<group>"; };
 		291E986AEF670EDAD724B1DC /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -97,10 +153,13 @@
 		61C08B59305FFE4DF7259DCE /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
 		672BD01CB737B65682F25750 /* AircraftFeedClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftFeedClient.swift; sourceTree = "<group>"; };
 		71F5046AB131B521B0ECFC6C /* Radome.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Radome.entitlements; sourceTree = "<group>"; };
+		739BC588C4ECB15ADF0CC3A5 /* RadomeWatchWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadomeWatchWidget.swift; sourceTree = "<group>"; };
 		769D50FEEB254553EEC84466 /* AircraftTypeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftTypeClient.swift; sourceTree = "<group>"; };
 		7E9DC61D7A09BED0AFB04882 /* RadomeWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = RadomeWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		82D0550591B3A5D10B447D6B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		840555C58A2570BC9178F17F /* RadomeWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RadomeWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		870CEDCB8BFC1B331B0714B1 /* RadomeWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RadomeWidget.entitlements; sourceTree = "<group>"; };
+		885BB602CFC1F57B10B6536C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		89B487FEB78297D897DBF514 /* RadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarView.swift; sourceTree = "<group>"; };
 		91035FC9B53995586796D3F8 /* Radome.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Radome.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		928AFA66090FE5F082D66E43 /* RadomeWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadomeWidget.swift; sourceTree = "<group>"; };
@@ -111,12 +170,15 @@
 		9FA4F22EA60A35820DF1F1DD /* RouteLookupClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteLookupClient.swift; sourceTree = "<group>"; };
 		A1830CD86FA2C8BA2A10B2FE /* NormalizedAircraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NormalizedAircraft.swift; sourceTree = "<group>"; };
 		ABDBFE3DD4DBEE94C6853950 /* PhoneLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneLocation.swift; sourceTree = "<group>"; };
+		AFE8C9677953B5B9D8EF4F39 /* RadomeWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadomeWatchApp.swift; sourceTree = "<group>"; };
 		B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoFeed.swift; sourceTree = "<group>"; };
 		BBB1E9DB1392DDDD2FF260B0 /* AircraftDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftDetailView.swift; sourceTree = "<group>"; };
 		C61F1870157C6C22B86BEFBC /* RadarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarViewModel.swift; sourceTree = "<group>"; };
 		E19D2A0D7427942DE7CE2C0A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E8D4E7EBFFDEE5864973BA91 /* RadomeWatchWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RadomeWatchWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		EDEF15D87D8BAE690A77DC40 /* Geo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geo.swift; sourceTree = "<group>"; };
 		F5F7AEE53D7B021629485B1A /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
+		F818F871D11FA58401811013 /* WatchSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSync.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -171,6 +233,8 @@
 			isa = PBXGroup;
 			children = (
 				91035FC9B53995586796D3F8 /* Radome.app */,
+				840555C58A2570BC9178F17F /* RadomeWatch.app */,
+				E8D4E7EBFFDEE5864973BA91 /* RadomeWatchWidget.appex */,
 				7E9DC61D7A09BED0AFB04882 /* RadomeWidget.appex */,
 			);
 			name = Products;
@@ -207,14 +271,27 @@
 				BA2B511A48C18438C83999B4 /* Pairing */,
 				B0958080EB170AC648409AE7 /* ViewModels */,
 				0584F7E5156EAB31491A005A /* Views */,
+				DDDDED939A1DD9D807EF80B0 /* Watch */,
 			);
 			path = Radome;
+			sourceTree = "<group>";
+		};
+		7DE494D0E9B923B1767AF48E /* RadomeWatch */ = {
+			isa = PBXGroup;
+			children = (
+				2534DE47A15B9009A7DBA41B /* Info.plist */,
+				AFE8C9677953B5B9D8EF4F39 /* RadomeWatchApp.swift */,
+				0BF91D723B0AD16296EBEB5E /* WatchRadarView.swift */,
+			);
+			path = RadomeWatch;
 			sourceTree = "<group>";
 		};
 		94ED6EAEAA1CB6C636418B36 = {
 			isa = PBXGroup;
 			children = (
 				78ACA7DD040AD6280B8589C9 /* Radome */,
+				7DE494D0E9B923B1767AF48E /* RadomeWatch */,
+				FE964F44333477AB163CF0EE /* RadomeWatchWidget */,
 				381FD77BE8A90601C0922F37 /* RadomeWidget */,
 				CAB21097C16E420581EB34F9 /* Shared */,
 				30408F55DFBBE6CB77C7CCB2 /* Products */,
@@ -255,6 +332,14 @@
 			path = Shared;
 			sourceTree = "<group>";
 		};
+		DDDDED939A1DD9D807EF80B0 /* Watch */ = {
+			isa = PBXGroup;
+			children = (
+				F818F871D11FA58401811013 /* WatchSync.swift */,
+			);
+			path = Watch;
+			sourceTree = "<group>";
+		};
 		EE9260830A972FBE9AD27FCA /* Models */ = {
 			isa = PBXGroup;
 			children = (
@@ -263,6 +348,15 @@
 				07EB33AD4B25EBAB71D4C610 /* PlaneState.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		FE964F44333477AB163CF0EE /* RadomeWatchWidget */ = {
+			isa = PBXGroup;
+			children = (
+				885BB602CFC1F57B10B6536C /* Info.plist */,
+				739BC588C4ECB15ADF0CC3A5 /* RadomeWatchWidget.swift */,
+			);
+			path = RadomeWatchWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -286,6 +380,24 @@
 			productReference = 7E9DC61D7A09BED0AFB04882 /* RadomeWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		14867450A5231A8ABA12FF13 /* RadomeWatchWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5A5250C8CCCCE3D343E29213 /* Build configuration list for PBXNativeTarget "RadomeWatchWidget" */;
+			buildPhases = (
+				03908CD33F84B3A20B8DEC06 /* Sources */,
+				FA8F68EACE94BF60CEED02CA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RadomeWatchWidget;
+			packageProductDependencies = (
+			);
+			productName = RadomeWatchWidget;
+			productReference = E8D4E7EBFFDEE5864973BA91 /* RadomeWatchWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		C10322E7B49D83B343F6F7C5 /* Radome */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 584B78FE4C149AB4BB2D9FA9 /* Build configuration list for PBXNativeTarget "Radome" */;
@@ -294,11 +406,13 @@
 				AABDBCE9A8BB62A164E5D681 /* Resources */,
 				9307E7C0E9FF31EB3473BAC5 /* Frameworks */,
 				520401567D084F410D324EF7 /* Embed Foundation Extensions */,
+				F2433312F038B73C9DE74243 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				6070139CE21D61B6E0AA33DC /* PBXTargetDependency */,
+				A6D4ED5F24998A1D2D316DCE /* PBXTargetDependency */,
 			);
 			name = Radome;
 			packageProductDependencies = (
@@ -306,6 +420,26 @@
 			);
 			productName = Radome;
 			productReference = 91035FC9B53995586796D3F8 /* Radome.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E249B965B93BD3015FAA2373 /* RadomeWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FAD803B71FAFC165A540EA4D /* Build configuration list for PBXNativeTarget "RadomeWatch" */;
+			buildPhases = (
+				D02CD7BC7DCCCB04F8ADCBAE /* Sources */,
+				BA8CFC999538510E35B7F288 /* Resources */,
+				F6FB2A08405CB367A6197CA7 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F2E65CAF40D53614CE254F27 /* PBXTargetDependency */,
+			);
+			name = RadomeWatch;
+			packageProductDependencies = (
+			);
+			productName = RadomeWatch;
+			productReference = 840555C58A2570BC9178F17F /* RadomeWatch.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -321,7 +455,15 @@
 						DevelopmentTeam = XXXXXXXXXX;
 						ProvisioningStyle = Automatic;
 					};
+					14867450A5231A8ABA12FF13 = {
+						DevelopmentTeam = XXXXXXXXXX;
+						ProvisioningStyle = Automatic;
+					};
 					C10322E7B49D83B343F6F7C5 = {
+						DevelopmentTeam = XXXXXXXXXX;
+						ProvisioningStyle = Automatic;
+					};
+					E249B965B93BD3015FAA2373 = {
 						DevelopmentTeam = XXXXXXXXXX;
 						ProvisioningStyle = Automatic;
 					};
@@ -346,6 +488,8 @@
 			targets = (
 				C10322E7B49D83B343F6F7C5 /* Radome */,
 				0163C9BE78C8E7F6A47B6129 /* RadomeWidget */,
+				E249B965B93BD3015FAA2373 /* RadomeWatch */,
+				14867450A5231A8ABA12FF13 /* RadomeWatchWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -369,9 +513,38 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BA8CFC999538510E35B7F288 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				88BFBBAE01D34D6E52743CA7 /* demo-traffic.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA8F68EACE94BF60CEED02CA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				121BD62F0A9CE279318F29C0 /* demo-traffic.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		03908CD33F84B3A20B8DEC06 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0D0DE80B7C370E69F214CBD9 /* APIConfig.swift in Sources */,
+				BF48DD9B81945F2C3ADC43FF /* Aircraft.swift in Sources */,
+				E3C42B52D87C81C12AA755FB /* AircraftFeedClient.swift in Sources */,
+				1C299E759C4FC525A8F7068C /* DemoFeed.swift in Sources */,
+				A02D5C7CCC59C4240DEDE855 /* Geo.swift in Sources */,
+				915A08AB7160583E5511B2BF /* RadomeWatchWidget.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		4C50B71899AA05265A1FE8E7 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -420,6 +593,21 @@
 				045525804441022B5E807489 /* RouteLookupClient.swift in Sources */,
 				C69753DE205589E999B71F62 /* RunwayClient.swift in Sources */,
 				EB80C2098169E49EFA266123 /* SettingsView.swift in Sources */,
+				42627FAB6D3F32515C9A9668 /* WatchSync.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D02CD7BC7DCCCB04F8ADCBAE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				96622DF96117F50AC7165848 /* APIConfig.swift in Sources */,
+				B31CF0C21C60C642EE61410A /* Aircraft.swift in Sources */,
+				4B803966945202AE11749225 /* AircraftFeedClient.swift in Sources */,
+				69C56A89CFA9070DEACFC984 /* DemoFeed.swift in Sources */,
+				CD1E1D43817A12186D11B28C /* Geo.swift in Sources */,
+				0C13992AE7E3EF7D44CFDF36 /* RadomeWatchApp.swift in Sources */,
+				E3494CCD507B093C6B770C16 /* WatchRadarView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -430,6 +618,16 @@
 			isa = PBXTargetDependency;
 			target = 0163C9BE78C8E7F6A47B6129 /* RadomeWidget */;
 			targetProxy = 308FECA1A3C393EABA7D2E3A /* PBXContainerItemProxy */;
+		};
+		A6D4ED5F24998A1D2D316DCE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E249B965B93BD3015FAA2373 /* RadomeWatch */;
+			targetProxy = B9C00CF135E375EEBFAC4033 /* PBXContainerItemProxy */;
+		};
+		F2E65CAF40D53614CE254F27 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 14867450A5231A8ABA12FF13 /* RadomeWatchWidget */;
+			targetProxy = CF6D2D6F9D301CECEF295C7D /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -455,6 +653,28 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
+		};
+		4FB7E8B4FAAC2FF6F6E49F87 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XXXXXXXXXX;
+				INFOPLIST_FILE = RadomeWatchWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.NelsonIndustries.radome.watchkitapp.widget;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.10;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
 		};
 		57A58F99A0DEC0657CA04FDF /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -512,12 +732,33 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
+		};
+		5CC1E8A0A949F03E91215C16 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XXXXXXXXXX;
+				INFOPLIST_FILE = RadomeWatchWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.NelsonIndustries.radome.watchkitapp.widget;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.10;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
 		};
 		649417A485A902C77B4260CA /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -589,6 +830,24 @@
 			};
 			name = Debug;
 		};
+		D65002D1DBC72F9F5C06A70F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XXXXXXXXXX;
+				INFOPLIST_FILE = RadomeWatch/Info.plist;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.NelsonIndustries.radome.watchkitapp;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.10;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
 		D9284793CAFC13231615C52A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -638,12 +897,29 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
+		};
+		ED34AD470F5EA45FC6702259 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XXXXXXXXXX;
+				INFOPLIST_FILE = RadomeWatch/Info.plist;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.NelsonIndustries.radome.watchkitapp;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.10;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
 		};
 /* End XCBuildConfiguration section */
 
@@ -657,11 +933,29 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		5A5250C8CCCCE3D343E29213 /* Build configuration list for PBXNativeTarget "RadomeWatchWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4FB7E8B4FAAC2FF6F6E49F87 /* Debug */,
+				5CC1E8A0A949F03E91215C16 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		709C4D87C02FCDD9E6745421 /* Build configuration list for PBXNativeTarget "RadomeWidget" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				649417A485A902C77B4260CA /* Debug */,
 				19B193A11554F3F53F1BFF22 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FAD803B71FAFC165A540EA4D /* Build configuration list for PBXNativeTarget "RadomeWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ED34AD470F5EA45FC6702259 /* Debug */,
+				D65002D1DBC72F9F5C06A70F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
