@@ -258,6 +258,30 @@
       inset 0 0 60px rgba(0,0,0,0.5);
   }
 
+  /* Roadmap 1.11: what never moves is drawn once, not 15 times a second.
+     .radar-layer sits under #radar, which now holds only moving things. The
+     generic canvas rule above gives every canvas the bezel ring and inset
+     shade, so these opt out of it -- two more copies would darken the dial.
+     The sweep is a sprite drawn once and turned by a CSS transform, which the
+     compositor does on the GPU without re-rasterising anything; its wrapper
+     clips the rotating square to the dial so the corners never overflow. */
+  .radar-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    box-shadow: none;
+    pointer-events: none;
+  }
+  #sweepClip { overflow: hidden; }
+  #radarSweep {
+    width: 100%;
+    height: 100%;
+    box-shadow: none;
+    will-change: transform;
+  }
+
   .hud {
     position: absolute;
     top: 6%;
@@ -1184,6 +1208,8 @@
 
 <div class="stage">
   <div id="mapbg"></div>
+  <canvas id="radarStatic" class="radar-layer" width="1080" height="1080"></canvas>
+  <div class="radar-layer" id="sweepClip"><canvas id="radarSweep" width="1080" height="1080"></canvas></div>
   <canvas id="radar" width="1080" height="1080"></canvas>
   <svg id="leaders"></svg>
   <div class="hud">
@@ -1462,6 +1488,9 @@ if (location.protocol === 'http:') {
 // ---- Canvas setup --------------------------------------------------
 const canvas = document.getElementById('radar');
 const ctx = canvas.getContext('2d');
+const staticCtx = document.getElementById('radarStatic').getContext('2d');
+const sweepEl = document.getElementById('radarSweep');
+const sweepCtx = sweepEl.getContext('2d');
 const W = canvas.width, H = canvas.height;
 const CX = W / 2, CY = H / 2;
 const R = W * 0.38; // usable radius, leaving a wider outer band for the label ring
@@ -3350,10 +3379,21 @@ try {
   // corrupt/unavailable storage -- default theme stands
 }
 
+// Redraw what does not move: after a theme change (new colours), and once the
+// web fonts arrive -- drawn before then, the ring labels and compass letters
+// would keep the fallback font for good, since nothing redraws them per frame
+// any more.
+function redrawStaticLayers() {
+  drawRings(staticCtx);
+  drawSweep(sweepCtx);
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawStaticLayers);
+
 function applyTheme(theme) {
   uiTheme = theme;
   document.documentElement.setAttribute('data-theme', theme);
   refreshCanvasColors();
+  redrawStaticLayers();
   recolorLabels(); // no-op if the map isn't up yet (e.g. this initial call at script load) -- map.on('load', recolorLabels) covers that case once it is
   try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
 }
@@ -4835,7 +4875,10 @@ function applyUpdate(list) {
 }
 
 // ---- Drawing ---------------------------------------------------
-function drawRings() {
+// The static dial: rings, range labels, crosshair, compass letters, centre dot.
+// Drawn onto its own layer by redrawStaticLayers(), not every frame.
+function drawRings(ctx) {
+  ctx.clearRect(0, 0, W, H);
   ctx.save();
   for (let i = 1; i <= RINGS; i++) {
     const r = (R / RINGS) * i;
@@ -4911,7 +4954,13 @@ function hexToRgba(hex, alpha) {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
-function drawSweep() {
+// The sweep sprite, drawn once at angle 0; tick() turns it with a CSS
+// transform. Rotating the drawn result about the centre is exactly what
+// drawing it at sweepAngle used to do, since every part of it -- gradient
+// start, line end -- was the angle-0 drawing turned by sweepAngle.
+function drawSweep(ctx) {
+  const sweepAngle = 0;
+  ctx.clearRect(0, 0, W, H);
   ctx.save();
   const grad = ctx.createConicGradient(sweepAngle - Math.PI / 2, CX, CY);
   grad.addColorStop(0, hexToRgba(COLORS.sweep, 0.35));
@@ -5316,8 +5365,7 @@ function tick(ts) {
   lastFrameTs = ts;
 
   ctx.clearRect(0, 0, W, H);
-  drawRings();
-  drawSweep();
+  sweepEl.style.transform = `rotate(${sweepAngle}rad)`;
   drawTrails();
   drawRewindTrack();
   updateGhosts(ts);      // advance dead reckoning before anything reads `ghosts`
