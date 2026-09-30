@@ -125,11 +125,22 @@ export function summaryFor(n, unit) {
 // ContentState and Attributes mirror ios/Shared/ApproachActivity.swift exactly.
 // The card counts down on the phone by itself; the relay only starts and ends it.
 
+const POINTS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+const point = (deg) => POINTS[Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+
+// Where it's coming from and heading, from its track (roadmap 3.4).
+export function travel(e) {
+  if (!Number.isInteger(e.trk)) return null;
+  return { from: point(e.trk + 180), to: point(e.trk) };
+}
+
 function approachState(e, nowS, passed) {
   const s = { etaUnix: nowS + (e.eta_s || 0), passed };
   if (typeof e.alt_ft === 'number') s.altFt = e.alt_ft;
   if (typeof e.dist_nm === 'number') s.distNm = e.dist_nm;
   if (e.dir) s.dir = e.dir;
+  const t = travel(e);
+  if (t) { s.trk = e.trk; s.from = t.from; s.to = t.to; }
   return s;
 }
 
@@ -147,7 +158,7 @@ export function approachStart(e, unit, startToken, nowS) {
         attributes: { unit, hex: e.hex, callsign: who, type: e.type || '', reason: e.label || '' },
         'content-state': approachState(e, nowS, false),
         'stale-date': nowS + (e.eta_s || 0) + 120,
-        alert: { title: `${e.label || 'Aircraft'} approaching`, body: `${who}${e.type ? ' · ' + e.type : ''} · overhead in about ${Math.max(1, Math.round((e.eta_s || 0) / 60))} min` },
+        alert: { title: `${e.label || 'Aircraft'} approaching`, body: `${who}${e.type ? ' · ' + e.type : ''} · ${travel(e) ? `coming from the ${travel(e).from}, heading ${travel(e).to} · ` : ''}overhead in about ${Math.max(1, Math.round((e.eta_s || 0) / 60))} min` },
       },
     },
   };

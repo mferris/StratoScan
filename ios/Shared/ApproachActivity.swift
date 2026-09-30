@@ -13,6 +13,11 @@ struct ApproachAttributes: ActivityAttributes {
         var altFt: Int?
         var distNm: Double?
         var dir: String?
+        /// Direction of travel (roadmap 3.4): track in degrees, and the compass
+        /// points it's coming from and heading to. Absent from older alerts.
+        var trk: Int?
+        var from: String?
+        var to: String?
 
         var eta: Date { Date(timeIntervalSince1970: etaUnix) }
     }

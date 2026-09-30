@@ -23,8 +23,9 @@ For each unit that sends **events** (roadmap 2.2; only once its owner
 pairs a phone): the moments it decided a paired phone should hear about.
 There are four kinds: emergency squawks, notable aircraft, low aircraft
 overhead and helicopters. Each carries the aircraft's identity, type,
-altitude, and its distance from the unit rounded to half a nautical mile
-with a compass direction. Events are kept for **48 hours** at most (500 per
+altitude, its distance from the unit rounded to half a nautical mile with
+a compass direction, and its track (the direction it's travelling, which it
+broadcasts itself). Events are kept for **48 hours** at most (500 per
 unit), only long enough to deliver them. The fleet page shows how many
 arrived, never what they were.
 

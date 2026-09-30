@@ -55,6 +55,8 @@ export function cleanEvent(e, requestTs) {
     alt_ft: Number.isInteger(e.alt_ft) ? num(e.alt_ft, -2000, 80000) : undefined,
     dist_nm: num(e.dist_nm, 0, 1000),
     dir: COMPASS.includes(e.dir) ? e.dir : undefined,
+    // The aircraft's own track, whole degrees (roadmap 3.4).
+    trk: Number.isInteger(e.trk) && e.trk >= 0 && e.trk < 360 ? e.trk : undefined,
   };
   for (const [k, v] of Object.entries(fields)) if (v !== undefined) out[k] = v;
   return out;

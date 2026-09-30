@@ -617,7 +617,7 @@ test('an approaching aircraft starts a Live Activity, and its end ends it', asyn
   clock += 1;
   assert.equal((await register(e, phone, { token: TOKEN, env: 'sandbox', kinds: ['approach'], la_start_token: LA_TOKEN })).status, 200);
   clock += 1;
-  await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90002', flight: 'N172AB', label: 'Low overhead', eta_s: 160 })]);
+  await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90002', flight: 'N172AB', label: 'Low overhead', eta_s: 160, trk: 45 })]);
   assert.equal(a.sent.length, 1);
   const start = a.sent[0];
   assert.ok(start.url.endsWith(`/3/device/${LA_TOKEN}`), 'sent to the push-to-start token, not the alert token');
@@ -626,6 +626,11 @@ test('an approaching aircraft starts a Live Activity, and its end ends it', asyn
   assert.equal(start.body.aps.event, 'start');
   assert.equal(start.body.aps['attributes-type'], 'ApproachAttributes');
   assert.equal(start.body.aps['content-state'].etaUnix, clock + 160);
+  // Direction of travel (roadmap 3.4): track 45 comes from the SW, heading NE.
+  assert.equal(start.body.aps['content-state'].trk, 45);
+  assert.equal(start.body.aps['content-state'].from, 'SW');
+  assert.equal(start.body.aps['content-state'].to, 'NE');
+  assert.match(start.body.aps.alert.body, /coming from the SW, heading NE/);
   assert.ok(!JSON.stringify(start.body).match(/"(lat|lon)"/), 'no position');
 
   clock += 1;
