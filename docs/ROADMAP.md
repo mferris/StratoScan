@@ -115,18 +115,46 @@ phone ──(pairing, notification rules)──▶ relay
 | 5.3 | 978 MHz UAT receiver for US units (dump978 into readsb) | Claude (code) | UAT-only GA aircraft appear on the radar |
 | 5.4 | Retro stand: ridges all the way round the plinth, standing out ~4 mm so the slicer supports them (as the case ribs were fixed) | Claude (CAD) | Printed, with clean ridges on all four sides |
 | 5.5 | Ambient light sensor: dim the display with the room, with an adjustable darkest level; a sensor window on both cases; first find a real backlight control (the panel's HID report 9, or DDC) | Claude (CAD, code) | The display follows the room on RDU, down to the owner's floor |
+| 5.6 | Key the back plate so it seats only upright (antenna at the top): a key on each shell's bore wall and a matching gap in one arc of the plate's locating rib; checks prove the seven wrong orientations are blocked | Claude (CAD) | The plate goes in only upright, on both cases |
 
-## Order and dependencies
+## Work order (agreed 2026-09-30)
 
-- 1.3 comes before 1.4 and 2.1–2.3.
-- 2.1 and 2.3 come before 2.4.
-- 2.x comes before 3.x.
-- 1.8 comes before 1.9, 1.10 and 2.8 (the app reads the core feed). 1.11 is independent.
-- 2.7 builds on 2.4 (approach alerts) and 2.5 (away mode).
-- 3.4 extends 3.3. Its phone half needs only 2.4 and can come first; its Watch half needs 3.1.
-- 1.5 should come after 1.1, 1.2 and 1.4 settle, so the image carries them.
-- Phase 4 items are independent, and can be interleaved whenever Phase 1–3
-  items are blocked on an owner action.
+The open items are done in this order, chosen so the wall display is never
+at risk for long.
+
+**Rules**
+
+- **One change to the unit at a time.** Each goes out as a small signed
+  update, which rolls itself back if the screen stops painting. Leave 2–3 days
+  on RDU between updates.
+- **Add, then switch, then delete.** A new service runs alongside the old
+  path with nothing depending on it. Screens move onto it one at a time,
+  riskiest last. Old code goes only once the new path has proved itself.
+- **The phone app goes first.** App changes cannot break the radar, so the
+  app is where a new foundation is tested for real.
+- **Hardware features change nothing without the part.** A unit without the
+  sensor, bezel or receiver behaves exactly as it does today.
+
+| Step | Items | Why here | Risk to the display |
+|---|---|---|---|
+| 0. Quick wins, anytime | 5.4 stand ridges, 5.6 back-plate key (CAD only); 4.7 quiet hours (off by default); 1.1 RTC cell and 1.7 radio recovery (confirm when the cell arrives or a hang happens) | Small and independent | None, or minimal |
+| 1. Measure, then cool it down | **1.11** drawing cost | Its measurement script is how every later step is checked. It changes only drawing, not data | Low: screenshot comparison |
+| 2. Core service, alongside | **1.8** core feed | Nothing reads it yet. Run for days with a live comparison against the kiosk's labels | None |
+| 3. First user: the app | 2.8 network aircraft in the app | Real use; a bug only affects the app, which falls back to the old feed | None |
+| 4. Alerts, trial run first | 1.10 `events.py` | Run the old and new logic side by side for days, logging disagreements, then switch | Alerts only |
+| 5. The kiosk, last | 1.9 kiosk and public page | Riskiest change, after a week or more of the feed. Tried on the public page first; the old path kept for one release | Medium, contained |
+| 6. App features | 2.9 zoom, the map part of 2.7, 3.4 (phone), the rest of 2.4/2.5, then the alerts part of 2.7 | Map parts are app-only; 3.4's direction of travel and 2.7's alerts need step 4 | None (app); low (alerts) |
+| 7. App Store | 2.6 | Once the app settles; TestFlight earlier | None |
+| 8. Watch | 3.1 → 3.2 → 3.3 / 3.4 (Watch) | Straightforward once there is one feed to read | None |
+| 9. Hardware v2 | 5.5 light sensor, 5.1 bezel, 5.2 presence, 5.3 978 MHz | As parts arrive: case, print, then software that changes nothing without the part. 5.5's first step (finding a real backlight control) is read-only and can be done anytime | Low |
+| Factory image | 1.5 | Test-flash today's image soon, to prove the pipeline; rebuild after step 5 so gifted units carry the new architecture | None |
+
+**Dependencies** (still true within the order above)
+
+- 1.8 comes before 1.9, 1.10 and 2.8. 1.11 is independent.
+- 2.7's alerts and 3.4's direction of travel need 1.10.
+- 3.x needs 3.1 first; 3.4 extends 3.3.
+- 1.5's final image comes after 1.9.
 
 ## Status
 
