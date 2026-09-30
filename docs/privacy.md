@@ -11,7 +11,8 @@ The code for all three is public at
 ## The short version
 
 - Your radar's exact location never leaves it.
-- The app doesn't ask for your location, doesn't track you, and shows no ads.
+- The app uses your phone's location only if you ask it to show you on the
+  radar, and only on the phone. It doesn't track you and shows no ads.
 - The relay keeps the minimum it needs to deliver alerts, and deletes it
   when it's no longer needed.
 
@@ -45,6 +46,12 @@ it gives the StratoScan relay:
 
 It collects nothing else: no location, contacts, usage analytics or
 advertising identifiers.
+
+**Your location.** If you tap the location button to see yourself on the
+radar, iOS asks whether the app may use your location while it's open. It
+is used on your phone, to place a "YOU" marker and centre the view, and is
+never sent anywhere: not to your radar, not to the relay, not to anyone
+else. You can turn it off at any time in the iPhone's Settings.
 
 ## The relay
 

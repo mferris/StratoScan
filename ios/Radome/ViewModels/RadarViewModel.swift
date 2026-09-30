@@ -19,11 +19,23 @@ final class RadarViewModel: ObservableObject {
     @Published var rangeNm: Double = 20
     static let minRangeNm = 1.0
     /// An aircraft to keep in the middle of the view, chosen from its details.
-    @Published var followHex: String?
-    var isZoomed: Bool { rangeNm < ringNm - 0.01 || followHex != nil }
+    @Published var followHex: String? { didSet { if followHex != nil { centreOnMe = false } } }
+    /// Centre the view on this phone instead of the radar (roadmap 2.7).
+    @Published var centreOnMe = false { didSet { if centreOnMe { followHex = nil } } }
+    /// Where this phone is, when the owner has asked to be shown. Stays on the phone.
+    @Published var me: Coordinate?
+    var isZoomed: Bool { rangeNm < ringNm - 0.01 || followHex != nil || centreOnMe }
 
     func setRange(_ nm: Double) { rangeNm = min(ringNm, max(Self.minRangeNm, nm)) }
-    func resetView() { rangeNm = ringNm; followHex = nil }
+    func resetView() { rangeNm = ringNm; followHex = nil; centreOnMe = false }
+
+    /// Where this phone is relative to the radar, in nm east and north.
+    var meOffset: (east: Double, north: Double)? {
+        guard let me, let home else { return nil }
+        let br = Geo.haversineBearingRange(lat1: home.lat, lon1: home.lon, lat2: me.lat, lon2: me.lon)
+        let b = br.bearing * .pi / 180
+        return (br.range * sin(b), br.range * cos(b))
+    }
 
     /// Where a plane is relative to the radar, in nm east and north.
     static func offset(_ p: PlaneState) -> (east: Double, north: Double) {
@@ -34,6 +46,7 @@ final class RadarViewModel: ObservableObject {
     /// The view's centre relative to the radar: the followed aircraft, or the radar.
     var viewCentre: (east: Double, north: Double) {
         if let h = followHex, let p = planes[h] { return Self.offset(p) }
+        if centreOnMe, let m = meOffset { return m }
         return (0, 0)
     }
 

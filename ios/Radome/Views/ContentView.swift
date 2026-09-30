@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewModel = RadarViewModel()
+    @StateObject private var location = PhoneLocation()
     @State private var showSettings = false
     @EnvironmentObject private var pairing: PairingStore
 
@@ -88,6 +89,17 @@ struct ContentView: View {
                                 .padding(10)
                         }
                         .accessibilityLabel("Labels: \(viewModel.labelMode.rawValue)")
+                        // Centre on me: shows this phone on the radar. The
+                        // location stays on the phone.
+                        Button {
+                            location.start()
+                            viewModel.centreOnMe.toggle()
+                        } label: {
+                            Image(systemName: viewModel.centreOnMe ? "location.fill" : "location")
+                                .foregroundColor(Color(hex: viewModel.centreOnMe ? "#93c5fd" : "#5b7278"))
+                                .padding(10)
+                        }
+                        .accessibilityLabel(viewModel.centreOnMe ? "Centre on the radar" : "Centre on me")
                         Spacer()
                         Button {
                             showSettings = true
@@ -104,6 +116,7 @@ struct ContentView: View {
         .background(Color.black)
         .statusBarHidden(true)
         .onAppear { viewModel.start() }
+        .onReceive(location.$coordinate) { viewModel.me = $0 }
         .onDisappear { viewModel.stop() }
         .sheet(item: Binding(
             get: { viewModel.selectedHex.map(SelectedAircraft.init) },
@@ -162,6 +175,14 @@ struct ContentView: View {
         if let h = viewModel.followHex, let p = viewModel.planes[h] {
             return "FOLLOWING \(p.cs) · \(range)"
         }
+        if location.denied && viewModel.centreOnMe { return "LOCATION IS OFF FOR STRATOSCAN IN SETTINGS" }
+        if viewModel.centreOnMe, let m = viewModel.meOffset {
+            let d = hypot(m.east, m.north)
+            let points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+            let bearing = (atan2(m.east, m.north) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
+            let dir = points[Int((bearing / 45).rounded()) % 8]
+            return String(format: "YOU · %.1f NM %@ OF THE RADAR · ", d, dir) + range
+        }
         return String(format: "%.4f°%@ %.4f°%@ · ", abs(home.lat), ns, abs(home.lon), ew) + range
     }
 
@@ -170,6 +191,7 @@ struct ContentView: View {
         if let h = viewModel.followHex, let p = viewModel.planes[h], let lat = p.lat, let lon = p.lon {
             return Coordinate(lat: lat, lon: lon)
         }
+        if viewModel.centreOnMe, let me = viewModel.me { return me }
         return home
     }
 }
