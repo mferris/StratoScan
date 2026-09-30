@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var viewModel = RadarViewModel()
     @StateObject private var location = PhoneLocation()
+    @State private var showSky = false
     @State private var showSettings = false
     @EnvironmentObject private var pairing: PairingStore
 
@@ -100,6 +101,13 @@ struct ContentView: View {
                                 .padding(10)
                         }
                         .accessibilityLabel(viewModel.centreOnMe ? "Centre on the radar" : "Centre on me")
+                        // Sky view: the aircraft over the camera image (roadmap 2.5).
+                        Button { showSky = true } label: {
+                            Image(systemName: "binoculars")
+                                .foregroundColor(Color(hex: "#5b7278"))
+                                .padding(10)
+                        }
+                        .accessibilityLabel("Sky view")
                         Spacer()
                         Button {
                             showSettings = true
@@ -124,6 +132,9 @@ struct ContentView: View {
             AircraftDetailView(viewModel: viewModel, location: location, hex: sel.id)
                 .presentationDetents([.medium, .large])
                 .preferredColorScheme(.dark)
+        }
+        .fullScreenCover(isPresented: $showSky) {
+            SkyView(viewModel: viewModel, location: location)
         }
         .sheet(isPresented: $showSettings) {
             SettingsView(viewModel: viewModel).environmentObject(pairing).environmentObject(PushManager.shared)
