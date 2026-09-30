@@ -77,7 +77,7 @@ They share the back plate and antenna mount.
 |---|---|
 | An iPhone on iOS 17.2 or later | For the app, widget, alerts and Live Activity |
 | An Apple Watch, Series 5 / SE or later | Only for the Watch app, still to come (Phase 3). Earlier models have no compass |
-| **To build the app yourself:** a Mac with Xcode, and the Apple Developer Program ($99/yr) | Not needed once the app is on the App Store |
+| **To build the app yourself:** a Mac with Xcode, and the Apple Developer Program ($99/yr) | Only needed to build and install the app yourself |
 | **To run your own relay (push alerts):** a free Cloudflare account | See [relay/README.md](../relay/README.md) |
 
 **Rough total for one unit:** about $400, plus filament and the phone you
@@ -94,4 +94,3 @@ starts before buying:** the exact part may change.
 | Rotary encoder | [5.1 rotating bezel](https://github.com/mferris/StratoScan/issues/22) | ~$5 |
 | Presence sensor: LD2410 mmWave, or a PIR | [5.2 presence wake](https://github.com/mferris/StratoScan/issues/23) | ~$10 |
 | 978 MHz SDR, for example FlightAware's 978 MHz Pro Stick Plus (the antenna is already in the bundle above) | [5.3 UAT receiver, US only](https://github.com/mferris/StratoScan/issues/24) | ~$25–40 |
-

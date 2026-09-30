@@ -2,7 +2,7 @@ import Foundation
 
 /// Demo mode: plays back a few minutes of real traffic recorded near RDU
 /// airport (Resources/demo-traffic.json), centred on the airport, so the app
-/// can be seen working without a radar -- for App Review, screenshots, and
+/// can be seen working without a radar -- for demos, screenshots, and
 /// anyone curious before they have one.
 enum DemoFeed {
     private static let key = "radome.demoMode"
