@@ -21,7 +21,7 @@ struct ContentView: View {
                 // the web version's separate, unclipped #tags layer.
                 if let home = viewModel.home {
                     MapBackgroundView(
-                        center: home,
+                        center: mapCentre(home),
                         zoom: Geo.zoomForRange(rangeNm: viewModel.rangeNm, lat: home.lat, pixels: side * 0.44),
                         runwayGeoJSON: viewModel.runwayGeoJSON
                     )
@@ -133,6 +133,12 @@ struct ContentView: View {
 
     private var hud: some View {
         VStack(spacing: 2) {
+            if viewModel.isZoomed {
+                Button("RESET VIEW") { viewModel.resetView() }
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(1.5)
+                    .padding(.bottom, 4)
+            }
             Text(locationText)
                 .font(.system(size: 10, design: .monospaced))
                 .tracking(1.5)
@@ -151,7 +157,20 @@ struct ContentView: View {
         guard let home = viewModel.home else { return "LOCATING…" }
         let ns = home.lat >= 0 ? "N" : "S"
         let ew = home.lon >= 0 ? "E" : "W"
-        return String(format: "%.4f°%@ %.4f°%@ · %.0fNM", abs(home.lat), ns, abs(home.lon), ew, viewModel.rangeNm)
+        let range = viewModel.rangeNm >= 5 ? String(format: "%.0fNM", viewModel.rangeNm)
+                                           : String(format: "%.1fNM", viewModel.rangeNm)
+        if let h = viewModel.followHex, let p = viewModel.planes[h] {
+            return "FOLLOWING \(p.cs) · \(range)"
+        }
+        return String(format: "%.4f°%@ %.4f°%@ · ", abs(home.lat), ns, abs(home.lon), ew) + range
+    }
+
+    /// The map follows the view: the radar, or a followed aircraft's position.
+    private func mapCentre(_ home: Coordinate) -> Coordinate {
+        if let h = viewModel.followHex, let p = viewModel.planes[h], let lat = p.lat, let lon = p.lon {
+            return Coordinate(lat: lat, lon: lon)
+        }
+        return home
     }
 }
 

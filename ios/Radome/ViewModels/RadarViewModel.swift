@@ -12,8 +12,36 @@ final class RadarViewModel: ObservableObject {
     static let homeOverride: Coordinate? = nil
 
     // The same outer ring as the kiosk (index.html RANGE_NM), so the phone
-    // and the radar count the same aircraft.
-    let rangeNm: Double = 20
+    // and the radar count the same aircraft -- whatever the view is zoomed to.
+    let ringNm: Double = 20
+    /// How far the view reaches from its centre (roadmap 2.9): pinch from the
+    /// full ring down to about a mile, to see which street an aircraft is over.
+    @Published var rangeNm: Double = 20
+    static let minRangeNm = 1.0
+    /// An aircraft to keep in the middle of the view, chosen from its details.
+    @Published var followHex: String?
+    var isZoomed: Bool { rangeNm < ringNm - 0.01 || followHex != nil }
+
+    func setRange(_ nm: Double) { rangeNm = min(ringNm, max(Self.minRangeNm, nm)) }
+    func resetView() { rangeNm = ringNm; followHex = nil }
+
+    /// Where a plane is relative to the radar, in nm east and north.
+    static func offset(_ p: PlaneState) -> (east: Double, north: Double) {
+        let b = p.bearing * .pi / 180
+        return (p.range * sin(b), p.range * cos(b))
+    }
+
+    /// The view's centre relative to the radar: the followed aircraft, or the radar.
+    var viewCentre: (east: Double, north: Double) {
+        if let h = followHex, let p = planes[h] { return Self.offset(p) }
+        return (0, 0)
+    }
+
+    /// How far a plane is from the middle of the view, in nm.
+    func distanceFromCentre(_ p: PlaneState) -> Double {
+        let o = Self.offset(p), c = viewCentre
+        return hypot(o.east - c.east, o.north - c.north)
+    }
     let fetchInterval: TimeInterval = 1.0
     let staleInterval: TimeInterval = 15
     let dropInterval: TimeInterval = 45
@@ -116,7 +144,7 @@ final class RadarViewModel: ObservableObject {
 
     private func loadRunways() async {
         guard let home else { return }
-        runwayGeoJSON = await RunwayClient.fetchRunwayGeoJSON(center: home, rangeNm: rangeNm)
+        runwayGeoJSON = await RunwayClient.fetchRunwayGeoJSON(center: home, rangeNm: ringNm)
     }
 
     private func pollOnce() async {
@@ -166,15 +194,17 @@ final class RadarViewModel: ObservableObject {
         }
 
         planes = planes.filter { seen.contains($0.key) }
-        aircraftCount = planes.values.filter { $0.range <= rangeNm && !$0.isNetwork }.count
-        notHeardCount = planes.values.filter { $0.range <= rangeNm && $0.isNetwork }.count
+        aircraftCount = planes.values.filter { $0.range <= ringNm && !$0.isNetwork }.count
+        notHeardCount = planes.values.filter { $0.range <= ringNm && $0.isNetwork }.count
+        // A followed aircraft that has left the radar's picture: back to the radar.
+        if let h = followHex, planes[h] == nil { followHex = nil }
     }
 
     /// The aircraft under a tap: its label first (the big target), then the
     /// nearest blip within a finger's width. Positions are the ones RadarView
     /// drew last frame, in the same coordinate space as the tap.
     func plane(at point: CGPoint) -> PlaneState? {
-        let visible = planes.values.filter { $0.range <= rangeNm }
+        let visible = planes.values.filter { distanceFromCentre($0) <= rangeNm }
         if let hit = visible.first(where: {
             guard let x = $0.labelX, let y = $0.labelY else { return false }
             return CGRect(x: x, y: y, width: $0.labelW, height: $0.labelH).insetBy(dx: -6, dy: -6).contains(point)
