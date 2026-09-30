@@ -263,6 +263,20 @@ back_lip_t    = 2;      // radial thickness
 back_lip_gap  = 0.35;   // radial clearance into the bore, per side
 back_lip_lead = 1.2;    // chamfer on the outer top edge, so it self-guides
 back_lip_skip = 9;      // degrees of clearance either side of each post
+// ---- Back-plate key (roadmap 5.6) ------------------------------------
+// The rib above is eight identical arcs, one between each pair of the eight
+// evenly spaced posts, so the plate used to seat at any of eight positions
+// 45 degrees apart -- and only one of them puts the antenna mount at the top.
+// One block on the shell's bore wall, and a matching notch in one arc of the
+// rib, leave exactly one. Placed lower left, between the posts at 225 and
+// 270: clear of the antenna-mount bosses at the top (which already come
+// within 0.2mm of the rib) and of the USB-C window. Both shells use the same
+// angle, so the one plate still fits both cases.
+back_key_a     = 247.5;
+back_key_w     = 6;                 // tangential width of the block
+back_key_reach = 2.6;               // in from the bore wall: past the rib's gap + thickness (2.35)
+back_key_h     = back_lip_h + 1;    // deeper than the rib is tall
+back_key_clear = 0.5;               // per side, between the block and the notch
 
 // ---- USB-C pass-through ----------------------------------------------
 // ONE opening, replacing the separate USB-C power gland and SMA antenna
@@ -1015,14 +1029,33 @@ module back_lip() {
     ri = outer_dia/2 - wall - back_lip_gap - back_lip_t;
     ro = outer_dia/2 - wall - back_lip_gap;
     span = 360/n_screws - 2*back_lip_skip;
-    for (i = [0 : n_screws - 1])
-        rotate([0, 0, i*360/n_screws + back_lip_skip])
-            rotate_extrude(angle = span)
-                polygon([[ri, 0],
-                         [ro, 0],
-                         [ro, back_lip_h - back_lip_lead],
-                         [ro - back_lip_lead, back_lip_h],
-                         [ri, back_lip_h]]);
+    difference() {
+        for (i = [0 : n_screws - 1])
+            rotate([0, 0, i*360/n_screws + back_lip_skip])
+                rotate_extrude(angle = span)
+                    polygon([[ri, 0],
+                             [ro, 0],
+                             [ro, back_lip_h - back_lip_lead],
+                             [ro - back_lip_lead, back_lip_h],
+                             [ri, back_lip_h]]);
+        back_key_notch();
+    }
+}
+
+// The key itself, fused into the bore wall (it reaches half a wall-thickness
+// into it). Its notch is cut from the plate's rib in back_lip().
+module back_key() {
+    r_wall = outer_dia/2 - wall;
+    rotate([0, 0, back_key_a])
+        translate([r_wall - back_key_reach, -back_key_w/2, 0])
+            cube([back_key_reach + wall/2, back_key_w, back_key_h]);
+}
+
+module back_key_notch() {
+    r_wall = outer_dia/2 - wall;
+    rotate([0, 0, back_key_a])
+        translate([r_wall - back_key_reach - 1, -(back_key_w/2 + back_key_clear), -1])
+            cube([back_key_reach + 3, back_key_w + 2*back_key_clear, back_lip_h + 2]);
 }
 
 // The single pass-through: a rounded window for the connector body plus its
@@ -1158,6 +1191,7 @@ module shell() {
                 difference() { ears_hollow(); back_collar(); }
             }
             back_posts();
+            back_key();
             cradle_rails();
             for (a = speaker_angles) speaker_bracket(a);
         }

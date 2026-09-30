@@ -127,6 +127,23 @@ antenna's own envelope: at 22mm it fouls the head's top rim even at nominal
 diameter, at 26mm it clears nominal but not +2mm, and at 30mm it still clears
 with 6mm of radial slack. `antenna_clears_head` holds it.
 
+## The plate fits one way only
+
+The plate's locating rib is eight identical arcs between eight evenly
+spaced posts, so it used to seat at any of eight positions 45° apart, and
+only one of them puts the antenna mount at the top. A small block on the
+shell's bore wall at 247.5° (lower left, between the posts at 225° and 270°)
+now meets a matching notch in one arc of the rib: upright, the plate drops
+in; turned to any other position, the block lands on the rib and the plate
+stands proud before a screw goes in. It sits well clear of the antenna-mount
+bosses at the top and the USB-C window, and both shells put it at the same
+angle, so the one plate still fits both cases.
+
+`key_fits` proves the upright plate meets the block with no volume, and
+`key_blocks_45` … `key_blocks_315` prove each of the other seven positions
+collides (43.7 mm³ each), each as its own check, because a key that blocked
+only some angles would still let the plate in wrong.
+
 ## Printing it in two colours
 
 The five stand bodies share one coordinate frame, so they occupy their true
