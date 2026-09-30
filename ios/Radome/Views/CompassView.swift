@@ -23,7 +23,7 @@ struct CompassView: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.2)) { _ in
-            let p = viewModel.planes[hex]
+            let p = viewModel.plane(hex)
             let from = location.coordinate ?? viewModel.home
             VStack(spacing: 18) {
                 Text(p?.cs ?? hex.uppercased())

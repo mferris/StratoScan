@@ -124,6 +124,12 @@ final class RadarViewModel: ObservableObject {
     private var trustPrecomputed: Bool { Self.homeOverride == nil }
 
     private(set) var planes: [String: PlaneState] = [:]
+    /// Aircraft around the phone when it is away from the radar, from
+    /// adsb.lol, for Sky view (roadmap 2.5). Kept apart from `planes` so the
+    /// radar, its counts and its alerts never mix them in.
+    @Published var nearMe: [String: PlaneState] = [:]
+    /// An aircraft by hex, from the radar or from around the phone.
+    func plane(_ hex: String) -> PlaneState? { planes[hex] ?? nearMe[hex] }
     private var lastGoodFetch: Date = .distantPast
 
     // Plain (non-Published) render-loop state, mutated directly from
