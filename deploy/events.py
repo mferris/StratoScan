@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Unit events: the moments worth telling a paired phone about, decided here on
-the unit and sent to the Radome relay (relay/), which fans them out to phones.
+the unit and sent to the StratoScan relay (relay/), which fans them out to phones.
 
   emergency       squawk 7500 / 7600 / 7700, at any range
   notable         a listed aircraft (plane-alert-db), a military address or a
@@ -522,7 +522,7 @@ class Sender:
         body = json.dumps({"v": 1, "events": events}, separators=(",", ":")).encode()
         path = "/v1/events"
         headers = {"Content-Type": "application/json",
-                   "User-Agent": "Radome-unit/1 (+https://github.com/mferris/Radome)"}
+                   "User-Agent": "StratoScan-unit/1 (+https://github.com/mferris/StratoScan)"}
         headers.update(hb.sign_headers(key, "POST", path, body))
         req = urllib.request.Request(hb.RELAY_URL.rstrip("/") + path, data=body,
                                      headers=headers, method="POST")

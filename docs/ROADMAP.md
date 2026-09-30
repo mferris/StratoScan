@@ -1,12 +1,12 @@
 # Roadmap: the five phases
 
-**Baseline:** [v2.0.0](https://github.com/mferris/Radome/releases/tag/v2.0.0),
+**Baseline:** [v2.0.0](https://github.com/mferris/StratoScan/releases/tag/v2.0.0),
 identical to OTA release `2026.09.27.15`. It is the revert point for
 everything below.
 
 Progress is tracked as GitHub
-[milestones](https://github.com/mferris/Radome/milestones) and
-[issues](https://github.com/mferris/Radome/issues). This file holds
+[milestones](https://github.com/mferris/StratoScan/milestones) and
+[issues](https://github.com/mferris/StratoScan/issues). This file holds
 the design decisions those issues depend on.
 
 ## Ground rules

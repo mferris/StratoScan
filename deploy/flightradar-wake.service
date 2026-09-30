@@ -1,5 +1,5 @@
 [Unit]
-Description=Radome display wake endpoint
+Description=StratoScan display wake endpoint
 After=graphical-session.target
 PartOf=graphical-session.target
 

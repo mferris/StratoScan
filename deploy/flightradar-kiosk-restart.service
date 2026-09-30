@@ -1,6 +1,6 @@
 [Unit]
-Description=Radome nightly kiosk restart (bounds the Chromium shm leak)
-Documentation=https://github.com/mferris/Radome
+Description=StratoScan nightly kiosk restart (bounds the Chromium shm leak)
+Documentation=https://github.com/mferris/StratoScan
 
 [Service]
 Type=oneshot

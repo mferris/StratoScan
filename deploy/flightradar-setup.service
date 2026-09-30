@@ -1,5 +1,5 @@
 [Unit]
-Description=Radome setup web server (unprivileged)
+Description=StratoScan setup web server (unprivileged)
 After=flightradar-setupd.service
 Wants=flightradar-setupd.service
 # StartLimitIntervalSec belongs in [Unit], not [Service]. Sitting in the

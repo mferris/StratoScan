@@ -1,6 +1,6 @@
 [Unit]
-Description=Radome unattended update (wakes the display, applies, self-rolls-back)
-Documentation=https://github.com/mferris/Radome
+Description=StratoScan unattended update (wakes the display, applies, self-rolls-back)
+Documentation=https://github.com/mferris/StratoScan
 After=network-online.target
 Wants=network-online.target
 

@@ -1,11 +1,11 @@
-# Source code for the Radome factory image
+# Source code for the StratoScan factory image
 
-The factory image is Raspberry Pi OS with Radome installed on top. It
+The factory image is Raspberry Pi OS with StratoScan installed on top. It
 contains software under the GNU GPL and other copyleft licences. As its
-distributor, the Radome project offers the corresponding source as
+distributor, the StratoScan project offers the corresponding source as
 follows.
 
-**Radome itself** (MIT): https://github.com/mferris/Radome, at the
+**StratoScan itself** (MIT): https://github.com/mferris/StratoScan, at the
 project commit named in `MANIFEST.txt`.
 
 **Attached to this release**, as built into the image:
@@ -25,7 +25,7 @@ https://snapshot.debian.org/). The base image is Raspberry Pi's own, named in
 `MANIFEST.txt`.
 
 **Written offer.** For at least three years from the date of this release, the
-Radome project will provide, on request, a complete machine-readable copy
+StratoScan project will provide, on request, a complete machine-readable copy
 of the corresponding source for any GPL- or LGPL-licensed software in this
 image, for no more than the cost of physically performing the distribution.
-Ask through https://github.com/mferris/Radome/issues.
+Ask through https://github.com/mferris/StratoScan/issues.

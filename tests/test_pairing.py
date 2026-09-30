@@ -59,7 +59,7 @@ class FakeRelay:
     def __call__(self, method, path, payload=None):
         self.calls.append((method, path, payload))
         if self.down:
-            raise pairing.RelayError("Could not reach the Radome service. Is this radar online?")
+            raise pairing.RelayError("Could not reach the StratoScan service. Is this radar online?")
         if path == "/v1/unit/pairing":
             self.offer_hash = payload["secret_hash"]
             return {"ok": True, "expires": 2_000_000_600}

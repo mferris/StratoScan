@@ -1,6 +1,6 @@
 [Unit]
-Description=Radome update check (verifies signatures; installs nothing)
-Documentation=https://github.com/mferris/Radome
+Description=StratoScan update check (verifies signatures; installs nothing)
+Documentation=https://github.com/mferris/StratoScan
 After=network-online.target
 Wants=network-online.target
 

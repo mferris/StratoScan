@@ -33,7 +33,7 @@ struct AlertsSection: View {
         } header: {
             Text("Alerts")
         } footer: {
-            Text("Delivered through Apple's push service by the Radome relay. An alert names the aircraft and roughly how far away it is, never where the radar is.")
+            Text("Delivered through Apple's push service by the StratoScan relay. An alert names the aircraft and roughly how far away it is, never where the radar is.")
         }
         .task { await push.refreshPermission() }
         .onDisappear { push.message = nil }

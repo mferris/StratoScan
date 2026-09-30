@@ -55,7 +55,8 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: com.NelsonIndustries.radome.pair
             CFBundleURLSchemes: [radome]
-        NSCameraUsageDescription: "To scan a Radome radar's pairing code."
+        NSCameraUsageDescription: "To scan a StratoScan radar's pairing code."
+        CFBundleDisplayName: StratoScan
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.NelsonIndustries.radome
@@ -78,7 +79,7 @@ targets:
     info:
       path: RadomeWidget/Info.plist
       properties:
-        CFBundleDisplayName: Radome
+        CFBundleDisplayName: StratoScan
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
         NSAppTransportSecurity:

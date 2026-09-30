@@ -543,7 +543,7 @@ test('a phone can ask for a test notification', async () => {
   clock += 1;
   const r = await worker.fetch(await signed(phone, '{}', { path: '/v1/phone/test', as: 'X-FR-Phone' }), e);
   assert.equal(r.status, 200);
-  assert.equal(a.sent.at(-1).body.aps.alert.title, 'Radome test');
+  assert.equal(a.sent.at(-1).body.aps.alert.title, 'StratoScan test');
 
   const unset = env();
   const p2 = await newUnit();

@@ -4,7 +4,7 @@ import Network
 /// Where the radar view and widget read from. Two addresses per radar:
 ///
 /// - home: the radar on your WiFi (fast; filled in by pairing). Before
-///   pairing, `radome.local` is the factory image's own mDNS name.
+///   pairing, `stratoscan.local` is the factory image's own mDNS name.
 /// - away: its public HTTPS address (Tailscale Funnel), when the owner has
 ///   turned that on. Learned from the pairing QR code, or from the radar
 ///   itself whenever the phone is home.
@@ -13,7 +13,7 @@ import Network
 enum APIConfig {
     private static let homeKey = "flightradar.baseURL"
     private static let awayKey = "radome.awayURL"
-    static let defaultBaseURL = "http://radome.local"
+    static let defaultBaseURL = "http://stratoscan.local"
 
     /// Shared with the widget (same App Group), so it reads the same radar.
     static let appGroup = "group.com.NelsonIndustries.radome"

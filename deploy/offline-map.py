@@ -52,7 +52,7 @@ BUILDS_URL = "https://build-metadata.protomaps.dev/builds.json"
 BUILD_BASE = "https://build.protomaps.com/"
 FONT_BASE = "https://protomaps.github.io/basemaps-assets/fonts/"
 FONTSTACKS = ("Noto Sans Regular", "Noto Sans Italic")
-USER_AGENT = ("Radome/1.0 (+https://github.com/mferris/Radome; "
+USER_AGENT = ("StratoScan/1.0 (+https://github.com/mferris/StratoScan; "
               "one-time offline map extract for a home ADS-B display)")
 
 # Radius (nm) fetched at each zoom. The radar is a fixed 20 nm disc, which

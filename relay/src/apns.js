@@ -85,11 +85,11 @@ const TITLES = {
   notable: e => e.label || 'Notable aircraft',
   low_overhead: () => 'Low overhead',
   helicopter: () => 'Helicopter nearby',
-  test: () => 'Radome test',
+  test: () => 'StratoScan test',
 };
 
 export function notificationFor(event, unit) {
-  const title = (TITLES[event.kind] || (() => 'Radome'))(event);
+  const title = (TITLES[event.kind] || (() => 'StratoScan'))(event);
   let body = event.kind === 'test' ? (event.label || 'Notifications from this radar are working.') : details(event);
   if (event.kind === 'emergency' && event.label) body = `${event.label[0].toUpperCase()}${event.label.slice(1)} · ${body}`;
   if (event.kind === 'notable' && event.operator) body = `${event.operator} · ${body}`;

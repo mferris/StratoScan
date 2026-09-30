@@ -1,5 +1,5 @@
 [Unit]
-Description=Radome first boot (finish provisioning the factory image)
+Description=StratoScan first boot (finish provisioning the factory image)
 ConditionPathExists=!/var/lib/flightradar-firstboot.done
 After=local-fs.target systemd-remount-fs.service
 # Deliberately NOT Before=display-manager: if anything here stalled, the

@@ -118,7 +118,7 @@ struct RadomeWidget: Widget {
             }
         }
         .configurationDisplayName("Aircraft overhead")
-        .description("How many aircraft your Radome radar sees, and the nearest.")
+        .description("How many aircraft your StratoScan radar sees, and the nearest.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryInline, .accessoryCircular, .accessoryRectangular])
     }
 }

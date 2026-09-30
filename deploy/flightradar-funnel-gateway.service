@@ -1,5 +1,5 @@
 [Unit]
-Description=Radome Funnel-facing filtering proxy (rounds receiver.json's coordinates)
+Description=StratoScan Funnel-facing filtering proxy (rounds receiver.json's coordinates)
 After=network-online.target
 
 [Service]

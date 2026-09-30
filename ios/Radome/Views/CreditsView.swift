@@ -12,9 +12,9 @@ struct CreditsView: View {
     var body: some View {
         List {
             Section {
-                Text("Radome shows the aircraft your own Radome radar hears, and sends you its alerts.")
+                Text("StratoScan shows the aircraft your own StratoScan radar hears, and sends you its alerts.")
                 LabeledContent("Version", value: version)
-                Link("Source code (MIT licence)", destination: URL(string: "https://github.com/mferris/Radome")!)
+                Link("Source code (MIT licence)", destination: URL(string: "https://github.com/mferris/StratoScan")!)
             }
 
             Section("Map") {

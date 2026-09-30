@@ -1,12 +1,12 @@
-# Radome privacy policy
+# StratoScan privacy policy
 
 *Last updated 2026-09-29.*
 
-Radome is an open-source radar for the aircraft flying over your home,
-built around a receiver you own. This page covers the Radome radar, the
-Radome iPhone app, and the small Radome relay service that connects them.
+StratoScan is an open-source radar for the aircraft flying over your home,
+built around a receiver you own. This page covers the StratoScan radar, the
+StratoScan iPhone app, and the small StratoScan relay service that connects them.
 The code for all three is public at
-[github.com/mferris/Radome](https://github.com/mferris/Radome).
+[github.com/mferris/StratoScan](https://github.com/mferris/StratoScan).
 
 ## The short version
 
@@ -37,7 +37,7 @@ turn on:
 ## The iPhone app
 
 The app reads your radar directly on your home network. To deliver alerts
-it gives the Radome relay:
+it gives the StratoScan relay:
 
 - a random key it generates (so your radars can recognise your phone);
 - Apple's push-notification address for your phone;
@@ -48,7 +48,7 @@ advertising identifiers.
 
 ## The relay
 
-The relay is a small service run by the Radome maintainer on Cloudflare.
+The relay is a small service run by the StratoScan maintainer on Cloudflare.
 
 | What | Kept for |
 |---|---|
@@ -65,4 +65,4 @@ tracking.
 ## Contact
 
 Questions or requests:
-[github.com/mferris/Radome/issues](https://github.com/mferris/Radome/issues).
+[github.com/mferris/StratoScan/issues](https://github.com/mferris/StratoScan/issues).

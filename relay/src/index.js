@@ -1,4 +1,4 @@
-// Radome relay (Cloudflare Worker + D1). See docs/ROADMAP.md.
+// StratoScan relay (Cloudflare Worker + D1). See docs/ROADMAP.md.
 //
 // POST /v1/heartbeat   signed by a unit; records its health (never a location)
 // POST /v1/events      signed by a unit; moments for its paired phones (never a location)
@@ -327,7 +327,7 @@ async function phoneActivity(request, env) {
 async function phoneTest(request, env) {
   const { auth, error } = await signedJson(request, 'X-FR-Phone');
   if (error) return error;
-  if (!apns.configured(env)) return json(503, { error: 'Notifications are not set up on this Radome service yet.' });
+  if (!apns.configured(env)) return json(503, { error: 'Notifications are not set up on this StratoScan service yet.' });
   const phone = await env.DB.prepare('SELECT * FROM phones WHERE id = ?').bind(auth.unit).first();
   if (!phone || !phone.token) return json(409, { error: 'This phone has not registered for notifications.' });
   const r = await pushTo(env, phone, apns.notificationFor({ kind: 'test' }, 'test'), true);
@@ -510,7 +510,7 @@ function needAuth(state) {
   if (state === 'unconfigured') return new Response('fleet view not configured\n', { status: 503 });
   return new Response('authentication required\n', {
     status: 401,
-    headers: { 'WWW-Authenticate': 'Basic realm="Radome fleet", charset="UTF-8"' },
+    headers: { 'WWW-Authenticate': 'Basic realm="StratoScan fleet", charset="UTF-8"' },
   });
 }
 
@@ -549,7 +549,7 @@ async function fleetPage(env) {
     </tr>`;
   }).join('');
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>Radome fleet</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>StratoScan fleet</title>
 <style>
   body{font:15px/1.4 system-ui,sans-serif;margin:16px;background:#0f1417;color:#e6e6e6}
   table{border-collapse:collapse;width:100%}td,th{padding:8px;border-bottom:1px solid #2a3338;text-align:left;vertical-align:top}
@@ -557,7 +557,7 @@ async function fleetPage(env) {
   input{background:#1b2226;color:#e6e6e6;border:1px solid #2a3338;padding:4px}
   button{background:#23424f;color:#e6e6e6;border:0;padding:5px 10px;margin-left:4px}
 </style></head><body>
-<h1>Radome fleet</h1><p>${rows ? '' : 'No unit has reported yet.'}</p>
+<h1>StratoScan fleet</h1><p>${rows ? '' : 'No unit has reported yet.'}</p>
 <table><tr><th>Unit</th><th>Version</th><th>Last report</th><th>Uptime</th><th>Status</th><th>Alerts 24h</th><th></th></tr>${rows}</table>
 </body></html>`;
   return new Response(html, {

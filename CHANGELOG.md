@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Renamed from Radome to **StratoScan** (2026-09-30). The GitHub repo moves to
+  `mferris/StratoScan` (old links redirect). As before, internal names stay as
+  they were so units in service update cleanly, and so do the iPhone app's
+  bundle ID, App Group, `radome://` pairing links and stored settings keys.
+  New units announce `StratoScan-Setup` as their hotspot and use the
+  hostname `stratoscan`.
 - Renamed from FlightRadar to **Radome** (2026-09-28), to stay clear of the
   Flightradar24 trademark. The GitHub repo moved to `mferris/Radome` (old
   links redirect). Internal paths and service names keep the old name so

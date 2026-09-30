@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs INSIDE the image (chroot). Turns stock Raspberry Pi OS into a
-# Radome unit that boots straight into the kiosk and the setup hotspot.
+# StratoScan unit that boots straight into the kiosk and the setup hotspot.
 # Facts about the base come from image/inspect.sh, not assumptions:
 #   - uid 1000 is a placeholder user "pi" (login shell nologin);
 #   - lightdm auto-logs-in "rpi-first-boot-wizard", which runs piwiz
@@ -27,10 +27,10 @@ grep -rq "^autologin-user=$KIOSK_USER" /etc/lightdm/ || { echo "autologin not se
 systemctl disable userconfig.service >/dev/null 2>&1 || true
 
 echo "== hostname"
-echo radome > /etc/hostname
+echo stratoscan > /etc/hostname
 sed -i -E 's/^127\.0\.1\.1\s.*/127.0.1.1\tflightradar/' /etc/hosts
 
-echo "== Radome itself (installer, chroot mode)"
+echo "== StratoScan itself (installer, chroot mode)"
 apt-get update -q >/dev/null
 cd /opt/flightradar-src
 FLIGHTRADAR_CHROOT=1 KIOSK_USER="$KIOSK_USER" sh deploy/install-setup-server.sh

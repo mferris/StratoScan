@@ -1,5 +1,5 @@
 #!/bin/sh
-# Provisions a Radome unit: everything it needs, on top of a stock
+# Provisions a StratoScan unit: everything it needs, on top of a stock
 # Raspberry Pi OS with desktop (Trixie, arm64). Idempotent; safe to re-run --
 # re-running it is how an existing unit picks up system-level changes that a
 # signed update deliberately cannot make (unit files, system config).
@@ -224,7 +224,7 @@ fi
 if [ "${RTC_RECHARGEABLE:-0}" = "1" ]; then
   CFG=/boot/firmware/config.txt
   if ! grep -q '^dtparam=rtc_bbat_vchg=' "$CFG"; then
-    printf '\n# Radome: trickle-charge the rechargeable ML-2020 RTC cell\ndtparam=rtc_bbat_vchg=3000000\n' >> "$CFG"
+    printf '\n# StratoScan: trickle-charge the rechargeable ML-2020 RTC cell\ndtparam=rtc_bbat_vchg=3000000\n' >> "$CFG"
     echo "  RTC charging enabled (takes effect after a reboot)"
   fi
 fi
@@ -238,7 +238,7 @@ fi
 # 84.5C on busy days, so it goes no further than that.
 CFG=/boot/firmware/config.txt
 if [ -f "$CFG" ] && ! grep -q '^dtparam=fan_temp2=' "$CFG"; then
-  printf '\n# Radome: steadier fan steps in the case (default 67.5C / 75C)\ndtparam=fan_temp2=70000\ndtparam=fan_temp3=77000\n' >> "$CFG"
+  printf '\n# StratoScan: steadier fan steps in the case (default 67.5C / 75C)\ndtparam=fan_temp2=70000\ndtparam=fan_temp3=77000\n' >> "$CFG"
   echo "  fan steps set to 70C / 77C in config.txt"
 fi
 # The trip points are writable at runtime, so apply now rather than waiting

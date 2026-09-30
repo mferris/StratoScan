@@ -1,6 +1,6 @@
 [Unit]
-Description=Radome kiosk memory probe (temporary instrumentation)
-Documentation=https://github.com/mferris/Radome
+Description=StratoScan kiosk memory probe (temporary instrumentation)
+Documentation=https://github.com/mferris/StratoScan
 
 [Service]
 Type=oneshot

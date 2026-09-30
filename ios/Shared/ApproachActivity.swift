@@ -2,7 +2,7 @@ import ActivityKit
 import Foundation
 
 /// A Live Activity for an aircraft about to pass over (roadmap 2.4). Started
-/// by the Radome relay with a push-to-start push when the radar predicts a
+/// by the StratoScan relay with a push-to-start push when the radar predicts a
 /// close pass, and ended by it after the pass. The field names are the JSON
 /// keys the relay sends (relay/src/apns.js approachStart/approachEnd).
 struct ApproachAttributes: ActivityAttributes {

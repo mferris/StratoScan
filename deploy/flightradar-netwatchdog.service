@@ -1,5 +1,5 @@
 [Unit]
-Description=Radome network watchdog (rollback + setup hotspot fallback)
+Description=StratoScan network watchdog (rollback + setup hotspot fallback)
 After=NetworkManager.service flightradar-setupd.service
 Wants=flightradar-setupd.service
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keeps a Radome unit reachable no matter what.
+"""Keeps a StratoScan unit reachable no matter what.
 
 Runs every couple of minutes and at boot. It is also the one root process on
 a timer that updates can reach, so it carries the last-resort health checks
@@ -14,7 +14,7 @@ has no other way to get. Networking jobs:
    the device on a network that does not work, with no way in.
 
 2. FALL BACK TO A HOTSPOT. If the device has no usable connection, raise
-   'Radome-Setup' so someone with a phone can reach the setup page.
+   'StratoScan-Setup' so someone with a phone can reach the setup page.
    This is the entire first-run story for a recipient: a device fresh out of
    the box has no credentials for their WiFi and they have no SSH.
 

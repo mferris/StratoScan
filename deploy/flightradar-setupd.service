@@ -1,5 +1,5 @@
 [Unit]
-Description=Radome setup root helper (privileged verb server)
+Description=StratoScan setup root helper (privileged verb server)
 After=network.target NetworkManager.service
 # StartLimitIntervalSec belongs in [Unit], not [Service]. Sitting in the
 # wrong section it was silently ignored, so the start-limit exemption

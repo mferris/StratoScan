@@ -1,6 +1,6 @@
 # Third-party notices
 
-Radome's own code, enclosure designs and documentation are MIT-licensed
+StratoScan's own code, enclosure designs and documentation are MIT-licensed
 (see [LICENSE](LICENSE)). This file lists everything else the project ships
 or uses, under what terms, and how each obligation is met. Reviewed
 2026-09-27; re-check it whenever a dependency or data source is added.
@@ -89,7 +89,7 @@ the GPL source offer (see the factory-image item in the roadmap).
 
 - **Trademark.** "Flightradar24" is a registered trademark of Flightradar24 AB.
   This project was called "FlightRadar" until 2026-09-28 and was renamed
-  "Radome" to stay clear of it. Some internal identifiers (the
+  "StratoScan" to stay clear of it. Some internal identifiers (the
   `/opt/flightradar` install path, `flightradar-*` service names,
   `FLIGHTRADAR_*` settings) keep the old name so units already in service
   update cleanly; none of them is shown to people using the device.

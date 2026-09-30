@@ -116,5 +116,5 @@ fi
 
 gh release create "$VERSION" \
     "$OUT/$BUNDLE" "$OUT/manifest.json" "$OUT/manifest.json.sig" \
-    --title "$VERSION" --notes "Radome $VERSION (serial $SERIAL)"
+    --title "$VERSION" --notes "StratoScan $VERSION (serial $SERIAL)"
 echo "  published $VERSION"
