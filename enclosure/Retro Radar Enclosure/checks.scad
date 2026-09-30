@@ -80,6 +80,20 @@ else if (check=="back_inserts_open") {
   }
 }
 // sanity: this MUST produce geometry, or nothing above means anything.
+// ---- back-plate key (roadmap 5.6) --------------------------------------
+// The plate must seat exactly one way. key_fits: correctly oriented, the key
+// meets the plate with no volume. key_blocks_*: rotated by each of the other
+// seven 45-degree steps -- every other position the eight posts allow -- the
+// key must hit the plate. A key that blocked only some angles would still let
+// it go in wrong, so each rotation is its own check.
+else if (check=="key_fits") { intersection() { back_plate(); back_key(); } }
+else if (check=="key_blocks_45")  { intersection() { rotate([0,0,45])  back_plate(); back_key(); } }
+else if (check=="key_blocks_90")  { intersection() { rotate([0,0,90])  back_plate(); back_key(); } }
+else if (check=="key_blocks_135") { intersection() { rotate([0,0,135]) back_plate(); back_key(); } }
+else if (check=="key_blocks_180") { intersection() { rotate([0,0,180]) back_plate(); back_key(); } }
+else if (check=="key_blocks_225") { intersection() { rotate([0,0,225]) back_plate(); back_key(); } }
+else if (check=="key_blocks_270") { intersection() { rotate([0,0,270]) back_plate(); back_key(); } }
+else if (check=="key_blocks_315") { intersection() { rotate([0,0,315]) back_plate(); back_key(); } }
 else if (check=="canary") { shell(); }
 
 // ---- the locating lip -------------------------------------------------
