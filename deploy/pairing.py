@@ -37,7 +37,7 @@ import urllib.error
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-RUN_DIR = os.environ.get("FLIGHTRADAR_PAIRING_RUN", "/run/flightradar")
+RUN_DIR = os.environ.get("STRATOSCAN_PAIRING_RUN", "/run/stratoscan")
 OFFER = os.path.join(RUN_DIR, "pairing-offer.json")
 TIMEOUT_S = 10
 LINK = "radome://pair"

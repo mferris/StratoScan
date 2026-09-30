@@ -6,7 +6,7 @@
 #
 # What it produces, all attached to a GitHub release:
 #
-#   flightradar-<version>.tar.gz   the payload: index.html and deploy/
+#   stratoscan-<version>.tar.gz   the payload: index.html and deploy/
 #   manifest.json                  version, serial, per-file sha256, bundle sha256
 #   manifest.json.sig             an ssh signature over the manifest
 #
@@ -18,7 +18,7 @@
 # Usage: sh scripts/release.sh <version> [--dry-run]
 set -eu
 
-KEY="${FLIGHTRADAR_SIGNING_KEY:-$HOME/.ssh/flightradar-signing}"
+KEY="${STRATOSCAN_SIGNING_KEY:-${FLIGHTRADAR_SIGNING_KEY:-$HOME/.ssh/flightradar-signing}}"   # the old variable still works
 NAMESPACE=flightradar
 REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 VERSION="${1:-}"
@@ -38,7 +38,7 @@ cd "$REPO_ROOT"
 SERIAL=$(git rev-list --count HEAD)
 OUT="$REPO_ROOT/dist/$VERSION"
 rm -rf "$OUT"; mkdir -p "$OUT"
-BUNDLE="flightradar-$VERSION.tar.gz"
+BUNDLE="stratoscan-$VERSION.tar.gz"
 
 # The payload. Deliberately explicit: an update must never be able to ship the
 # signing key, the enclosure sources, or the git history.

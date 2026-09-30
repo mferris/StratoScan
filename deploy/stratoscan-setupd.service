@@ -12,11 +12,11 @@ StartLimitIntervalSec=0
 # /etc/default/readsb. It has no network listener of its own -- only a unix
 # socket -- so the attack surface is the verb enum, not an HTTP parser.
 User=root
-Environment=SETUP_GROUP=frsetup
-ExecStart=/usr/bin/python3 /opt/flightradar/setupd.py
+Environment=SETUP_GROUP=scsetup
+ExecStart=/usr/bin/python3 /opt/stratoscan/setupd.py
 Restart=always
 RestartSec=5
-RuntimeDirectory=flightradar
+RuntimeDirectory=stratoscan
 RuntimeDirectoryMode=0750
 # Deliberately NO StateDirectory here. Both units used to declare it, and
 # whichever started last decided the ownership -- root:0700 locked the

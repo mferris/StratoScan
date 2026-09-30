@@ -101,10 +101,10 @@ def build_release(tmp, key, serial=2, version="9.9.9", payload=b"<html>new</html
 def run(tmp, cmd, state, allowed, env_extra=None):
     env = dict(os.environ)
     env.update({
-        "FLIGHTRADAR_OTA_API": f"http://127.0.0.1:{tmp['port']}",
-        "FLIGHTRADAR_OTA_REPO": "t/t",
-        "FLIGHTRADAR_ALLOWED_SIGNERS": allowed,
-        "FLIGHTRADAR_OTA_STATE": state,
+        "STRATOSCAN_OTA_API": f"http://127.0.0.1:{tmp['port']}",
+        "STRATOSCAN_OTA_REPO": "t/t",
+        "STRATOSCAN_ALLOWED_SIGNERS": allowed,
+        "STRATOSCAN_OTA_STATE": state,
     })
     env.update(env_extra or {})
     return subprocess.run([sys.executable, OTA, cmd], env=env,
@@ -205,7 +205,7 @@ def main():
     ok(ota.dest_for("deploy/allowed_signers") is None,
        "an update must NOT be able to replace the key that vouches for it")
     ok(ota.dest_for("../../etc/passwd") is None, "traversal must not resolve")
-    ok(ota.dest_for("deploy/flightradar-kiosk.service") is None,
+    ok(ota.dest_for("deploy/stratoscan-kiosk.service") is None,
        "an update must not drop systemd units")
     ok(ota.dest_for("deploy/setupd.py") is not None,
        "the root helper must be fixable by an update")
@@ -220,14 +220,14 @@ def main():
     # A funnel-gateway.py security fix once sat installed-but-not-running for
     # hours because only the kiosk was restarted after an update.
     gw = ota.dest_for("deploy/funnel-gateway.py")
-    ok(("system", "flightradar-funnel-gateway.service") in ota.services_to_restart([gw]),
+    ok(("system", "stratoscan-funnel-gateway.service") in ota.services_to_restart([gw]),
        "a changed gateway must be restarted, or its fix never runs")
     ok(ota.services_to_restart([ota.dest_for("deploy/wake-listener.py")])
-       == [("user", "flightradar-wake.service")],
+       == [("user", "stratoscan-wake.service")],
        "wake-listener runs under the kiosk user's systemd")
     both = ota.services_to_restart([ota.dest_for("deploy/setup-server.py"),
                                     ota.dest_for("deploy/setup-ui.html")])
-    ok(both == [("system", "flightradar-setup.service")],
+    ok(both == [("system", "stratoscan-setup.service")],
        "two files of one service restart it once")
     ok(ota.services_to_restart([ota.dest_for("index.html"),
                                 ota.dest_for("deploy/net-watchdog.py")]) == [],
@@ -243,38 +243,38 @@ def main():
     # An update can deliver a program before the installer has put its
     # service on that unit; that service is skipped, not restarted.
     units_dir = tempfile.mkdtemp()
-    open(os.path.join(units_dir, "flightradar-setup.service"), "w").close()
+    open(os.path.join(units_dir, "stratoscan-setup.service"), "w").close()
     ran = []
     real_run, real_dir = ota.subprocess.run, ota.SYSTEM_UNIT_DIR
     ota.subprocess.run = lambda argv, **k: ran.append(argv)
     ota.SYSTEM_UNIT_DIR = units_dir
     try:
-        ota.restart_services([("system", "flightradar-setup.service"),
-                              ("system", "flightradar-events.service")])
+        ota.restart_services([("system", "stratoscan-setup.service"),
+                              ("system", "stratoscan-events.service")])
     finally:
         ota.subprocess.run, ota.SYSTEM_UNIT_DIR = real_run, real_dir
     restarted = [a for argv in ran for a in argv if a.endswith(".service")]
-    ok(restarted == ["flightradar-setup.service"],
+    ok(restarted == ["stratoscan-setup.service"],
        "an installed service is restarted and a not-yet-installed one is skipped")
 
     # --- the kiosk user is found, never assumed ------------------------------
     d = tempfile.mkdtemp()
     conf = os.path.join(d, "lightdm.conf")
     with open(conf, "w") as f:
-        f.write("[Seat:*]\n#autologin-user=\nautologin-user=flightradar\nautologin-session=rpd-labwc\n")
-    saved = os.environ.pop("FLIGHTRADAR_KIOSK_USER", None)
-    ok(ota.detect_kiosk_user([conf]) == "flightradar",
+        f.write("[Seat:*]\n#autologin-user=\nautologin-user=stratoscan\nautologin-session=rpd-labwc\n")
+    saved = os.environ.pop("STRATOSCAN_KIOSK_USER", None)
+    ok(ota.detect_kiosk_user([conf]) == "stratoscan",
        "the autologin user is the kiosk user (a factory-image unit is not 'mferris')")
     override = os.path.join(d, "override.conf")
     with open(override, "w") as f:
         f.write("[Seat:*]\nautologin-user=someoneelse\n")
     ok(ota.detect_kiosk_user([conf, override]) == "someoneelse", "a later config overrides an earlier one")
-    os.environ["FLIGHTRADAR_KIOSK_USER"] = "explicit"
+    os.environ["STRATOSCAN_KIOSK_USER"] = "explicit"
     ok(ota.detect_kiosk_user([conf]) == "explicit", "an explicit override wins")
     if saved is None:
-        del os.environ["FLIGHTRADAR_KIOSK_USER"]
+        del os.environ["STRATOSCAN_KIOSK_USER"]
     else:
-        os.environ["FLIGHTRADAR_KIOSK_USER"] = saved
+        os.environ["STRATOSCAN_KIOSK_USER"] = saved
     shutil.rmtree(d, ignore_errors=True)
 
     httpd.shutdown()

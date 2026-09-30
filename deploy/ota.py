@@ -5,7 +5,7 @@ The reason this is safe enough to put on a device in somebody else's house is
 not the download. It is three things that happen around it:
 
   1. NOTHING IS TRUSTED WITHOUT A SIGNATURE. The manifest must carry an ssh
-     signature from the key in /opt/flightradar/allowed_signers, which was put
+     signature from the key in /opt/stratoscan/allowed_signers, which was put
      there before the unit shipped. GitHub is delivery, not trust: a
      compromised account could publish a release but could not sign one.
 
@@ -37,16 +37,16 @@ import tempfile
 import time
 import urllib.request
 
-REPO = os.environ.get("FLIGHTRADAR_OTA_REPO", "mferris/StratoScan")
+REPO = os.environ.get("STRATOSCAN_OTA_REPO", "mferris/StratoScan")
 # Overridable so the whole path -- fetch, verify, stage, reject -- can be
 # exercised against a local server in tests. The default is the real thing;
 # nothing about the trust model depends on this being GitHub.
-API_BASE = os.environ.get("FLIGHTRADAR_OTA_API", "https://api.github.com")
+API_BASE = os.environ.get("STRATOSCAN_OTA_API", "https://api.github.com")
 NAMESPACE = "flightradar"
 ALLOWED_SIGNERS = os.environ.get(
-    "FLIGHTRADAR_ALLOWED_SIGNERS", "/opt/flightradar/allowed_signers")
+    "STRATOSCAN_ALLOWED_SIGNERS", "/opt/stratoscan/allowed_signers")
 SIGNER_ID = "flightradar-release"
-STATE_DIR = os.environ.get("FLIGHTRADAR_OTA_STATE", "/var/lib/flightradar-ota")
+STATE_DIR = os.environ.get("STRATOSCAN_OTA_STATE", "/var/lib/stratoscan-ota")
 INSTALLED = os.path.join(STATE_DIR, "installed.json")
 STATUS = os.path.join(STATE_DIR, "status.json")
 STAGING = os.path.join(STATE_DIR, "staging")
@@ -59,12 +59,12 @@ def detect_kiosk_user(confs=None):
     """The desktop user the kiosk runs as, without assuming a name.
 
     The first unit's user was hard-coded here, which a unit built from the
-    factory image (user "flightradar") would not have -- every update would
+    factory image (user "stratoscan") would not have -- every update would
     then have restarted a user that doesn't exist and waited for a paint that
     could never be reported. Order: explicit override, then the display
     manager's autologin user (that IS the kiosk session), then uid 1000.
     """
-    override = os.environ.get("FLIGHTRADAR_KIOSK_USER")
+    override = os.environ.get("STRATOSCAN_KIOSK_USER")
     if override:
         return override
     paths = list(confs or LIGHTDM_CONFS)
@@ -87,28 +87,28 @@ def detect_kiosk_user(confs=None):
         import pwd
         return pwd.getpwuid(1000).pw_name
     except (KeyError, ImportError):
-        return "flightradar"
+        return "stratoscan"
 
 
 def _default_heartbeat():
     """The kiosk user's runtime directory, resolved from their uid.
 
-    Not /run/flightradar: that belongs to setupd's RuntimeDirectory= and is
+    Not /run/stratoscan: that belongs to setupd's RuntimeDirectory= and is
     recreated root-owned on every restart of the root helper.
     """
     try:
         import pwd
         uid = pwd.getpwnam(detect_kiosk_user()).pw_uid
-        return f"/run/user/{uid}/flightradar-painted"
+        return f"/run/user/{uid}/stratoscan-painted"
     except (KeyError, ImportError):
-        return "/tmp/flightradar-painted"
+        return "/tmp/stratoscan-painted"
 
 
-HEARTBEAT = os.environ.get("FLIGHTRADAR_PAINT_STAMP", _default_heartbeat())
+HEARTBEAT = os.environ.get("STRATOSCAN_PAINT_STAMP", _default_heartbeat())
 
-WEB_ROOT = os.environ.get("FLIGHTRADAR_WEB_ROOT", "/var/www/html")
-OPT_ROOT = os.environ.get("FLIGHTRADAR_OPT_ROOT", "/opt/flightradar")
-KIOSK_UNIT = "flightradar-kiosk.service"
+WEB_ROOT = os.environ.get("STRATOSCAN_WEB_ROOT", "/var/www/html")
+OPT_ROOT = os.environ.get("STRATOSCAN_OPT_ROOT", "/opt/stratoscan")
+KIOSK_UNIT = "stratoscan-kiosk.service"
 KIOSK_USER = detect_kiosk_user()
 
 HTTP_TIMEOUT_S = 30
@@ -409,7 +409,7 @@ def restart_kiosk():
     # mid-way and leave the device half-written with nothing watching it.
     subprocess.run(
         ["systemd-run", "--quiet", "--collect",
-         "--unit", f"flightradar-ota-restart-{os.getpid()}",
+         "--unit", f"stratoscan-ota-restart-{os.getpid()}",
          "--on-active=2s", TIMER_ACCURACY,
          "/usr/bin/systemctl", "--user", "-M", f"{KIOSK_USER}@",
          "restart", KIOSK_UNIT],
@@ -424,23 +424,23 @@ def restart_kiosk():
 # and this file itself pick up a new version on their next run and need
 # nothing here.
 SERVICE_FOR = {
-    "sighting-store.py":  ("system", "flightradar-sighting-store.service"),
-    "approach-store.py":  ("system", "flightradar-approach-store.service"),
-    "network-compare.py": ("system", "flightradar-network.service"),
-    "photo-proxy.py":     ("system", "flightradar-photo-proxy.service"),
-    "funnel-gateway.py":  ("system", "flightradar-funnel-gateway.service"),
-    "setup-server.py":    ("system", "flightradar-setup.service"),
-    "setup-ui.html":      ("system", "flightradar-setup.service"),
-    "setupd.py":          ("system", "flightradar-setupd.service"),
-    "wake-listener.py":   ("user",   "flightradar-wake.service"),
-    "tts-service.py":     ("system", "flightradar-tts.service"),
-    "events.py":          ("system", "flightradar-events.service"),
+    "sighting-store.py":  ("system", "stratoscan-sighting-store.service"),
+    "approach-store.py":  ("system", "stratoscan-approach-store.service"),
+    "network-compare.py": ("system", "stratoscan-network.service"),
+    "photo-proxy.py":     ("system", "stratoscan-photo-proxy.service"),
+    "funnel-gateway.py":  ("system", "stratoscan-funnel-gateway.service"),
+    "setup-server.py":    ("system", "stratoscan-setup.service"),
+    "setup-ui.html":      ("system", "stratoscan-setup.service"),
+    "setupd.py":          ("system", "stratoscan-setupd.service"),
+    "wake-listener.py":   ("user",   "stratoscan-wake.service"),
+    "tts-service.py":     ("system", "stratoscan-tts.service"),
+    "events.py":          ("system", "stratoscan-events.service"),
 }
 # Where the installer puts system units. An update can deliver a program
 # before the installer has put its service on that unit; restarting a unit
 # that does not exist only fails the restart command it shares with the
 # others, so it is left out and logged instead.
-SYSTEM_UNIT_DIR = os.environ.get("FLIGHTRADAR_SYSTEM_UNIT_DIR", "/etc/systemd/system")
+SYSTEM_UNIT_DIR = os.environ.get("STRATOSCAN_SYSTEM_UNIT_DIR", "/etc/systemd/system")
 
 
 def services_to_restart(dests):
@@ -473,13 +473,13 @@ def restart_services(units):
     if system:
         subprocess.run(
             ["systemd-run", "--quiet", "--collect",
-             "--unit", f"flightradar-ota-services-{os.getpid()}",
+             "--unit", f"stratoscan-ota-services-{os.getpid()}",
              "--on-active=1s", TIMER_ACCURACY, "/usr/bin/systemctl", "restart", *system],
             check=False, timeout=30)
     if user:
         subprocess.run(
             ["systemd-run", "--quiet", "--collect",
-             "--unit", f"flightradar-ota-userservices-{os.getpid()}",
+             "--unit", f"stratoscan-ota-userservices-{os.getpid()}",
              "--on-active=1s", TIMER_ACCURACY, "/usr/bin/systemctl", "--user", "-M",
              f"{KIOSK_USER}@", "restart", *user],
             check=False, timeout=30)
@@ -528,7 +528,7 @@ def apply():
         # guaranteed to be reverted.
         raise Fail(f"no paint heartbeat at {HEARTBEAT} -- the display check "
                    f"cannot run, so an update would be rolled back whatever "
-                   f"happened. Is flightradar-wake.service running?")
+                   f"happened. Is stratoscan-wake.service running?")
     # Every allowlisted file is rewritten on every release, so "in the plan"
     # is not "changed" -- compare contents, or every update would bounce every
     # service, the setup page and remote access included.

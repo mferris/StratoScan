@@ -30,8 +30,8 @@ def check(label, cond):
 
 
 tmp = tempfile.mkdtemp()
-os.environ["FLIGHTRADAR_RELAY_STATE"] = os.path.join(tmp, "relay")
-os.environ["FLIGHTRADAR_RELAY_URL"] = "https://relay.example"
+os.environ["STRATOSCAN_RELAY_STATE"] = os.path.join(tmp, "relay")
+os.environ["STRATOSCAN_RELAY_URL"] = "https://relay.example"
 spec = importlib.util.spec_from_file_location("hb", os.path.join(HERE, "..", "deploy", "heartbeat.py"))
 hb = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(hb)

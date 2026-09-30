@@ -37,10 +37,10 @@
 # scoped to the last interval rather than the whole boot so the journal is
 # not re-scanned from the beginning on every sample.
 #
-# Install: /opt/flightradar/mem-probe.sh, run by flightradar-memprobe.timer.
+# Install: /opt/stratoscan/mem-probe.sh, run by stratoscan-memprobe.timer.
 set -eu
 
-OUT="${STATE_DIRECTORY:-/var/lib/flightradar-memprobe}/samples.csv"
+OUT="${STATE_DIRECTORY:-/var/lib/stratoscan-memprobe}/samples.csv"
 INTERVAL_LABEL="${1:-5min}"
 
 HEADER="ts,kiosk_uptime_s,shmem_kb,shm_used_kb,browser_rss_kb,renderer_rss_kb,gpu_rss_kb,browser_maps,renderer_maps,gpu_maps,browser_shm_kb,renderer_shm_kb,gpu_shm_kb,n_renderers,attributed_pct,gpu_errors,aircraft,temp_c,throttled"
@@ -53,7 +53,7 @@ elif [ "$(head -1 "$OUT")" != "$HEADER" ]; then
     echo "$HEADER" > "$OUT"
 fi
 
-main_pid=$(systemctl --user -M <user>@ show flightradar-kiosk.service -p ExecMainPID --value 2>/dev/null || echo 0)
+main_pid=$(systemctl --user -M <user>@ show stratoscan-kiosk.service -p ExecMainPID --value 2>/dev/null || echo 0)
 [ -n "$main_pid" ] || main_pid=0
 
 uptime_s=0
@@ -136,7 +136,7 @@ print(g("browser",0), g("renderer",0), g("gpu-process",0),
 PY
 )
 
-gpu_errors=$(journalctl --user-unit flightradar-kiosk.service --since "-${INTERVAL_LABEL}" --no-pager 2>/dev/null \
+gpu_errors=$(journalctl --user-unit stratoscan-kiosk.service --since "-${INTERVAL_LABEL}" --no-pager 2>/dev/null \
              | grep -c 'AllocateRingBuffer\|ContextResult' || true)
 
 aircraft=$(curl -s --max-time 5 http://127.0.0.1/tar1090/data/aircraft.json 2>/dev/null \

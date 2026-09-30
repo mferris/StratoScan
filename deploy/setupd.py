@@ -40,9 +40,9 @@ import subprocess
 import sys
 import time
 
-SOCK_PATH = "/run/flightradar/setupd.sock"
-RUN_DIR = "/run/flightradar"
-STATE_DIR = "/var/lib/flightradar-setup"
+SOCK_PATH = "/run/stratoscan/setupd.sock"
+RUN_DIR = "/run/stratoscan"
+STATE_DIR = "/var/lib/stratoscan-setup"
 PENDING = os.path.join(STATE_DIR, "pending.json")
 LOCK = os.path.join(STATE_DIR, "lock")
 READSB_DEFAULT = "/etc/default/readsb"
@@ -50,8 +50,8 @@ READSB_ORIG = os.path.join(STATE_DIR, "readsb.default.orig")
 READSB_BACKUP = os.path.join(STATE_DIR, "readsb.fr-backup")
 CONFIG_JSON = "/var/www/html/config.json"
 OFFLINE_MAP_DIR = "/var/www/html/offline-map"
-OFFLINE_MAP = "/opt/flightradar/offline-map.py"
-AIRPORTS_JSON = "/opt/flightradar/airports.json"
+OFFLINE_MAP = "/opt/stratoscan/offline-map.py"
+AIRPORTS_JSON = "/opt/stratoscan/airports.json"
 
 CANDIDATE_PROFILE = "fr-candidate"
 HOTSPOT_PROFILE = "fr-hotspot"
@@ -812,7 +812,7 @@ def geocode(query):
 # the rollback all live there. This keeps the privileged surface small: three
 # verbs that take no arguments at all, so there is nothing here for a caller to
 # steer.
-OTA = "/opt/flightradar/ota.py"
+OTA = "/opt/stratoscan/ota.py"
 
 
 def ota_status():
@@ -844,7 +844,7 @@ def ota_apply():
     if ota_status().get("state") == "applying":
         raise Err("ota_busy", "an update is already running")
     run(["systemd-run", "--quiet", "--collect",
-         "--unit", "flightradar-ota-apply",
+         "--unit", "stratoscan-ota-apply",
          "--property=Type=oneshot",
          OTA, "apply"], timeout=30, check=True)
     return {"state": "applying", "started": True}
@@ -854,7 +854,7 @@ def ota_apply():
 # heartbeat.py owns the key, the report and the sending; setupd only turns it
 # on and off for the setup page. A closed pair of verbs whose only parameter
 # is a strict boolean -- nothing here for a caller to steer.
-HEARTBEAT = "/opt/flightradar/heartbeat.py"
+HEARTBEAT = "/opt/stratoscan/heartbeat.py"
 
 
 def _heartbeat():
@@ -867,7 +867,7 @@ def _heartbeat():
     return mod
 
 
-EVENTS = "/opt/flightradar/events.py"
+EVENTS = "/opt/stratoscan/events.py"
 
 
 def _events():
@@ -906,7 +906,7 @@ def set_health_report(enabled):
 # the radar's own screen (setup-server's loopback-only onboarding listener)
 # and to the password-protected setup page. The only parameter anywhere is a
 # phone id, checked against the exact shape of one.
-PAIRING = "/opt/flightradar/pairing.py"
+PAIRING = "/opt/stratoscan/pairing.py"
 RE_PHONE_ID = re.compile(r"^[A-Za-z0-9_-]{43}$")
 
 
@@ -954,7 +954,7 @@ def pair_remove(phone):
 # feeding.py does the work; setupd exposes a closed pair of verbs whose only
 # parameter is a strict boolean. Installing takes a minute or two, so turning
 # it on runs as a transient unit (like ota_apply) and the page polls status.
-FEEDING = "/opt/flightradar/feeding.py"
+FEEDING = "/opt/stratoscan/feeding.py"
 
 
 def feeding_status():
@@ -975,8 +975,8 @@ def set_feeding(flightaware):
     if not os.path.exists(FEEDING):
         raise Err("unavailable", "feeding is not installed on this unit")
     if flightaware:
-        run([SYSTEMCTL, "stop", "flightradar-feeding.service"], timeout=30)
-        run(["systemd-run", "--quiet", "--collect", "--unit", "flightradar-feeding",
+        run([SYSTEMCTL, "stop", "stratoscan-feeding.service"], timeout=30)
+        run(["systemd-run", "--quiet", "--collect", "--unit", "stratoscan-feeding",
              "--property=Type=oneshot", "/usr/bin/python3", FEEDING, "enable-flightaware"],
             timeout=30, check=True)
     else:
@@ -1014,9 +1014,9 @@ def start_offline_map_build(lat, lon):
     try:
         # A build still running for the PREVIOUS location is now building the
         # wrong area; stop it so this one can take the unit name.
-        run([SYSTEMCTL, "stop", "flightradar-offline-map.service"], timeout=30)
+        run([SYSTEMCTL, "stop", "stratoscan-offline-map.service"], timeout=30)
         r = run(["systemd-run", "--quiet", "--collect",
-                 "--unit", "flightradar-offline-map",
+                 "--unit", "stratoscan-offline-map",
                  "--property=Type=oneshot", "--property=Nice=10",
                  "/usr/bin/python3", OFFLINE_MAP, "build", f"{lat:.5f}", f"{lon:.5f}"],
                 timeout=30)
@@ -1272,16 +1272,16 @@ def reset_full():
     # store erases nothing: its next flush puts the old owner's history
     # straight back. Stop first (the stop's own flush lands BEFORE the
     # delete), delete, then start them empty.
-    stores = ("flightradar-sighting-store.service",
-              "flightradar-network.service",
-              "flightradar-approach-store.service")
+    stores = ("stratoscan-sighting-store.service",
+              "stratoscan-network.service",
+              "stratoscan-approach-store.service")
     with contextlib.suppress(Exception):
         run([SYSTEMCTL, "stop", *stores], timeout=60)
     for path in (os.path.join(STATE_DIR, "setup.json"),
                  CONFIG_JSON,
-                 "/var/lib/flightradar-sightings/sightings.json",
-                 "/var/lib/flightradar-approaches/approaches.json",
-                 "/var/lib/flightradar-network/coverage.json"):
+                 "/var/lib/stratoscan-sightings/sightings.json",
+                 "/var/lib/stratoscan-approaches/approaches.json",
+                 "/var/lib/stratoscan-network/coverage.json"):
         with contextlib.suppress(Exception):
             os.unlink(path)
     with contextlib.suppress(Exception):
@@ -1335,7 +1335,7 @@ def reset_full():
     # stopped first -- it would otherwise rename a fresh copy back into place
     # after the delete -- and its half-written staging dir goes too.
     with contextlib.suppress(Exception):
-        run([SYSTEMCTL, "stop", "flightradar-offline-map.service"], timeout=30)
+        run([SYSTEMCTL, "stop", "stratoscan-offline-map.service"], timeout=30)
     for d in (OFFLINE_MAP_DIR, OFFLINE_MAP_DIR + ".new", OFFLINE_MAP_DIR + ".old"):
         with contextlib.suppress(Exception):
             shutil.rmtree(d)
@@ -1447,7 +1447,7 @@ class Handler(socketserver.StreamRequestHandler):
 def resolve_gid():
     """Group shared with the unprivileged web tier, so it alone can reach us."""
     import grp
-    name = os.environ.get("SETUP_GROUP", "frsetup")
+    name = os.environ.get("SETUP_GROUP", "scsetup")
     try:
         return grp.getgrnam(name).gr_gid
     except KeyError:
@@ -1492,7 +1492,7 @@ def ensure_claim_code():
 def share_state_dir():
     """Let the unprivileged web tier reach the shared state.
 
-    Both units declare StateDirectory=flightradar-setup. systemd creates it
+    Both units declare StateDirectory=stratoscan-setup. systemd creates it
     for whichever starts first -- this one, as root -- giving 0700 root:root,
     which locks the web tier out of its OWN state file. The symptom is
     brutal and silent: load_state() fails, the device reports itself

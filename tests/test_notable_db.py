@@ -27,8 +27,8 @@ def check(label, cond):
 
 
 tmp = tempfile.mkdtemp()
-os.environ["FLIGHTRADAR_WEB_ROOT"] = tmp
-os.environ["FLIGHTRADAR_NOTABLE_STATE"] = os.path.join(tmp, "state")
+os.environ["STRATOSCAN_WEB_ROOT"] = tmp
+os.environ["STRATOSCAN_NOTABLE_STATE"] = os.path.join(tmp, "state")
 spec = importlib.util.spec_from_file_location("nd", os.path.join(HERE, "..", "deploy", "notable-db.py"))
 nd = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(nd)

@@ -4,5 +4,5 @@ Documentation=https://github.com/mferris/StratoScan
 
 [Service]
 Type=oneshot
-StateDirectory=flightradar-memprobe
-ExecStart=/opt/flightradar/mem-probe.sh 5min
+StateDirectory=stratoscan-memprobe
+ExecStart=/opt/stratoscan/mem-probe.sh 5min

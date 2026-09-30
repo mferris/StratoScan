@@ -43,7 +43,7 @@ REPO_DEB_URL = ("https://www.flightaware.com/adsb/piaware/files/packages/pool/pi
 REPO_DEB_SHA256 = "20bdb73536845d9d95bc4659973e7ed07bc0fbdda7491045b82a66d5361046cc"
 FEEDER_ID_FILE = "/var/cache/piaware/feeder_id"
 CLAIM_URL = "https://www.flightaware.com/adsb/piaware/claim/"
-STATE_DIR = os.environ.get("FLIGHTRADAR_FEEDING_STATE", "/run/flightradar-feeding")
+STATE_DIR = os.environ.get("STRATOSCAN_FEEDING_STATE", "/run/stratoscan-feeding")
 PROGRESS = os.path.join(STATE_DIR, "progress.json")
 ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C", "DEBIAN_FRONTEND": "noninteractive"}
 

@@ -26,8 +26,8 @@ import urllib.parse
 import wave
 
 LISTEN = ("127.0.0.1", 8089)
-VOICE = os.environ.get("FLIGHTRADAR_TTS_VOICE",
-                       "/opt/flightradar/tts/voices/en_US-ljspeech-medium.onnx")
+VOICE = os.environ.get("STRATOSCAN_TTS_VOICE",
+                       "/opt/stratoscan/tts/voices/en_US-ljspeech-medium.onnx")
 MAX_TEXT = 240
 TEXT_RE = re.compile(r"^[A-Za-z0-9 ,.'’:;!?()&/%°\-]+$")
 CACHE_SIZE = 64

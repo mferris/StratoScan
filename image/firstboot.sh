@@ -8,16 +8,16 @@
 # image; anything that needs the internet (the notable list, the offline map)
 # is retried later by net-watchdog. Runs once, then disables itself.
 set -e
-LOG=/var/log/flightradar-firstboot.log
+LOG=/var/log/stratoscan-firstboot.log
 {
   echo "== StratoScan first boot: $(date -Is)"
   # Raspberry Pi OS keeps WiFi blocked until a country is set, which would
   # stop the setup hotspot from ever appearing. Default to US; the owner
   # sets the real one in setup (setupd's set_wifi_country).
   raspi-config nonint do_wifi_country US || rfkill unblock wifi || true
-  cd /opt/flightradar-src
-  KIOSK_USER=flightradar sh deploy/install-setup-server.sh
-  touch /var/lib/flightradar-firstboot.done
-  systemctl disable flightradar-firstboot.service
+  cd /opt/stratoscan-src
+  KIOSK_USER=stratoscan sh deploy/install-setup-server.sh
+  touch /var/lib/stratoscan-firstboot.done
+  systemctl disable stratoscan-firstboot.service
   echo "== done: $(date -Is)"
 } >>"$LOG" 2>&1

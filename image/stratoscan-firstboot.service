@@ -1,6 +1,6 @@
 [Unit]
 Description=StratoScan first boot (finish provisioning the factory image)
-ConditionPathExists=!/var/lib/flightradar-firstboot.done
+ConditionPathExists=!/var/lib/stratoscan-firstboot.done
 After=local-fs.target systemd-remount-fs.service
 # Deliberately NOT Before=display-manager: if anything here stalled, the
 # screen would stay black for up to the timeout. The kiosk page retries until
@@ -8,7 +8,7 @@ After=local-fs.target systemd-remount-fs.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh /opt/flightradar-src/image/firstboot.sh
+ExecStart=/bin/sh /opt/stratoscan-src/image/firstboot.sh
 RemainAfterExit=yes
 TimeoutStartSec=30min
 

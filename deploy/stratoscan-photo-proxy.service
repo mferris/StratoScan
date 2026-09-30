@@ -1,9 +1,9 @@
 [Unit]
-Description=StratoScan Funnel-facing filtering proxy (rounds receiver.json's coordinates)
+Description=StratoScan aircraft photo proxy (planespotters.net)
 After=network-online.target
 
 [Service]
-ExecStart=/usr/bin/python3 /opt/flightradar/funnel-gateway.py
+ExecStart=/usr/bin/python3 /opt/stratoscan/photo-proxy.py
 Restart=always
 RestartSec=5
 # 127.0.0.1-only listener; no elevated privileges needed

@@ -15,7 +15,7 @@
 # Runs as a user unit, like the kiosk it manages.
 set -eu
 
-STATE="${STATE_DIRECTORY:-$HOME/.local/state/flightradar-shmguard}"
+STATE="${STATE_DIRECTORY:-$HOME/.local/state/stratoscan-shmguard}"
 RELOAD_STAMP="$STATE/last-reload"
 RESTART_STAMP="$STATE/last-restart"
 
@@ -43,13 +43,13 @@ RESTART_SETTLE_S="${SHMGUARD_RESTART_SETTLE_S:-25}"
 # unexpected is on screen, so treat it as broken and repair it.
 FULLSCREEN_MAX="${SHMGUARD_FULLSCREEN_MAX:-60}"
 FORCE="${SHMGUARD_FORCE:-0}"
-RELOAD_REQUEST="${XDG_RUNTIME_DIR:-/tmp}/flightradar-reload-request"
+RELOAD_REQUEST="${XDG_RUNTIME_DIR:-/tmp}/stratoscan-reload-request"
 
 mkdir -p "$STATE"
 
 # Never act on a kiosk that is not running: restarting a stopped or failed
 # unit turns an unrelated problem into a restart loop.
-if [ "$(systemctl --user is-active flightradar-kiosk.service)" != "active" ]; then
+if [ "$(systemctl --user is-active stratoscan-kiosk.service)" != "active" ]; then
     echo "shm-guard: kiosk not active, nothing to do"; exit 0
 fi
 
@@ -153,7 +153,7 @@ restart_kiosk() {   # reason
         WAYLAND_DISPLAY="$WD" timeout 10 wlopm --on HDMI-A-1 >/dev/null 2>&1 || true
         sleep 2
     fi
-    timeout 120 systemctl --user restart flightradar-kiosk.service
+    timeout 120 systemctl --user restart stratoscan-kiosk.service
     if [ "$was_off" = "1" ]; then
         sleep "$RESTART_SETTLE_S"
         WAYLAND_DISPLAY="$WD" timeout 10 wlopm --off HDMI-A-1 >/dev/null 2>&1 || true

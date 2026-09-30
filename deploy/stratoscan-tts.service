@@ -3,7 +3,7 @@ Description=StratoScan spoken alerts (local Piper text-to-speech)
 After=network.target
 
 [Service]
-ExecStart=/opt/flightradar/tts/venv/bin/python /opt/flightradar/tts-service.py
+ExecStart=/opt/stratoscan/tts/venv/bin/python /opt/stratoscan/tts-service.py
 Restart=always
 RestartSec=5
 # 127.0.0.1-only listener that reads a voice model and writes nothing.

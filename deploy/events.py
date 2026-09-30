@@ -25,7 +25,7 @@ Nothing here can affect the radar: it only reads readsb's aircraft.json, and
 if the relay is unreachable events wait in a small in-memory queue, then
 expire. Nothing is written to storage while it runs.
 
-  events.py run       the service loop (flightradar-events.service)
+  events.py run       the service loop (stratoscan-events.service)
   events.py status    what is on, what is queued, the last send
   events.py enable    turn events on (pairing a phone does this: pairing.py)
   events.py disable   turn them off
@@ -45,10 +45,10 @@ import urllib.error
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-AIRCRAFT_JSON = os.environ.get("FLIGHTRADAR_AIRCRAFT_JSON", "/run/readsb/aircraft.json")
-NOTABLE_JSON = os.environ.get("FLIGHTRADAR_NOTABLE_JSON", "/var/www/html/data/notable.json")
-TAR1090_DB_GLOB = os.environ.get("FLIGHTRADAR_TAR1090_DB", "/usr/local/share/tar1090/html/db-*")
-RUN_DIR = os.environ.get("FLIGHTRADAR_EVENTS_RUN", "/run/flightradar-events")
+AIRCRAFT_JSON = os.environ.get("STRATOSCAN_AIRCRAFT_JSON", "/run/readsb/aircraft.json")
+NOTABLE_JSON = os.environ.get("STRATOSCAN_NOTABLE_JSON", "/var/www/html/data/notable.json")
+TAR1090_DB_GLOB = os.environ.get("STRATOSCAN_TAR1090_DB", "/usr/local/share/tar1090/html/db-*")
+RUN_DIR = os.environ.get("STRATOSCAN_EVENTS_RUN", "/run/stratoscan-events")
 STATUS = os.path.join(RUN_DIR, "status.json")
 # What has been reported recently, so a restart (an update, a reinstall) does
 # not report the same pass again. /run: survives a service restart
@@ -595,7 +595,7 @@ def config_mtime():
 class Service:
     """The run loop, one tick at a time (testable without sleeping).
 
-    The service's sandbox makes storage read-only (flightradar-events.service,
+    The service's sandbox makes storage read-only (stratoscan-events.service,
     ProtectSystem=strict), so it never writes the on/off setting itself. When
     the relay says no phone is paired it pauses instead, until the setting
     changes: pairing.py, via setupd, owns that file and rewrites it when a

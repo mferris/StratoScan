@@ -72,7 +72,7 @@ ACCEPT = [
     (d.v_lat, 37.4530), (d.v_lon, -122.1817),
     (d.v_lat, -33.8688), (d.v_lon, 151.2093),
     (d.v_lat, 90.0), (d.v_lat, -90.0), (d.v_lon, 180.0), (d.v_lon, -180.0),
-    (d.v_ts_hostname, "flightradar-1"),
+    (d.v_ts_hostname, "stratoscan-1"),
     (d.v_authkey, "tskey-auth-" + "x" * 20),
     (d.v_atc_mount, "krdu_app2"), (d.v_atc_mount, ""),
     (d.v_query, "Rapenburg 70, Leiden, Netherlands"),
@@ -258,7 +258,7 @@ def check_reset(fails):
                 fails.append(f"reset_full dropped unrelated readsb options {label}")
             flat = [" ".join(map(str, c)) for c in calls]
             restart = next((i for i, c in enumerate(flat) if c.endswith("restart readsb")), None)
-            stop_map = next((i for i, c in enumerate(flat) if "stop flightradar-offline-map" in c), None)
+            stop_map = next((i for i, c in enumerate(flat) if "stop stratoscan-offline-map" in c), None)
             if restart is None:
                 fails.append(f"reset_full did not restart readsb {label} (old position stays published)")
             if stop_map is None:

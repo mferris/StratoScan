@@ -34,9 +34,9 @@ import time
 import urllib.request
 
 SOURCE_URL = "https://raw.githubusercontent.com/sdr-enthusiasts/plane-alert-db/main/plane-alert-db.csv"
-WEB_ROOT = os.environ.get("FLIGHTRADAR_WEB_ROOT", "/var/www/html")
+WEB_ROOT = os.environ.get("STRATOSCAN_WEB_ROOT", "/var/www/html")
 OUT = os.path.join(WEB_ROOT, "data", "notable.json")
-STATE_DIR = os.environ.get("FLIGHTRADAR_NOTABLE_STATE", "/var/lib/flightradar-notable")
+STATE_DIR = os.environ.get("STRATOSCAN_NOTABLE_STATE", "/var/lib/stratoscan-notable")
 FAILED_STAMP = os.path.join(STATE_DIR, "last-failure")
 REFRESH_EVERY_S = 7 * 86400
 RETRY_AFTER_FAILURE_S = 6 * 3600

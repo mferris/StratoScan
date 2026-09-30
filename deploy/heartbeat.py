@@ -32,13 +32,13 @@ import urllib.request
 
 # The maintainer's relay (relay/, deployed on Cloudflare). Reporting still
 # does nothing unless the owner turns it on in the setup page.
-RELAY_URL = os.environ.get("FLIGHTRADAR_RELAY_URL", "https://relay.stratoscan.io")
-STATE_DIR = os.environ.get("FLIGHTRADAR_RELAY_STATE", "/var/lib/flightradar-relay")
+RELAY_URL = os.environ.get("STRATOSCAN_RELAY_URL", "https://relay.stratoscan.io")
+STATE_DIR = os.environ.get("STRATOSCAN_RELAY_STATE", "/var/lib/stratoscan-relay")
 KEY_PATH = os.path.join(STATE_DIR, "unit.key")
 CONFIG = os.path.join(STATE_DIR, "heartbeat.json")    # {"enabled": bool}
 LAST = os.path.join(STATE_DIR, "last-report.json")
 IO_SNAPSHOT = os.path.join(STATE_DIR, "io-snapshot.json")   # sectors written at the last report
-OTA_STATE = "/var/lib/flightradar-ota"
+OTA_STATE = "/var/lib/stratoscan-ota"
 REPORT_EVERY_S = 6 * 3600
 RETRY_AFTER_FAILURE_S = 30 * 60
 TIMEOUT_S = 10
@@ -193,7 +193,7 @@ def collect():
         if k in ("MemTotal", "MemAvailable", "Shmem"):
             mem[k] = int(v.split()[0]) // 1024
 
-    painted = [p for p in (f"/run/user/{u}/flightradar-painted" for u in os.listdir("/run/user"))
+    painted = [p for p in (f"/run/user/{u}/stratoscan-painted" for u in os.listdir("/run/user"))
                if os.path.exists(p)] if os.path.isdir("/run/user") else []
 
     return {
@@ -208,7 +208,7 @@ def collect():
             "messages_per_min": last1.get("messages"),
             "signal_db": local.get("signal"),
             "noise_db": local.get("noise"),
-            "restarts": int(_read("/run/flightradar-net/receiver-restarts", "0") or 0),
+            "restarts": int(_read("/run/stratoscan-net/receiver-restarts", "0") or 0),
         },
         "display": {"painted_age_s": _age(painted[0]) if painted else None},
         "storage": storage,
@@ -216,7 +216,7 @@ def collect():
         "thermal": {"temp_c": round(int(temp) / 1000, 1) if temp and temp.isdigit() else None,
                     "throttled": throttled},
         "memory_mb": mem,
-        "last_watchdog_reboot_age_s": _age("/var/lib/flightradar-setup/last-watchdog-reboot"),
+        "last_watchdog_reboot_age_s": _age("/var/lib/stratoscan-setup/last-watchdog-reboot"),
     }
 
 

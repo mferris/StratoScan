@@ -32,8 +32,8 @@ def check(label, condition):
 
 
 tmp = tempfile.mkdtemp()
-os.environ["FLIGHTRADAR_WEB_ROOT"] = tmp
-os.environ["FLIGHTRADAR_OFFLINE_STATE"] = os.path.join(tmp, "state")
+os.environ["STRATOSCAN_WEB_ROOT"] = tmp
+os.environ["STRATOSCAN_OFFLINE_STATE"] = os.path.join(tmp, "state")
 spec = importlib.util.spec_from_file_location("offline_map", SRC)
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)

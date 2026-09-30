@@ -19,9 +19,9 @@ Type=oneshot
 # within seconds of each other -- which loses kiosk mode and leaves the
 # browser windowed on the display.
 Environment=SHMGUARD_FORCE=1
-StateDirectory=flightradar-shmguard
+StateDirectory=stratoscan-shmguard
 # A oneshot with no timeout waits forever: one hung compositor call used to
 # leave this unit 'activating' for good, and its timer never fired again --
 # silently disabling the nightly restart.
 TimeoutStartSec=5min
-ExecStart=/opt/flightradar/shm-guard.sh
+ExecStart=/opt/stratoscan/shm-guard.sh

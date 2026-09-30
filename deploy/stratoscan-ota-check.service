@@ -6,9 +6,9 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-StateDirectory=flightradar-ota
+StateDirectory=stratoscan-ota
 # CHECK ONLY. This looks for a newer signed release and records what it found;
 # it never installs. Applying is a deliberate act by whoever owns the device,
 # from the settings screen or the setup page -- a unit that silently replaced
 # its own software overnight would be a very different thing to give somebody.
-ExecStart=/opt/flightradar/ota.py check
+ExecStart=/opt/stratoscan/ota.py check

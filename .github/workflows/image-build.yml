@@ -45,7 +45,7 @@ jobs:
       - name: Keep the result
         uses: actions/upload-artifact@v4
         with:
-          name: flightradar-image-${{ env.VERSION }}
+          name: stratoscan-image-${{ env.VERSION }}
           path: image-out/
           retention-days: 14
           compression-level: 0
@@ -54,7 +54,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          IMG=image-out/flightradar-$VERSION.img.xz
+          IMG=image-out/stratoscan-$VERSION.img.xz
           SIZE=$(stat -c %s "$IMG")
           [ "$SIZE" -lt 2147483648 ] || { echo "image is over GitHub's 2 GiB asset limit"; exit 1; }
           gh release create "image-$VERSION" --prerelease --latest=false \

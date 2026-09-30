@@ -29,7 +29,7 @@ def check(label, cond):
 
 
 tmp = tempfile.mkdtemp()
-os.environ["FLIGHTRADAR_FEEDING_STATE"] = os.path.join(tmp, "state")
+os.environ["STRATOSCAN_FEEDING_STATE"] = os.path.join(tmp, "state")
 spec = importlib.util.spec_from_file_location("feeding", os.path.join(HERE, "..", "deploy", "feeding.py"))
 fd = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fd)

@@ -8,7 +8,7 @@ strings are not accepted" -- see https://www.planespotters.net/photo/api),
 and browser fetch()/XMLHttpRequest can never set that header themselves --
 it's exclusively controlled by the browser. So this runs server-side on the
 Pi instead, listening on 127.0.0.1 only; lighttpd proxies /photo/<hex>
-requests to it (see 89-flightradar-photo-proxy.conf), keeping the browser's
+requests to it (see 89-stratoscan-photo-proxy.conf), keeping the browser's
 fetch same-origin exactly like aircraft.json/receiver.json already are.
 
 Attribution requirement per planespotters.net's terms of use (photographer

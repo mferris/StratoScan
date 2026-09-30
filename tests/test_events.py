@@ -53,11 +53,11 @@ with open(notable_path, "w") as f:
     json.dump({"v": 1, "ac": {"c0ffee": ["Dictator Alert", "Civ", "", "Gulfstream G650"],
                               "a11111": ["Police Forces", "Gov", "State Police", "Bell 407"]}}, f)
 
-os.environ["FLIGHTRADAR_RELAY_STATE"] = os.path.join(tmp, "relay")
-os.environ["FLIGHTRADAR_RELAY_URL"] = "https://relay.example"
-os.environ["FLIGHTRADAR_TAR1090_DB"] = os.path.join(tmp, "db-*")
-os.environ["FLIGHTRADAR_NOTABLE_JSON"] = notable_path
-os.environ["FLIGHTRADAR_EVENTS_RUN"] = os.path.join(tmp, "run")
+os.environ["STRATOSCAN_RELAY_STATE"] = os.path.join(tmp, "relay")
+os.environ["STRATOSCAN_RELAY_URL"] = "https://relay.example"
+os.environ["STRATOSCAN_TAR1090_DB"] = os.path.join(tmp, "db-*")
+os.environ["STRATOSCAN_NOTABLE_JSON"] = notable_path
+os.environ["STRATOSCAN_EVENTS_RUN"] = os.path.join(tmp, "run")
 spec = importlib.util.spec_from_file_location("events", os.path.join(HERE, "..", "deploy", "events.py"))
 ev = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ev)

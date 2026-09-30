@@ -11,7 +11,7 @@ the rest of index.html already detects, not once per poll. Persisted
 server-side rather than in localStorage, so the kiosk's own accumulated
 history is visible to every viewer (laptop, phone, the Funnel URL), not just
 whichever browser happened to be open when a plane flew by. lighttpd proxies
-/sightings requests here (see 93-flightradar-sighting-store.conf).
+/sightings requests here (see 93-stratoscan-sighting-store.conf).
 
 Alongside the counts each aircraft carries a classification -- operator class
 (commercial / private / military) and airframe kind (jet / heavy / prop /
