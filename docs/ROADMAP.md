@@ -25,6 +25,10 @@ the design decisions those issues depend on.
   the relay.
 - **Every fix is verified on the running device**, not just installed.
 
+## What to buy
+
+The parts each item needs are in [SHOPPING.md](SHOPPING.md).
+
 ## Architecture: the relay
 
 One small **Cloudflare Worker** (`relay/`) with a D1 database. It is the
@@ -57,65 +61,64 @@ phone ──(pairing, notification rules)──▶ relay
 
 ## Phase 1: reliability you can see
 
-| # | Item | Owner | Done when |
-|---|---|---|---|
-| 1.1 | RTC battery support: installer sets `dtparam=rtc_bbat_vchg` when a rechargeable cell is fitted; clock health in status | Claude (code) | A unit keeps correct time across a power cut with no network |
-| 1.2 | Storage off the SD card: NVMe boot via the Pi 5 M.2 HAT+ (or CM5 eMMC). Migration script, enclosure fit, installer checks | Claude | A unit boots and runs from NVMe; the enclosure fits |
-| 1.3 | Relay foundation: Worker, D1 schema, signed-request auth, heartbeat endpoint, fleet status page | Claude | Deployed; tests pass; RDU's heartbeat shows on the fleet page |
-| 1.4 | Unit side: keypair generation, opt-in heartbeat (setup toggle), sent every 6 h | Claude | RDU reports; turning it off stops it |
-| 1.5 | Factory image: pi-gen build in GitHub Actions (Arm runner); first boot runs the installer; GPL source offer for readsb/tar1090 included | Claude | A fresh SD flashed from the release boots to the setup hotspot |
-| 1.6 | Re-measure SD writes after the storage fixes (scheduled 2026-09-28) | Claude | Result recorded; any remaining large writer fixed |
-| 1.7 | Recover a hung radio without a human: the watchdog power-cycles USB (uhubctl) before it reboots, since a Pi 5 reboot keeps USB powered | Claude | A hung SDR comes back on its own on a real unit |
-| 1.8 | Core feed on the device: one service merges the antenna's and the network's aircraft, labels them once (operator, type, route, owner, notable), caches the lookups, and serves `/api/aircraft` to every screen; no antenna-relative fields | Claude | Live on RDU; labels match the kiosk's on a recorded sample |
-| 1.9 | Kiosk and public page read the core feed; route and owner lookups move off visitors' browsers onto the unit | Claude | Same picture as before; public visitors no longer contact adsb.im or adsbdb |
-| 1.10 | `events.py` reads the core feed; the copied classification tables are deleted | Claude | Same alerts from the same fixtures, with no tables of its own |
-| 1.11 | Cut the radar's drawing cost: static layers drawn once, the sweep rotated by the compositor, only moving things redrawn | Claude | Measured on RDU: the GPU process well under half its current ~94% of a core, and cooler |
+| # | Item | Done when |
+|---|---|---|
+| 1.1 | RTC battery support: installer sets `dtparam=rtc_bbat_vchg` when a rechargeable cell is fitted; clock health in status | A unit keeps correct time across a power cut with no network |
+| 1.2 | Storage off the SD card: NVMe boot via the Pi 5 M.2 HAT+ (or CM5 eMMC). Migration script, enclosure fit, installer checks | A unit boots and runs from NVMe; the enclosure fits |
+| 1.3 | Relay foundation: Worker, D1 schema, signed-request auth, heartbeat endpoint, fleet status page | Deployed; tests pass; RDU's heartbeat shows on the fleet page |
+| 1.4 | Unit side: keypair generation, opt-in heartbeat (setup toggle), sent every 6 h | RDU reports; turning it off stops it |
+| 1.5 | Factory image: pi-gen build in GitHub Actions (Arm runner); first boot runs the installer; GPL source offer for readsb/tar1090 included | A fresh SD flashed from the release boots to the setup hotspot |
+| 1.6 | Re-measure SD writes after the storage fixes (scheduled 2026-09-28) | Result recorded; any remaining large writer fixed |
+| 1.7 | Recover a hung radio without a human: the watchdog power-cycles USB (uhubctl) before it reboots, since a Pi 5 reboot keeps USB powered | A hung SDR comes back on its own on a real unit |
+| 1.8 | Core feed on the device: one service merges the antenna's and the network's aircraft, labels them once (operator, type, route, owner, notable), caches the lookups, and serves `/api/aircraft` to every screen; no antenna-relative fields | Live on RDU; labels match the kiosk's on a recorded sample |
+| 1.9 | Kiosk and public page read the core feed; route and owner lookups move off visitors' browsers onto the unit | Same picture as before; public visitors no longer contact adsb.im or adsbdb |
+| 1.10 | `events.py` reads the core feed; the copied classification tables are deleted | Same alerts from the same fixtures, with no tables of its own |
+| 1.11 | Cut the radar's drawing cost: static layers drawn once, the sweep rotated by the compositor, only moving things redrawn | Measured on RDU: the GPU process well under half its current ~94% of a core, and cooler |
 
 ## Phase 2: the pocket
 
-| # | Item | Owner | Done when |
-|---|---|---|---|
-| 2.1 | Relay push: APNs token auth, fan-out, per-phone rules, rate limits | Claude | A test event reaches a real iPhone |
-| 2.2 | Unit events: notable / emergency / low overhead / helicopter, decided on the unit and queued to the relay | Claude | Events arrive for real traffic at RDU |
-| 2.3 | QR pairing on the device screen, and in the app | Claude | Pair and unpair with a phone, end to end |
-| 2.4 | iOS app v2: notification rules, home and lock-screen widgets, Live Activity (inbound overhead), StandBy radar | Claude | Each feature working on a real phone |
-| 2.5 | iOS app v2: away mode (community feed when not home), logbook/collection, AR sky view fed by the unit | Claude | Each feature working on a real phone |
-| 2.6 | App Store readiness: bundle IDs, privacy labels, credits screen (MapLibre Native BSD-2, map attribution), screenshots, review notes | Claude | Approved on the App Store |
-| 2.7 | Location-aware app: a "You" marker relative to the antenna and a centre-on-me map; opt-in alerts for aircraft approaching the phone, its location end-to-end encrypted to the paired radar, which runs the prediction | Claude | Alerts for aircraft near the phone arrive on a real iPhone away from home, within the radar's coverage |
-| 2.8 | App shows the network's aircraft too (the kiosk's "not heard" ghosts from `/network`), marked distinctly, with matching counts and the ODbL credit; setting to turn off | Claude | The app and the kiosk show the same sky on a real iPhone |
-| 2.9 | Zoom in the app: pinch from 20 nm to about 1 nm, centred on the radar, the phone, or a followed aircraft; optionally the same on the kiosk, returning to full view by itself | Claude | A real aircraft sits on the right street at full zoom on a real iPhone |
+| # | Item | Done when |
+|---|---|---|
+| 2.1 | Relay push: APNs token auth, fan-out, per-phone rules, rate limits | A test event reaches a real iPhone |
+| 2.2 | Unit events: notable / emergency / low overhead / helicopter, decided on the unit and queued to the relay | Events arrive for real traffic at RDU |
+| 2.3 | QR pairing on the device screen, and in the app | Pair and unpair with a phone, end to end |
+| 2.4 | iOS app v2: notification rules, home and lock-screen widgets, Live Activity (inbound overhead), StandBy radar | Each feature working on a real phone |
+| 2.5 | iOS app v2: away mode (community feed when not home), logbook/collection, AR sky view fed by the unit | Each feature working on a real phone |
+| 2.7 | Location-aware app: a "You" marker relative to the antenna and a centre-on-me map; opt-in alerts for aircraft approaching the phone, its location end-to-end encrypted to the paired radar, which runs the prediction | Alerts for aircraft near the phone arrive on a real iPhone away from home, within the radar's coverage |
+| 2.8 | App shows the network's aircraft too (the kiosk's "not heard" ghosts from `/network`), marked distinctly, with matching counts and the ODbL credit; setting to turn off | The app and the kiosk show the same sky on a real iPhone |
+| 2.9 | Zoom in the app: pinch from 20 nm to about 1 nm, centred on the radar, the phone, or a followed aircraft; optionally the same on the kiosk, returning to full view by itself | A real aircraft sits on the right street at full zoom on a real iPhone |
 
 ## Phase 3: the wrist
 
-| # | Item | Owner | Done when |
-|---|---|---|---|
-| 3.1 | watchOS app: nearest-plane complication, glance radar | Claude | Complication live on a real Watch |
-| 3.2 | Distinct wrist taps per alert type; Smart Stack Live Activity | Claude | Felt on a real Watch |
-| 3.3 | "Look up" mode: a compass arrow toward the aircraft, and a countdown to overhead | Claude | Arrow points correctly outdoors |
-| 3.4 | Approach compass on the phone as well as the Watch: where the aircraft is, where it is coming from and heading, in the notification, a north-up dial on the Live Activity, and a live compass in the app | Claude | The needle points at a real aircraft outdoors, on a phone and a Watch |
+| # | Item | Done when |
+|---|---|---|
+| 3.1 | watchOS app: nearest-plane complication, glance radar | Complication live on a real Watch |
+| 3.2 | Distinct wrist taps per alert type; Smart Stack Live Activity | Felt on a real Watch |
+| 3.3 | "Look up" mode: a compass arrow toward the aircraft, and a countdown to overhead | Arrow points correctly outdoors |
+| 3.4 | Approach compass on the phone as well as the Watch: where the aircraft is, where it is coming from and heading, in the notification, a north-up dial on the Live Activity, and a live compass in the app | The needle points at a real aircraft outdoors, on a phone and a Watch |
 
 ## Phase 4: delight
 
-| # | Item | Owner | Done when |
-|---|---|---|---|
-| 4.1 | "What was that?": the unit keeps a rolling hour of tracks in RAM; tap to rewind and see what passed overhead | Claude | Rewind works on the kiosk and in the app |
-| 4.2 | Notable aircraft from plane-alert-db (**license check first**) | Claude | Categories show and alert; notices updated |
-| 4.3 | Empty-sky mode: clock, weather (source license checked), today's tally | Claude | Shows when nothing is in range, and leaves when traffic returns |
-| 4.4 | Spoken announcements with offline TTS (Piper; **voice license checked**, permissive only) | Claude | Announces real traffic with no internet |
-| 4.5 | Yearly "Wrapped" from the sighting store, shareable from the app | Claude | Generated from RDU's real history |
-| 4.6 | Opt-in feeding to FlightAware / FR24 (their feeder licenses checked; precise-location sharing is explicit) | Claude · recipient (their accounts) | A unit feeds; the perk account activates |
-| 4.7 | Quiet hours: silence the unit's alert sounds (chimes and speech) in a set window or sunset to sunrise; alerts still show on screen; emergencies can still sound | Claude | No sound inside the window on RDU, and sound returns on time |
+| # | Item | Done when |
+|---|---|---|
+| 4.1 | "What was that?": the unit keeps a rolling hour of tracks in RAM; tap to rewind and see what passed overhead | Rewind works on the kiosk and in the app |
+| 4.2 | Notable aircraft from plane-alert-db (**license check first**) | Categories show and alert; notices updated |
+| 4.3 | Empty-sky mode: clock, weather (source license checked), today's tally | Shows when nothing is in range, and leaves when traffic returns |
+| 4.4 | Spoken announcements with offline TTS (Piper; **voice license checked**, permissive only) | Announces real traffic with no internet |
+| 4.5 | Yearly "Wrapped" from the sighting store, shareable from the app | Generated from RDU's real history |
+| 4.6 | Opt-in feeding to FlightAware / FR24 (their feeder licenses checked; precise-location sharing is explicit) | A unit feeds; the perk account activates |
+| 4.7 | Quiet hours: silence the unit's alert sounds (chimes and speech) in a set window or sunset to sunrise; alerts still show on screen; emergencies can still sound | No sound inside the window on RDU, and sound returns on time |
 
 ## Phase 5: hardware v2
 
-| # | Item | Owner | Done when |
-|---|---|---|---|
-| 5.1 | Rotating bezel (rotary encoder) for range and paging: enclosure redesign plus input handling | Claude (CAD, code) | Turning the bezel changes range on the kiosk |
-| 5.2 | Presence wake (LD2410 mmWave over UART, or PIR) replacing the 20-min idle timer | Claude (code) | The screen wakes on approach and sleeps when the room is empty |
-| 5.3 | 978 MHz UAT receiver for US units (dump978 into readsb) | Claude (code) | UAT-only GA aircraft appear on the radar |
-| 5.4 | Retro stand: ridges all the way round the plinth, standing out ~4 mm so the slicer supports them (as the case ribs were fixed) | Claude (CAD) | Printed, with clean ridges on all four sides |
-| 5.5 | Ambient light sensor: dim the display with the room, with an adjustable darkest level; a sensor window on both cases; first find a real backlight control (the panel's HID report 9, or DDC) | Claude (CAD, code) | The display follows the room on RDU, down to the owner's floor |
-| 5.6 | Key the back plate so it seats only upright (antenna at the top): a key on each shell's bore wall and a matching gap in one arc of the plate's locating rib; checks prove the seven wrong orientations are blocked | Claude (CAD) | The plate goes in only upright, on both cases |
+| # | Item | Done when |
+|---|---|---|
+| 5.1 | Rotating bezel (rotary encoder) for range and paging: enclosure redesign plus input handling | Turning the bezel changes range on the kiosk |
+| 5.2 | Presence wake (LD2410 mmWave over UART, or PIR) replacing the 20-min idle timer | The screen wakes on approach and sleeps when the room is empty |
+| 5.3 | 978 MHz UAT receiver for US units (dump978 into readsb) | UAT-only GA aircraft appear on the radar |
+| 5.4 | Retro stand: ridges all the way round the plinth, standing out ~4 mm so the slicer supports them (as the case ribs were fixed) | Printed, with clean ridges on all four sides |
+| 5.5 | Ambient light sensor: dim the display with the room, with an adjustable darkest level; a sensor window on both cases; first find a real backlight control (the panel's HID report 9, or DDC) | The display follows the room on RDU, down to the owner's floor |
+| 5.6 | Key the back plate so it seats only upright (antenna at the top): a key on each shell's bore wall and a matching gap in one arc of the plate's locating rib; checks prove the seven wrong orientations are blocked | The plate goes in only upright, on both cases |
 
 ## Work order (agreed 2026-09-30)
 
@@ -144,9 +147,8 @@ at risk for long.
 | 4. Alerts, trial run first | 1.10 `events.py` | Run the old and new logic side by side for days, logging disagreements, then switch | Alerts only |
 | 5. The kiosk, last | 1.9 kiosk and public page | Riskiest change, after a week or more of the feed. Tried on the public page first; the old path kept for one release | Medium, contained |
 | 6. App features | 2.9 zoom, the map part of 2.7, 3.4 (phone), the rest of 2.4/2.5, then the alerts part of 2.7 | Map parts are app-only; 3.4's direction of travel and 2.7's alerts need step 4 | None (app); low (alerts) |
-| 7. App Store | 2.6 | Once the app settles; TestFlight earlier | None |
-| 8. Watch | 3.1 → 3.2 → 3.3 / 3.4 (Watch) | Straightforward once there is one feed to read | None |
-| 9. Hardware v2 | 5.5 light sensor, 5.1 bezel, 5.2 presence, 5.3 978 MHz | As parts arrive: case, print, then software that changes nothing without the part. 5.5's first step (finding a real backlight control) is read-only and can be done anytime | Low |
+| 7. Watch | 3.1 → 3.2 → 3.3 / 3.4 (Watch) | Straightforward once there is one feed to read | None |
+| 8. Hardware v2 | 5.5 light sensor, 5.1 bezel, 5.2 presence, 5.3 978 MHz | As parts arrive: case, print, then software that changes nothing without the part. 5.5's first step (finding a real backlight control) is read-only and can be done anytime | Low |
 | Factory image | 1.5 | Test-flash today's image soon, to prove the pipeline; rebuild after step 5 so gifted units carry the new architecture | None |
 
 **Dependencies** (still true within the order above)
@@ -160,7 +162,7 @@ at risk for long.
 
 | Item | State | Waiting on |
 |---|---|---|
-| 1.1 RTC battery | Software done: the installer reports the battery; `RTC_RECHARGEABLE=1` enables charging. Cells to be fitted | Fitting a cell and checking the clock survives a power cut |
+| 1.1 RTC battery | Software done: the installer reports the battery; `RTC_RECHARGEABLE=1` enables charging | Fitting a cell and checking the clock survives a power cut |
 | 1.3 Relay | **Done.** Live at stratoscan-relay.example.workers.dev (D1 attached); RDU reporting; fleet page password-protected | — |
 | 1.4 Health reports | **Live**; RDU opted in and reporting every 6 h | — |
 | 1.6 SD re-measure | **Done.** 2.25 GB/day in steady state (was 8.8): about 8 TB over 10 years against a rough 40–70 TB ceiling for a 128 GB card. Last fixes: 2-minute writeback batching, no Chromium shader disk cache. Remaining: journald ~1 GB/day, kept on purpose (logs that survive a crash are worth more) | — |
@@ -178,4 +180,4 @@ at risk for long.
 | 2.5 Away mode, logbook, AR sky view | Away mode done and verified on a real iPhone (2026-09-28): the app and widget switch between the radar's home address and its public HTTPS page (Tailscale Funnel) as the phone leaves and rejoins home WiFi; the away address is learned from the radar. Logbook and AR sky view not started | — |
 | 1.7 Hung-radio recovery | Code done and installed on RDU (uhubctl sees hubs 1–4; the FlyCatcher is on hub 3) | A live hang, to watch it recover |
 | 2.7, 3.4, 5.4, 5.5 | Planned 2026-09-29 as issues #29, #28, #26, #27 | — |
-| 1.5 Factory image | Built: CI produces a 1.6 GB image that passes its checks (working unit, no per-unit secrets, GPL sources attached). Rebuilt as Radome (2026.09.28). Not yet published | A spare SD card + Pi to test-flash |
+| 1.5 Factory image | Built: CI produces a 1.6 GB image that passes its checks (working unit, no per-unit secrets, GPL sources attached). Rebuilt as Radome (2026.09.28). Not yet published | A test flash on a spare SD card |
