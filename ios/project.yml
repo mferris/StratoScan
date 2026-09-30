@@ -56,6 +56,7 @@ targets:
           - CFBundleURLName: com.NelsonIndustries.radome.pair
             CFBundleURLSchemes: [radome]
         NSCameraUsageDescription: "To scan a StratoScan radar's pairing code."
+        NSLocationWhenInUseUsageDescription: "To show where you are on the radar. Your location stays on this phone."
         CFBundleDisplayName: StratoScan
     settings:
       base:

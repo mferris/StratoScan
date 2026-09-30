@@ -150,7 +150,20 @@ struct RadarView: View {
         }
 
         let inView = inRange.filter { viewModel.distanceFromCentre($0) <= viewModel.rangeNm }
-        // When the view is centred on an aircraft, mark where the radar is.
+        // This phone, when the owner has asked to be shown.
+        if let m = viewModel.meOffset {
+            let mx = cx + CGFloat((m.east - c.east) / viewModel.rangeNm) * r
+            let my = cy - CGFloat((m.north - c.north) / viewModel.rangeNm) * r
+            if hypot(mx - cx, my - cy) <= r {
+                let dot = Path(ellipseIn: CGRect(x: mx - 6, y: my - 6, width: 12, height: 12))
+                context.fill(dot, with: .color(Color(hex: "#3b82f6")))
+                context.stroke(dot, with: .color(.white), lineWidth: 2)
+                context.draw(Text("YOU").font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundColor(Color(hex: "#93c5fd")),
+                             at: CGPoint(x: mx, y: my + 14), anchor: .top)
+            }
+        }
+        // When the view is centred elsewhere, mark where the radar is.
         if c.east != 0 || c.north != 0 {
             let rx = cx - CGFloat(c.east / viewModel.rangeNm) * r
             let ry = cy + CGFloat(c.north / viewModel.rangeNm) * r
