@@ -24,10 +24,39 @@ final class RadarViewModel: ObservableObject {
     @Published var centreOnMe = false { didSet { if centreOnMe { followHex = nil } } }
     /// Where this phone is, when the owner has asked to be shown. Stays on the phone.
     @Published var me: Coordinate?
+    /// Where the owner has moved the view to -- by pinching on a spot or
+    /// dragging -- relative to the radar, in nm east and north. Used when the
+    /// view is not following an aircraft or the phone.
+    @Published var pan: (east: Double, north: Double) = (0, 0)
     var isZoomed: Bool { rangeNm < ringNm - 0.01 || followHex != nil || centreOnMe }
+    /// Following an aircraft or the phone: the centre is theirs, not the owner's.
+    var centreIsLocked: Bool { followHex != nil || (centreOnMe && meOffset != nil) }
 
-    func setRange(_ nm: Double) { rangeNm = min(ringNm, max(Self.minRangeNm, nm)) }
-    func resetView() { rangeNm = ringNm; followHex = nil; centreOnMe = false }
+    func setRange(_ nm: Double) {
+        rangeNm = min(ringNm, max(Self.minRangeNm, nm))
+        setPan(pan)
+    }
+    func resetView() { rangeNm = ringNm; pan = (0, 0); followHex = nil; centreOnMe = false }
+
+    /// Zoom to `nm`, keeping the spot at `anchor` where it is on screen, the
+    /// way Maps does. `anchor` is measured from the middle of the view in
+    /// radii (x right, y down); `from` is the range and centre when the pinch
+    /// began. Around the middle when the view is following something.
+    func zoom(to nm: Double, anchor: CGPoint, from: (range: Double, centre: (east: Double, north: Double))) {
+        guard !centreIsLocked else { setRange(nm); return }
+        let newRange = min(ringNm, max(Self.minRangeNm, nm))
+        let spot = (east: from.centre.east + Double(anchor.x) * from.range,
+                    north: from.centre.north - Double(anchor.y) * from.range)
+        rangeNm = newRange
+        setPan((spot.east - Double(anchor.x) * newRange, spot.north + Double(anchor.y) * newRange))
+    }
+
+    /// Move the view's centre, never so far that it looks past the radar's ring.
+    func setPan(_ p: (east: Double, north: Double)) {
+        let limit = max(0, ringNm - rangeNm)
+        let d = hypot(p.east, p.north)
+        pan = d <= limit ? p : (d == 0 ? (0, 0) : (p.east * limit / d, p.north * limit / d))
+    }
 
     /// Where this phone is relative to the radar, in nm east and north.
     var meOffset: (east: Double, north: Double)? {
@@ -47,7 +76,7 @@ final class RadarViewModel: ObservableObject {
     var viewCentre: (east: Double, north: Double) {
         if let h = followHex, let p = planes[h] { return Self.offset(p) }
         if centreOnMe, let m = meOffset { return m }
-        return (0, 0)
+        return pan
     }
 
     /// How far a plane is from the middle of the view, in nm.

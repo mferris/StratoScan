@@ -14,7 +14,8 @@ struct RadarView: View {
     let diameter: CGFloat
 
     private let rangeRings = 4
-    @State private var pinchStart: Double?
+    @State private var pinchStart: (range: Double, centre: (east: Double, north: Double), anchor: CGPoint)?
+    @State private var dragStart: (translation: CGSize, centre: (east: Double, north: Double))?
     private let sweepSpeed: Double = 0.008 * 60 // radians/sec (web version: 0.008/frame @ ~60fps)
     private let smoothTau = 0.35
     private let labelGap: CGFloat = 10
@@ -29,26 +30,59 @@ struct RadarView: View {
     private let colorLow = Color(hex: "#ffb020")
 
     var body: some View {
-        TimelineView(.animation) { timeline in
-            Canvas { context, canvasSize in
-                render(context: &context, canvasSize: canvasSize, now: timeline.date)
+        GeometryReader { geo in
+            TimelineView(.animation) { timeline in
+                Canvas { context, canvasSize in
+                    render(context: &context, canvasSize: canvasSize, now: timeline.date)
+                }
             }
+            .drawingGroup()
+            .contentShape(Rectangle())
+            // Double-tap zooms in a step on the spot tapped; a single tap picks
+            // an aircraft; a pinch zooms from the full ring down to about a
+            // mile, keeping the spot under the fingers where it is; a drag
+            // moves the zoomed view (roadmap 2.9).
+            .gesture(SpatialTapGesture(count: 2).onEnded { tap in
+                viewModel.zoom(to: viewModel.rangeNm / 2, anchor: anchor(tap.location, geo.size),
+                               from: (viewModel.rangeNm, viewModel.viewCentre))
+            }.exclusively(before: SpatialTapGesture().onEnded { tap in
+                viewModel.selectedHex = viewModel.plane(at: tap.location)?.hex
+            }))
+            .simultaneousGesture(MagnifyGesture()
+                .onChanged { value in
+                    if pinchStart == nil {
+                        pinchStart = (viewModel.rangeNm, viewModel.viewCentre, anchor(value.startLocation, geo.size))
+                    }
+                    guard let s = pinchStart else { return }
+                    viewModel.zoom(to: s.range / Double(value.magnification), anchor: s.anchor, from: (s.range, s.centre))
+                }
+                .onEnded { _ in pinchStart = nil })
+            .simultaneousGesture(DragGesture(minimumDistance: 10)
+                .onChanged { value in
+                    // A pinch moves both fingers; the pinch decides, and the
+                    // drag starts again from wherever the pinch left the view.
+                    guard pinchStart == nil, viewModel.rangeNm < viewModel.ringNm - 0.01 else { dragStart = nil; return }
+                    if dragStart == nil {
+                        // Dragging a view that follows something lets go of it.
+                        let c = viewModel.viewCentre
+                        viewModel.followHex = nil
+                        viewModel.centreOnMe = false
+                        viewModel.setPan(c)
+                        dragStart = (value.translation, viewModel.pan)
+                    }
+                    guard let s = dragStart else { return }
+                    let perPoint = viewModel.rangeNm / Double(diameter * 0.44)
+                    viewModel.setPan((s.centre.east - Double(value.translation.width - s.translation.width) * perPoint,
+                                      s.centre.north + Double(value.translation.height - s.translation.height) * perPoint))
+                }
+                .onEnded { _ in dragStart = nil })
         }
-        .drawingGroup()
-        .contentShape(Rectangle())
-        // Double-tap zooms in a step; a single tap picks an aircraft; a pinch
-        // zooms from the full ring down to about a mile (roadmap 2.9).
-        .gesture(SpatialTapGesture(count: 2).onEnded { _ in
-            viewModel.setRange(viewModel.rangeNm / 2)
-        }.exclusively(before: SpatialTapGesture().onEnded { tap in
-            viewModel.selectedHex = viewModel.plane(at: tap.location)?.hex
-        }))
-        .simultaneousGesture(MagnificationGesture()
-            .onChanged { scale in
-                if pinchStart == nil { pinchStart = viewModel.rangeNm }
-                viewModel.setRange(pinchStart! / Double(scale))
-            }
-            .onEnded { _ in pinchStart = nil })
+    }
+
+    /// A point on screen as a fraction of the radar's radius from its middle.
+    private func anchor(_ p: CGPoint, _ size: CGSize) -> CGPoint {
+        let r = diameter * 0.44
+        return CGPoint(x: (p.x - size.width / 2) / r, y: (p.y - size.height / 2) / r)
     }
 
     private func render(context: inout GraphicsContext, canvasSize: CGSize, now: Date) {
