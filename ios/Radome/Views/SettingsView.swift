@@ -6,6 +6,7 @@ struct SettingsView: View {
     @EnvironmentObject private var pairing: PairingStore
     @State private var baseURL: String = APIConfig.baseURL
     @State private var awayURL: String = APIConfig.awayURL ?? ""
+    @State private var showNetwork: Bool = AircraftFeedClient.showNetwork
 
     var body: some View {
         NavigationView {
@@ -35,6 +36,12 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Show aircraft the radar didn't hear", isOn: $showNetwork)
+                } footer: {
+                    Text("Adds aircraft a public ADS-B network (adsb.lol) reports near the radar that its own antenna missed, drawn hollow, as on the radar's screen. The radar fetches them once for everyone; turning this off stops the app asking.")
+                }
+
+                Section {
                     Toggle("Demo mode", isOn: Binding(get: { viewModel.isDemo }, set: { viewModel.setDemo($0) }))
                 } footer: {
                     Text("Plays a few minutes of real traffic recorded near RDU airport, so you can see StratoScan working without a radar.")
@@ -46,6 +53,9 @@ struct SettingsView: View {
             }
             // Saved however the sheet closes, Done or a swipe down.
             .onDisappear { save() }
+            // Saved as it's switched: a didSet on @State doesn't fire for a
+            // binding write, so it would never have been stored.
+            .onChange(of: showNetwork) { _, on in AircraftFeedClient.showNetwork = on }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

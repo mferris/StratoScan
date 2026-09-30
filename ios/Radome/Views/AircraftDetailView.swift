@@ -43,8 +43,20 @@ struct AircraftDetailView: View {
             if let p {
                 Text(p.airlineLabel).foregroundColor(p.badgeColor)
                 if let type = p.typeLabel { Text(type).foregroundColor(.secondary) }
-                if let r = viewModel.routeClient.cache[p.cs], let route = r {
+                if let r = p.feedRoute {
+                    Text(r.plausible == false ? "\(r.text) (unconfirmed)" : r.text).font(.callout)
+                } else if let r = viewModel.routeClient.cache[p.cs], let route = r {
                     Text("\(route.from) → \(route.to)").font(.callout)
+                }
+                if let o = p.owner {
+                    Text("Registered to \(o.name)\(o.country.map { " (\($0))" } ?? "")")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+                if p.isNetwork {
+                    // Said plainly: this came from the network, not the antenna.
+                    // adsb.lol's data is ODbL, which asks for this credit.
+                    Text("Reported by adsb.lol, not heard by this radar. Network data © ADSB.lol contributors (ODbL).")
+                        .font(.caption).foregroundColor(.orange)
                 }
             }
         }

@@ -229,8 +229,15 @@ struct RadarView: View {
         context.drawLayer { ctx in
             ctx.translateBy(x: p.anchorX, y: p.anchorY)
             ctx.rotate(by: .radians(p.hdg * .pi / 180))
-            ctx.addFilter(.shadow(color: p.color, radius: 6))
-            ctx.fill(tri, with: .color(p.color))
+            if p.isNetwork {
+                // Reported by a public network, not heard by this radar: hollow
+                // and dimmed, as on the kiosk, so a glance always tells "my
+                // radar heard this" from "the network says it's there".
+                ctx.stroke(tri, with: .color(p.color.opacity(0.55)), lineWidth: 1.2)
+            } else {
+                ctx.addFilter(.shadow(color: p.color, radius: 6))
+                ctx.fill(tri, with: .color(p.color))
+            }
         }
     }
 
@@ -250,7 +257,9 @@ struct RadarView: View {
         let speedTxt = p.speed.map { "\(Int($0.rounded()))" } ?? "--"
         let altLine = "\(PlaneState.altLabel(p.alt)) · \(speedTxt)kt"
         var routeLine: String?
-        if let route = viewModel.routeClient.cache[p.cs], let r = route {
+        if let r = p.feedRoute {
+            routeLine = r.plausible == false ? "\(r.text) (unconfirmed)" : r.text
+        } else if let route = viewModel.routeClient.cache[p.cs], let r = route {
             routeLine = "\(r.from) → \(r.to)"
         }
         if viewModel.labelMode != .full && p.hex != viewModel.selectedHex {

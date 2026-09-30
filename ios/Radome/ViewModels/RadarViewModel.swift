@@ -21,6 +21,8 @@ final class RadarViewModel: ObservableObject {
     @Published private(set) var home: Coordinate?
     @Published private(set) var connected: Bool = false
     @Published private(set) var aircraftCount: Int = 0
+    /// In the ring, reported by a public network but not heard by this radar.
+    @Published private(set) var notHeardCount: Int = 0
     @Published private(set) var runwayGeoJSON: Data?
     @Published private(set) var isDemo = DemoFeed.isOn
     /// True while the radar is being read through its public (away) address.
@@ -120,7 +122,7 @@ final class RadarViewModel: ObservableObject {
     private func pollOnce() async {
         if home == nil { await loadHome() }
         do {
-            let raw = try await AircraftFeedClient.fetchAircraft()
+            let raw = try await AircraftFeedClient.fetchFeed(network: AircraftFeedClient.showNetwork).aircraft
             lastGoodFetch = Date()
             connected = true
             let away = !DemoFeed.isOn && Endpoint.shared.whereNow == .away
@@ -145,14 +147,16 @@ final class RadarViewModel: ObservableObject {
                 planes[n.hex] = PlaneState(hex: n.hex, from: n)
             }
 
-            if n.airlineIcao != nil {
+            // The core feed has already looked these up, once, on the radar.
+            let fromFeed = raw.feedOperator != nil
+            if n.airlineIcao != nil && !fromFeed {
                 let lat = n.lat ?? home?.lat ?? 0
                 let lon = n.lon ?? home?.lon ?? 0
                 routeClient.queueLookup(callsign: n.cs, lat: lat, lon: lon)
             }
 
             let hex = n.hex
-            if planes[hex]?.typeLabel == nil {
+            if planes[hex]?.typeLabel == nil && !fromFeed {
                 Task {
                     if let label = await typeClient.lookupType(hex: hex) {
                         self.planes[hex]?.typeLabel = label
@@ -162,7 +166,8 @@ final class RadarViewModel: ObservableObject {
         }
 
         planes = planes.filter { seen.contains($0.key) }
-        aircraftCount = planes.values.filter { $0.range <= rangeNm }.count
+        aircraftCount = planes.values.filter { $0.range <= rangeNm && !$0.isNetwork }.count
+        notHeardCount = planes.values.filter { $0.range <= rangeNm && $0.isNetwork }.count
     }
 
     /// The aircraft under a tap: its label first (the big target), then the

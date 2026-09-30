@@ -1,9 +1,49 @@
 import Foundation
 
 enum AircraftFeedClient {
+    /// Whether to include aircraft a public network reports that the radar's
+    /// own antenna didn't hear (roadmap 2.8). On by default, as on the kiosk.
+    static var showNetwork: Bool {
+        get { UserDefaults.standard.object(forKey: "stratoscan.showNetwork") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "stratoscan.showNetwork") }
+    }
+
+    /// Set when the radar answered /api/aircraft with 404: it hasn't got the
+    /// core feed yet, so use aircraft.json and ask again in a few minutes.
+    private static var coreMissingUntil = Date.distantPast
+
     static func fetchAircraft() async throws -> [RawAircraft] {
-        if DemoFeed.isOn { return DemoFeed.aircraft() }
+        try await fetchFeed(network: false).aircraft
+    }
+
+    /// The radar's labelled core feed (/api/aircraft), or readsb's plain
+    /// aircraft.json from a radar that doesn't have it yet.
+    static func fetchFeed(network: Bool) async throws -> AircraftFeedResponse {
+        if DemoFeed.isOn { return AircraftFeedResponse(aircraft: DemoFeed.aircraft(), now: nil) }
         await Endpoint.shared.resolve()
+        if Date() >= coreMissingUntil {
+            var req = URLRequest(url: APIConfig.url("/api/aircraft" + (network ? "?network=1" : "")))
+            req.cachePolicy = .reloadIgnoringLocalCacheData
+            req.timeoutInterval = 8
+            let data: Data
+            let response: URLResponse
+            do {
+                (data, response) = try await URLSession.shared.data(for: req)
+            } catch {
+                Endpoint.shared.invalidate()   // perhaps we just left (or came) home
+                throw error
+            }
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 200, let feed = try? JSONDecoder().decode(AircraftFeedResponse.self, from: data) {
+                return feed
+            }
+            if status == 404 { coreMissingUntil = Date().addingTimeInterval(300) }
+            // anything else: fall back to aircraft.json for this poll
+        }
+        return AircraftFeedResponse(aircraft: try await fetchReadsb(), now: nil)
+    }
+
+    private static func fetchReadsb() async throws -> [RawAircraft] {
         var req = URLRequest(url: APIConfig.url("/tar1090/data/aircraft.json"))
         req.cachePolicy = .reloadIgnoringLocalCacheData
         req.timeoutInterval = 8
