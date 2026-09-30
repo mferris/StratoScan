@@ -12,7 +12,9 @@ The code for all three is public at
 
 - Your radar's exact location never leaves it.
 - The app uses your phone's location only if you ask it to show you on the
-  radar, and only on the phone. It doesn't track you and shows no ads.
+  radar, and only on the phone. One exception, off unless you turn it on:
+  Sky view away from home asks adsb.lol for the aircraft around you, with
+  your location rounded to about 5 km. It doesn't track you and shows no ads.
 - The relay keeps the minimum it needs to deliver alerts, and deletes it
   when it's no longer needed.
 
@@ -45,14 +47,23 @@ it gives the StratoScan relay:
 - Apple's push-notification address for your phone;
 - the generic device name iOS provides (for example "iPhone").
 
-It collects nothing else: no location, contacts, usage analytics or
-advertising identifiers.
+It collects nothing else: no location (but see Sky view below), contacts,
+usage analytics or advertising identifiers.
 
 **Your location.** If you tap the location button to see yourself on the
 radar, iOS asks whether the app may use your location while it's open. It
-is used on your phone, to place a "YOU" marker and centre the view, and is
-never sent anywhere: not to your radar, not to the relay, not to anyone
-else. You can turn it off at any time in the iPhone's Settings.
+is used on your phone, to place a "YOU" marker, centre the view and aim the
+compass and Sky view. It is never sent to your radar or the relay. You can
+turn it off at any time in the iPhone's Settings.
+
+**Sky view away from home** (off unless you turn it on). When the phone is
+more than 3 nm from your radar, Sky view offers to show the aircraft around
+you instead. If you say yes, the app asks adsb.lol, a public ADS-B network,
+for the aircraft within 25 nm of your location **rounded to about 5 km**
+(0.05° of latitude and longitude), every 5 seconds while Sky view is open.
+adsb.lol sees that rounded location and your IP address, like any web
+request. Nothing else is sent, and a button in Sky view turns it off again.
+The camera picture in Sky view is never recorded or sent.
 
 ## The relay
 
