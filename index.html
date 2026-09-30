@@ -1315,7 +1315,7 @@ const SWEEP_RAD_PER_SEC = 0.48;
 // the largest CPU lever here and the sweep is the only thing that visibly
 // loses smoothness at 15.
 const TARGET_FPS = 15;
-const FRAME_MIN_MS = 1000 / TARGET_FPS - 4; // slack so vsync jitter doesn't cost a whole frame
+let frameMinMs = 1000 / TARGET_FPS - 4; // slack so vsync jitter doesn't cost a whole frame (a perf experiment can change it)
 const SMOOTH_TAU = 0.35;         // seconds; exponential smoothing time constant for plane motion
 // A position in aircraft.json is not "now" -- it is the last position message
 // readsb decoded, and `seen_pos` says how long ago that was. Measured against
@@ -1525,6 +1525,33 @@ const leadersEl = document.getElementById('leaders');
 const stage = document.querySelector('.stage');
 const hudEl = document.querySelector('.hud');
 const locEl = document.getElementById('loc');
+
+// ---- Performance experiments (roadmap 1.11, #35) -------------------------
+// Switches for finding where the kiosk's CPU goes, one suspect at a time.
+// Read once at load from /data/perf-debug.json, which doesn't exist on a
+// normal unit (a 404 means no switches, and the page is exactly as usual).
+// On a test unit it is written by hand, e.g. {"noLabels": true}, and the page
+// reloaded; scripts/perf-experiments.sh does both and measures each.
+//   noLabels    hide the HTML aircraft labels and leader lines
+//   noMap       hide the MapLibre map;  noMapFilter  keep it, drop its CSS filter
+//   noSweep     hide the sweep layer
+//   tinyCanvas  shrink the moving-things canvas to 1x1, so drawing it is ~free
+//   fps         draw at this many frames a second instead of TARGET_FPS
+const PERF = {};
+function applyPerfFlags() {
+  const mapEl = document.getElementById('mapbg');
+  if (PERF.noMap) mapEl.style.display = 'none';
+  if (PERF.noMapFilter) mapEl.style.filter = 'none';
+  if (PERF.noLabels) { tagsEl.style.display = 'none'; leadersEl.style.display = 'none'; }
+  if (PERF.noSweep) document.getElementById('sweepClip').style.display = 'none';
+  if (PERF.tinyCanvas) { canvas.width = 1; canvas.height = 1; }
+  if (PERF.fps > 0) frameMinMs = 1000 / PERF.fps - 4;
+  console.log('perf experiment flags:', JSON.stringify(PERF));
+}
+fetch('/data/perf-debug.json', { cache: 'no-store' })
+  .then(r => (r.ok ? r.json() : null))
+  .then(f => { if (f && typeof f === 'object') { Object.assign(PERF, f); applyPerfFlags(); } })
+  .catch(() => {});
 const countEl = document.getElementById('count');
 const statusEl = document.getElementById('status');
 const tagNodes = new Map();    // hex -> tag DOM node
@@ -5381,7 +5408,7 @@ function tick(ts) {
   requestAnimationFrame(tick);
 
   const since = ts - lastFrameTs;
-  if (since < FRAME_MIN_MS) return; // frame budget not up yet -- skip the repaint
+  if (since < frameMinMs) return; // frame budget not up yet -- skip the repaint
   // dt is measured from the last frame actually DRAWN, so interpolation and
   // the sweep stay correct across skipped frames
   const dt = Math.min(0.25, Math.max(0, since / 1000));
