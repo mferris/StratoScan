@@ -78,6 +78,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 2.5 | iOS app v2: away mode (community feed when not home), logbook/collection, AR sky view fed by the unit | Claude | Each feature working on a real phone |
 | 2.6 | App Store readiness: bundle IDs, privacy labels, credits screen (MapLibre Native BSD-2, map attribution), screenshots, review notes | Claude | Approved on the App Store |
 | 2.7 | Location-aware app: a "You" marker relative to the antenna and a centre-on-me map; opt-in alerts for aircraft approaching the phone, its location end-to-end encrypted to the paired radar, which runs the prediction | Claude | Alerts for aircraft near the phone arrive on a real iPhone away from home, within the radar's coverage |
+| 2.8 | App shows the network's aircraft too (the kiosk's "not heard" ghosts from `/network`), marked distinctly, with matching counts and the ODbL credit; setting to turn off | Claude | The app and the kiosk show the same sky on a real iPhone |
 
 ## Phase 3: the wrist
 
