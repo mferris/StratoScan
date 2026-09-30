@@ -184,7 +184,7 @@ at risk for long.
 | 4.7 Quiet hours | **Done** (2026-09-30): Settings › Alerts › Quiet hours silences chimes and speech in a set window (default 22:00–07:00, half-hour steps) or sunset to sunrise; alerts still show; emergencies can sound; sounds you trigger in Settings still play. Off by default | — |
 | 1.7 Hung-radio recovery | Code done and installed on RDU (uhubctl sees hubs 1–4; the FlyCatcher is on hub 3) | A live hang, to watch it recover |
 | 2.9 Zoom | **Verified on a real iPhone** (2026-09-30): pinch from 20 nm to 1 nm on any spot (it stays under the fingers), double-tap to zoom in on a spot, drag to move, follow an aircraft, centre on the phone. The app's map is now at the radar's true scale (63e21ed; it had been drawn at twice it) | Kiosk zoom (optional) |
-| 2.7 Location-aware app | Map part built (c4a6615): a "You" marker and centre-on-me; location stays on the phone. Alerts near the phone not started | A real-iPhone check; then the encrypted-location alerts |
+| 2.7 Location-aware app | Map part **verified on a real iPhone** (2026-09-30): a "You" marker where the phone is, and centre-on-me; location stays on the phone. Alerts near the phone not started | The encrypted-location alerts |
 | 3.4 Approach compass | Built: the approach alert says where the aircraft comes from and heads (258778f, needs a relay deploy); a live compass in the app (a165624); a north-up dial on the Live Activity | Relay deploy; outdoors on a real phone |
 | 3.1 watchOS app | Built (037b07a): a glance radar and complications, fed by the phone | A real Watch |
 | 3.2 Wrist taps, Smart Stack | Smart Stack Live Activity built (4853ebc); distinct taps not started | A real Watch |
