@@ -2,6 +2,14 @@ name = "flightradar-relay"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
 
+# The relay's permanent address (2026-09-30): a custom domain, so it no longer
+# depends on the Worker's name or the account's workers.dev subdomain.
+# Cloudflare creates the DNS record and certificate on deploy. The old
+# workers.dev address stays on (workers_dev) until every unit and app has
+# moved over, since units in service only know that one.
+routes = [ { pattern = "relay.stratoscan.io", custom_domain = true } ]
+workers_dev = true
+
 [[d1_databases]]
 binding = "DB"
 database_name = "flightradar-relay"
