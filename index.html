@@ -1541,6 +1541,24 @@ const locEl = document.getElementById('loc');
 //   tinyCanvas  shrink the moving-things canvas to 1x1, so drawing it is ~free
 //   fps         draw at this many frames a second instead of TARGET_FPS
 //   canvasFps   redraw the aircraft canvas this many times a second instead of CANVAS_FPS
+//   sweepJs     turn the sweep from the page's frame loop, as before, not the compositor
+//   sweepSteps  compositor sweep in this many steps a second instead of every display frame
+// The sweep turns on the compositor, not in tick(). tick() only redraws the
+// aircraft canvas every third frame (see CANVAS_FPS), so its frames are
+// uneven -- two cheap, one heavy -- and a sweep stepped from it visibly
+// stuttered on the panel. An animation the compositor runs is independent
+// of whatever the page's own thread is doing, so it stays smooth.
+const SWEEP_PERIOD_MS = (2 * Math.PI / SWEEP_RAD_PER_SEC) * 1000;
+let sweepAnim = null;
+function startSweep(stepsPerSec = 0) {
+  if (sweepAnim) sweepAnim.cancel();
+  sweepAnim = sweepEl.animate(
+    [{ transform: 'rotate(0turn)' }, { transform: 'rotate(1turn)' }],
+    { duration: SWEEP_PERIOD_MS, iterations: Infinity,
+      easing: stepsPerSec > 0 ? `steps(${Math.round((SWEEP_PERIOD_MS / 1000) * stepsPerSec)})` : 'linear' });
+}
+startSweep();
+
 const PERF = {};
 function applyPerfFlags() {
   const mapEl = document.getElementById('mapbg');
@@ -1551,6 +1569,8 @@ function applyPerfFlags() {
   if (PERF.tinyCanvas) { canvas.width = 1; canvas.height = 1; }
   if (PERF.fps > 0) frameMinMs = 1000 / PERF.fps - 4;
   if (PERF.canvasFps > 0) canvasMinMs = 1000 / PERF.canvasFps - 4;
+  if (PERF.sweepJs) { sweepAnim.cancel(); sweepAnim = null; }
+  else if (PERF.sweepSteps > 0) startSweep(PERF.sweepSteps);
   console.log('perf experiment flags:', JSON.stringify(PERF));
 }
 fetch('/data/perf-debug.json', { cache: 'no-store' })
@@ -5464,7 +5484,7 @@ function tick(ts) {
   const dt = Math.min(0.25, Math.max(0, since / 1000));
   lastFrameTs = ts;
 
-  sweepEl.style.transform = `rotate(${sweepAngle}rad)`;
+  if (!sweepAnim) sweepEl.style.transform = `rotate(${sweepAngle}rad)`;   // perf flag sweepJs only
 
   // The aircraft canvas is redrawn less often than the sweep turns. Measured
   // on RDU (#35): repainting that full-screen canvas was ~3/4 of Chromium's
