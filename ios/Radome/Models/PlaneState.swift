@@ -34,6 +34,13 @@ final class PlaneState: Identifiable {
     /// True when the core feed labelled this aircraft, so the app needn't.
     var fromFeed = false
 
+    /// Where it has been: its reported positions over the last couple of
+    /// minutes, for Sky view's tracks across the sky (#40). Kept on the
+    /// phone, from the moment the app opened.
+    struct Fix { let lat: Double; let lon: Double; let altFt: Double; let at: Date }
+    private(set) var history: [Fix] = []
+    static let historySeconds: TimeInterval = 120
+
     // Screen-space layout state, recomputed every frame by RadarView.
     var anchorX: CGFloat = 0
     var anchorY: CGFloat = 0
@@ -62,6 +69,17 @@ final class PlaneState: Identifiable {
         speed = n.speed
         lat = n.lat
         lon = n.lon
+        if let la = n.lat, let lo = n.lon {
+            let now = Date()
+            if history.last.map({ $0.lat != la || $0.lon != lo }) ?? true {
+                let ft: Double = n.alt == .ground ? 0 : (n.alt.feetValue ?? history.last?.altFt ?? 0)
+                history.append(Fix(lat: la, lon: lo, altFt: ft, at: now))
+            }
+            if let keep = history.firstIndex(where: { now.timeIntervalSince($0.at) <= Self.historySeconds }), keep > 0 {
+                history.removeFirst(keep)
+            }
+            if history.count > 150 { history.removeFirst(history.count - 150) }
+        }
         airlineIcao = n.airlineIcao
         isNetwork = n.raw.isNetwork
         fromFeed = n.raw.feedOperator != nil
