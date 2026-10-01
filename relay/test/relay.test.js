@@ -707,3 +707,95 @@ test('an end that beats the phone\'s report is kept, and sent when the report ar
   assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM live_activities').get().n, 0);
   assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM live_activity_ends').get().n, 0);
 });
+
+// ---- where the phone is (roadmap 2.7) ------------------------------------------
+
+const BOX_CONTEXT = 'stratoscan-boxkey-v1:';
+async function boxKey(u, keyBytes = crypto.getRandomValues(new Uint8Array(32))) {
+  const key = b64url(keyBytes);
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, u.key, new TextEncoder().encode(BOX_CONTEXT + key)));
+  return { key, sig: b64url(sig) };
+}
+const asPhone = async (e, phone, path, body) => worker.fetch(await signed(phone, JSON.stringify(body), { path, as: 'X-FR-Phone' }), e);
+const BLOB = b64url(crypto.getRandomValues(new Uint8Array(32 + 12 + 60 + 16)));
+
+test('a radar publishes a signed box key; only its paired phones can fetch it', async () => {
+  const e = env(), u = await newUnit(), stranger = await newUnit();
+  clock += 1000;
+  const k = await boxKey(u);
+  assert.equal((await worker.fetch(await signed(u, JSON.stringify(k), { path: '/v1/unit/boxkey' }), e)).status, 200);
+  clock += 1;
+  const forged = await boxKey(stranger);       // signed by someone else
+  assert.equal((await worker.fetch(await signed(u, JSON.stringify(forged), { path: '/v1/unit/boxkey' }), e)).status, 400,
+    'a key the unit did not sign is refused');
+  const phone = await newUnit();
+  await offer(e, u, TEST_PAIRING_CODE); await pair(e, phone, u, TEST_PAIRING_CODE);
+  clock += 1;
+  const got = await (await asPhone(e, phone, '/v1/phone/boxkey', { unit: u.id })).json();
+  assert.deepEqual(got, k);
+  clock += 1;
+  assert.equal((await asPhone(e, stranger, '/v1/phone/boxkey', { unit: u.id })).status, 403, 'not paired: refused');
+});
+
+test('a phone leaves an encrypted location for its radar, which collects it; nobody else can', async () => {
+  const e = env(), u = await newUnit(), other = await newUnit();
+  clock += 1000;
+  const phone = await newUnit();
+  await offer(e, u, TEST_PAIRING_CODE); await pair(e, phone, u, TEST_PAIRING_CODE);
+  clock += 1;
+  assert.equal((await asPhone(e, phone, '/v1/phone/location', { unit: u.id, blob: BLOB })).status, 200);
+  clock += 1;
+  const mine = await getAs(e, u, '/v1/unit/locations');
+  assert.equal(mine.locations.length, 1);
+  assert.equal(mine.locations[0].phone, phone.id);
+  assert.equal(mine.locations[0].blob, BLOB, 'stored exactly as sent: opaque to the relay');
+  clock += 1;
+  assert.equal((await getAs(e, other, '/v1/unit/locations')).locations.length, 0, 'another unit sees nothing');
+  assert.equal((await asPhone(e, phone, '/v1/phone/location', { unit: u.id, blob: BLOB })).status, 429, 'too soon after the last');
+  assert.equal((await asPhone(e, phone, '/v1/phone/location', { unit: other.id, blob: BLOB })).status, 403, 'not paired with that unit');
+  assert.equal((await asPhone(e, phone, '/v1/phone/location', { unit: u.id, blob: 'x'.repeat(500) })).status, 400, 'too big');
+  assert.equal((await asPhone(e, phone, '/v1/phone/location', { unit: u.id, blob: { lat: 35.8, lon: -78.7 } })).status, 400,
+    'a plain position is not a blob');
+  clock += 1;
+  assert.equal((await asPhone(e, phone, '/v1/phone/location', { unit: u.id, blob: null })).status, 200, 'withdrawn');
+  clock += 1;
+  assert.equal((await getAs(e, u, '/v1/unit/locations')).locations.length, 0);
+});
+
+test('a location expires, and goes with the pairing', async () => {
+  const e = env(), u = await newUnit();
+  clock += 1000;
+  const phone = await newUnit();
+  await offer(e, u, TEST_PAIRING_CODE); await pair(e, phone, u, TEST_PAIRING_CODE);
+  clock += 1;
+  await asPhone(e, phone, '/v1/phone/location', { unit: u.id, blob: BLOB });
+  clock += 6 * 3600 + 1;
+  assert.equal((await getAs(e, u, '/v1/unit/locations')).locations.length, 0, 'stale: gone');
+  await asPhone(e, phone, '/v1/phone/location', { unit: u.id, blob: BLOB });
+  clock += 1;
+  await worker.fetch(await signed(u, JSON.stringify({ phone: phone.id }), { path: '/v1/unit/unpair' }), e);
+  assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM phone_locations').get().n, 0, 'unpaired: gone');
+});
+
+test('an approach to a phone goes to that phone alone, and says "you"', async () => {
+  const { e, a } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  const me = await pairedPhone(e, u, { kinds: ['approach_me'] });
+  clock += 1;
+  await register(e, me, { token: TOKEN, env: 'sandbox', kinds: ['approach_me'], la_start_token: LA_TOKEN });
+  const other = await pairedPhone(e, u, { kinds: ['approach', 'approach_me'] });
+  clock += 1;
+  await register(e, other, { token: TOKEN, env: 'sandbox', kinds: ['approach', 'approach_me'], la_start_token: LA_TOKEN });
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90002', eta_s: 120, phone: me.id, label: 'Low overhead' })]);
+  assert.equal(a.sent.length, 1, 'one phone only');
+  assert.equal(a.sent[0].body.aps.alert.title, 'Low overhead approaching you');
+  assert.equal(a.sent[0].body.aps.attributes.about, 'you');
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90003', eta_s: 120 })]);
+  assert.equal(a.sent.length, 2, 'an approach to the radar: only the phone that wants those');
+  assert.equal(a.sent[1].body.aps.attributes.about, 'radar');
+  clock += 1;
+  assert.equal((await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90004', eta_s: 120, phone: 'not-an-id' })])).status, 400);
+});

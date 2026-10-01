@@ -155,10 +155,12 @@ export function approachStart(e, unit, startToken, nowS) {
         timestamp: nowS,
         event: 'start',
         'attributes-type': 'ApproachAttributes',
-        attributes: { unit, hex: e.hex, callsign: who, type: e.type || '', reason: e.label || '' },
+        // about: whose position it's approaching -- the radar, or this phone
+        // itself (roadmap 2.7). Older apps ignore it.
+        attributes: { unit, hex: e.hex, callsign: who, type: e.type || '', reason: e.label || '', about: e.phone ? 'you' : 'radar' },
         'content-state': approachState(e, nowS, false),
         'stale-date': nowS + (e.eta_s || 0) + 120,
-        alert: { title: `${e.label || 'Aircraft'} approaching`, body: `${who}${e.type ? ' · ' + e.type : ''} · ${travel(e) ? `coming from the ${travel(e).from}, heading ${travel(e).to} · ` : ''}overhead in about ${Math.max(1, Math.round((e.eta_s || 0) / 60))} min` },
+        alert: { title: `${e.label || 'Aircraft'} approaching${e.phone ? ' you' : ''}`, body: `${who}${e.type ? ' · ' + e.type : ''} · ${travel(e) ? `coming from the ${travel(e).from}, heading ${travel(e).to} · ` : ''}overhead in about ${Math.max(1, Math.round((e.eta_s || 0) / 60))} min` },
       },
     },
   };

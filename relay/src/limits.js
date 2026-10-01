@@ -39,6 +39,12 @@ export function cleanEvent(e, requestTs) {
   }
   if (typeof e.hex !== 'string' || !/^[0-9a-f]{6}$/.test(e.hex)) return null;
   out.hex = e.hex;
+  // An approach to one phone's location (roadmap 2.7) names that phone, and
+  // goes to it alone.
+  if ((e.kind === 'approach' || e.kind === 'approach_end') && e.phone !== undefined) {
+    if (typeof e.phone !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(e.phone)) return null;
+    out.phone = e.phone;
+  }
   if (e.kind === 'approach_end') return out;
   if (e.kind === 'approach') {
     if (!Number.isInteger(e.eta_s) || e.eta_s < 0 || e.eta_s > 600) return null;
@@ -93,7 +99,15 @@ export function cleanPhoneName(v) {
 }
 
 // Push (roadmap 2.1).
-export const PUSH_KINDS = ['emergency', 'notable', 'low_overhead', 'helicopter', 'approach'];
+// 'approach' is an aircraft about to pass over the radar; 'approach_me', one
+// about to pass over the phone itself (roadmap 2.7).
+export const PUSH_KINDS = ['emergency', 'notable', 'low_overhead', 'helicopter', 'approach', 'approach_me'];
+
+// Phone locations (roadmap 2.7): encrypted on the phone, for one radar.
+export const LOCATION_TTL_S = 6 * 3600;      // older than this, it no longer says where the phone is
+export const LOCATION_MIN_GAP_S = 20;        // significant-change updates come minutes apart
+export const LOCATION_BLOB_MAX = 400;        // a 32-byte key, 12-byte nonce, ~100 bytes of JSON, 16-byte tag
+export const BOX_KEY_CONTEXT = 'stratoscan-boxkey-v1:';
 export const PUSHES_PER_HOUR = 30;      // per phone, ordinary alerts
 export const PUSHES_PER_HOUR_HARD = 60; // per phone, everything: emergencies and tests go past the
                                         // ordinary cap, but a misbehaving unit still cannot flood a phone

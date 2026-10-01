@@ -32,6 +32,7 @@ import {
   MAX_EVENTS_PER_REQUEST, EVENTS_PER_HOUR, EVENTS_PER_UNIT, EVENT_RETENTION_S, cleanEvent,
   PAIRING_TTL_S, PAIRING_MAX_ATTEMPTS, MAX_PHONES_PER_UNIT, MAX_UNITS_PER_PHONE, cleanPhoneName,
   PUSHES_PER_HOUR, PUSHES_PER_HOUR_HARD, PUSHES_PER_BATCH, cleanKinds,
+  LOCATION_TTL_S, LOCATION_MIN_GAP_S, LOCATION_BLOB_MAX, BOX_KEY_CONTEXT,
 } from './limits.js';
 import * as apns from './apns.js';
 
@@ -177,8 +178,11 @@ async function deliver(env, unit, evs) {
   for (const phone of results || []) {
     let wants = [];
     try { wants = JSON.parse(phone.kinds); } catch { /* none */ }
-    // Approaches start and end Live Activities, handled apart from alerts.
-    for (const e of ordered.filter(x => x.kind === 'approach' || x.kind === 'approach_end').slice(0, 2)) {
+    // Approaches start and end Live Activities, handled apart from alerts. An
+    // approach to a phone's own location (roadmap 2.7) goes to that phone only.
+    const approaches = ordered.filter(x => (x.kind === 'approach' || x.kind === 'approach_end')
+      && (!x.phone || x.phone === phone.id));
+    for (const e of approaches.slice(0, 2)) {
       await liveActivity(env, phone, unit, e, wants);
     }
     const mine = ordered.filter(e => e.kind !== 'approach' && e.kind !== 'approach_end'
@@ -202,7 +206,7 @@ async function deliver(env, unit, evs) {
 async function liveActivity(env, phone, unit, e, wants) {
   const db = env.DB, now = nowS();
   if (e.kind === 'approach') {
-    if (!wants.includes('approach')) return;
+    if (!wants.includes(e.phone ? 'approach_me' : 'approach')) return;
     const la = await db.prepare('SELECT start_token FROM live_activity_phones WHERE phone = ?').bind(phone.id).first();
     if (!la) return;                                    // this phone cannot start one (older iOS, or not allowed)
     const r = await pushTo(env, phone, apns.approachStart(e, unit, la.start_token, now), false);
@@ -246,6 +250,8 @@ const forgetUnpairedPhones = db => db.batch([
   db.prepare('DELETE FROM live_activity_phones WHERE phone NOT IN (SELECT phone FROM pairings)'),
   db.prepare('DELETE FROM live_activities WHERE phone NOT IN (SELECT phone FROM pairings)'),
   db.prepare('DELETE FROM live_activity_ends WHERE phone NOT IN (SELECT phone FROM pairings)'),
+  db.prepare(`DELETE FROM phone_locations WHERE NOT EXISTS
+    (SELECT 1 FROM pairings p WHERE p.phone = phone_locations.phone AND p.unit = phone_locations.unit)`),
 ]);
 
 async function phoneRegister(request, env) {
@@ -486,6 +492,80 @@ async function phoneUnpair(request, env) {
 
 // ---- fleet view (maintainer only) -----------------------------------------
 
+// ---- where the phone is (roadmap 2.7) ---------------------------------------
+// The phone encrypts its location to one radar's box key; the relay keeps the
+// ciphertext for that radar to collect, and can never read it.
+
+const paired = (db, unit, phone) =>
+  db.prepare('SELECT 1 FROM pairings WHERE unit = ? AND phone = ?').bind(unit, phone).first();
+
+// A radar publishes its box key, signed by its identity key.
+async function unitBoxKey(request, env) {
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit');
+  if (error) return error;
+  const key = b64urlDecode(payload.key || ''), sig = b64urlDecode(payload.sig || '');
+  if (!key || key.length !== 32 || !sig || sig.length !== 64) return json(400, { error: 'key and sig expected' });
+  // Checked here too, so a bad key never reaches a phone (which checks again).
+  const id = await crypto.subtle.importKey('raw', b64urlDecode(auth.unit), { name: 'Ed25519' }, false, ['verify']);
+  const ok = await crypto.subtle.verify({ name: 'Ed25519' }, id, sig, new TextEncoder().encode(BOX_KEY_CONTEXT + payload.key));
+  if (!ok) return json(400, { error: 'signature does not match the unit' });
+  await env.DB.prepare(
+    `INSERT INTO unit_box_keys (unit, key, sig, updated) VALUES (?1, ?2, ?3, ?4)
+     ON CONFLICT(unit) DO UPDATE SET key = ?2, sig = ?3, updated = ?4`
+  ).bind(auth.unit, payload.key, payload.sig, nowS()).run();
+  return json(200, { ok: true });
+}
+
+// A paired phone fetches that key (and checks the signature itself).
+async function phoneBoxKey(request, env) {
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone');
+  if (error) return error;
+  if (!isId(payload.unit)) return json(400, { error: 'name a unit' });
+  if (!(await paired(env.DB, payload.unit, auth.unit))) return json(403, { error: 'not paired with that unit' });
+  const row = await env.DB.prepare('SELECT key, sig FROM unit_box_keys WHERE unit = ?').bind(payload.unit).first();
+  if (!row) return json(404, { error: 'that radar has not published a key yet' });
+  return json(200, { key: row.key, sig: row.sig });
+}
+
+// A paired phone leaves its encrypted location for one radar; null withdraws it.
+async function phoneLocation(request, env) {
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone');
+  if (error) return error;
+  const db = env.DB, now = nowS();
+  if (!isId(payload.unit)) return json(400, { error: 'name a unit' });
+  if (!(await paired(db, payload.unit, auth.unit))) return json(403, { error: 'not paired with that unit' });
+  if (payload.blob === null) {
+    await db.prepare('DELETE FROM phone_locations WHERE phone = ? AND unit = ?').bind(auth.unit, payload.unit).run();
+    return json(200, { ok: true, cleared: true });
+  }
+  if (typeof payload.blob !== 'string' || payload.blob.length > LOCATION_BLOB_MAX
+      || !/^[A-Za-z0-9_-]+$/.test(payload.blob) || (b64urlDecode(payload.blob) || []).length < 32 + 12 + 16 + 8) {
+    return json(400, { error: 'blob expected' });
+  }
+  const last = await db.prepare('SELECT updated FROM phone_locations WHERE phone = ? AND unit = ?')
+    .bind(auth.unit, payload.unit).first();
+  if (last && now - last.updated < LOCATION_MIN_GAP_S) return json(429, { error: 'too soon' });
+  await db.prepare(
+    `INSERT INTO phone_locations (phone, unit, blob, updated) VALUES (?1, ?2, ?3, ?4)
+     ON CONFLICT(phone, unit) DO UPDATE SET blob = ?3, updated = ?4`
+  ).bind(auth.unit, payload.unit, payload.blob, now).run();
+  return json(200, { ok: true });
+}
+
+// A radar collects its phones' encrypted locations.
+async function unitLocations(request, env) {
+  const { auth, error } = await signedJson(request, 'X-FR-Unit');
+  if (error) return error;
+  const db = env.DB, now = nowS();
+  await db.prepare('DELETE FROM phone_locations WHERE updated < ?').bind(now - LOCATION_TTL_S).run();
+  const { results } = await db.prepare(
+    `SELECT l.phone, l.blob, l.updated FROM phone_locations l
+       JOIN pairings p ON p.phone = l.phone AND p.unit = l.unit
+      WHERE l.unit = ?`
+  ).bind(auth.unit).all();
+  return json(200, { locations: results || [] });
+}
+
 function timingSafeEqual(a, b) {
   const ea = new TextEncoder().encode(a), eb = new TextEncoder().encode(b);
   let diff = ea.length ^ eb.length;
@@ -601,6 +681,10 @@ export default {
     if (pathname === '/v1/phone/register' && m === 'POST') return phoneRegister(request, env);
     if (pathname === '/v1/phone/test' && m === 'POST') return phoneTest(request, env);
     if (pathname === '/v1/phone/activity' && m === 'POST') return phoneActivity(request, env);
+    if (pathname === '/v1/unit/boxkey' && m === 'POST') return unitBoxKey(request, env);
+    if (pathname === '/v1/unit/locations' && m === 'GET') return unitLocations(request, env);
+    if (pathname === '/v1/phone/boxkey' && m === 'POST') return phoneBoxKey(request, env);
+    if (pathname === '/v1/phone/location' && m === 'POST') return phoneLocation(request, env);
     if (pathname === '/fleet' || pathname === '/fleet.json' || pathname === '/fleet/name') {
       const state = maintainer(request, env);
       if (state !== 'ok') return needAuth(state);
