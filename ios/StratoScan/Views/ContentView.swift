@@ -80,6 +80,25 @@ struct ContentView: View {
                             .tracking(2)
                             .foregroundColor(pal.textDim)
                             .padding(.bottom, geo.size.height * 0.08)
+                    } else if viewModel.aroundMe && !viewModel.isDemo && location.denied {
+                        // around me needs the phone's location
+                        VStack(spacing: 8) {
+                            Text("LOCATION IS OFF FOR STRATOSCAN")
+                                .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
+                                .tracking(2).foregroundColor(pal.bad)
+                            Button("Turn it on in Settings") {
+                                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                            }
+                            .font(.system(size: 13 * ui, weight: .medium)).foregroundColor(pal.mid)
+                        }
+                        .padding(.bottom, geo.size.height * 0.08)
+                    } else if viewModel.aroundMe && !viewModel.isDemo && !viewModel.isStale && !viewModel.connecting {
+                        // the network's data, and its licence's credit
+                        Text("AROUND YOU · DATA © ADSB.LOL (ODbL)")
+                            .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
+                            .tracking(2)
+                            .foregroundColor(pal.textDim)
+                            .padding(.bottom, geo.size.height * 0.08)
                     } else if viewModel.isDemo {
                         Text("DEMO · TRAFFIC RECORDED NEAR RDU")
                             .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
@@ -89,7 +108,7 @@ struct ContentView: View {
                     } else if viewModel.connecting {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small).tint(pal.textDim)
-                            Text("CONNECTING TO YOUR RADAR…")
+                            Text(viewModel.aroundMe ? "FINDING AIRCRAFT AROUND YOU…" : "CONNECTING TO YOUR RADAR…")
                                 .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
                                 .tracking(2)
                                 .foregroundColor(pal.textDim)
@@ -101,10 +120,29 @@ struct ContentView: View {
                                 .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
                                 .tracking(2)
                                 .foregroundColor(pal.bad)
-                            if pairing.radars.isEmpty {
-                                Button("No radar yet? Try the demo") { viewModel.setDemo(true) }
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(pal.mid)
+                            if pairing.radars.isEmpty && !viewModel.aroundMe {
+                                // No radar (#41): the sky around you, or the demo.
+                                VStack(spacing: 10) {
+                                    Text("No StratoScan radar yet?").font(.system(size: 14 * ui, weight: .semibold)).foregroundColor(pal.text)
+                                    Button {
+                                        location.start()
+                                        viewModel.setAroundMe(true)
+                                    } label: {
+                                        Label("See aircraft around you", systemImage: "location.viewfinder")
+                                            .font(.system(size: 14 * ui, weight: .semibold))
+                                            .padding(.horizontal, 16).padding(.vertical, 9)
+                                            .foregroundColor(pal.mid)
+                                            .background(pal.mid.opacity(0.14), in: Capsule())
+                                            .overlay(Capsule().stroke(pal.mid.opacity(0.5), lineWidth: 1))
+                                    }
+                                    .buttonStyle(.plain)
+                                    Text("Live, from the public adsb.lol network. To ask for them, the app sends adsb.lol your location rounded to about 5 km.")
+                                        .font(.system(size: 11 * ui)).foregroundColor(pal.textDim)
+                                        .multilineTextAlignment(.center).frame(maxWidth: 300 * ui)
+                                    Button("Or try the demo") { viewModel.setDemo(true) }
+                                        .font(.system(size: 13 * ui, weight: .medium))
+                                        .foregroundColor(pal.mid)
+                                }
                             }
                         }
                         .padding(.bottom, geo.size.height * 0.08)
@@ -227,7 +265,13 @@ struct ContentView: View {
         // sheets, settings and the details panel follow the theme
         .preferredColorScheme(pal.dark ? .dark : .light)
         .statusBarHidden(true)
-        .onAppear { viewModel.start() }
+        .onAppear {
+            viewModel.start()
+            if viewModel.aroundMe { location.start() }
+        }
+        // a radar paired: it takes over from "around me"
+        .onChange(of: pairing.radars.count) { _, n in if n > 0 && viewModel.aroundMe { viewModel.setAroundMe(false) } }
+        .onChange(of: viewModel.aroundMe) { _, on in if on { location.start() } }
         // back from the background: say "connecting" until the radar answers
         .onChange(of: scenePhase) { _, phase in if phase == .active { viewModel.resume() } }
         .onReceive(location.$coordinate) { viewModel.me = $0 }
@@ -251,7 +295,7 @@ struct ContentView: View {
                 .preferredColorScheme(pal.dark ? .dark : .light)
         }
         .sheet(isPresented: $showLogbook) {
-            LogbookView().preferredColorScheme(pal.dark ? .dark : .light)
+            LogbookView(noRadar: viewModel.aroundMe).preferredColorScheme(pal.dark ? .dark : .light)
         }
         .fullScreenCover(isPresented: $showSky) {
             SkyView(viewModel: viewModel, location: location, focus: skyFocus, backToRadar: { hex in

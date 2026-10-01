@@ -6,6 +6,8 @@ import SwiftUI
 /// /sightings/year). Read-only, and readable from away too: the radar's
 /// public page serves it.
 struct LogbookView: View {
+    /// Using the app without a radar (#41): there is no logbook to show.
+    var noRadar = false
     @Environment(\.dismiss) private var dismiss
     @State private var stats: LogStats?
     @State private var year: LogYear?
@@ -14,7 +16,15 @@ struct LogbookView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let stats {
+                if noRadar {
+                    ContentUnavailableView {
+                        Label("Kept by your radar", systemImage: "book.closed")
+                    } description: {
+                        Text("A StratoScan radar keeps a logbook of everything it hears: records, regulars, what flies over and when. The aircraft around you come from a public network, which keeps no history for you.")
+                    } actions: {
+                        Link("How to build a StratoScan radar", destination: URL(string: "https://github.com/mferris/StratoScan#readme")!)
+                    }
+                } else if let stats {
                     List {
                         header(stats)
                         today(stats)
@@ -38,7 +48,7 @@ struct LogbookView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .refreshable { await load() }
         }
-        .task { await load() }
+        .task { if !noRadar { await load() } }
     }
 
     // MARK: sections

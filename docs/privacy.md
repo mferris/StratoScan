@@ -72,6 +72,15 @@ aircraft's track is public, so an alert does hint where you were, to
 anyone who could read it on its way through the relay (it is kept only
 briefly). Turning the option off withdraws your location from every radar.
 
+**Aircraft around you, without a radar** (off unless you turn it on: "See
+aircraft around you", or Settings › Without a radar). For someone with no
+StratoScan radar, the app shows live traffic around the phone from adsb.lol,
+centred on where you are. To ask for it, the app sends adsb.lol your
+location **rounded to about 5 km** (0.05°), every 5 seconds while the app is
+open. adsb.lol sees that rounded location and your IP address, like any web
+request. Nothing goes to the StratoScan relay. The map is centred on your
+exact position on the phone only. Pairing a radar switches this off.
+
 **Sky view away from home** (off unless you turn it on). When the phone is
 more than 3 nm from your radar, Sky view offers to show the aircraft around
 you instead. If you say yes, the app asks adsb.lol, a public ADS-B network,

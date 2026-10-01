@@ -103,6 +103,11 @@ final class RadarViewModel: ObservableObject {
     @Published private(set) var notHeardCount: Int = 0
     @Published private(set) var runwayGeoJSON: Data?
     @Published private(set) var isDemo = DemoFeed.isOn
+    /// No radar (#41): the aircraft around the phone, from adsb.lol, with the
+    /// view centred on the phone. Opt-in; the location goes to adsb.lol only,
+    /// rounded to about 5 km (NearMeFeed). Pairing a radar switches it off.
+    @Published private(set) var aroundMe = UserDefaults.standard.bool(forKey: "stratoscan.aroundMe")
+    private var aroundMeFetchedAt = Date.distantPast
     /// True while the radar is being read through its public (away) address.
     @Published private(set) var viaAway = false
 
@@ -188,6 +193,21 @@ final class RadarViewModel: ObservableObject {
         Task { await loadHome() }
     }
 
+    func setAroundMe(_ on: Bool) {
+        UserDefaults.standard.set(on, forKey: "stratoscan.aroundMe")
+        aroundMe = on
+        if on && DemoFeed.isOn { DemoFeed.isOn = false; isDemo = false }
+        planes.removeAll()
+        aircraftCount = 0
+        notHeardCount = 0
+        selectedHex = nil
+        home = nil
+        runwayGeoJSON = nil
+        aroundMeFetchedAt = .distantPast
+        resume()
+        WatchSync.shared.push()
+    }
+
     func stop() {
         pollTask?.cancel()
         pollTask = nil
@@ -214,7 +234,44 @@ final class RadarViewModel: ObservableObject {
         runwayGeoJSON = await RunwayClient.fetchRunwayGeoJSON(center: home, rangeNm: ringNm)
     }
 
+    /// Around me: the phone is the centre, adsb.lol the source, every 5 s.
+    private func pollAroundMe() async {
+        guard let me else {
+            // waiting for the first location fix (or for permission)
+            if Date().timeIntervalSince(connectingSince) > connectGrace { connecting = false }
+            connected = false
+            return
+        }
+        if home.map({ Geo.haversineBearingRange(lat1: $0.lat, lon1: $0.lon, lat2: me.lat, lon2: me.lon).range > 0.25 }) ?? true {
+            home = me
+            Task { await loadRunways() }
+        }
+        guard Date().timeIntervalSince(aroundMeFetchedAt) >= 5 else { return }
+        aroundMeFetchedAt = Date()
+        guard let list = await NearMeFeed.fetch(around: me) else {
+            connected = false
+            if Date().timeIntervalSince(connectingSince) > connectGrace { connecting = false }
+            checkStale()
+            return
+        }
+        lastGoodFetch = Date()
+        connected = true
+        connecting = false
+        if viaAway { viaAway = false }
+        applyUpdate(list.map(\.0))
+        // all of them reported by the network, with its registration and type
+        for (raw, extra) in list {
+            guard let p = planes[raw.hex] else { continue }
+            p.isNetwork = true
+            if let r = extra?.r { p.reg = r }
+            if p.typeLabel == nil, let t = extra?.t { p.typeLabel = t }
+        }
+        aircraftCount = planes.values.filter { $0.range <= ringNm }.count
+        notHeardCount = 0
+    }
+
     private func pollOnce() async {
+        if aroundMe && !DemoFeed.isOn { await pollAroundMe(); return }
         if home == nil { await loadHome() }
         do {
             let raw = try await AircraftFeedClient.fetchFeed(network: AircraftFeedClient.showNetwork).aircraft
