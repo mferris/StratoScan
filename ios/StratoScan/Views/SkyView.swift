@@ -34,6 +34,10 @@ struct SkyView: View {
     /// Back to the radar with the focused aircraft selected there again.
     var backToRadar: ((String) -> Void)? = nil
 
+    /// The aircraft being found, and the way to it: a bright yellow that
+    /// stands out against sky, cloud and the other labels.
+    static let findColour = Color(red: 1.0, green: 0.86, blue: 0.0)
+
     /// Further than this from the radar, its own aircraft no longer cover
     /// the sky overhead, so Sky view offers the ones around the phone.
     private static let awayNm = 3.0
@@ -292,6 +296,9 @@ struct SkyView: View {
     private func labels(in size: CGSize) -> some View {
         let from = location.coordinate ?? viewModel.home
         var offscreen: [(PlaneState, CGPoint, Angle, Double)] = []
+        // Finding one aircraft: which way across the screen it lies, and how
+        // far off the middle of the view, in degrees.
+        var guide: (angle: Angle, degreesOff: Double)? = nil
         let placed: [(PlaneState, CGPoint, Double)] = {
             guard let from, let m = motion.deviceFromWorld else { return [] }
             // Portrait, aspect-fill: the screen's height spans the camera's
@@ -307,6 +314,14 @@ struct SkyView: View {
                 // world: x north, y west, z up (CoreMotion's xTrueNorthZVertical)
                 let w = SIMD3(cos(el) * cos(b), -cos(el) * sin(b), sin(el))
                 let d = m * w   // device: x right, y up the screen, z out of the screen
+                if p.hex == focus {
+                    // angle between where the camera looks (-z) and the aircraft
+                    let off = acos(max(-1, min(1, -d.z))) * 180 / .pi
+                    let ux = CGFloat(d.x), uy = CGFloat(-d.y)
+                    if off > 8, hypot(ux, uy) > 0.001 {
+                        guide = (.radians(atan2(ux, -uy)), off)
+                    }
+                }
                 let onScreen: CGPoint? = {
                     guard d.z < -0.05 else { return nil }   // the back camera looks along -z
                     let pt = CGPoint(x: size.width / 2 + CGFloat(d.x / -d.z) * f,
@@ -332,6 +347,24 @@ struct SkyView: View {
         // the focused aircraft always gets its arrow, first
         let arrows = offscreen.sorted { ($0.0.hex == focus ? -1 : $0.3) < ($1.0.hex == focus ? -1 : $1.3) }.prefix(5)
         return ZStack {
+            // The way to the aircraft being found: a big arrow from the middle
+            // of the view, and how far off it is, gone once it's near the middle.
+            if let g = guide {
+                VStack(spacing: 6) {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 64, weight: .heavy))
+                        .rotationEffect(g.angle - motion.upright)
+                    Text("\(Int(g.degreesOff.rounded()))° away")
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(Self.findColour)
+                .shadow(color: .black.opacity(0.9), radius: 3)
+                .shadow(color: .black.opacity(0.6), radius: 8)
+                .rotationEffect(motion.upright)
+                .position(x: size.width / 2, y: size.height / 2)
+                .allowsHitTesting(false)
+                .accessibilityLabel("The aircraft is \(Int(g.degreesOff.rounded())) degrees away; the arrow points to it")
+            }
             ForEach(placed, id: \.0.hex) { p, pt, range in
                 Button {
                     // Held sideways, the details open sideways too: a panel
@@ -350,7 +383,9 @@ struct SkyView: View {
                     ZStack(alignment: .top) {
                         // the aircraft being found: a white double ring
                         if p.hex == focus {
-                            Circle().stroke(.white, lineWidth: 2).frame(width: 34, height: 34).offset(y: -6)
+                            Circle().stroke(Self.findColour, lineWidth: 3.5).frame(width: 38, height: 38)
+                                .offset(y: -8)      // centred on the aircraft's own ring (11 pt down)
+                                .shadow(color: .black.opacity(0.8), radius: 2)
                         }
                         Circle().stroke(Palette.classic.altColor(p.alt), lineWidth: 2).frame(width: 22, height: 22)
                         VStack(spacing: 1) {
@@ -390,9 +425,9 @@ struct SkyView: View {
                         Text(p.cs).font(.system(size: 11, weight: .semibold, design: .monospaced))
                         Text(String(format: "%.0f nm", range)).font(.system(size: 10, design: .monospaced))
                     }
-                    .foregroundColor(Palette.classic.altColor(p.alt))
+                    .foregroundColor(p.hex == focus ? Self.findColour : Palette.classic.altColor(p.alt))
                     .padding(6)
-                    .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    .background(.black.opacity(p.hex == focus ? 0.6 : 0.35), in: RoundedRectangle(cornerRadius: 8))
                     .rotationEffect(motion.upright)
                 }
                 .buttonStyle(.plain)
