@@ -401,6 +401,48 @@ class Detector:
             if self.fired.get(key) == now:
                 self.approaching_me[(hex_, phone)] = now + t
 
+    def _check_phone_nearby(self, out, a, alt, now):
+        """The radar's nearby rules -- notable within 30 nm, a helicopter
+        within 3 nm, anything low within 2 mi -- measured from each phone's
+        position as well as the antenna's (#44). The relay sends each phone
+        only what it chose: the radar's, its own, or both."""
+        lat, lon = a.get("lat"), a.get("lon")
+        if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+            return
+        hex_ = a["hex"]
+        info = None
+        for phone, (lat0, lon0, _) in self.points.items():
+            d = math.hypot((lon - lon0) * 60 * math.cos(math.radians(lat0)), (lat - lat0) * 60)
+            if d > NOTABLE_RADIUS_NM:
+                continue
+            if info is None:
+                info = self.types.lookup(hex_)
+
+            def event(label=None, operator=None):
+                ev = describe(a, info, now)
+                ev.pop("dist_nm", None)     # from the antenna, and from the phone they'd say where it is
+                ev.pop("dir", None)
+                ev["phone"] = phone
+                if label:
+                    ev["label"] = label[:60]
+                if operator:
+                    ev["operator"] = operator[:60]
+                return ev
+
+            key = (hex_, "notable", phone)
+            if self._due(key, "notable", now):
+                why = notable_reason(a, info, self.notable)
+                if why:
+                    self._emit(out, key, "notable", event(why[0], why[1]), now)
+            if d <= HELI_RADIUS_NM and is_rotorcraft(a, info):
+                key = (hex_, "helicopter", phone)
+                if self._due(key, "helicopter", now):
+                    self._emit(out, key, "helicopter", event(), now)
+            elif d <= LOW_RADIUS_NM and alt is not None and 0 < alt <= LOW_MAX_ALT_FT:
+                key = (hex_, "low_overhead", phone)
+                if self._due(key, "low_overhead", now):
+                    self._emit(out, key, "low_overhead", event(), now)
+
     def set_points(self, points, now=None):
         """Phone positions from the relay, newest wins; stale ones dropped."""
         now = now if now is not None else time.time()
@@ -449,6 +491,7 @@ class Detector:
             self._check_approach(out, a, info, dist, alt, now)
             if self.points:
                 self._check_phone_approaches(out, a, alt, now)
+                self._check_phone_nearby(out, a, alt, now)
 
             # A helicopter nearby is a helicopter event, never also a low one.
             if dist <= HELI_RADIUS_NM and is_rotorcraft(a, info):
