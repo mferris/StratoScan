@@ -549,7 +549,7 @@ async function fleetPage(env) {
     </tr>`;
   }).join('');
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>StratoScan fleet</title><link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230a1a3a'/><circle cx='50' cy='50' r='38' fill='none' stroke='%23274a86' stroke-width='7'/><path d='M50 50 L50 12 A38 38 0 0 1 82.9 31 Z' fill='%235ee7ff' opacity='0.35'/><line x1='50' y1='50' x2='82.9' y2='31' stroke='%235ee7ff' stroke-width='8' stroke-linecap='round'/><circle cx='30' cy='64' r='7' fill='%233ddc97'/><circle cx='45' cy='36' r='8.5' fill='%23ffffff'/></svg>">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>StratoScan fleet</title><link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%230a1a3a%22/><circle cx=%2250%22 cy=%2250%22 r=%2238%22 fill=%22none%22 stroke=%22%23274a86%22 stroke-width=%227%22/><path d=%22M50 50 L50 12 A38 38 0 0 1 82.9 31 Z%22 fill=%22%235ee7ff%22 opacity=%220.35%22/><line x1=%2250%22 y1=%2250%22 x2=%2282.9%22 y2=%2231%22 stroke=%22%235ee7ff%22 stroke-width=%228%22 stroke-linecap=%22round%22/><circle cx=%2230%22 cy=%2264%22 r=%227%22 fill=%22%233ddc97%22/><circle cx=%2245%22 cy=%2236%22 r=%228.5%22 fill=%22%23ffffff%22/></svg>">
 <style>
   body{font:15px/1.4 system-ui,sans-serif;margin:16px;background:#0f1417;color:#e6e6e6}
   table{border-collapse:collapse;width:100%}td,th{padding:8px;border-bottom:1px solid #2a3338;text-align:left;vertical-align:top}
