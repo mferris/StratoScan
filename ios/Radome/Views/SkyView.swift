@@ -42,7 +42,8 @@ struct SkyView: View {
             ZStack {
                 Color.black
                 CameraPreview(session: camera.session)
-                labels(in: geo.size)
+                // redrawn 30 times a second, so labels glide between reports
+                TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in labels(in: geo.size) }
                 VStack(spacing: 12) {
                     HStack(alignment: .top) {
                         Text(status)
@@ -103,6 +104,21 @@ struct SkyView: View {
         guard nearMeOn, isAway, let me = location.coordinate else { return "off" }
         let r = NearMeFeed.rounded(me)
         return "\(r.lat),\(r.lon)"
+    }
+
+    /// Where the aircraft is now, not where it was at its last report.
+    /// Reports come once a second from the radar, and every 5 s from
+    /// adsb.lol; placed at each report, labels jumped from one to the next.
+    /// In between, each moves along its own speed and track, at most 10 s
+    /// ahead, so a stale report can't fly a label off into the distance.
+    static func estimatedPosition(_ p: PlaneState, at now: Date) -> Coordinate? {
+        guard let lat = p.lat, let lon = p.lon else { return nil }
+        let age = min(10, max(0, now.timeIntervalSince(p.lastSeen)))
+        guard let gs = p.speed, gs > 30, age > 0 else { return Coordinate(lat: lat, lon: lon) }
+        let nm = gs * age / 3600
+        let t = p.hdg * .pi / 180
+        return Coordinate(lat: lat + nm * cos(t) / 60,
+                          lon: lon + nm * sin(t) / (60 * cos(lat * .pi / 180)))
     }
 
     private var status: String {
@@ -186,9 +202,10 @@ struct SkyView: View {
             // Portrait, aspect-fill: the screen's height spans the camera's
             // full wide field of view (its long side).
             let f = (size.height / 2) / tan(camera.fieldOfView * .pi / 360)
+            let now = Date()
             return shown.compactMap { p in
-                guard let lat = p.lat, let lon = p.lon else { return nil }
-                let br = Geo.haversineBearingRange(lat1: from.lat, lon1: from.lon, lat2: lat, lon2: lon)
+                guard let fix = Self.estimatedPosition(p, at: now) else { return nil }
+                let br = Geo.haversineBearingRange(lat1: from.lat, lon1: from.lon, lat2: fix.lat, lon2: fix.lon)
                 let upM = (p.alt.feetValue ?? 0) * 0.3048
                 let el = atan2(upM, max(br.range * 1852, 1))
                 let b = br.bearing * .pi / 180
