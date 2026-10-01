@@ -124,8 +124,10 @@ struct ContentView: View {
                                 .padding(10)
                         }
                         .accessibilityLabel("Labels: \(viewModel.labelMode.rawValue)")
-                        // Centre on me: shows this phone on the radar. The
-                        // location stays on the phone.
+                        // Centre on me, as in Apple Maps: the "YOU" dot shows
+                        // whenever location is on (this, the compass, Sky view
+                        // or "Approaching me" can turn it on); this button
+                        // centres the view on it, and back on the radar.
                         Button {
                             location.start()
                             viewModel.centreOnMe.toggle()
