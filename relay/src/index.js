@@ -32,7 +32,7 @@ import {
   MAX_EVENTS_PER_REQUEST, EVENTS_PER_HOUR, EVENTS_PER_UNIT, EVENT_RETENTION_S, cleanEvent,
   PAIRING_TTL_S, PAIRING_MAX_ATTEMPTS, MAX_PHONES_PER_UNIT, MAX_UNITS_PER_PHONE, cleanPhoneName,
   PUSHES_PER_HOUR, PUSHES_PER_HOUR_HARD, PUSHES_PER_BATCH, cleanKinds,
-  LOCATION_TTL_S, LOCATION_MIN_GAP_S, LOCATION_BLOB_MAX, BOX_KEY_CONTEXT,
+  LOCATION_TTL_S, LOCATION_MIN_GAP_S, LOCATION_BLOB_MAX, BOX_KEY_CONTEXT, NEARBY_KINDS,
 } from './limits.js';
 import * as apns from './apns.js';
 
@@ -196,8 +196,23 @@ async function deliver(env, unit, evs) {
     for (const e of approaches.slice(0, 2)) {
       await liveActivity(env, phone, unit, e, wants);
     }
-    const mine = ordered.filter(e => e.kind !== 'approach' && e.kind !== 'approach_end'
-      && (e.kind === 'test' || wants.includes(e.kind)));
+    // Nearby alerts by where the owner wants them about (#44): the radar's
+    // (no phone named), this phone's own (named), or both -- once each per
+    // aircraft. A phone that hasn't chosen gets the radar's, as before.
+    const aboutRadar = wants.includes('near_radar') || !wants.includes('near_me');
+    const aboutMe = wants.includes('near_me');
+    const seenNearby = new Set();
+    const mine = ordered.filter(e => {
+      if (e.kind === 'approach' || e.kind === 'approach_end') return false;
+      if (e.kind === 'test') return true;
+      if (!wants.includes(e.kind)) return false;
+      if (!NEARBY_KINDS.includes(e.kind)) return !e.phone;          // emergencies: about the aircraft
+      if (e.phone ? (e.phone !== phone.id || !aboutMe) : !aboutRadar) return false;
+      const k = e.kind + ':' + e.hex;
+      if (seenNearby.has(k)) return false;
+      seenNearby.add(k);
+      return true;
+    });
     let dead = false;
     for (const e of mine.slice(0, PUSHES_PER_BATCH)) {
       const r = await pushTo(env, phone, apns.notificationFor(e, unit), e.kind === 'emergency' || e.kind === 'test');
