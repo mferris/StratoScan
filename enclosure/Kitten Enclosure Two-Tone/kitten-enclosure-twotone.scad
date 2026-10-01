@@ -331,28 +331,12 @@ fan_grille_pos = [0, -68];
 // floor intake
 intake_dia = 54; intake_hole = 3; intake_pitch = 6;
 
-// side exhaust
-exhaust_slot_w = 2.2; exhaust_slot_h = 12;
-// Centred in the window between the top of the upper decorative rib and the
-// rear cradle arm, rather than at plain mid-depth. At mid-depth the slots ran
-// from z=24.5 and the upper rib band is 22-27, so every slot cut through the
-// rib and came out the other side -- the rib read as broken rather than as a
-// ridge. Moving rather than shortening keeps the full 12mm of vent: the clear
-// window is 16.5mm and the slot is 12mm, so it fits with ~2mm either side.
-//
-// Derived, not typed, so it follows shell_depth and the rib positions instead
-// of silently becoming wrong the next time either moves. The kitten has no
-// ribs, but exhaust_z is shared core, and the slots stay inside the arm gap
-// there too -- identical part, no reason to fork it.
-rib_top_z      = 27;               // max(rib_z_list) + rib_w, restated for the kitten
-arm_b_inner_z  = shell_depth/2 + 13;   // arm_gap/2 = 13
-exhaust_z      = (rib_top_z + arm_b_inner_z) / 2;
-n_exhaust = 24;   // on a 15-degree pitch; only those in exhaust_a0..a1 are cut
-// One slot, at the top between the ears (2026-10-01). The others ran into the
-// ear bases, the whisker grilles and the cradle underneath, and every one was
-// centred on the outer face, so none reached the inside. See exhaust_slots().
-exhaust_a0 = 90;
-exhaust_a1 = 90;
+// No side exhaust (2026-10-01). The ears are hollow and open at the back, and
+// their hollows reach into the head, so warm air leaves through them. The
+// side slots the kitten inherited from the retro case ran into the ear
+// bases, the whisker grilles and the cradle, and were blind dents anyway
+// (centred on the outer face, 2.5mm into a 3mm wall). checks.scad's
+// top_wall_solid holds this.
 
 stand_angle = 18;           // how far the head leans back in the cradle
 
@@ -630,23 +614,6 @@ module fan_grille() {
                 translate([fan_grille_pos[0]+x, fan_grille_pos[1]+y, -1])
                     cylinder(d=intake_hole, h=wall+2, $fn=10);
         }
-    }
-}
-
-module exhaust_slots() {
-    for (i = [0:n_exhaust-1]) {
-        a = i * 360/n_exhaust;
-        // Centred in the wall, so the cut (wall + 2 deep) breaks out on both
-        // faces. Centred on the outer face, it went only 2.5mm into the 3mm
-        // wall: a blind dent, not a vent.
-        if (a >= exhaust_a0 && a <= exhaust_a1)
-            translate([(outer_dia/2 - wall/2)*cos(a), (outer_dia/2 - wall/2)*sin(a), exhaust_z])
-                rotate([0,0,a]) rotate([90,0,90])
-                    linear_extrude(height=wall+2, center=true)
-                        hull() {
-                            translate([0,  exhaust_slot_h/2 - exhaust_slot_w/2]) circle(d=exhaust_slot_w);
-                            translate([0, -exhaust_slot_h/2 + exhaust_slot_w/2]) circle(d=exhaust_slot_w);
-                        }
     }
 }
 
@@ -1201,7 +1168,6 @@ module shell() {
             cradle_rails();
             for (a = speaker_angles) speaker_bracket(a);
         }
-        exhaust_slots();
         for (a = speaker_angles) whisker_grille(a);
         inner_ear_recess();
         back_post_holes();

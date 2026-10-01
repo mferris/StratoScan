@@ -18,7 +18,7 @@ check = "none";
 // the milligram across a resolution change that should have moved it.
 $fs = 0.4;
 $fa = 0.5;
-outer_dia=223.34; shell_depth=61; wall=3; n_exhaust=24; exhaust_a0=90; exhaust_a1=90; exhaust_slot_w=2.2; exhaust_slot_h=12; lip_height=6; shelf_h=2;
+outer_dia=223.34; shell_depth=61; wall=3; lip_height=6; shelf_h=2;
 screw_r=106.67; n_screws=8; post_od=9;
 screw_clear_dia=3.4; nose_angle=270; front_trim_h=4;
 back_plate_t=3; ant_mount_y=88; ant_stub_len=30; ant_barrel_len=14; ant_socket_dia=33; ant_socket_depth=6;
@@ -379,25 +379,14 @@ else if (check=="key_blocks_180") { intersection() { rotate([0,0,180]) back_plat
 else if (check=="key_blocks_225") { intersection() { rotate([0,0,225]) back_plate(); back_key(); } }
 else if (check=="key_blocks_270") { intersection() { rotate([0,0,270]) back_plate(); back_key(); } }
 else if (check=="key_blocks_315") { intersection() { rotate([0,0,315]) back_plate(); back_key(); } }
-// ---- side exhaust: the one slot at the top, open to the inside --------
-// The slots used to run all round, into the ears, the whiskers and the
-// cradle, and only 2.5mm deep in a 3mm wall. Nothing may be cut more than 5
-// degrees from straight up...
-else if (check=="exhaust_top_only") {
+// ---- no side slots ----------------------------------------------------
+// The kitten vents through its hollow ears, open at the back; the side wall
+// is plain. A probe where the last slot was (straight up, mid-depth) must
+// find the full wall there, about 79mm3; a slot would take most of it.
+else if (check=="top_wall_solid") {
   intersection() {
-    exhaust_slots();
-    rotate([0,0,95]) rotate_extrude(angle=350)
-      translate([0, -1]) square([outer_dia, shell_depth + 2]);
-  }
-}
-// ...and that slot must break out past the wall's inner face (about 13mm3).
-else if (check=="exhaust_reaches_inside") {
-  intersection() {
-    exhaust_slots();
-    difference() {
-      cylinder(d=outer_dia - 2*wall + 0.01, h=shell_depth);
-      translate([0,0,-1]) cylinder(d=outer_dia - 2*wall - 1, h=shell_depth + 2);
-    }
+    shell();
+    translate([-1.1, outer_dia/2 - wall, 29.25]) cube([2.2, wall, 12]);
   }
 }
 else if (check=="canary") { shell(); }
