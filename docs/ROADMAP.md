@@ -88,6 +88,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 2.8 | App shows the network's aircraft too (the kiosk's "not heard" ghosts from `/network`), marked distinctly, with matching counts and the ODbL credit; setting to turn off | The app and the kiosk show the same sky on a real iPhone |
 | 2.9 | Zoom in the app: pinch from 20 nm to about 1 nm, centred on the radar, the phone, or a followed aircraft; optionally the same on the kiosk, returning to full view by itself | A real aircraft sits on the right street at full zoom on a real iPhone |
 | 2.10 | Logo and app icon: a round radar-sweep mark with a nod to altitude, legible at 16 px and in one colour; app icon (with dark and tinted variants), favicons, README header, repo social preview; logo files under their own notice, not MIT | Claude | The icon on a real iPhone home screen, and favicons everywhere the project shows its face |
+| 2.11 | iPad app: a big radar with details, logbook and settings in a side panel; landscape and portrait; optional full-screen wall mode | On a real iPad, both orientations, nothing changed on the iPhone |
 
 ## Phase 3: the wrist
 
