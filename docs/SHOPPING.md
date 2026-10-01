@@ -25,6 +25,15 @@ browser, before any display or case.
 | ADS-B receiver (1090 MHz SDR with a built-in filter) | 1 | $30–46 | Either the Nooelec FlyCatcher (what RDU uses) or the [FlightAware Pro Stick Plus](https://flightaware.store/products/pro-stick-plus) |
 | [NooElec ADS-B Discovery 5 dBi antenna bundle](https://www.amazon.com/NooElec-ADS-B-Discovery-Antenna-Bundle/dp/B01J9DH9U2) | 1 | $25 | 1090 MHz whip, plus a 978 MHz one for the future UAT receiver. **Placement matters more than any part:** a window or outdoor spot heard 14 aircraft where an indoor puck heard 1 |
 
+**Connect the receiver directly.** The FlyCatcher mounts on the Pi as a HAT,
+but its data still goes over USB: use the short USB-A to micro-USB jumper that
+comes with it, plugged straight into one of the Pi's ports. **Don't add a
+USB adapter or extension** (a right-angle USB-A adapter, a panel-mount
+passthrough). On RDU a right-angle adapter made the receiver drop off USB
+dozens of times an evening ("Cannot enable. Maybe the USB cable is bad?");
+the screen showed NO SIGNAL each time until the watchdog reset it. With the
+adapter removed, the drop-outs stopped.
+
 **Check first:** set up the Pi, receiver and antenna, and confirm real
 aircraft appear before you buy the display. See
 [project-spec.md](project-spec.md), "Purchase Plan".
