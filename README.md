@@ -30,7 +30,7 @@ needs are in the [shopping list](docs/SHOPPING.md).
 | The radar (kiosk) | Running unattended; updates itself from signed releases. One labelled aircraft feed on the unit for every screen (`/api/aircraft`); drawing cost halved |
 | Phase 4 extras | Done: rewind, notable aircraft, empty-sky screen, spoken announcements, year in review, opt-in FlightAware feeding |
 | Relay (push + fleet health) | Live on Cloudflare Workers |
-| iPhone app | Working on a real iPhone: QR pairing, push alerts, widgets, Live Activity for approaching aircraft, home/away switching, the network's aircraft, zoom, "centre on me", a compass, Sky view, the logbook, demo mode |
+| iPhone and iPad app | Working on a real iPhone: QR pairing, push alerts (including aircraft approaching *you*), widgets, Live Activity, home/away switching, the network's aircraft, zoom, a compass, Sky view with tracks, the logbook, weather, colour themes; a no-radar mode and an iPad layout (simulator-tested) |
 | Apple Watch app | Built (glance radar, complications, Smart Stack); waiting for TestFlight to reach a real Watch |
 | Security review | Full scan done 2026-09-28; every finding fixed and verified on the running unit |
 | Factory SD image | Builds and passes its checks in CI; not yet test-flashed or published |
@@ -199,6 +199,18 @@ scanning a QR code on its screen:
 - **Logbook** — what your radar has seen: today, all-time totals, records
   (farthest, closest, highest, fastest), what flies over, when, and the
   regulars
+- **Sky view tracks and Find in the sky** — each aircraft's path drawn
+  across the sky; from any aircraft on the radar, a big arrow guides you to
+  it in the camera view
+- **Approaching you** (opt-in) — alerts for aircraft about to pass over
+  where *you* are, not just the radar; your location is end-to-end
+  encrypted to your own radar
+- **Weather and themes** — rain, storms and lightning on the map, and the
+  radar's four colour themes (Daylight by default)
+- **iPad** — a big radar with details alongside, and a wall mode that dims
+  at night
+- **No radar yet?** — see live aircraft around you from the public
+  adsb.lol network (opt-in), or play the demo
 - **Home and away** — on your WiFi the app talks to the radar directly; away
   from home it switches to the radar's public HTTPS page by itself. The away
   address is learned from the radar
