@@ -162,6 +162,10 @@ def main():
         # cropped to the capitals (42 tall, no descenders), 2 units spare
         write("wordmark-on-dark.svg", svg(f'<g transform="translate(1 44)">{words}</g>',
                                           w=round(width + 2), h=46, title="StratoScan"))
+        # and dark letters, for the app's Daylight theme (iOS picks by appearance)
+        words, width = wordmark_paths(a.font, [("Strato", INK), ("Scan", SCAN_ON_LIGHT)], cap_height=42)
+        write("wordmark-on-light.svg", svg(f'<g transform="translate(1 44)">{words}</g>',
+                                           w=round(width + 2), h=46, title="StratoScan"))
     sync_pages(inline)
 
 

@@ -102,16 +102,8 @@ final class PlaneState: Identifiable {
         lastSeen = Date()
     }
 
-    static func altColor(_ alt: Altitude) -> Color {
-        switch alt {
-        case .ground: return Color(hex: "#6b8087")
-        case .unknown: return Color(hex: "#6b8087")
-        case .feet(let ft):
-            if ft < 10000 { return Color(hex: "#ffb020") }
-            if ft < 25000 { return Color(hex: "#4fd6c8") }
-            return Color(hex: "#a78bfa")
-        }
-    }
+    /// The chosen theme's altitude colour (see Palette).
+    static func altColor(_ alt: Altitude) -> Color { Palette.current.altColor(alt) }
 
     static func altLabel(_ alt: Altitude) -> String {
         switch alt {

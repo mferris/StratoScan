@@ -18,6 +18,8 @@ struct MapBackgroundView: UIViewRepresentable {
     let center: Coordinate
     let zoom: Double
     let runwayGeoJSON: Data?
+    /// The theme: its place-name colours (dark-on-light for Daylight).
+    var palette: Palette = .classic
 
     private static let styleURL = URL(string: "https://tiles.openfreemap.org/styles/liberty")!
 
@@ -29,10 +31,12 @@ struct MapBackgroundView: UIViewRepresentable {
         map.attributionButton.isHidden = false
         map.delegate = context.coordinator
         context.coordinator.map = map
+        context.coordinator.setPalette(palette)
         return map
     }
 
     func updateUIView(_ uiView: MLNMapView, context: Context) {
+        context.coordinator.setPalette(palette)
         uiView.setCenter(CLLocationCoordinate2D(latitude: center.lat, longitude: center.lon), zoomLevel: zoom, animated: false)
         context.coordinator.pendingRunwayGeoJSON = runwayGeoJSON
         context.coordinator.addRunwaysIfReady()
@@ -46,6 +50,14 @@ struct MapBackgroundView: UIViewRepresentable {
         private var runwaysAdded = false
         private var styleLoaded = false
 
+        private var palette: Palette = .classic
+
+        func setPalette(_ p: Palette) {
+            guard p != palette else { return }
+            palette = p
+            if styleLoaded, let style = map?.style { recolorLabels(style) }
+        }
+
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
             styleLoaded = true
             recolorLabels(style)
@@ -53,18 +65,19 @@ struct MapBackgroundView: UIViewRepresentable {
         }
 
         /// "liberty" is styled for a light background (black text, white
-        /// halo) — flip place-name labels to the opposite convention so
-        /// they stay legible once the CALayer filter darkens everything.
+        /// halo). On the darkened maps place names flip to light-on-dark so
+        /// they stay legible; Daylight keeps them dark-on-light (the kiosk's
+        /// recolorLabels, per theme).
         private func recolorLabels(_ style: MLNStyle) {
             let labelLayerIDs = ["label_city_capital", "label_city", "label_town", "label_village", "label_other"]
             for id in labelLayerIDs {
                 guard let layer = style.layer(withIdentifier: id) as? MLNSymbolStyleLayer else { continue }
-                layer.textColor = NSExpression(forConstantValue: UIColor(Color(hex: "#e8e2d5")))
-                layer.textHaloColor = NSExpression(forConstantValue: UIColor(Color(hex: "#05080a")))
+                layer.textColor = NSExpression(forConstantValue: UIColor(palette.mapLabel))
+                layer.textHaloColor = NSExpression(forConstantValue: UIColor(palette.mapHalo))
             }
             if let water = style.layer(withIdentifier: "water_name_point_label") as? MLNSymbolStyleLayer {
-                water.textColor = NSExpression(forConstantValue: UIColor(Color(hex: "#9fc4e8")))
-                water.textHaloColor = NSExpression(forConstantValue: UIColor(Color(hex: "#05080a")))
+                water.textColor = NSExpression(forConstantValue: UIColor(palette.mapWater))
+                water.textHaloColor = NSExpression(forConstantValue: UIColor(palette.mapHalo))
             }
         }
 

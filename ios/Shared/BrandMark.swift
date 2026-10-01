@@ -50,10 +50,14 @@ struct StratoScanMark: View {
     }
 }
 
-/// The mark on its sky tile, with the wordmark beside it (the "Wordmark"
-/// image, from assets/brand/wordmark-on-dark.svg). For dark screens.
+/// The mark on its sky tile, with the wordmark beside it ("Wordmark" and
+/// "WordmarkLight", from assets/brand/wordmark-on-dark.svg and -on-light.svg).
 struct StratoScanLogo: View {
     var height: CGFloat = 24
+    /// Dark letters for a light background (the app's Daylight theme). Left
+    /// out, it follows the screen's light or dark appearance.
+    var onLight: Bool? = nil
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(spacing: height * 0.16) {
@@ -61,7 +65,7 @@ struct StratoScanLogo: View {
                 .padding(height * 0.1)
                 .frame(width: height, height: height)
                 .background(StratoScanMark.sky, in: RoundedRectangle(cornerRadius: height * 0.22, style: .continuous))
-            Image("Wordmark")
+            Image((onLight ?? (scheme == .light)) ? "WordmarkLight" : "Wordmark")
                 .resizable()
                 .scaledToFit()
                 .frame(height: height * 0.42)

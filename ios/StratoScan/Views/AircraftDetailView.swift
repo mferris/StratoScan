@@ -6,6 +6,8 @@ struct AircraftDetailView: View {
     @ObservedObject var viewModel: RadarViewModel
     @ObservedObject var location: PhoneLocation
     let hex: String
+    /// "Find in the sky": opens Sky view on this aircraft (from the radar only).
+    var findInSky: (() -> Void)? = nil
     @State private var photo: Photo?
     @State private var showCompass = false
     @Environment(\.dismiss) private var dismiss
@@ -42,6 +44,10 @@ struct AircraftDetailView: View {
                         // Point the phone at it (roadmap 3.4).
                         Button("Compass") { showCompass = true }
                             .buttonStyle(.bordered)
+                        if let findInSky {
+                            Button { findInSky() } label: { Label("Find in the sky", systemImage: "binoculars") }
+                                .buttonStyle(.bordered)
+                        }
                     }
                     photoView
                     if let p {
