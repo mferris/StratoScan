@@ -14,6 +14,7 @@ struct WatchRadarView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 8) {
+                StratoScanLogo(height: 18)
                 radar.frame(width: 130, height: 130)
                 if let nearby {
                     Text("\(nearby.count) AIRCRAFT").font(.system(.headline, design: .monospaced))

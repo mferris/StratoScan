@@ -11,6 +11,12 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
+                Section {
+                    StratoScanLogo(height: 36)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
+                }
+                .listRowBackground(Color.clear)
                 PairedRadarsSection()
                 if !pairing.radars.isEmpty { AlertsSection() }
 

@@ -15,6 +15,7 @@
 		0DE14D91681F7C764E922EDB /* AircraftTypeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 769D50FEEB254553EEC84466 /* AircraftTypeClient.swift */; };
 		121BD62F0A9CE279318F29C0 /* demo-traffic.json in Resources */ = {isa = PBXBuildFile; fileRef = 9F6A1715C56DD3725E841B89 /* demo-traffic.json */; };
 		1C299E759C4FC525A8F7068C /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */; };
+		214A618091784678239C1324 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EB949368B168152189196A /* BrandMark.swift */; };
 		250F2BE3ED0A0540AF10F808 /* PairingScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 960596F02F0A26C2C5BB3E9C /* PairingScannerView.swift */; };
 		25C6604554AF94DA469EA92F /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */; };
 		25FC95561C8C8EC59463D039 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82D0550591B3A5D10B447D6B /* ContentView.swift */; };
@@ -46,10 +47,12 @@
 		91C2BCF8BF0A780884396FAB /* MapBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59D8472601E7A87932540E37 /* MapBackgroundView.swift */; };
 		96622DF96117F50AC7165848 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F7AEE53D7B021629485B1A /* APIConfig.swift */; };
 		99FA1A152BF6A9A9B5D69A78 /* RadomeWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 840555C58A2570BC9178F17F /* RadomeWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9AEF690EF7FD4F6FD9EAEA5E /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EB949368B168152189196A /* BrandMark.swift */; };
 		A02D5C7CCC59C4240DEDE855 /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDEF15D87D8BAE690A77DC40 /* Geo.swift */; };
 		A10B30F1CAED66BDF721A147 /* demo-traffic.json in Resources */ = {isa = PBXBuildFile; fileRef = 9F6A1715C56DD3725E841B89 /* demo-traffic.json */; };
 		A2C7AD80930A7B9E7EC2FB0F /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */; };
 		A3B5845981B37B60BD0088A0 /* Aircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5364E64D7A6AB4EC7F36A762 /* Aircraft.swift */; };
+		AD798A1432A5DD2FBE050996 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EB949368B168152189196A /* BrandMark.swift */; };
 		B31CF0C21C60C642EE61410A /* Aircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5364E64D7A6AB4EC7F36A762 /* Aircraft.swift */; };
 		B6702FB094B782BC253305C4 /* RadomeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 253708C4759FB636D54CE7FE /* RadomeApp.swift */; };
 		B9B67C3F95E4E43F6BE9CE9E /* PairedRadarsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F02A218B8D94A0157BAD495 /* PairedRadarsSection.swift */; };
@@ -173,6 +176,7 @@
 		9F6A1715C56DD3725E841B89 /* demo-traffic.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "demo-traffic.json"; sourceTree = "<group>"; };
 		9FA4F22EA60A35820DF1F1DD /* RouteLookupClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteLookupClient.swift; sourceTree = "<group>"; };
 		A1830CD86FA2C8BA2A10B2FE /* NormalizedAircraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NormalizedAircraft.swift; sourceTree = "<group>"; };
+		A1EB949368B168152189196A /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMark.swift; sourceTree = "<group>"; };
 		ABDBFE3DD4DBEE94C6853950 /* PhoneLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneLocation.swift; sourceTree = "<group>"; };
 		AFE8C9677953B5B9D8EF4F39 /* RadomeWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadomeWatchApp.swift; sourceTree = "<group>"; };
 		B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoFeed.swift; sourceTree = "<group>"; };
@@ -331,6 +335,7 @@
 				672BD01CB737B65682F25750 /* AircraftFeedClient.swift */,
 				F5F7AEE53D7B021629485B1A /* APIConfig.swift */,
 				5ED9AA2CE9A2C6B5AE180774 /* ApproachActivity.swift */,
+				A1EB949368B168152189196A /* BrandMark.swift */,
 				9F6A1715C56DD3725E841B89 /* demo-traffic.json */,
 				B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */,
 				EDEF15D87D8BAE690A77DC40 /* Geo.swift */,
@@ -561,6 +566,7 @@
 				726737634573DF876A6D429D /* AircraftFeedClient.swift in Sources */,
 				6F86ADE723B1ACAA1C0B3267 /* ApproachActivity.swift in Sources */,
 				D1F5F69DB780397F097AEB5B /* ApproachLiveActivity.swift in Sources */,
+				AD798A1432A5DD2FBE050996 /* BrandMark.swift in Sources */,
 				A2C7AD80930A7B9E7EC2FB0F /* DemoFeed.swift in Sources */,
 				09BDC78A861DEF82784989E0 /* Geo.swift in Sources */,
 				34B5E252D752396C044ED735 /* RadomeWidget.swift in Sources */,
@@ -579,6 +585,7 @@
 				F116F0F02DB64AF8485758E5 /* AirlineTable.swift in Sources */,
 				7CAFC7B414B1C56CD1390D4D /* AlertsSection.swift in Sources */,
 				86A23D183EC9805CED42C8A6 /* ApproachActivity.swift in Sources */,
+				9AEF690EF7FD4F6FD9EAEA5E /* BrandMark.swift in Sources */,
 				743522892CB30F81B4D69FF4 /* CompassView.swift in Sources */,
 				25FC95561C8C8EC59463D039 /* ContentView.swift in Sources */,
 				3FAD0E8926CAEDF90E4DB73F /* CreditsView.swift in Sources */,
@@ -612,6 +619,7 @@
 				96622DF96117F50AC7165848 /* APIConfig.swift in Sources */,
 				B31CF0C21C60C642EE61410A /* Aircraft.swift in Sources */,
 				4B803966945202AE11749225 /* AircraftFeedClient.swift in Sources */,
+				214A618091784678239C1324 /* BrandMark.swift in Sources */,
 				69C56A89CFA9070DEACFC984 /* DemoFeed.swift in Sources */,
 				CD1E1D43817A12186D11B28C /* Geo.swift in Sources */,
 				0C13992AE7E3EF7D44CFDF36 /* RadomeWatchApp.swift in Sources */,
