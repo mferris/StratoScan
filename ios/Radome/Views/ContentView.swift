@@ -180,7 +180,7 @@ struct ContentView: View {
 
     private var hud: some View {
         VStack(spacing: 2) {
-            StratoScanLogo(height: 22)
+            StratoScanLogo(height: 32)
                 .opacity(0.9)
                 .padding(.bottom, 6)
             if viewModel.isZoomed {
