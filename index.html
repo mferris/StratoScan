@@ -5805,45 +5805,14 @@ function showPlaceholderPhoto(photoEl) {
 // Most tracked tails (private/GA especially) have no dedicated planespotters
 // photo -- rather than always falling back to the generic silhouette, try a
 // representative photo of the aircraft *type* instead (e.g. any Cessna 172,
-// not necessarily this exact tail). Wikipedia/Wikimedia Commons, the same
-// free/no-key-required class of source as adsb.im's routes, RainViewer's
-// radar, and Overpass's runways elsewhere in this file. Cached per type
-// string (typeLabel), not per hex, since many tails share a type -- one
-// lookup covers every Cessna 172 this receiver ever sees. Clearly labeled
-// "Representative photo" (a badge on the image itself, not just the credit
-// line) so it's never mistaken for a real photo of that specific airframe --
-// unlike the planespotters credit above, this isn't a specific photographer
-// crediting a specific photo of a specific plane, so a "site name + link"
-// level of attribution (same non-clickable-text treatment as planespotters,
-// same kiosk-navigation-safety reasoning) felt like the right proportional
-// effort here, not full Commons per-image license/author boilerplate.
-// Attribution for a Wikipedia article's lead image, or null if it must not be
-// shown. Only files hosted on Wikimedia Commons qualify: everything there is
-// freely licensed, whereas a file hosted on English Wikipedia itself can be a
-// non-free "fair use" image whose permission does not extend to this app.
-// Most Commons images are CC BY-SA, which requires naming the author and the
-// licence -- "Wikipedia" alone, as this credit used to say, is not enough.
-async function commonsCredit(thumbUrl) {
-  const m = /\/wikipedia\/commons\/(?:thumb\/)?[0-9a-f]\/[0-9a-f]{2}\/([^/]+)/.exec(thumbUrl);
-  if (!m) return null;
-  const file = decodeURIComponent(m[1]);
-  const res = await fetch(
-    'https://commons.wikimedia.org/w/api.php?action=query&prop=imageinfo&iiprop=extmetadata' +
-    `&titles=${encodeURIComponent('File:' + file)}&format=json&origin=*`,
-    { cache: 'force-cache' });
-  const pages = (await res.json())?.query?.pages || {};
-  const meta = Object.values(pages)[0]?.imageinfo?.[0]?.extmetadata;
-  const license = meta?.LicenseShortName?.value;
-  if (!license) return null;
-  // Artist is HTML (often a link to a user page); keep only its text.
-  const artistHtml = meta?.Artist?.value || '';
-  const artist = new DOMParser().parseFromString(artistHtml, 'text/html').body.textContent.trim() || 'Unknown';
-  return {
-    artist: artist.slice(0, 80),
-    license: license.slice(0, 40),
-    page: `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(file)}`,
-  };
-}
+// not necessarily this exact tail): the lead image of the type's Wikipedia
+// article, if it is a freely licensed Wikimedia Commons file. The unit looks
+// it up (deploy/photo-proxy.py, /photo/type) so visitors' browsers never ask
+// Wikipedia themselves (#33). Cached per type string (typeLabel), not per
+// hex, since many tails share a type. Clearly labeled "Representative photo"
+// (a badge on the image itself, not just the credit line) so it's never
+// mistaken for a real photo of that specific airframe, and credited with the
+// author and licence that Commons' CC BY-SA files require.
 
 // A credit line: a real link in a normal browser, plain text on the kiosk,
 // where navigating away has no touch-reachable way back to the radar.
@@ -5860,42 +5829,17 @@ async function lookupStockPhoto(typeLabel) {
   stockPhotoPending.add(typeLabel);
   let result = null;
   try {
-    // action=query&list=search (full-text search over article content) --
-    // NOT action=opensearch, which only prefix-matches page *titles* and
-    // badly undershoots real hit rate: e.g. our own typeLabel string
-    // "Bombardier Regional Jet CRJ-900" doesn't share a common prefix with
-    // Wikipedia's actual title "Bombardier CRJ" (opensearch: no match), but
-    // full-text search finds it fine since the words all appear in the
-    // article regardless of order. Confirmed via a real browser fetch (not
-    // curl) that this endpoint honors CORS and doesn't require special
-    // headers for ordinary, human-paced usage.
-    const searchRes = await fetch(
-      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(typeLabel)}&srlimit=1&format=json&origin=*`,
-      { cache: 'force-cache' }
-    );
-    const searchData = await searchRes.json();
-    const title = searchData.query && searchData.query.search && searchData.query.search[0] && searchData.query.search[0].title;
-    if (title) {
-      const sumRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`, { cache: 'force-cache' });
-      const sumData = await sumRes.json();
-      const thumb = sumData.thumbnail && sumData.thumbnail.source;
-      const credit = thumb ? await commonsCredit(thumb) : null;
-      if (thumb && credit) result = { thumb, ...credit };
+    const res = await fetch(`/photo/type?q=${encodeURIComponent(typeLabel)}`);
+    const data = await res.json();
+    if (data.found && /^https:\/\//.test(data.thumb || '')) {
+      result = { thumb: data.thumb, artist: data.artist, license: data.license, page: data.page };
     }
   } catch (e) {
-    // offline or Wikipedia unavailable this attempt -- caller falls back to
-    // the placeholder, but see below: not cached, so a later reopen retries
+    // offline or the unit's lookup unavailable -- caller falls back to the
+    // placeholder; not cached, so a later reopen retries
   }
-  // Only successful lookups are cached, deliberately -- caching a null here
-  // would mean one transient failure (a network hiccup, a momentary
-  // Wikipedia rate-limit) permanently shows the placeholder for that whole
-  // aircraft type for the rest of the session, never retried, the exact
-  // failure mode loadRunways() had before its retry fix. Unlike runways
-  // (fetched once automatically at page load), this only ever runs on a
-  // tap, so an occasional repeat lookup for a type that's genuinely not on
-  // Wikipedia is cheap and bounded by how often someone taps that type,
-  // same tradeoff already made for the specific-tail planespotters photo
-  // lookup above, which also isn't cached and re-fetches every open.
+  // Only successful lookups are cached: one hiccup mustn't leave a whole
+  // type on the placeholder for the session (the unit remembers misses).
   if (result) stockPhotoCache.set(typeLabel, result);
   stockPhotoPending.delete(typeLabel);
   return result;
