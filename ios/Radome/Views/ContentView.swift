@@ -8,6 +8,14 @@ struct ContentView: View {
     @State private var showLogbook = false
     @State private var showSettings = false
     @EnvironmentObject private var pairing: PairingStore
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    /// iPad (#39): a full-screen radar with no controls, the screen kept awake.
+    @AppStorage("stratoscan.wallMode") private var wallMode = false
+
+    /// An iPad, or any window wide enough to be treated like one.
+    private var isPad: Bool { sizeClass == .regular }
+    /// Text and controls, scaled up on the bigger screen.
+    private var ui: CGFloat { isPad ? 1.4 : 1 }
 
     var body: some View {
         GeometryReader { geo in
@@ -46,7 +54,7 @@ struct ContentView: View {
                     .position(x: geo.size.width / 2, y: geo.size.height / 2)
                     .shadow(color: .black.opacity(0.6), radius: 20)
 
-                RadarView(viewModel: viewModel, diameter: side)
+                RadarView(viewModel: viewModel, diameter: side, uiScale: ui)
                     .frame(width: geo.size.width, height: geo.size.height)
 
                 VStack {
@@ -54,13 +62,13 @@ struct ContentView: View {
                     Spacer()
                     if viewModel.viaAway && !viewModel.isStale {
                         Text("AWAY · VIA THE RADAR'S PUBLIC PAGE")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
                             .tracking(2)
                             .foregroundColor(Color(hex: "#5b7278"))
                             .padding(.bottom, geo.size.height * 0.08)
                     } else if viewModel.isDemo {
                         Text("DEMO · TRAFFIC RECORDED NEAR RDU")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
                             .tracking(2)
                             .foregroundColor(Color(hex: "#5b7278"))
                             .padding(.bottom, geo.size.height * 0.08)
@@ -68,7 +76,7 @@ struct ContentView: View {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small).tint(Color(hex: "#5b7278"))
                             Text("CONNECTING TO YOUR RADAR…")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
                                 .tracking(2)
                                 .foregroundColor(Color(hex: "#5b7278"))
                         }
@@ -76,7 +84,7 @@ struct ContentView: View {
                     } else if viewModel.isStale {
                         VStack(spacing: 10) {
                             Text("NO SIGNAL — CHECK RECEIVER")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
                                 .tracking(2)
                                 .foregroundColor(Color(hex: "#ff5d5d"))
                             if pairing.radars.isEmpty {
@@ -90,6 +98,21 @@ struct ContentView: View {
                 }
                 .padding(.top, geo.safeAreaInsets.top + 8)
 
+                if wallMode {
+                    // Wall mode: only a faint way out, top right.
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Button { wallMode = false } label: {
+                                Image(systemName: "arrow.down.right.and.arrow.up.left")
+                                    .foregroundColor(Color(hex: "#5b7278").opacity(0.5))
+                                    .padding(14)
+                            }
+                            .accessibilityLabel("Leave wall mode")
+                        }
+                        Spacer()
+                    }
+                } else {
                 VStack {
                     HStack {
                         // Labels: compact → full → off.
@@ -127,6 +150,15 @@ struct ContentView: View {
                                 .padding(10)
                         }
                         .accessibilityLabel("Logbook")
+                        if isPad {
+                            // Wall mode: an iPad as a second radar screen.
+                            Button { wallMode = true } label: {
+                                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                    .foregroundColor(Color(hex: "#5b7278"))
+                                    .padding(10)
+                            }
+                            .accessibilityLabel("Wall mode")
+                        }
                         Button {
                             showSettings = true
                         } label: {
@@ -135,7 +167,36 @@ struct ContentView: View {
                                 .padding(10)
                         }
                     }
+                    .font(.system(size: 17 * ui))
                     Spacer()
+                }
+                }
+
+                // iPad: an aircraft's details beside the radar, not over it,
+                // so the radar keeps moving next to them (#39).
+                if isPad, let hex = viewModel.selectedHex {
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 0) {
+                            HStack {
+                                Spacer()
+                                Button { viewModel.selectedHex = nil } label: {
+                                    Image(systemName: "xmark.circle.fill").font(.title2)
+                                        .foregroundStyle(.white, .gray.opacity(0.4))
+                                }
+                                .accessibilityLabel("Close details")
+                            }
+                            .padding([.top, .horizontal], 12)
+                            AircraftDetailView(viewModel: viewModel, location: location, hex: hex)
+                        }
+                        .frame(width: min(420, geo.size.width * 0.42))
+                        .background(Color(white: 0.08).opacity(0.96))
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .padding(.top, 64)          // below the controls, which stay usable
+                        .padding([.horizontal, .bottom], 16)
+                        .environment(\.colorScheme, .dark)
+                    }
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
         }
@@ -146,8 +207,12 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, phase in if phase == .active { viewModel.resume() } }
         .onReceive(location.$coordinate) { viewModel.me = $0 }
         .onDisappear { viewModel.stop() }
+        .animation(.easeOut(duration: 0.2), value: viewModel.selectedHex)
+        .onAppear { UIApplication.shared.isIdleTimerDisabled = wallMode }
+        .onChange(of: wallMode) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
         .sheet(item: Binding(
-            get: { viewModel.selectedHex.map(SelectedAircraft.init) },
+            // the iPad shows details in its side panel instead
+            get: { isPad ? nil : viewModel.selectedHex.map(SelectedAircraft.init) },
             set: { viewModel.selectedHex = $0?.id })) { sel in
             AircraftDetailView(viewModel: viewModel, location: location, hex: sel.id)
                 .presentationDetents([.medium, .large])
@@ -180,24 +245,24 @@ struct ContentView: View {
 
     private var hud: some View {
         VStack(spacing: 2) {
-            StratoScanLogo(height: 32)
+            StratoScanLogo(height: 32 * ui)
                 .opacity(0.9)
                 .padding(.bottom, 6)
             if viewModel.isZoomed {
                 Button("RESET VIEW") { viewModel.resetView() }
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 10 * ui, weight: .semibold, design: .monospaced))
                     .tracking(1.5)
                     .padding(.bottom, 4)
             }
             Text(locationText)
-                .font(.system(size: 10, design: .monospaced))
+                .font(.system(size: 10 * ui, design: .monospaced))
                 .tracking(1.5)
                 .foregroundColor(Color(hex: "#5b7278"))
                 .textCase(.uppercase)
             Text(viewModel.notHeardCount > 0
                  ? "\(viewModel.aircraftCount) AIRCRAFT · \(viewModel.notHeardCount) NOT HEARD"
                  : "\(viewModel.aircraftCount) AIRCRAFT")
-                .font(.system(size: 15, design: .monospaced))
+                .font(.system(size: 15 * ui, design: .monospaced))
                 .tracking(1)
                 .foregroundColor(Color(hex: "#cfe8ea"))
         }
