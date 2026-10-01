@@ -56,6 +56,7 @@
 		B31CF0C21C60C642EE61410A /* Aircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5364E64D7A6AB4EC7F36A762 /* Aircraft.swift */; };
 		B6702FB094B782BC253305C4 /* RadomeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 253708C4759FB636D54CE7FE /* RadomeApp.swift */; };
 		B9B67C3F95E4E43F6BE9CE9E /* PairedRadarsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F02A218B8D94A0157BAD495 /* PairedRadarsSection.swift */; };
+		BA323BF2EC5128A7773F70C9 /* LogbookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AFFC89D87DC7284FDB27E86 /* LogbookView.swift */; };
 		BB108B6E46FA39B8F7793550 /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 672BD01CB737B65682F25750 /* AircraftFeedClient.swift */; };
 		BCCB582D19914CF9197B0275 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6119DE8FF601795FF50E7980 /* PrivacyInfo.xcprivacy */; };
 		BF48DD9B81945F2C3ADC43FF /* Aircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5364E64D7A6AB4EC7F36A762 /* Aircraft.swift */; };
@@ -158,6 +159,7 @@
 		6119DE8FF601795FF50E7980 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		61C08B59305FFE4DF7259DCE /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
 		672BD01CB737B65682F25750 /* AircraftFeedClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftFeedClient.swift; sourceTree = "<group>"; };
+		6AFFC89D87DC7284FDB27E86 /* LogbookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogbookView.swift; sourceTree = "<group>"; };
 		71F5046AB131B521B0ECFC6C /* Radome.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Radome.entitlements; sourceTree = "<group>"; };
 		739BC588C4ECB15ADF0CC3A5 /* RadomeWatchWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadomeWatchWidget.swift; sourceTree = "<group>"; };
 		769D50FEEB254553EEC84466 /* AircraftTypeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftTypeClient.swift; sourceTree = "<group>"; };
@@ -209,6 +211,7 @@
 				4B7C1945CDB64FA07423EC2E /* CompassView.swift */,
 				82D0550591B3A5D10B447D6B /* ContentView.swift */,
 				0A6D09E9B61F4ACDAD3AEEA7 /* CreditsView.swift */,
+				6AFFC89D87DC7284FDB27E86 /* LogbookView.swift */,
 				59D8472601E7A87932540E37 /* MapBackgroundView.swift */,
 				3F02A218B8D94A0157BAD495 /* PairedRadarsSection.swift */,
 				89B487FEB78297D897DBF514 /* RadarView.swift */,
@@ -591,6 +594,7 @@
 				3FAD0E8926CAEDF90E4DB73F /* CreditsView.swift in Sources */,
 				25C6604554AF94DA469EA92F /* DemoFeed.swift in Sources */,
 				CA5C1540FB8252CF32A4D689 /* Geo.swift in Sources */,
+				BA323BF2EC5128A7773F70C9 /* LogbookView.swift in Sources */,
 				91C2BCF8BF0A780884396FAB /* MapBackgroundView.swift in Sources */,
 				2DDAA7C10336F84FD9A228BC /* NormalizedAircraft.swift in Sources */,
 				B9B67C3F95E4E43F6BE9CE9E /* PairedRadarsSection.swift in Sources */,
