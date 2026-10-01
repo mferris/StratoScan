@@ -94,6 +94,8 @@ phone ──(pairing, notification rules)──▶ relay
 | 2.14 | Weather in the app: the kiosk's precipitation radar (RainViewer) and lightning (RealEarth) on the iPhone and iPad map, with the same switches | On a real iPhone, rain shows where the kiosk shows it |
 | 2.15 | The kiosk's four colour themes in the app, Daylight by default (the kiosk's default too, from 2026-10-01), and a lighter map | Each theme matches the kiosk on a real iPhone; new installs open in Daylight |
 | 2.16 | Alerts about where I am, the radar, or both: low overhead, helicopter and notable alerts measured from the phone's (encrypted) location as well as the antenna, by the owner's choice; within the radar's reach first | Away from home, a helicopter near the phone alerts "near you"; one over the house doesn't |
+| 2.17 | Radar names: set during setup (default from the place), shown on the radar and carried to phones by the pairing link; a rename on the radar reaches phones that haven't named it themselves | A new radar pairs and shows its own name on the phone |
+| 2.18 | Set up a new radar from the app: one QR code on the first-boot screen, the app joins the setup hotspot, sends home WiFi, the phone's location, time zone and name, and pairs in the same session; the browser and on-screen setup stay | A radar fresh from the factory image is set up and paired from the app alone |
 
 ## Phase 3: the wrist
 
