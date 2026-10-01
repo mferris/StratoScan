@@ -193,10 +193,11 @@ struct SkyView: View {
         return list
     }
 
-    /// Each aircraft's label where it is on screen, or nothing when it's
-    /// behind the phone or off the edges.
+    /// Each aircraft's label where it is on screen; for the nearest few that
+    /// are out of view, an arrow at the edge pointing the way to turn.
     private func labels(in size: CGSize) -> some View {
         let from = location.coordinate ?? viewModel.home
+        var offscreen: [(PlaneState, CGPoint, Angle, Double)] = []
         let placed: [(PlaneState, CGPoint, Double)] = {
             guard let from, let m = motion.deviceFromWorld else { return [] }
             // Portrait, aspect-fill: the screen's height spans the camera's
@@ -212,13 +213,29 @@ struct SkyView: View {
                 // world: x north, y west, z up (CoreMotion's xTrueNorthZVertical)
                 let w = SIMD3(cos(el) * cos(b), -cos(el) * sin(b), sin(el))
                 let d = m * w   // device: x right, y up the screen, z out of the screen
-                guard d.z < -0.05 else { return nil }   // the back camera looks along -z
-                let pt = CGPoint(x: size.width / 2 + CGFloat(d.x / -d.z) * f,
-                                 y: size.height / 2 - CGFloat(d.y / -d.z) * f)
-                guard pt.x > -60, pt.x < size.width + 60, pt.y > -60, pt.y < size.height + 60 else { return nil }
-                return (p, pt, br.range)
+                let onScreen: CGPoint? = {
+                    guard d.z < -0.05 else { return nil }   // the back camera looks along -z
+                    let pt = CGPoint(x: size.width / 2 + CGFloat(d.x / -d.z) * f,
+                                     y: size.height / 2 - CGFloat(d.y / -d.z) * f)
+                    return pt.x > -60 && pt.x < size.width + 60 && pt.y > -60 && pt.y < size.height + 60 ? pt : nil
+                }()
+                if let pt = onScreen { return (p, pt, br.range) }
+                // Out of view: which way across the screen it lies (behind
+                // the phone too: the arrow then says which way to turn).
+                let ux = CGFloat(d.x), uy = CGFloat(-d.y)
+                let len = hypot(ux, uy)
+                if len > 0.02 {
+                    let margin: CGFloat = 44
+                    let t = min((size.width / 2 - margin) / max(abs(ux / len), 0.001),
+                                (size.height / 2 - margin) / max(abs(uy / len), 0.001))
+                    let edge = CGPoint(x: size.width / 2 + ux / len * t, y: size.height / 2 + uy / len * t)
+                    offscreen.append((p, edge, .radians(atan2(ux, -uy)), br.range))
+                }
+                return nil
             }
         }()
+        // only the nearest few, or the edges fill with arrows
+        let arrows = offscreen.sorted { $0.3 < $1.3 }.prefix(5)
         return ZStack {
             ForEach(placed, id: \.0.hex) { p, pt, range in
                 Button {
@@ -264,6 +281,25 @@ struct SkyView: View {
                 .offset(y: Self.labelSize.height / 2 - 11)
                 .position(pt)
                 .accessibilityLabel("\(p.cs), \(p.typeLabel.map { "\($0), " } ?? "")\(PlaneState.altLabel(p.alt)), \(String(format: "%.1f", range)) nautical miles")
+            }
+            ForEach(Array(arrows), id: \.0.hex) { p, edge, angle, range in
+                Button { selected = p.hex } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 22, weight: .bold))
+                            .rotationEffect(angle - motion.upright)
+                        Text(p.cs).font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        Text(String(format: "%.0f nm", range)).font(.system(size: 10, design: .monospaced))
+                    }
+                    .foregroundColor(PlaneState.altColor(p.alt))
+                    .padding(6)
+                    .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    .rotationEffect(motion.upright)
+                }
+                .buttonStyle(.plain)
+                .opacity(p.isNetwork ? 0.65 : 1)
+                .position(edge)
+                .accessibilityLabel("\(p.cs), out of view, \(String(format: "%.0f", range)) nautical miles")
             }
         }
     }
