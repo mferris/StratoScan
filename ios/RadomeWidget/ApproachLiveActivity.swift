@@ -105,6 +105,19 @@ struct ApproachLiveActivity: Widget {
     }
 
     private func lockScreen(_ context: ActivityViewContext<ApproachAttributes>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // whose card this is, small: the lock screen doesn't say
+            HStack(spacing: 5) {
+                StratoScanMark(small: true).frame(width: 13, height: 13)
+                Text("STRATOSCAN").font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            approachRow(context)
+        }
+        .foregroundColor(.white)
+    }
+
+    private func approachRow(_ context: ActivityViewContext<ApproachAttributes>) -> some View {
         HStack(spacing: 14) {
             if context.state.trk != nil {
                 dial(context)
@@ -122,7 +135,6 @@ struct ApproachLiveActivity: Widget {
                 Text(context.state.passed ? "passed" : "to overhead").font(.caption2).foregroundColor(.secondary)
             }
         }
-        .foregroundColor(.white)
     }
 }
 
