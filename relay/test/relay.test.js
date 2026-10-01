@@ -799,3 +799,16 @@ test('an approach to a phone goes to that phone alone, and says "you"', async ()
   clock += 1;
   assert.equal((await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90004', eta_s: 120, phone: 'not-an-id' })])).status, 400);
 });
+
+test('a phone near its radar gets one countdown per aircraft, not two', async () => {
+  const { e, a } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  const me = await pairedPhone(e, u, { kinds: ['approach', 'approach_me'] });
+  clock += 1;
+  await register(e, me, { token: TOKEN, env: 'sandbox', kinds: ['approach', 'approach_me'], la_start_token: LA_TOKEN });
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90002', eta_s: 120 }),
+                          evt({ kind: 'approach', hex: 'a90002', eta_s: 120, phone: me.id })]);
+  assert.equal(a.sent.length, 1, 'one Live Activity for the one aircraft');
+});
