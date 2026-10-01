@@ -1,4 +1,4 @@
-name: Radome
+name: StratoScan
 options:
   bundleIdPrefix: com.NelsonIndustries
   deploymentTarget:
@@ -11,23 +11,23 @@ packages:
     exactVersion: 6.28.0
 
 targets:
-  Radome:
+  StratoScan:
     type: application
     # a shared scheme, so xcodebuild and Xcode always have one to build
     scheme: {}
     platform: iOS
     deploymentTarget: "17.2"
     sources:
-      - path: Radome
+      - path: StratoScan
       - path: Shared
     dependencies:
       - package: MapLibre
         product: MapLibre
-      - target: RadomeWidget
+      - target: StratoScanWidget
       # The Watch app (roadmap 3.1) ships inside the iPhone app.
-      - target: RadomeWatch
+      - target: StratoScanWatch
     entitlements:
-      path: Radome/App/Radome.entitlements
+      path: StratoScan/App/StratoScan.entitlements
       properties:
         # Development builds; Xcode switches to "production" when exporting
         # for TestFlight or the App Store.
@@ -37,7 +37,7 @@ targets:
         # Shared settings with the widget (the radar's address, demo mode).
         com.apple.security.application-groups: [group.com.NelsonIndustries.radome]
     info:
-      path: Radome/App/Info.plist
+      path: StratoScan/App/Info.plist
       properties:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
@@ -58,7 +58,8 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
           - CFBundleURLName: com.NelsonIndustries.radome.pair
-            CFBundleURLSchemes: [radome]
+            # stratoscan:// from units on 2026.10.01.2+; radome:// still accepted from older ones
+            CFBundleURLSchemes: [stratoscan, radome]
         NSCameraUsageDescription: "To scan a StratoScan radar's pairing code, and to show aircraft over the camera image in Sky view. Nothing is recorded or sent."
         NSLocationWhenInUseUsageDescription: "To show where you are on the radar, and to aim the compass and Sky view. It stays on this phone unless you turn on a feature that says otherwise."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Only if you turn on alerts for aircraft approaching you: when you move, your location is sent encrypted so only your own radar can read it, to warn you of aircraft about to pass over. Turn it off any time in Settings."
@@ -76,15 +77,15 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         ENABLE_PREVIEWS: true
 
-  RadomeWidget:
+  StratoScanWidget:
     type: app-extension
     platform: iOS
     deploymentTarget: "17.2"
     sources:
-      - path: RadomeWidget
+      - path: StratoScanWidget
       - path: Shared
     info:
-      path: RadomeWidget/Info.plist
+      path: StratoScanWidget/Info.plist
       properties:
         CFBundleDisplayName: StratoScan
         NSExtension:
@@ -94,7 +95,7 @@ targets:
           # .local names, Tailscale short names). Everything else must be HTTPS.
           NSAllowsLocalNetworking: true
     entitlements:
-      path: RadomeWidget/RadomeWidget.entitlements
+      path: StratoScanWidget/StratoScanWidget.entitlements
       properties:
         com.apple.security.application-groups: [group.com.NelsonIndustries.radome]
     settings:
@@ -110,14 +111,14 @@ targets:
   # ---- Apple Watch (roadmap 3.1) -------------------------------------------
   # A small radar and the nearest aircraft, read from the same radar as the
   # phone; the phone sends the radar's addresses over WatchConnectivity.
-  RadomeWatch:
+  StratoScanWatch:
     type: application
     # a shared scheme, so xcodebuild and Xcode always have one to build
     scheme: {}
     platform: watchOS
     deploymentTarget: "10.0"
     sources:
-      - path: RadomeWatch
+      - path: StratoScanWatch
       - path: Shared/APIConfig.swift
       - path: Shared/Aircraft.swift
       - path: Shared/AircraftFeedClient.swift
@@ -126,9 +127,9 @@ targets:
       - path: Shared/BrandMark.swift
       - path: Shared/demo-traffic.json
     dependencies:
-      - target: RadomeWatchWidget
+      - target: StratoScanWatchWidget
     info:
-      path: RadomeWatch/Info.plist
+      path: StratoScanWatch/Info.plist
       properties:
         CFBundleDisplayName: StratoScan
         WKApplication: true
@@ -145,12 +146,12 @@ targets:
         DEVELOPMENT_TEAM: XXXXXXXXXX
         CODE_SIGN_STYLE: Automatic
 
-  RadomeWatchWidget:
+  StratoScanWatchWidget:
     type: app-extension
     platform: watchOS
     deploymentTarget: "10.0"
     sources:
-      - path: RadomeWatchWidget
+      - path: StratoScanWatchWidget
       - path: Shared/APIConfig.swift
       - path: Shared/Aircraft.swift
       - path: Shared/AircraftFeedClient.swift
@@ -158,7 +159,7 @@ targets:
       - path: Shared/Geo.swift
       - path: Shared/demo-traffic.json
     info:
-      path: RadomeWatchWidget/Info.plist
+      path: StratoScanWatchWidget/Info.plist
       properties:
         CFBundleDisplayName: StratoScan
         NSExtension:

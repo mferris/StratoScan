@@ -15,10 +15,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E249B965B93BD3015FAA2373"
-               BuildableName = "RadomeWatch.app"
-               BlueprintName = "RadomeWatch"
-               ReferencedContainer = "container:Radome.xcodeproj">
+               BlueprintIdentifier = "46DEACFAAD6836D23AAE66B1"
+               BuildableName = "StratoScan.app"
+               BlueprintName = "StratoScan"
+               ReferencedContainer = "container:StratoScan.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -32,10 +32,10 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "E249B965B93BD3015FAA2373"
-            BuildableName = "RadomeWatch.app"
-            BlueprintName = "RadomeWatch"
-            ReferencedContainer = "container:Radome.xcodeproj">
+            BlueprintIdentifier = "46DEACFAAD6836D23AAE66B1"
+            BuildableName = "StratoScan.app"
+            BlueprintName = "StratoScan"
+            ReferencedContainer = "container:StratoScan.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
@@ -57,10 +57,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "E249B965B93BD3015FAA2373"
-            BuildableName = "RadomeWatch.app"
-            BlueprintName = "RadomeWatch"
-            ReferencedContainer = "container:Radome.xcodeproj">
+            BlueprintIdentifier = "46DEACFAAD6836D23AAE66B1"
+            BuildableName = "StratoScan.app"
+            BlueprintName = "StratoScan"
+            ReferencedContainer = "container:StratoScan.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>
@@ -76,10 +76,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "E249B965B93BD3015FAA2373"
-            BuildableName = "RadomeWatch.app"
-            BlueprintName = "RadomeWatch"
-            ReferencedContainer = "container:Radome.xcodeproj">
+            BlueprintIdentifier = "46DEACFAAD6836D23AAE66B1"
+            BuildableName = "StratoScan.app"
+            BlueprintName = "StratoScan"
+            ReferencedContainer = "container:StratoScan.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>

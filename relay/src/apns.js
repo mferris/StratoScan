@@ -103,7 +103,7 @@ export function notificationFor(event, unit) {
         'thread-id': unit,
         'interruption-level': event.kind === 'emergency' ? 'time-sensitive' : 'active',
       },
-      radome: { unit, kind: event.kind, hex: event.hex },
+      stratoscan: { unit, kind: event.kind, hex: event.hex },
     },
   };
 }
@@ -116,7 +116,7 @@ export function summaryFor(n, unit) {
     payload: {
       aps: { alert: { title: 'More aircraft', body: `${n} more alert${n === 1 ? '' : 's'} from this radar` },
              'thread-id': unit, 'interruption-level': 'passive' },
-      radome: { unit, kind: 'summary' },
+      stratoscan: { unit, kind: 'summary' },
     },
   };
 }

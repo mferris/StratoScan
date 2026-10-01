@@ -2,7 +2,7 @@ import SwiftUI
 import WidgetKit
 
 @main
-struct RadomeApp: App {
+struct StratoScanApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var pairing = PairingStore()
     @StateObject private var push = PushManager.shared
@@ -15,7 +15,7 @@ struct RadomeApp: App {
                 .preferredColorScheme(.dark)
                 .environmentObject(pairing)
                 .environmentObject(push)
-                // radome://pair links: from the Camera app, the setup page,
+                // stratoscan://pair links (radome:// from older units): from the Camera app, the setup page,
                 // or anything else that opens one.
                 .onOpenURL { pairing.handle($0) }
                 // Push tokens can change; re-register whenever a radar is paired.

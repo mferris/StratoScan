@@ -56,7 +56,7 @@ struct WatchComplicationView: View {
 }
 
 @main
-struct RadomeWatchWidget: Widget {
+struct StratoScanWatchWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "StratoScanWatchNearby", provider: WatchProvider()) { entry in
             WatchComplicationView(entry: entry).containerBackground(.black, for: .widget)

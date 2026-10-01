@@ -3,7 +3,7 @@ import VisionKit
 
 /// Scans a radar's pairing QR code with the camera. VisionKit's scanner needs
 /// iOS 16 and an A12 or newer; where it isn't available (the simulator, older
-/// phones) the iPhone Camera app does the same job via the radome:// link.
+/// phones) the iPhone Camera app does the same job via the stratoscan:// link.
 struct PairingScannerView: UIViewControllerRepresentable {
     let onFound: (URL) -> Void
 

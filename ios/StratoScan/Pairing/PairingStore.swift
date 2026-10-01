@@ -2,7 +2,8 @@ import Foundation
 import UIKit
 
 /// The radars this phone is paired with. A radar's own screen shows a QR code
-/// holding `radome://pair?u=<unit>&s=<one-time secret>&h=<LAN address>`;
+/// holding `stratoscan://pair?u=<unit>&s=<one-time secret>&h=<LAN address>`
+/// (`radome://` from units before 2026.10.01.2, still accepted);
 /// scanning it (Camera app or in-app) lands here. The secret goes to the
 /// relay once and is never stored; the LAN address, when present, points the
 /// radar view at this radar if it has not been pointed anywhere yet.
@@ -46,7 +47,7 @@ final class PairingStore: ObservableObject {
     /// A pairing link, or nil for anything else. Strict about shapes: the
     /// unit id is an Ed25519 key (43 base64url chars), the secret 16-64 chars.
     nonisolated static func parse(_ url: URL) -> Link? {
-        guard url.scheme?.lowercased() == "radome", url.host?.lowercased() == "pair",
+        guard ["stratoscan", "radome"].contains(url.scheme?.lowercased() ?? ""), url.host?.lowercased() == "pair",
               let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return nil }
         func q(_ n: String) -> String? { items.first { $0.name == n }?.value }
         let b64url = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
@@ -64,7 +65,7 @@ final class PairingStore: ObservableObject {
     }
 
     /// A link waiting for the owner to confirm. Any web page or message can
-    /// open a radome:// link, so nothing pairs without an explicit yes.
+    /// open a stratoscan:// link, so nothing pairs without an explicit yes.
     @Published var pendingLink: Link?
 
     /// Handles a scanned or opened link. Returns false when it is not ours.

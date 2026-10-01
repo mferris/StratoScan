@@ -102,7 +102,7 @@ if have_crypto:
     pairing.time.time = lambda: 2_000_000_000
     offer = pairing.start()
     q = parse_qs(urlparse(offer["link"]).query)
-    check("the link is a radome:// pairing link", offer["link"].startswith("radome://pair?"))
+    check("the link is a stratoscan:// pairing link", offer["link"].startswith("stratoscan://pair?"))
     unit = pairing.hb.unit_id(pairing.hb.load_key(create=False))
     check("it names this unit", q.get("u") == [unit])
     secret = q["s"][0]

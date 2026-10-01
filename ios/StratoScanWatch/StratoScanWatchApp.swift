@@ -5,7 +5,7 @@ import WatchConnectivity
 /// nearest aircraft. Reads the same feed as the phone, from the same radar,
 /// whose addresses the phone sends over (WatchSync on the phone).
 @main
-struct RadomeWatchApp: App {
+struct StratoScanWatchApp: App {
     init() { WatchReceiver.shared.start() }
     var body: some Scene {
         WindowGroup { WatchRadarView() }
