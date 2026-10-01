@@ -93,6 +93,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 2.13 | The app without a radar: live aircraft around the phone from adsb.lol (opt-in, rounded location), radar view and Sky view; alerts and the logbook stay radar-only | On a real iPhone with no radar: real aircraft around you; pairing later switches cleanly |
 | 2.14 | Weather in the app: the kiosk's precipitation radar (RainViewer) and lightning (RealEarth) on the iPhone and iPad map, with the same switches | On a real iPhone, rain shows where the kiosk shows it |
 | 2.15 | The kiosk's four colour themes in the app, Daylight by default (the kiosk's default too, from 2026-10-01), and a lighter map | Each theme matches the kiosk on a real iPhone; new installs open in Daylight |
+| 2.16 | Alerts about where I am, the radar, or both: low overhead, helicopter and notable alerts measured from the phone's (encrypted) location as well as the antenna, by the owner's choice; within the radar's reach first | Away from home, a helicopter near the phone alerts "near you"; one over the house doesn't |
 
 ## Phase 3: the wrist
 
