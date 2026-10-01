@@ -196,4 +196,4 @@ at risk for long.
 | 3.1 watchOS app | Built (037b07a): a glance radar and complications, fed by the phone; runs in the Watch simulator. The maintainer's Watch can't be reached by Xcode (2026-09-30): not listed after re-pairing, Bluetooth off, the iPhone's hotspot, and everything on one Wi-Fi; the Watch never offers itself for pairing on the network, so Developer Mode never appears. A development build is refused without it | Install through TestFlight once the App Store Connect record exists |
 | 3.2 Wrist taps, Smart Stack | Smart Stack Live Activity built (4853ebc); distinct taps not started | A real Watch |
 | 5.4, 5.5 | Planned 2026-09-29 as issues #26, #27 | — |
-| 1.5 Factory image | Built: CI produces a 1.6 GB image that passes its checks (working unit, no per-unit secrets, GPL sources attached). Rebuilt as Radome (2026.09.28). Not yet published | A test flash on a spare SD card |
+| 1.5 Factory image | Built: CI produces a 1.6 GB image that passes its checks (working unit, no per-unit secrets, GPL sources attached). Last built 2026.09.28 under the old name; to be rebuilt as StratoScan after 1.9. Not yet published | A test flash on a spare SD card |
