@@ -4,6 +4,7 @@ struct ContentView: View {
     @StateObject private var viewModel = RadarViewModel()
     @StateObject private var location = PhoneLocation()
     @State private var showSky = false
+    @State private var showLogbook = false
     @State private var showSettings = false
     @EnvironmentObject private var pairing: PairingStore
 
@@ -109,6 +110,13 @@ struct ContentView: View {
                         }
                         .accessibilityLabel("Sky view")
                         Spacer()
+                        // The logbook: what this radar has seen (roadmap 2.5).
+                        Button { showLogbook = true } label: {
+                            Image(systemName: "book.closed")
+                                .foregroundColor(Color(hex: "#5b7278"))
+                                .padding(10)
+                        }
+                        .accessibilityLabel("Logbook")
                         Button {
                             showSettings = true
                         } label: {
@@ -132,6 +140,9 @@ struct ContentView: View {
             AircraftDetailView(viewModel: viewModel, location: location, hex: sel.id)
                 .presentationDetents([.medium, .large])
                 .preferredColorScheme(.dark)
+        }
+        .sheet(isPresented: $showLogbook) {
+            LogbookView().preferredColorScheme(.dark)
         }
         .fullScreenCover(isPresented: $showSky) {
             SkyView(viewModel: viewModel, location: location)
