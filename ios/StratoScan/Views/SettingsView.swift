@@ -19,6 +19,7 @@ struct SettingsView: View {
                 .listRowBackground(Color.clear)
                 PairedRadarsSection()
                 if !pairing.radars.isEmpty { AlertsSection() }
+                ThemeSection()
 
                 Section {
                     LabeledContent("At home") {
@@ -92,4 +93,38 @@ extension SettingsView {
 
 #Preview {
     SettingsView(viewModel: RadarViewModel()).environmentObject(PairingStore()).environmentObject(PushManager.shared)
+}
+
+
+/// The colour theme (#43): the radar's four, Daylight first and by default.
+private struct ThemeSection: View {
+    @AppStorage(Palette.storageKey) private var themeID = Palette.daylight.id
+
+    var body: some View {
+        Section {
+            ForEach(Palette.all) { p in
+                Button { themeID = p.id } label: {
+                    HStack(spacing: 12) {
+                        // a small preview: the theme's background, ring and sweep
+                        ZStack {
+                            Circle().fill(p.bg)
+                            Circle().stroke(p.ringBright, lineWidth: 2)
+                            Circle().trim(from: 0, to: 0.12).stroke(p.sweep, lineWidth: 6).rotationEffect(.degrees(-90))
+                        }
+                        .frame(width: 30, height: 30)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(p.name).foregroundColor(.primary)
+                            Text(p.detail).font(.caption).foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        if p.id == themeID { Image(systemName: "checkmark").foregroundColor(.accentColor) }
+                    }
+                }
+            }
+        } header: {
+            Text("Colour theme")
+        } footer: {
+            Text("The same themes as the radar's screen. The Watch and widgets stay dark.")
+        }
+    }
 }

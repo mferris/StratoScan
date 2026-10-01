@@ -25,11 +25,13 @@ struct RadarView: View {
     private let labelSpringTau = 0.22
     private let labelSeparationPasses = 8
 
-    private let colorRing = Color(hex: "#1c3236")
-    private let colorRingBright = Color(hex: "#2a4a4f")
-    private let colorSweep = Color(hex: "#ffb020")
-    private let colorTextDim = Color(hex: "#5b7278")
-    private let colorLow = Color(hex: "#ffb020")
+    // The chosen theme's colours (Palette), read as each frame is drawn.
+    private var pal: Palette { Palette.current }
+    private var colorRing: Color { pal.ring }
+    private var colorRingBright: Color { pal.ringBright }
+    private var colorSweep: Color { pal.sweep }
+    private var colorTextDim: Color { pal.textDim }
+    private var colorLow: Color { pal.low }
 
     var body: some View {
         GeometryReader { geo in
@@ -135,7 +137,7 @@ struct RadarView: View {
             rings += stride(from: 1, to: ring, by: 1).filter { $0.truncatingRemainder(dividingBy: step) != 0 }.map { (CGFloat($0), false) }
         }
         // brighter than the rings: zoomed in they sit over busy streets
-        let labelColor = Color(hex: "#7d9ca1")
+        let labelColor = pal.ringLabel
         for (nm, major) in rings {
             let ringR = nm * k
             // skip rings wholly outside the view, or so big or small they're noise
@@ -160,7 +162,7 @@ struct RadarView: View {
         var cross = Path()
         cross.move(to: CGPoint(x: radar.x, y: radar.y - reach)); cross.addLine(to: CGPoint(x: radar.x, y: radar.y + reach))
         cross.move(to: CGPoint(x: radar.x - reach, y: radar.y)); cross.addLine(to: CGPoint(x: radar.x + reach, y: radar.y))
-        context.stroke(cross, with: .color(Color(hex: "#16282b")), lineWidth: 1)
+        context.stroke(cross, with: .color(pal.crosshair), lineWidth: 1)
 
         var dot = Path()
         dot.addEllipse(in: CGRect(x: radar.x - 3, y: radar.y - 3, width: 6, height: 6))
@@ -170,7 +172,7 @@ struct RadarView: View {
     /// N, S, E, W stay at the edge of the view: they say which way is which,
     /// not where anything is.
     private func drawCompass(_ context: inout GraphicsContext, cx: CGFloat, cy: CGFloat, r: CGFloat) {
-        let compassColor = Color(hex: "#4a6b70")
+        let compassColor = pal.compass
         let compassFont = Font.system(size: 13 * uiScale, weight: .semibold)
         context.draw(Text("N").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: cx, y: cy - r + 16), anchor: .center)
         context.draw(Text("S").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: cx, y: cy + r - 10), anchor: .center)
@@ -331,7 +333,7 @@ struct RadarView: View {
         if p.hex == viewModel.selectedHex {
             let r = 16 * uiScale
             let ring = Path(ellipseIn: CGRect(x: p.anchorX - r, y: p.anchorY - r, width: r * 2, height: r * 2))
-            context.stroke(ring, with: .color(.white.opacity(0.85)), lineWidth: 1.5)
+            context.stroke(ring, with: .color(pal.text.opacity(0.85)), lineWidth: 1.5)
         }
         var tri = Path()
         tri.move(to: CGPoint(x: 0, y: -9))
@@ -424,8 +426,8 @@ struct RadarView: View {
         let rect = CGRect(origin: origin, size: metrics.size)
 
         var bg = Path(roundedRect: rect, cornerRadius: 3)
-        context.fill(bg, with: .color(Color(hex: "#05080a").opacity(0.75)))
-        context.stroke(bg, with: .color(.white.opacity(0.06)), lineWidth: 1)
+        context.fill(bg, with: .color(pal.panel))
+        context.stroke(bg, with: .color(pal.text.opacity(0.08)), lineWidth: 1)
 
         var edge = Path()
         edge.move(to: CGPoint(x: rect.minX, y: rect.minY))

@@ -28,6 +28,11 @@ struct SkyView: View {
     @State private var sideways: SidewaysDetail?
     @AppStorage("stratoscan.skyNearMe") private var nearMeOn = false
     @Environment(\.dismiss) private var dismiss
+    /// Opened from an aircraft's details ("Find in the sky"): that aircraft
+    /// is always shown -- label, track, or an arrow to it -- and picked out.
+    var focus: String? = nil
+    /// Back to the radar with the focused aircraft selected there again.
+    var backToRadar: ((String) -> Void)? = nil
 
     /// Further than this from the radar, its own aircraft no longer cover
     /// the sky overhead, so Sky view offers the ones around the phone.
@@ -51,8 +56,18 @@ struct SkyView: View {
                 }
                 VStack(spacing: 12) {
                     HStack(alignment: .top) {
-                        Text(status)
-                            .font(.caption).padding(8).background(.black.opacity(0.55)).clipShape(Capsule())
+                        if let focus, let back = backToRadar {
+                            Button { back(focus) } label: {
+                                Label("Back to the radar", systemImage: "chevron.left")
+                                    .font(.callout.weight(.semibold))
+                                    .padding(.horizontal, 12).padding(.vertical, 8)
+                                    .background(.black.opacity(0.6), in: Capsule())
+                                    .foregroundStyle(.white)
+                            }
+                        } else {
+                            Text(status)
+                                .font(.caption).padding(8).background(.black.opacity(0.55)).clipShape(Capsule())
+                        }
                         Spacer()
                         Button { dismiss() } label: {
                             Image(systemName: "xmark.circle.fill").font(.title).foregroundStyle(.white, .black.opacity(0.5))
@@ -60,6 +75,10 @@ struct SkyView: View {
                         .accessibilityLabel("Close Sky view")
                     }
                     Spacer()
+                    if let focus, let p = viewModel.plane(focus) {
+                        Text("Finding \(p.cs)").font(.caption.weight(.semibold))
+                            .padding(8).background(.black.opacity(0.55)).clipShape(Capsule()).foregroundStyle(.white)
+                    }
                     if cameraDenied { settingsPrompt("Allow the camera to see the sky behind the labels.") }
                     if location.denied { settingsPrompt("Allow location to aim from where you stand.") }
                     if isAway && !nearMeOn { nearMePrompt }
@@ -69,6 +88,12 @@ struct SkyView: View {
                     }
                 }
                 .padding(.horizontal).padding(.top, 56).padding(.bottom, 40)
+                // whose view this is
+                VStack {
+                    Spacer()
+                    StratoScanLogo(height: 26, onLight: false).opacity(0.85).padding(.bottom, 14)
+                }
+                .allowsHitTesting(false)
                 if let d = sideways { sidewaysPanel(d, in: geo.size) }
             }
             .ignoresSafeArea()
@@ -225,9 +250,9 @@ struct SkyView: View {
                 return (p, fix, Geo.haversineBearingRange(lat1: from.lat, lon1: from.lon, lat2: fix.lat, lon2: fix.lon).range)
             }
             .sorted { $0.2 < $1.2 }
-            let picked = Set(near.prefix(5).map { $0.0.hex } + [selected, sideways?.hex].compactMap { $0 })
+            let picked = Set(near.prefix(5).map { $0.0.hex } + [selected, sideways?.hex, focus].compactMap { $0 })
             for (p, fix, _) in near where picked.contains(p.hex) {
-                let colour = PlaneState.altColor(p.alt)
+                let colour = Palette.classic.altColor(p.alt)
                 let fade = p.isNetwork ? 0.5 : 1.0
                 let altNow = p.alt == .ground ? 0 : (p.alt.feetValue ?? p.history.last?.altFt ?? 0)
                 // where it's been: segment by segment, older ones fainter
@@ -304,7 +329,8 @@ struct SkyView: View {
             }
         }()
         // only the nearest few, or the edges fill with arrows
-        let arrows = offscreen.sorted { $0.3 < $1.3 }.prefix(5)
+        // the focused aircraft always gets its arrow, first
+        let arrows = offscreen.sorted { ($0.0.hex == focus ? -1 : $0.3) < ($1.0.hex == focus ? -1 : $1.3) }.prefix(5)
         return ZStack {
             ForEach(placed, id: \.0.hex) { p, pt, range in
                 Button {
@@ -322,7 +348,11 @@ struct SkyView: View {
                     // and the pair turns about the ring to stay upright
                     // however the phone is held (the app itself is portrait).
                     ZStack(alignment: .top) {
-                        Circle().stroke(PlaneState.altColor(p.alt), lineWidth: 2).frame(width: 22, height: 22)
+                        // the aircraft being found: a white double ring
+                        if p.hex == focus {
+                            Circle().stroke(.white, lineWidth: 2).frame(width: 34, height: 34).offset(y: -6)
+                        }
+                        Circle().stroke(Palette.classic.altColor(p.alt), lineWidth: 2).frame(width: 22, height: 22)
                         VStack(spacing: 1) {
                             Text(p.cs).font(.system(size: 14, weight: .bold, design: .monospaced))
                             // What it is, when known: "Boeing 737-900", or
@@ -339,7 +369,7 @@ struct SkyView: View {
                         .background(.black.opacity(0.4)).clipShape(RoundedRectangle(cornerRadius: 6))
                         .padding(.top, 26)
                     }
-                    .foregroundColor(PlaneState.altColor(p.alt))
+                    .foregroundColor(Palette.classic.altColor(p.alt))
                     .frame(width: Self.labelSize.width, height: Self.labelSize.height, alignment: .top)
                     .contentShape(Rectangle())
                 }
@@ -360,7 +390,7 @@ struct SkyView: View {
                         Text(p.cs).font(.system(size: 11, weight: .semibold, design: .monospaced))
                         Text(String(format: "%.0f nm", range)).font(.system(size: 10, design: .monospaced))
                     }
-                    .foregroundColor(PlaneState.altColor(p.alt))
+                    .foregroundColor(Palette.classic.altColor(p.alt))
                     .padding(6)
                     .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
                     .rotationEffect(motion.upright)
