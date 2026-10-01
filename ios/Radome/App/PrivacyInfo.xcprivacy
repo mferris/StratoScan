@@ -7,6 +7,10 @@
   identifies it to its paired radars. Neither is linked to the owner, and
   nothing is used for tracking. The radar's live data is read from the
   owner's own radar, not collected.
+  Location is used on the phone (the "You" marker, the compass, Sky view)
+  and not sent anywhere -- except, if the owner turns it on, Sky view away
+  from home asks adsb.lol for the aircraft around them, with the location
+  rounded to about 5 km: declared below as coarse location.
 -->
 <plist version="1.0">
 <dict>
@@ -28,6 +32,18 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeCoarseLocation</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
 	</array>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
@@ -38,6 +54,8 @@
 			<array>
 				<!-- The app's own settings: the radar address, paired radars, alert choices. -->
 				<string>CA92.1</string>
+				<!-- Shared with the app's own widgets through its App Group (the radar's address). -->
+				<string>1C8F.1</string>
 			</array>
 		</dict>
 	</array>
