@@ -91,6 +91,8 @@ phone ──(pairing, notification rules)──▶ relay
 | 2.11 | iPad app: a big radar with details, logbook and settings in a side panel; landscape and portrait; optional full-screen wall mode | On a real iPad, both orientations, nothing changed on the iPhone |
 | 2.12 | Sky view tracks: a fading line where each aircraft has been and a dotted one where it's going, projected across the sky like the labels | Outdoors on a real iPhone, the lines follow the aircraft's real path |
 | 2.13 | The app without a radar: live aircraft around the phone from adsb.lol (opt-in, rounded location), radar view and Sky view; alerts and the logbook stay radar-only | On a real iPhone with no radar: real aircraft around you; pairing later switches cleanly |
+| 2.14 | Weather in the app: the kiosk's precipitation radar (RainViewer) and lightning (RealEarth) on the iPhone and iPad map, with the same switches | On a real iPhone, rain shows where the kiosk shows it |
+| 2.15 | The kiosk's four colour themes in the app, Daylight by default (the kiosk's default too, from 2026-10-01), and a lighter map | Each theme matches the kiosk on a real iPhone; new installs open in Daylight |
 
 ## Phase 3: the wrist
 
