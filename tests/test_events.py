@@ -282,7 +282,8 @@ air = os.path.join(tmp, "aircraft.json")
 ev.AIRCRAFT_JSON = air
 posts = []
 reply = {"body": b'{"ok":true,"stored":0,"phones":0}'}
-svc = ev.Service(detector=ev.Detector(), sender=ev.Sender(post=lambda b: (posts.append(b), (200, reply["body"]))[1]))
+svc = ev.Service(detector=ev.Detector(), sender=ev.Sender(post=lambda b: (posts.append(b), (200, reply["body"]))[1]),
+                 locations=ev.PhoneLocations(call=lambda *a: (None, None)))
 real_set = ev.set_enabled
 ev.set_enabled = lambda on: (_ for _ in ()).throw(OSError(30, "Read-only file system"))
 

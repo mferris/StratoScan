@@ -201,12 +201,95 @@ def describe(a, info, now):
     return ev
 
 
+# ---- where the phones are (roadmap 2.7) ------------------------------------------
+# A phone that asks for alerts about aircraft approaching *it* leaves its
+# location at the relay, encrypted to this unit's X25519 "box" key, which
+# only this unit can read. The key is derived from the unit's Ed25519
+# identity key with HKDF -- a separate key, but one this sandboxed service
+# can compute without a key file of its own -- and published to the relay
+# signed by that identity, so a phone can check it against the unit id it
+# scanned at pairing.
+#
+# A blob is base64url(ephemeral X25519 public key (32) | nonce (12) |
+# ChaCha20-Poly1305 ciphertext and tag); the key is HKDF-SHA256 of the shared
+# secret with info "stratoscan-location-v1" + ephemeral key + this unit's box
+# key, and the phone's id is the associated data, so a blob can't be passed
+# off as another phone's. Inside: {"lat", "lon", "ts"}. Decrypted positions
+# stay in memory: never written, never logged, never sent.
+
+BOX_INFO = b"stratoscan-box-v1"
+LOCATION_INFO = b"stratoscan-location-v1"
+BOX_KEY_CONTEXT = "stratoscan-boxkey-v1:"
+LOCATION_POLL_S = 60
+LOCATION_MAX_AGE_S = 6 * 3600          # older than this, it no longer says where the phone is
+BOX_PUBLISH_EVERY_S = 24 * 3600
+PHONE_LOOKUP_NM = 10                   # type lookups for aircraft this close to a phone
+
+
+def box_private(ed_key):
+    """This unit's X25519 box key, derived from its Ed25519 identity key."""
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+    seed = ed_key.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw,
+                                serialization.NoEncryption())
+    return X25519PrivateKey.from_private_bytes(
+        HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=BOX_INFO).derive(seed))
+
+
+def box_public_raw(box_key):
+    from cryptography.hazmat.primitives import serialization
+    return box_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+
+
+def decrypt_location(box_key, blob, phone):
+    """(lat, lon, ts) from one phone's blob, or None if it isn't genuine."""
+    import base64
+    from cryptography.exceptions import InvalidTag
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PublicKey
+    from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+    try:
+        raw = base64.urlsafe_b64decode(blob + "=" * (-len(blob) % 4))
+        if len(raw) < 32 + 12 + 16 + 8:
+            return None
+        eph, nonce, sealed = raw[:32], raw[32:44], raw[44:]
+        shared = box_key.exchange(X25519PublicKey.from_public_bytes(eph))
+        key = HKDF(algorithm=hashes.SHA256(), length=32, salt=None,
+                   info=LOCATION_INFO + eph + box_public_raw(box_key)).derive(shared)
+        d = json.loads(ChaCha20Poly1305(key).decrypt(nonce, sealed, phone.encode()))
+        lat, lon, ts = float(d["lat"]), float(d["lon"]), int(d["ts"])
+    except (InvalidTag, ValueError, KeyError, TypeError):
+        return None
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return None
+    return lat, lon, ts
+
+
+def closest_approach_to(a, lat0, lon0):
+    """(now nm, bearing from the point, seconds until closest, nm then) for a
+    point that isn't the antenna, from the aircraft's own position and track;
+    None without them. Flat-earth: fine within the few miles that matter."""
+    lat, lon, gs, trk = a.get("lat"), a.get("lon"), a.get("gs"), a.get("track")
+    if not all(isinstance(v, (int, float)) for v in (lat, lon, gs, trk)) or gs < APPROACH_MIN_GS:
+        return None
+    x = (lon - lon0) * 60 * math.cos(math.radians(lat0))      # nm east of the point
+    y = (lat - lat0) * 60                                     # nm north
+    vx, vy = gs * math.sin(math.radians(trk)) / 3600, gs * math.cos(math.radians(trk)) / 3600
+    v2 = vx * vx + vy * vy
+    t = -(x * vx + y * vy) / v2
+    return math.hypot(x, y), math.degrees(math.atan2(x, y)) % 360, t, math.hypot(x + vx * t, y + vy * t)
+
+
 class Detector:
     def __init__(self, types=None, notable=None):
         self.types = types or TypeDb()
         self.notable = notable or NotableDb()
         self.fired = {}                        # (hex, kind[, detail]) -> ts
         self.approaching = {}                  # hex -> expected time of the pass
+        self.points = {}                       # phone id -> (lat, lon, ts): where opted-in phones are
+        self.approaching_me = {}               # (hex, phone) -> expected time of the pass
         self.sent_times = collections.deque()  # non-emergency events in the last hour
 
     def save(self, path=FIRED):
@@ -277,6 +360,52 @@ class Detector:
         if self.fired.get((hex_, "approach")) == now:       # not held back by the hourly cap
             self.approaching[hex_] = now + t
 
+    def _approach_reason(self, a, info, alt):
+        why = notable_reason(a, info, self.notable)
+        if why:
+            return why[0]
+        if is_rotorcraft(a, info):
+            return "Helicopter"
+        if alt is not None and 0 < alt <= LOW_MAX_ALT_FT:
+            return "Low overhead"
+        return None
+
+    def _check_phone_approaches(self, out, a, alt, now):
+        """The same rule as the radar's approach, against each phone's position."""
+        hex_ = a["hex"]
+        info = None
+        for phone, (lat0, lon0, _) in self.points.items():
+            if (hex_, phone) in self.approaching_me:
+                continue
+            cpa = closest_approach_to(a, lat0, lon0)
+            if not cpa:
+                continue
+            dist, _bearing, t, miss = cpa
+            if dist <= APPROACH_CPA_NM or not (APPROACH_MIN_S <= t <= APPROACH_WARN_S and miss <= APPROACH_CPA_NM):
+                continue
+            if info is None:
+                info = self.types.lookup(hex_) if dist <= PHONE_LOOKUP_NM else {}
+            reason = self._approach_reason(a, info, alt)
+            key = (hex_, "approach", phone)
+            if not reason or not self._due(key, "approach", now):
+                continue
+            ev = describe(a, info, now)
+            # No distance or direction: those would be from the antenna, and
+            # from the phone they'd say where it is. Which aircraft, and when.
+            ev.pop("dist_nm", None)
+            ev.pop("dir", None)
+            ev["label"] = reason[:60]
+            ev["eta_s"] = int(round(t / 10.0)) * 10
+            ev["phone"] = phone
+            self._emit(out, key, "approach", ev, now)
+            if self.fired.get(key) == now:
+                self.approaching_me[(hex_, phone)] = now + t
+
+    def set_points(self, points, now=None):
+        """Phone positions from the relay, newest wins; stale ones dropped."""
+        now = now if now is not None else time.time()
+        self.points = {p: v for p, v in points.items() if now - v[2] <= LOCATION_MAX_AGE_S}
+
     def scan(self, doc, now=None):
         """New events for one aircraft.json snapshot."""
         now = now if now is not None else time.time()
@@ -318,6 +447,8 @@ class Detector:
                     self._emit(out, (hex_, "notable"), "notable", ev, now)
 
             self._check_approach(out, a, info, dist, alt, now)
+            if self.points:
+                self._check_phone_approaches(out, a, alt, now)
 
             # A helicopter nearby is a helicopter event, never also a low one.
             if dist <= HELI_RADIUS_NM and is_rotorcraft(a, info):
@@ -332,6 +463,10 @@ class Detector:
             if now > at + APPROACH_END_AFTER_S:
                 del self.approaching[hex_]
                 out.append({"kind": "approach_end", "ts": int(now), "hex": hex_})
+        for (hex_, phone), at in list(self.approaching_me.items()):
+            if now > at + APPROACH_END_AFTER_S:
+                del self.approaching_me[(hex_, phone)]
+                out.append({"kind": "approach_end", "ts": int(now), "hex": hex_, "phone": phone})
 
         # forget passes long over, so this never grows without bound
         horizon = max(COOLDOWN_S.values())
@@ -410,6 +545,81 @@ class Sender:
         return f"send failed ({why}); {len(self.queue)} queued, retrying"
 
 
+def relay_call(method, path, payload=None):
+    """(status, parsed JSON or None) from a signed request to the relay."""
+    key = hb.load_key(create=True)
+    body = b"" if method == "GET" else json.dumps(payload or {}, separators=(",", ":")).encode()
+    headers = {"Content-Type": "application/json",
+               "User-Agent": "StratoScan-unit/1 (+https://github.com/mferris/StratoScan)"}
+    headers.update(hb.sign_headers(key, method, path, body))
+    req = urllib.request.Request(hb.RELAY_URL.rstrip("/") + path, data=body if method != "GET" else None,
+                                 headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as r:
+            return r.status, json.loads(r.read(65536) or b"{}")
+    except urllib.error.HTTPError as e:
+        return e.code, None
+    except Exception:
+        return None, None
+
+
+class PhoneLocations:
+    """Publishes this unit's box key, and collects its phones' positions."""
+
+    def __init__(self, call=None):
+        self.call = call or relay_call
+        self.next_poll = 0.0
+        self.next_publish = 0.0
+        self.box = None
+        self.count = 0
+
+    def _box(self):
+        if self.box is None:
+            self.box = box_private(hb.load_key(create=True))
+        return self.box
+
+    def publish(self):
+        import base64
+        key = base64.urlsafe_b64encode(box_public_raw(self._box())).rstrip(b"=").decode()
+        sig = hb.load_key(create=True).sign((BOX_KEY_CONTEXT + key).encode())
+        status, _ = self.call("POST", "/v1/unit/boxkey",
+                              {"key": key, "sig": base64.urlsafe_b64encode(sig).rstrip(b"=").decode()})
+        return status
+
+    def tick(self, detector, now=None):
+        """Poll when due. Returns a log line when something worth saying happened."""
+        now = now if now is not None else time.time()
+        if not hb.RELAY_URL or now < self.next_poll:
+            return None
+        self.next_poll = now + LOCATION_POLL_S
+        line = None
+        if now >= self.next_publish:
+            status = self.publish()
+            if status == 200:
+                self.next_publish = now + BOX_PUBLISH_EVERY_S
+            else:
+                # an older relay (404) or a network fault: quietly, an hour on
+                self.next_publish = self.next_poll = now + 3600
+                return None
+        status, reply = self.call("GET", "/v1/unit/locations")
+        if status != 200 or not isinstance(reply, dict):
+            self.next_poll = now + (3600 if status == 404 else 300)
+            return None
+        points = {}
+        for row in reply.get("locations") or []:
+            if not isinstance(row, dict) or not isinstance(row.get("phone"), str) or not isinstance(row.get("blob"), str):
+                continue
+            fix = decrypt_location(self._box(), row["blob"], row["phone"])
+            if fix:
+                points[row["phone"]] = fix
+        detector.set_points(points, now)
+        if len(detector.points) != self.count:
+            # how many, never where
+            line = f"watching for approaches to {len(detector.points)} phone(s) as well as the radar"
+            self.count = len(detector.points)
+        return line
+
+
 def write_status(detector, sender, on):
     try:
         os.makedirs(RUN_DIR, exist_ok=True)
@@ -439,9 +649,10 @@ class Service:
     phone pairs again.
     """
 
-    def __init__(self, detector=None, sender=None):
+    def __init__(self, detector=None, sender=None, locations=None):
         self.detector = detector or Detector()
         self.sender = sender or Sender()
+        self.locations = locations or PhoneLocations()
         self.last_mtime = None
         self.paused_at = False      # config mtime when paused; False = not paused
 
@@ -466,6 +677,12 @@ class Service:
                     self.sender.add(new)
             except (OSError, ValueError):
                 pass    # readsb mid-write or restarting; next poll
+            try:
+                said = self.locations.tick(self.detector)
+                if said:
+                    print(f"events: {said}", flush=True)
+            except Exception:
+                pass    # approaches to phones are extra; never let them stop the alerts
             line = self.sender.flush()
             if line:
                 print(f"events: {line}", flush=True)
