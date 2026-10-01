@@ -180,8 +180,19 @@ async function deliver(env, unit, evs) {
     try { wants = JSON.parse(phone.kinds); } catch { /* none */ }
     // Approaches start and end Live Activities, handled apart from alerts. An
     // approach to a phone's own location (roadmap 2.7) goes to that phone only.
-    const approaches = ordered.filter(x => (x.kind === 'approach' || x.kind === 'approach_end')
-      && (!x.phone || x.phone === phone.id));
+    // A phone near its radar can get both for the same aircraft in one batch
+    // (the radar's approach and its own); one countdown per aircraft is
+    // enough, so the first that it wants wins.
+    const seenHex = new Set();
+    const approaches = ordered.filter(x => {
+      if (x.kind !== 'approach' && x.kind !== 'approach_end') return false;
+      if (x.phone && x.phone !== phone.id) return false;
+      if (x.kind === 'approach' && !wants.includes(x.phone ? 'approach_me' : 'approach')) return false;
+      const k = x.kind + ':' + x.hex;
+      if (seenHex.has(k)) return false;
+      seenHex.add(k);
+      return true;
+    });
     for (const e of approaches.slice(0, 2)) {
       await liveActivity(env, phone, unit, e, wants);
     }
