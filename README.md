@@ -20,20 +20,21 @@ app brings it to your pocket.
 
 ## Status
 
-*As of 2026-09-29.* One unit (RDU) runs around the clock on release
-`2026.09.28.4`. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md), tracked
+*As of 2026-09-30.* One unit (RDU) runs around the clock on release
+`2026.09.30.11`. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md), tracked
 as [issues](https://github.com/mferris/StratoScan/issues), and the parts it still
 needs are in the [shopping list](docs/SHOPPING.md).
 
 | Area | State |
 |---|---|
-| Wall radar (kiosk) | Running unattended; updates itself from signed releases |
+| Wall radar (kiosk) | Running unattended; updates itself from signed releases. One labelled aircraft feed on the unit for every screen (`/api/aircraft`); drawing cost halved |
 | Phase 4 extras | Done: rewind, notable aircraft, empty-sky screen, spoken announcements, year in review, opt-in FlightAware feeding |
 | Relay (push + fleet health) | Live on Cloudflare Workers |
-| iPhone app | Working on a real iPhone: QR pairing, push alerts, home-screen widget, Live Activity for approaching aircraft, automatic home/away switching, demo mode |
+| iPhone app | Working on a real iPhone: QR pairing, push alerts, widgets, Live Activity for approaching aircraft, home/away switching, the network's aircraft, zoom, "centre on me", a compass, Sky view, the logbook, demo mode |
+| Apple Watch app | Built (glance radar, complications, Smart Stack); waiting for TestFlight to reach a real Watch |
 | Security review | Full scan done 2026-09-28; every finding fixed and verified on the running unit |
 | Factory SD image | Builds and passes its checks in CI; not yet test-flashed or published |
-| Next up | RTC battery fitting, factory image test, StandBy radar, logbook and AR sky view, Apple Watch |
+| Next up | Factory image test, the Watch on a real wrist, RTC battery fitting, alerts for aircraft approaching the phone, hardware v2 (light sensor, bezel) |
 
 ## What it does
 
@@ -185,7 +186,19 @@ scanning a QR code on its screen:
   2 miles in the next 3 minutes), a countdown appears on the lock screen and
   in the Dynamic Island, and closes itself after the pass
 - **Home-screen and lock-screen widget** — how many aircraft are overhead and
-  the nearest few
+  the nearest few; a radar widget for StandBy
+- **Every aircraft, not just the ones the antenna hears** — the aircraft a
+  public network (adsb.lol) reports are drawn hollow, with a "not heard" count
+- **Zoom** — pinch on any spot, down to about a mile; the rings stay true
+  distances from the radar. Follow an aircraft, or centre on yourself
+- **Compass** — turn and the needle points at an aircraft, with which way it's
+  coming from and going
+- **Sky view** — hold the phone up and each aircraft's label sits where it is
+  in the sky; tap one for its details. Away from home it can show the
+  aircraft around you instead (opt-in; see [privacy](docs/privacy.md))
+- **Logbook** — what your radar has seen: today, all-time totals, records
+  (farthest, closest, highest, fastest), what flies over, when, and the
+  regulars
 - **Home and away** — on your WiFi the app talks to the radar directly; away
   from home it switches to the radar's public HTTPS page by itself. The away
   address is learned from the radar
