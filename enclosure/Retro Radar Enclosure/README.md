@@ -189,6 +189,17 @@ Now there are nine, across the top between the speakers (`exhaust_a0`..`exhaust_
 - `exhaust_top_only` checks that nothing is cut outside that arc.
 - `exhaust_reaches_inside` checks that each slot breaks out past the wall's inner face. It finds about 115mm³, about 13 per slot; a blind dent finds nothing.
 
+### Speaker grilles: one clean block each
+
+Each speaker's grille is now only the rows in front of the ribs: five rows of 21 holes. Two things went:
+
+- **The single row between the two ribs.** It read as a stray line of holes, not part of the grille.
+- **The three rivets of the front ring that fell on each grille.** They stood up among the holes. The ring keeps its other 18.
+
+These checks hold the change:
+- `grille_in_front_of_ribs` and `rivets_clear_of_grilles` must come out empty. Both find the old geometry when run against it.
+- `grille_present` and `rivets_present` are their positive controls.
+
 ## Checks
 
 `sh run-checks.sh`. Every target must come out with no real volume except

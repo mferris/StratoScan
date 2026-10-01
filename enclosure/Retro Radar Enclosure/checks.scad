@@ -59,6 +59,14 @@ module plinth_side_probe(side) {
             cube([plinth_rib_h/2, base_d/2, z1 - z0]);
 }
 
+// The grille block at each speaker, out past the wall and the rivets' height,
+// front to back. Rivets anywhere in it stood up among the holes; three of the
+// ring used to.
+module grille_zone(a) {
+  rotate([0,0,a]) translate([outer_dia/2 - 5, -grille_w/2 - 2, -1])
+    cube([10, grille_w + 4, shell_depth + 2]);
+}
+
 if (check=="plate_vs_shell") {
   intersection() { back_plate(); shell(); }
 }
@@ -125,6 +133,30 @@ else if (check=="lip_inside_bore") {      // proud of the bore locates nothing
     }
     translate([0,0,-1]) cylinder(d=outer_dia - 2*wall - 2*back_lip_gap + 0.01,
                                  h=back_lip_h + 2);
+  }
+}
+// ---- speaker grilles: no rivets on them, no holes behind the ribs --------
+else if (check=="rivets_clear_of_grilles") {
+  intersection() { rivets(); union() { for (a = speaker_angles) grille_zone(a); } }
+}
+// Paired control: the same probe turned to 90 degrees, where no speaker is,
+// must find rivets, or the empty result above proves nothing.
+else if (check=="rivets_present") {
+  intersection() { rivets(); grille_zone(90); }
+}
+// No grille hole at or behind the ribs. The one row that sat between them read
+// as a stray line of holes. The front rib's front edge is z = 27.
+else if (check=="grille_in_front_of_ribs") {
+  intersection() {
+    for (a = speaker_angles) speaker_grille(a);
+    translate([0,0,-1]) cylinder(d=outer_dia + 20, h=27 + 1);
+  }
+}
+// ...and the grille in front of them is still there.
+else if (check=="grille_present") {
+  intersection() {
+    for (a = speaker_angles) speaker_grille(a);
+    translate([0,0,27]) cylinder(d=outer_dia + 20, h=shell_depth);
   }
 }
 // ---- side exhaust: top arc only, and open to the inside ----------------
