@@ -115,7 +115,7 @@ def heli(**kw):
 d = ev.Detector()
 d.set_points({PHONE: (plat, plon, NOW - 60)}, NOW)
 out = d.scan({"aircraft": [heli()]}, now=NOW)
-mine = [e for e in out if e.get("phone") == PHONE]
+mine = [e for e in out if e.get("phone") == PHONE and e["kind"] == "approach"]
 check("an aircraft about to pass over the phone is an approach to that phone",
       len(mine) == 1 and mine[0]["kind"] == "approach" and mine[0]["label"] == "Helicopter")
 check("the pass is about 80 s away", mine and 70 <= mine[0]["eta_s"] <= 90)
@@ -144,6 +144,27 @@ check("an aircraft passing well clear is not an approach",
 airliner = heli(hex="a90001", category="A3", alt_baro=30000)
 check("high traffic passing over is not worth an alert",
       not [e for e in ev.Detector().scan({"aircraft": [airliner]}, now=NOW) if e.get("phone")])
+
+# ---- nearby alerts measured from a phone (#44) ------------------------------------------
+dn = ev.Detector()
+dn.set_points({PHONE: (plat, plon, NOW)}, NOW)
+near = heli(lat=plat - 1 / 60, gs=0)          # hovering a mile south of the phone, 19 nm from the antenna
+out = dn.scan({"aircraft": [near]}, now=NOW)
+mine = [e for e in out if e.get("phone") == PHONE]
+check("a helicopter near the phone is a helicopter alert for that phone",
+      any(e["kind"] == "helicopter" for e in mine))
+check("with no distance or direction", all("dist_nm" not in e and "dir" not in e for e in mine))
+check("the antenna, 19 nm away, raises nothing of its own", not [e for e in out if "phone" not in e])
+again = dn.scan({"aircraft": [near]}, now=NOW + 10)
+check("not again for the same aircraft and phone", not [e for e in again if e.get("phone") == PHONE and e["kind"] == "helicopter"])
+low = heli(hex="a90002", category="A1", alt_baro=1200, lat=plat - 0.5 / 60, gs=0)
+d4b = ev.Detector()
+d4b.set_points({PHONE: (plat, plon, NOW)}, NOW)
+check("anything low within 2 mi of the phone is low overhead",
+      any(e["kind"] == "low_overhead" and e.get("phone") == PHONE for e in d4b.scan({"aircraft": [low]}, now=NOW)))
+high = heli(hex="a90003", category="A3", alt_baro=30000, lat=plat - 0.5 / 60, gs=0)
+d5 = ev.Detector(); d5.set_points({PHONE: (plat, plon, NOW)}, NOW)
+check("an airliner high overhead is nothing", not [e for e in d5.scan({"aircraft": [high]}, now=NOW) if e.get("phone")])
 
 # ---- talking to the relay ----------------------------------------------------------------
 os.makedirs(ev.hb.STATE_DIR, exist_ok=True)
