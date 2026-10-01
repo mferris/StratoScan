@@ -536,9 +536,18 @@ module keyhole_pads() {
 // raised ribs around the body. Purely cosmetic, added to the shell's
 // outer wall (never touches the glass/rabbet fit).
 // ============================================================
+// Angular half-width of a speaker grille on the outer wall, plus a rivet's
+// radius: no rivet sits on a grille (2026-10-01). Three of the ring fell
+// across each one, standing up among the holes.
+grille_half_deg = (grille_w/2 + rivet_dia/2 + 1) / (outer_dia/2) * 180 / PI;
+function near_speaker(a) =
+    len([for (s = speaker_angles)
+         if (abs((a - s + 540) % 360 - 180) < grille_half_deg) s]) > 0;
+
 module rivets() {
     for (i = [0:n_rivets-1]) {
         a = i * 360/n_rivets;
+        if (!near_speaker(a))
         translate([(outer_dia/2)*cos(a), (outer_dia/2)*sin(a), rivet_z])
             rotate([0,0,a])
                 translate([-rivet_h/2, 0, 0])
@@ -666,24 +675,20 @@ module speaker_bracket(angle) {
 }
 
 
-// Clearance between a grille hole and a rib edge. 0.6 is chosen, not
-// arbitrary: it is the largest value that still keeps the row sitting in the
-// 7mm gap BETWEEN the two ribs. At 0.8 that row is dropped too, for 0.05mm,
-// and the grille loses its whole lower half -- 4 rows of 9 -- which is both
-// less speaker aperture and a lopsided look.
+// Clearance between a grille hole and a rib edge.
 grille_rib_clear = 0.6;
 
-// True when a grille hole at this Z would break into a decorative rib. The
-// ribs sweep 220 degrees, which takes in both speakers at 0 and 180, so
-// without this every rib arrives at the speaker already perforated: the holes
-// cut through the ridge and out the other side, and it reads as broken rather
-// than as a ridge. A round hole cannot be shortened, so these are dropped.
-//
-// Written over rib_z_list rather than two hardcoded bands, so adding a third
-// rib does not silently start drilling through it.
-function z_on_rib(z) =
-    let (c = grille_hole_dia/2 + grille_rib_clear)
-    len([for (rz = rib_z_list) if (z + c > rz && z - c < rz + rib_w) rz]) > 0;
+// The grille is the block of rows in front of the ribs, and nothing behind
+// them (2026-10-01). The ribs sweep 220 degrees, taking in both speakers, so
+// a hole on a rib would perforate it (the rib reads as broken), and the one
+// row that fitted in the 7mm gap BETWEEN the ribs read as a stray line of
+// holes rather than part of the grille. Every hole whose edge comes within
+// grille_rib_clear of the rearmost rib's front edge, or anywhere behind it, is
+// dropped. Written over rib_z_list, so moving or adding a rib moves this too.
+function behind_ribs(z) =
+    let (c = grille_hole_dia/2 + grille_rib_clear,
+         front = max([for (rz = rib_z_list) rz + rib_w]))
+    z - c < front;
 
 module speaker_grille(angle) {
     // The holes have to clear BOTH solids in the sound path, not just the
@@ -705,7 +710,7 @@ module speaker_grille(angle) {
             dy = (iy - n_y/2) * grille_pitch;
             for (iz = [0:n_z]) {
                 dz = (iz - n_z/2) * grille_pitch;
-                if (!z_on_rib(z0 + speaker_d/2 + dz))
+                if (!behind_ribs(z0 + speaker_d/2 + dz))
                     translate([r_mount, dy, z0 + speaker_d/2 + dz])
                         rotate([0,90,0])
                             cylinder(d=grille_hole_dia,
