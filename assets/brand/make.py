@@ -156,6 +156,12 @@ def main():
             tile = f'<rect width="100" height="100" rx="22" fill="{SKY}"/><g transform="translate(10 10) scale(0.8)">{mark()}</g>'
             body = tile + f'<g transform="translate(116 71)">{words}</g>'
             write(name, svg(body, w=round(116 + width + 4), h=100, title="StratoScan"))
+        # The words alone, for the apps: they draw the mark natively
+        # (ios/Shared/BrandMark.swift) and set this beside it
+        words, width = wordmark_paths(a.font, [("Strato", "#ffffff"), ("Scan", SWEEP)], cap_height=42)
+        # cropped to the capitals (42 tall, no descenders), 2 units spare
+        write("wordmark-on-dark.svg", svg(f'<g transform="translate(1 44)">{words}</g>',
+                                          w=round(width + 2), h=46, title="StratoScan"))
     sync_pages(inline)
 
 

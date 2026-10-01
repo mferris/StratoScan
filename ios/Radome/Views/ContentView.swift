@@ -157,6 +157,9 @@ struct ContentView: View {
 
     private var hud: some View {
         VStack(spacing: 2) {
+            StratoScanLogo(height: 22)
+                .opacity(0.9)
+                .padding(.bottom, 6)
             if viewModel.isZoomed {
                 Button("RESET VIEW") { viewModel.resetView() }
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))

@@ -122,6 +122,7 @@ targets:
       - path: Shared/AircraftFeedClient.swift
       - path: Shared/DemoFeed.swift
       - path: Shared/Geo.swift
+      - path: Shared/BrandMark.swift
       - path: Shared/demo-traffic.json
     dependencies:
       - target: RadomeWatchWidget
