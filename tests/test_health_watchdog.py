@@ -108,6 +108,57 @@ with tempfile.TemporaryDirectory() as tmp:
     m.check_receiver()
     check("a second reboot inside the interval is refused", calls == [])
 
+    # ---- a radio gone from USB goes straight to the power cycle ---------
+    usb = os.path.join(tmp, "usb")
+    m.USB_DEVICES = usb
+    m.RTL_SEEN = os.path.join(tmp, "net", "rtl-sdr-seen")
+    m.UHUBCTL = os.path.join(tmp, "uhubctl")
+    open(m.UHUBCTL, "w").close()
+
+    def radio(present):
+        dev = os.path.join(usb, "1-2")
+        if present:
+            os.makedirs(dev, exist_ok=True)
+            open(os.path.join(dev, "idVendor"), "w").write("0bda\n")
+            open(os.path.join(dev, "idProduct"), "w").write("2838\n")
+        elif os.path.isdir(dev):
+            for f in os.listdir(dev):
+                os.remove(os.path.join(dev, f))
+            os.rmdir(dev)
+    os.makedirs(usb, exist_ok=True)
+
+    # never seen an RTL radio this boot: the usual order, restart first
+    m._write_int(m.RECEIVER_RESTARTS, 0)
+    calls.clear()
+    m.check_receiver()
+    check("an unknown receiver keeps the usual order (restart first)", calls == [["restart", "readsb.service"]])
+
+    # seen, and still there: data stale for another reason, restart first
+    radio(True)
+    m._write_int(m.RECEIVER_RESTARTS, 0)
+    calls.clear()
+    m.check_receiver()
+    check("a radio still on USB is restarted, not power-cycled", calls == [["restart", "readsb.service"]])
+    check("seeing the radio is remembered", os.path.exists(m.RTL_SEEN))
+
+    # gone: power cycle at once, counted
+    radio(False)
+    m._write_int(m.RECEIVER_RESTARTS, 0)
+    calls.clear()
+    m.check_receiver()
+    check("a radio gone from USB is power-cycled at once",
+          len([c for c in calls if c[-1] == "off"]) == 4 and calls[-1] == ["restart", "readsb.service"])
+    check("the fast cycle counts toward the reboot", m._read_int(m.RECEIVER_RESTARTS) == 1)
+
+    # still gone inside the interval: no second cycle; the usual restarts
+    calls.clear()
+    m.check_receiver()
+    check("no second cycle inside the interval; back to restarts", calls == [["restart", "readsb.service"]])
+    os.remove(m.UHUBCTL)
+    os.remove(m.USB_CYCLED)
+    m._write_int(m.RECEIVER_RESTARTS, 0)
+    calls.clear()
+
     # ---- kiosk -----------------------------------------------------------
     os.remove(m.LAST_REBOOT)
     stuck_dir = os.path.join(tmp, "user", "1000")

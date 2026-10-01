@@ -79,6 +79,17 @@ USB_CYCLED = "/run/stratoscan-net/usb-power-cycled"
 MIN_USB_CYCLE_INTERVAL_S = 30 * 60
 USB_OFF_S = 3
 USB_SETTLE_S = 6
+# When the radio has dropped off USB altogether (RDU 2026-09-30, a loose
+# connector: "Cannot enable. Maybe the USB cable is bad?"), restarting readsb
+# can't help -- there is nothing for it to open -- and three restarts two
+# minutes apart cost about seven minutes of NO SIGNAL before the power cycle
+# that does. So a radio that is missing goes straight to the power cycle.
+# Only RTL2832U radios (the FlyCatcher, FlightAware's Pro Stick) are
+# recognised, and only on a unit where one has been seen since boot: a unit
+# with some other receiver keeps the usual order.
+USB_DEVICES = "/sys/bus/usb/devices"
+RTL_SDR_IDS = {("0bda", "2832"), ("0bda", "2838")}
+RTL_SEEN = "/run/stratoscan-net/rtl-sdr-seen"
 sleep = time.sleep                 # patched by the tests
 # wake-listener.py (the frozen-display watchdog) runs as the desktop user and
 # can only restart the browser. It counts restarts that did not bring a
@@ -294,6 +305,32 @@ def power_cycle_usb():
     return True
 
 
+def rtl_sdr_present():
+    """True if an RTL2832U radio is on USB now."""
+    try:
+        for dev in os.listdir(USB_DEVICES):
+            try:
+                with open(os.path.join(USB_DEVICES, dev, "idVendor")) as f:
+                    vendor = f.read().strip()
+                with open(os.path.join(USB_DEVICES, dev, "idProduct")) as f:
+                    product = f.read().strip()
+            except OSError:
+                continue
+            if (vendor, product) in RTL_SDR_IDS:
+                return True
+    except OSError:
+        pass
+    return False
+
+
+def radio_missing():
+    """True only when an RTL radio was here earlier this boot and is gone now."""
+    if rtl_sdr_present():
+        touch_runtime(RTL_SEEN)
+        return False
+    return os.path.exists(RTL_SEEN)
+
+
 def check_receiver():
     if _uptime() < RECEIVER_BOOT_GRACE_S:
         return
@@ -308,6 +345,14 @@ def check_receiver():
         return
     what = "missing" if age == float("inf") else f"stale for {int(age)}s"
     restarts = _read_int(RECEIVER_RESTARTS)
+    if radio_missing() and power_cycle_usb():
+        # Counted like a restart, so a cycle that doesn't bring it back still
+        # escalates (the next cycle is rate-limited; the reboot follows).
+        _write_int(RECEIVER_RESTARTS, restarts + 1)
+        print(f"health: receiver data {what} and the radio is gone from USB; "
+              "power-cycled USB", flush=True)
+        run([SYSTEMCTL, "restart", "readsb.service"], timeout=60)
+        return
     if restarts >= RECEIVER_REBOOT_AFTER:
         if power_cycle_usb():
             # One more readsb start on a freshly powered radio; if data is
