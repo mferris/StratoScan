@@ -25,6 +25,7 @@
 			<string>com.NelsonIndustries.radome.pair</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>stratoscan</string>
 				<string>radome</string>
 			</array>
 		</dict>
@@ -43,7 +44,7 @@
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Only if you turn on alerts for aircraft approaching you: when you move, your location is sent encrypted so only your own radar can read it, to warn you of aircraft about to pass over. Turn it off any time in Settings.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>To show where you are on the radar. Your location stays on this phone.</string>
+	<string>To show where you are on the radar, and to aim the compass and Sky view. It stays on this phone unless you turn on a feature that says otherwise.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIBackgroundModes</key>

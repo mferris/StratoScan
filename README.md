@@ -400,7 +400,7 @@ the dimensional mistakes that are easy to repeat.
 
 **iOS app**: `ios/` is an [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 project (app plus widget extension, iOS 17.2 or later). Run `xcodegen generate`
-inside `ios/` if you change `project.yml`, then open `Radome.xcodeproj` in
+inside `ios/` if you change `project.yml`, then open `StratoScan.xcodeproj` in
 Xcode. To build your own, set your signing team, bundle id and App Group in
 `project.yml`. On the radar, open Settings › Phone & Watch to show a pairing
 code, then scan it from the app. Push alerts need your own relay and an APNs

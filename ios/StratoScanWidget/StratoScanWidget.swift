@@ -37,7 +37,7 @@ struct Provider: TimelineProvider {
     }
 }
 
-struct RadomeWidgetView: View {
+struct StratoScanWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: Entry
 
@@ -103,9 +103,9 @@ struct RadomeWidgetView: View {
 }
 
 @main
-struct RadomeWidgets: WidgetBundle {
+struct StratoScanWidgets: WidgetBundle {
     var body: some Widget {
-        RadomeWidget()
+        StratoScanWidget()
         RadarWidget()
         ApproachLiveActivity()
     }
@@ -160,13 +160,15 @@ struct RadarWidgetView: View {
     }
 }
 
-struct RadomeWidget: Widget {
+struct StratoScanWidget: Widget {
     var body: some WidgetConfiguration {
+        // "RadomeNearby": the kind iOS knows placed widgets by -- renaming it would
+        // silently remove every one already on someone's home screen. Kept.
         StaticConfiguration(kind: "RadomeNearby", provider: Provider()) { entry in
             if #available(iOS 17.0, *) {
-                RadomeWidgetView(entry: entry).containerBackground(.black, for: .widget)
+                StratoScanWidgetView(entry: entry).containerBackground(.black, for: .widget)
             } else {
-                RadomeWidgetView(entry: entry).padding().background(Color.black)
+                StratoScanWidgetView(entry: entry).padding().background(Color.black)
             }
         }
         .configurationDisplayName("Aircraft overhead")

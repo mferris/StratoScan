@@ -21,8 +21,8 @@ StratoScan. A fork needs its own name and icon.
 | `logo-on-dark.svg`, `logo-on-light.svg` | The mark with the wordmark, for dark and light pages |
 | `social-preview.png` | GitHub's social preview, 1280×640 |
 
-The PNG app icons in `ios/Radome/App/Assets.xcassets/AppIcon.appiconset` and
-`ios/RadomeWatch/Assets.xcassets` are 1024 px renders of `icon*.svg`.
+The PNG app icons in `ios/StratoScan/App/Assets.xcassets/AppIcon.appiconset` and
+`ios/StratoScanWatch/Assets.xcassets` are 1024 px renders of `icon*.svg`.
 
 ## Colours
 

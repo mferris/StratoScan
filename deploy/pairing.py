@@ -5,7 +5,8 @@ because it signs with the unit key (heartbeat.py owns it).
 
   1. The owner taps "Pair a phone" on the radar's own screen. start() makes a
      one-time secret, tells the relay only its SHA-256, and returns a link the
-     screen shows as a QR code:  radome://pair?u=<unit id>&s=<secret>
+     screen shows as a QR code:  stratoscan://pair?u=<unit id>&s=<secret>
+     (radome:// before 2026.10.01.2; the app accepts both)
   2. The phone scans it (the Camera app opens the StratoScan app), and presents
      the secret to the relay with its own signed request. The relay links the
      two and spends the code; it expires anyway after 10 minutes.
@@ -40,7 +41,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 RUN_DIR = os.environ.get("STRATOSCAN_PAIRING_RUN", "/run/stratoscan")
 OFFER = os.path.join(RUN_DIR, "pairing-offer.json")
 TIMEOUT_S = 10
-LINK = "radome://pair"
+LINK = "stratoscan://pair"
 RE_ID = re.compile(r"^[A-Za-z0-9_-]{43}$")
 
 

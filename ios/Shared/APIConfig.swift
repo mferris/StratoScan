@@ -12,6 +12,10 @@ import Network
 /// `Endpoint` picks between them automatically.
 enum APIConfig {
     private static let homeKey = "flightradar.baseURL"
+    // Stored settings keep their "radome." keys (and the Keychain its
+    // "radome.relay.identity" service) on purpose: renaming them would lose
+    // every owner's settings and unpair their radars. The App Group and
+    // bundle IDs keep "radome" until the company name is settled.
     private static let awayKey = "radome.awayURL"
     static let defaultBaseURL = "http://stratoscan.local"
 
@@ -66,7 +70,7 @@ final class Endpoint {
 
     private init() {
         monitor.pathUpdateHandler = { [weak self] _ in self?.invalidate() }
-        monitor.start(queue: DispatchQueue(label: "radome.endpoint.path"))
+        monitor.start(queue: DispatchQueue(label: "stratoscan.endpoint.path"))
     }
 
     /// The address in use (the last choice; home until something is known).

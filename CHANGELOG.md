@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- The app's internal names are StratoScan too (2026-10-01): the Xcode
+  project (`ios/StratoScan.xcodeproj`), its folders and targets, the Swift
+  types, the `stratoscan://` pairing link (units from 2026.10.01.2 make it;
+  the app still accepts `radome://`), and the push payload's key. Kept on
+  purpose: the bundle ID and App Group (until the company name is
+  settled), the stored settings keys and Keychain entry (renaming them
+  would lose every owner's settings and unpair their radars), and the
+  home-screen widget's kind (renaming it would remove placed widgets).
 - Renamed from Radome to **StratoScan** (2026-09-30). The GitHub repo moves to
   `mferris/StratoScan` (old links redirect). As before, internal names stay as
   they were so units in service update cleanly, and so do the iPhone app's
