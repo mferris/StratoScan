@@ -133,13 +133,20 @@ with tempfile.TemporaryDirectory() as tmp:
     m.check_receiver()
     check("an unknown receiver keeps the usual order (restart first)", calls == [["restart", "readsb.service"]])
 
-    # seen, and still there: data stale for another reason, restart first
+    # seen while all is well: remembered, even though nothing needed doing
     radio(True)
+    stale(1)
+    calls.clear()
+    m.check_receiver()
+    check("a healthy run takes no action", calls == [])
+    check("the radio is remembered on a healthy run", os.path.exists(m.RTL_SEEN))
+
+    # still there: data stale for another reason, restart first
+    stale(600)
     m._write_int(m.RECEIVER_RESTARTS, 0)
     calls.clear()
     m.check_receiver()
     check("a radio still on USB is restarted, not power-cycled", calls == [["restart", "readsb.service"]])
-    check("seeing the radio is remembered", os.path.exists(m.RTL_SEEN))
 
     # gone: power cycle at once, counted
     radio(False)

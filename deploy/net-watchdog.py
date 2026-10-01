@@ -332,6 +332,10 @@ def radio_missing():
 
 
 def check_receiver():
+    # Noted on every run, healthy or not: the fast path below needs to know
+    # the radio was here before it went missing.
+    if rtl_sdr_present():
+        touch_runtime(RTL_SEEN)
     if _uptime() < RECEIVER_BOOT_GRACE_S:
         return
     try:
