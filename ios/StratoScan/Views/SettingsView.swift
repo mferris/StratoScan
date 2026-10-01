@@ -20,6 +20,7 @@ struct SettingsView: View {
                 PairedRadarsSection()
                 if !pairing.radars.isEmpty { AlertsSection() }
                 ThemeSection()
+                WeatherSection()
 
                 Section {
                     LabeledContent("At home") {
@@ -125,6 +126,34 @@ private struct ThemeSection: View {
             Text("Colour theme")
         } footer: {
             Text("The same themes as the radar's screen. The Watch and widgets stay dark.")
+        }
+    }
+}
+
+
+/// Weather on the map (#42), as on the radar's screen.
+private struct WeatherSection: View {
+    @AppStorage("stratoscan.storms") private var storms = true
+    @AppStorage("stratoscan.lightning") private var lightning = false
+
+    var body: some View {
+        Section {
+            Toggle(isOn: $storms) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Rain and storms")
+                    Text("Weather radar under the aircraft, updated every few minutes (RainViewer)")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+            }
+            Toggle(isOn: $lightning) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Lightning")
+                    Text("Recent strikes seen from satellite, in the Americas only (RealEarth, UW–Madison)")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+            }
+        } header: {
+            Text("Weather")
         }
     }
 }

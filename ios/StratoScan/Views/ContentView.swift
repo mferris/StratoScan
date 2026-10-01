@@ -16,6 +16,9 @@ struct ContentView: View {
     /// The colour theme (#43): Daylight unless chosen otherwise.
     @AppStorage(Palette.storageKey) private var themeID = Palette.daylight.id
     private var pal: Palette { Palette.named(themeID) }
+    /// Weather on the map (#42): as the radar's defaults, storms on, lightning off.
+    @AppStorage("stratoscan.storms") private var showStorms = true
+    @AppStorage("stratoscan.lightning") private var showLightning = false
 
     /// An iPad, or any window wide enough to be treated like one.
     private var isPad: Bool { sizeClass == .regular }
@@ -41,7 +44,9 @@ struct ContentView: View {
                         center: mapCentre(home),
                         zoom: Geo.zoomForRange(rangeNm: viewModel.rangeNm, lat: home.lat, pixels: side * 0.44),
                         runwayGeoJSON: viewModel.runwayGeoJSON,
-                        palette: pal
+                        palette: pal,
+                        showStorms: showStorms,
+                        showLightning: showLightning
                     )
                     // The kiosk's --map-filter for the chosen theme (Palette).
                     .mapFilter(pal.mapFilter)

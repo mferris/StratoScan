@@ -24,6 +24,10 @@ struct CreditsView: View {
                        nil, "https://openfreemap.org/")
                 credit("Runways: OpenStreetMap data via the Overpass API",
                        "© OpenStreetMap contributors, ODbL.", "https://overpass-api.de/")
+                credit("Weather radar: RainViewer",
+                       nil, "https://www.rainviewer.com/")
+                credit("Lightning: SSEC RealEarth, University of Wisconsin–Madison",
+                       "GOES-East Geostationary Lightning Mapper.", "https://realearth.ssec.wisc.edu/")
             }
 
             Section("Aircraft") {
