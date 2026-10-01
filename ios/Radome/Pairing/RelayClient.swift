@@ -40,6 +40,20 @@ struct RelayClient {
         _ = try await send("POST", "/v1/phone/activity", ["unit": unit, "hex": hex, "token": token])
     }
 
+    /// A paired radar's box key and its signature (roadmap 2.7); the caller
+    /// checks the signature against the radar's id (LocationBox).
+    func boxKey(unit: String) async throws -> (key: String, sig: String) {
+        struct Reply: Decodable { let key: String; let sig: String }
+        let r = try JSONDecoder().decode(Reply.self, from: try await send("POST", "/v1/phone/boxkey", ["unit": unit]))
+        return (r.key, r.sig)
+    }
+
+    /// This phone's location for one radar, sealed (LocationBox); nil withdraws it.
+    func location(unit: String, blob: String?) async throws {
+        let value: Any = blob ?? NSNull()      // JSON null withdraws it
+        _ = try await send("POST", "/v1/phone/location", ["unit": unit, "blob": value])
+    }
+
     func testPush() async throws {
         _ = try await send("POST", "/v1/phone/test", [:])
     }

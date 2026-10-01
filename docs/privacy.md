@@ -56,6 +56,22 @@ is used on your phone, to place a "YOU" marker, centre the view and aim the
 compass and Sky view. It is never sent to your radar or the relay. You can
 turn it off at any time in the iPhone's Settings.
 
+**Alerts for aircraft approaching you** (off unless you turn on
+"Approaching me" in the app's alert settings). So your radar can warn you of
+an aircraft about to pass over where *you* are, the app tells your paired
+radar where your phone is when it moves significantly (iOS's
+significant-change service: roughly every 500 m or more, which needs the
+"Always" location permission). The location is **end-to-end encrypted to
+your radar**: the app seals it with your radar's own key, which it checks
+against the identity it learned when you paired, so the StratoScan relay
+that carries it only ever stores an unreadable blob, for at most 6 hours.
+Your radar decrypts it, keeps it in memory to run the prediction, and
+never writes it down, logs it or sends it on. The alert itself names the
+aircraft and when it will pass, not how far or which way from you; but an
+aircraft's track is public, so an alert does hint where you were, to
+anyone who could read it on its way through the relay (it is kept only
+briefly). Turning the option off withdraws your location from every radar.
+
 **Sky view away from home** (off unless you turn it on). When the phone is
 more than 3 nm from your radar, Sky view offers to show the aircraft around
 you instead. If you say yes, the app asks adsb.lol, a public ADS-B network,

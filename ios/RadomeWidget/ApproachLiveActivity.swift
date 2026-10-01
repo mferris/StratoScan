@@ -65,6 +65,7 @@ struct ApproachLiveActivity: Widget {
         // dir is where the aircraft IS, seen from the radar; from/to are
         // which way it's travelling. "from the N" used to read as the latter.
         if let dir = context.state.dir { parts.append("\(dir) of the radar") }
+        if context.attributes.about == "you" { parts.append("near you") }
         if let f = context.state.from, let t = context.state.to { parts.append("coming from the \(f), heading \(t)") }
         return parts.joined(separator: " · ")
     }
