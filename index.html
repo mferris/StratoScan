@@ -3523,19 +3523,24 @@ function saveAlertSettings() {
 // and re-reads the canvas-side color copies (COLORS, see refreshCanvasColors
 // above), since canvas drawing can't read CSS at draw time the way DOM
 // elements can.
-const THEME_KEY = 'stratoscan_theme_v1';
+// v2 (2026-10-01): the v1 key held whatever theme the page last loaded
+// with -- it was saved on every load, chosen or not -- so a new default could
+// never reach anyone. Saved now only when someone picks a theme.
+const THEME_KEY = 'stratoscan_theme_v2';
 // swatchBg/swatchAccent are only for the small preview dot in the settings
 // panel -- a deliberate, small duplication of each theme's --bg/--sweep
 // value from the [data-theme] CSS blocks (can't read another theme's CSS
 // custom properties while a different one is active, so there's no way to
 // derive these live from the stylesheet itself).
 const THEMES = [
-  { key: 'classic', label: 'Classic', sub: 'The original look — dark background, warm accent colors', swatchBg: '#0a0d0f', swatchAccent: '#4fd6c8' },
   { key: 'daylight', label: 'Daylight', sub: 'Light background, black text — for a bright room', swatchBg: '#eaf3f1', swatchAccent: '#0f7a6c' },
+  { key: 'classic', label: 'Classic', sub: 'The original look — dark background, warm accent colors', swatchBg: '#0a0d0f', swatchAccent: '#4fd6c8' },
   { key: 'highcontrast', label: 'High Contrast', sub: 'Built for low-vision/colorblind readability — true black background, colorblind-safe accents (Okabe–Ito palette)', swatchBg: '#000000', swatchAccent: '#ffd400' },
   { key: 'radar', label: 'Retro Radar', sub: 'Old CRT plan-position display — black screen, phosphor green', swatchBg: '#000000', swatchAccent: '#39ff14' },
 ];
-let uiTheme = 'classic';
+// Daylight by default (2026-10-01, the owner's choice), first in the list;
+// a theme someone picked is remembered and wins.
+let uiTheme = 'daylight';
 try {
   const savedTheme = localStorage.getItem(THEME_KEY);
   if (THEMES.some((t) => t.key === savedTheme)) uiTheme = savedTheme;
@@ -3553,13 +3558,13 @@ function redrawStaticLayers() {
 }
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawStaticLayers);
 
-function applyTheme(theme) {
+function applyTheme(theme, chosen = false) {
   uiTheme = theme;
   document.documentElement.setAttribute('data-theme', theme);
   refreshCanvasColors();
   redrawStaticLayers();
   recolorLabels(); // no-op if the map isn't up yet (e.g. this initial call at script load) -- map.on('load', recolorLabels) covers that case once it is
-  try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+  if (chosen) { try { localStorage.setItem(THEME_KEY, theme); } catch (e) {} }
 }
 applyTheme(uiTheme); // set before the first frame renders, not just on a later settings-panel interaction
 
@@ -7777,7 +7782,7 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     // the swatch counts as a control too: it's the big obvious circle on
     // each theme row, so pressing it doing nothing read as broken
     if (!e.target.closest('.sp-radio, .sp-theme-swatch')) return; // row body is for scrolling
-    applyTheme(themeRow.dataset.themeKey);
+    applyTheme(themeRow.dataset.themeKey, true);
     renderSettingsPanel();
     return;
   }
