@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var viewModel = RadarViewModel()
     @StateObject private var location = PhoneLocation()
     @State private var showSky = false
@@ -63,6 +64,15 @@ struct ContentView: View {
                             .tracking(2)
                             .foregroundColor(Color(hex: "#5b7278"))
                             .padding(.bottom, geo.size.height * 0.08)
+                    } else if viewModel.connecting {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small).tint(Color(hex: "#5b7278"))
+                            Text("CONNECTING TO YOUR RADAR…")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .tracking(2)
+                                .foregroundColor(Color(hex: "#5b7278"))
+                        }
+                        .padding(.bottom, geo.size.height * 0.08)
                     } else if viewModel.isStale {
                         VStack(spacing: 10) {
                             Text("NO SIGNAL — CHECK RECEIVER")
@@ -132,6 +142,8 @@ struct ContentView: View {
         .background(Color.black)
         .statusBarHidden(true)
         .onAppear { viewModel.start() }
+        // back from the background: say "connecting" until the radar answers
+        .onChange(of: scenePhase) { _, phase in if phase == .active { viewModel.resume() } }
         .onReceive(location.$coordinate) { viewModel.me = $0 }
         .onDisappear { viewModel.stop() }
         .sheet(item: Binding(
