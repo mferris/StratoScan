@@ -253,7 +253,14 @@ struct RadarView: View {
             }
         }
         // Labels off: only the tapped plane keeps one.
-        let visible = viewModel.labelMode == .off ? inView.filter { $0.hex == viewModel.selectedHex } : inView
+        // Aircraft on the ground keep their blip but not a label, unless
+        // tapped or followed: near a busy airport (Atlanta, in the app's
+        // around-me mode) dozens of parked and taxiing aircraft piled their
+        // labels into a column over the airfield.
+        let keep: (PlaneState) -> Bool = { $0.hex == viewModel.selectedHex || $0.hex == viewModel.followHex }
+        let visible = viewModel.labelMode == .off
+            ? inView.filter(keep)
+            : inView.filter { $0.alt != .ground || keep($0) }
         for p in inView where !visible.contains(where: { $0 === p }) {
             p.labelX = nil; p.labelY = nil
         }

@@ -50,9 +50,12 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Aircraft around me (no radar)", isOn: Binding(get: { viewModel.aroundMe }, set: { viewModel.setAroundMe($0) }))
                     Toggle("Demo mode", isOn: Binding(get: { viewModel.isDemo }, set: { viewModel.setDemo($0) }))
+                } header: {
+                    Text("Without a radar")
                 } footer: {
-                    Text("Plays a few minutes of real traffic recorded near RDU airport, so you can see StratoScan working without a radar.")
+                    Text("Aircraft around me shows live traffic around your phone from the public adsb.lol network, centred on you; to ask for it the app sends adsb.lol your location rounded to about 5 km. Alerts and the logbook need a StratoScan radar. Demo mode plays a few minutes of traffic recorded near RDU airport.")
                 }
 
                 Section {
