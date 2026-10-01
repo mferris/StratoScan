@@ -39,9 +39,9 @@ export function cleanEvent(e, requestTs) {
   }
   if (typeof e.hex !== 'string' || !/^[0-9a-f]{6}$/.test(e.hex)) return null;
   out.hex = e.hex;
-  // An approach to one phone's location (roadmap 2.7) names that phone, and
-  // goes to it alone.
-  if ((e.kind === 'approach' || e.kind === 'approach_end') && e.phone !== undefined) {
+  // An approach to one phone's location (roadmap 2.7), or a nearby alert
+  // measured from it (#44), names that phone, and goes to it alone.
+  if (['approach', 'approach_end', 'notable', 'low_overhead', 'helicopter'].includes(e.kind) && e.phone !== undefined) {
     if (typeof e.phone !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(e.phone)) return null;
     out.phone = e.phone;
   }
@@ -101,7 +101,14 @@ export function cleanPhoneName(v) {
 // Push (roadmap 2.1).
 // 'approach' is an aircraft about to pass over the radar; 'approach_me', one
 // about to pass over the phone itself (roadmap 2.7).
-export const PUSH_KINDS = ['emergency', 'notable', 'low_overhead', 'helicopter', 'approach', 'approach_me'];
+//
+// 'near_radar' and 'near_me' (#44) aren't kinds of event but where the
+// nearby alerts (notable, low_overhead, helicopter) are about: the radar,
+// the phone, or both. A phone with neither -- every phone before #44 --
+// gets the radar's, as it always did.
+export const PUSH_KINDS = ['emergency', 'notable', 'low_overhead', 'helicopter', 'approach', 'approach_me',
+  'near_radar', 'near_me'];
+export const NEARBY_KINDS = ['notable', 'low_overhead', 'helicopter'];
 
 // Phone locations (roadmap 2.7): encrypted on the phone, for one radar.
 export const LOCATION_TTL_S = 6 * 3600;      // older than this, it no longer says where the phone is

@@ -812,3 +812,31 @@ test('a phone near its radar gets one countdown per aircraft, not two', async ()
                           evt({ kind: 'approach', hex: 'a90002', eta_s: 120, phone: me.id })]);
   assert.equal(a.sent.length, 1, 'one Live Activity for the one aircraft');
 });
+
+// ---- alerts about where I am, the radar, or both (#44) --------------------------
+
+test('nearby alerts follow where the phone wants them about', async () => {
+  const { e, a } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  const legacy = await pairedPhone(e, u, { kinds: ['helicopter'] });                        // never chose
+  const radar = await pairedPhone(e, u, { kinds: ['helicopter', 'near_radar'] });
+  const me = await pairedPhone(e, u, { kinds: ['helicopter', 'near_me'] });
+  const both = await pairedPhone(e, u, { kinds: ['helicopter', 'near_radar', 'near_me'] });
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'helicopter', hex: 'a11111' })]);                     // near the radar
+  assert.equal(a.sent.length, 3, 'legacy, radar and both get the radar\'s');
+  a.sent.length = 0;
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'helicopter', hex: 'a22222', phone: me.id, dist_nm: undefined, dir: undefined }),
+                          evt({ kind: 'helicopter', hex: 'a33333', phone: both.id, dist_nm: undefined, dir: undefined })]);
+  assert.equal(a.sent.length, 2, 'each phone-measured alert goes to its own phone, if it wants them');
+  assert.ok(a.sent.every(x => x.body.aps.alert.title === 'Helicopter near you'));
+  a.sent.length = 0;
+  clock += 1;
+  // the same aircraft, both near the radar and near "both": one alert to that phone
+  await postEvents(e, u, [evt({ kind: 'helicopter', hex: 'a44444' }),
+                          evt({ kind: 'helicopter', hex: 'a44444', phone: both.id })]);
+  assert.equal(a.sent.filter(x => x.body.aps.alert.title.startsWith('Helicopter')).length, 3,
+    'legacy + radar get one each, both gets one, me gets none');
+});

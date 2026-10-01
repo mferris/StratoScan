@@ -80,11 +80,12 @@ function details(e) {
   return parts.join(' · ');
 }
 
+// A nearby alert measured from the phone (#44) says so: "near you".
 const TITLES = {
   emergency: e => `Emergency${e.squawk ? ` · squawk ${e.squawk}` : ''}`,
-  notable: e => e.label || 'Notable aircraft',
-  low_overhead: () => 'Low overhead',
-  helicopter: () => 'Helicopter nearby',
+  notable: e => `${e.label || 'Notable aircraft'}${e.phone ? ' near you' : ''}`,
+  low_overhead: e => (e.phone ? 'Low overhead near you' : 'Low overhead'),
+  helicopter: e => (e.phone ? 'Helicopter near you' : 'Helicopter nearby'),
   test: () => 'StratoScan test',
 };
 
