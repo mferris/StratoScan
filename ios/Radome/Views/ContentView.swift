@@ -249,10 +249,20 @@ struct ContentView: View {
                 .opacity(0.9)
                 .padding(.bottom, 6)
             if viewModel.isZoomed {
-                Button("RESET VIEW") { viewModel.resetView() }
-                    .font(.system(size: 10 * ui, weight: .semibold, design: .monospaced))
-                    .tracking(1.5)
-                    .padding(.bottom, 4)
+                // A real button: it was small text, easy to miss and to miss tapping.
+                Button { viewModel.resetView() } label: {
+                    Label("RESET VIEW", systemImage: "arrow.counterclockwise")
+                        .font(.system(size: 13 * ui, weight: .semibold, design: .monospaced))
+                        .tracking(1)
+                        .padding(.horizontal, 16 * ui)
+                        .padding(.vertical, 9 * ui)
+                        .foregroundColor(Color(hex: "#4fd6c8"))
+                        .background(Color(hex: "#4fd6c8").opacity(0.16), in: Capsule())
+                        .overlay(Capsule().stroke(Color(hex: "#4fd6c8").opacity(0.55), lineWidth: 1))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 8)
             }
             Text(locationText)
                 .font(.system(size: 10 * ui, design: .monospaced))
