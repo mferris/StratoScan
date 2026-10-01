@@ -51,7 +51,7 @@ ICAO_HEX = re.compile(r"[0-9a-fA-F]{6}")
 
 SOURCE_NAME = "adsb.lol"
 SOURCE_URL = "https://api.adsb.lol/v2/point/{lat}/{lon}/{radius}"
-USER_AGENT = "FlightWall/1.0 (+hobby ADS-B receiver; coverage self-comparison)"
+USER_AGENT = "StratoScan/1.0 (+https://github.com/mferris/StratoScan; coverage self-comparison)"
 MIN_UPSTREAM_S = 15
 UPSTREAM_TIMEOUT = 8
 RADIUS_NM = 25          # a little beyond the 20nm ring the radar draws

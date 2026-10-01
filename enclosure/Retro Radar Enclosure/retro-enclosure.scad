@@ -1,5 +1,5 @@
 // ============================================================
-// FlightWall Enclosure — 3-piece stack
+// StratoScan retro radar enclosure — 3-piece stack
 //   1. front_trim  — sits IN FRONT of the glass, overlaps its
 //                    outer black border, screws pass through it
 //   2. retainer    — sits BEHIND the glass, the glass rests on

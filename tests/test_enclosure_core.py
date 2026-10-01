@@ -21,7 +21,7 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent / "enclosure"
-RETRO = ROOT / "Retro Radar Enclosure" / "flightwall-enclosure.scad"
+RETRO = ROOT / "Retro Radar Enclosure" / "retro-enclosure.scad"
 KITTEN = ROOT / "Kitten Enclosure Two-Tone" / "kitten-enclosure-twotone.scad"
 
 # Everything the hardware touches: the shell's internal furniture, the back,

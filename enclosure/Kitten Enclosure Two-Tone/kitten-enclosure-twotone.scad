@@ -1,5 +1,5 @@
 // ============================================================
-// FlightWall — KITTEN enclosure
+// StratoScan — KITTEN enclosure
 //
 // Same radar, same hardware, different animal. Every dimension that
 // touches a physical part is copied verbatim from the Retro Radar

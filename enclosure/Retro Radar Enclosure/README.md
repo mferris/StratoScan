@@ -1,8 +1,8 @@
-# FlightWall enclosure
+# Retro radar enclosure
 
-The 3D-printable case for the wall/desk build, as a single parametric
+The 3D-printable case for the retro build, as a single parametric
 OpenSCAD source. Everything is driven from the measured values at the top of
-[`flightwall-enclosure.scad`](flightwall-enclosure.scad) — change those and
+[`retro-enclosure.scad`](retro-enclosure.scad) — change those and
 the rest follows.
 
 ## Parts
@@ -27,7 +27,7 @@ Set `part` at the top of the file, or override it from the command line:
 
 ```bash
 openscad --backend=manifold --export-format binstl \
-         -D 'part="shell"' -o shell.stl flightwall-enclosure.scad
+         -D 'part="shell"' -o shell.stl retro-enclosure.scad
 ```
 
 Binary STL: the shell is 75,000 facets, which is far smaller as binary than
