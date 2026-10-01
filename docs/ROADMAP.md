@@ -96,6 +96,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 2.16 | Alerts about where I am, the radar, or both: low overhead, helicopter and notable alerts measured from the phone's (encrypted) location as well as the antenna, by the owner's choice; within the radar's reach first | Away from home, a helicopter near the phone alerts "near you"; one over the house doesn't |
 | 2.17 | Radar names: set during setup (default from the place), shown on the radar and carried to phones by the pairing link; a rename on the radar reaches phones that haven't named it themselves | A new radar pairs and shows its own name on the phone |
 | 2.18 | Set up a new radar from the app: one QR code on the first-boot screen, the app joins the setup hotspot, sends home WiFi, the phone's location, time zone and name, and pairs in the same session; the browser and on-screen setup stay | A radar fresh from the factory image is set up and paired from the app alone |
+| 2.19 | Public web address during first setup: nothing to type or renew; proposed: the relay mints a one-time `tag:stratoscan` Tailscale key for a radar being set up (Cloudflare Tunnel the alternative) | A radar set up from the app is reachable away from home, and can reach nothing on the tailnet |
 
 ## Phase 3: the wrist
 
