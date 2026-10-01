@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""Writes the StratoScan brand SVGs from one definition of the mark.
+
+The mark ("Climb", Stratosphere colours): a radar scope with its sweep, and
+three blips climbing toward it, changing colour with height -- green near the
+ground, cyan, then white where the air runs out. Below about 32 px it drops to
+two larger blips and a heavier ring, or the dots merge into a smudge.
+
+    python3 assets/brand/make.py [--font PATH_TO_ChakraPetch-SemiBold.ttf]
+
+Without --font the wordmark files are left as they are (the letters are
+outlined from the font, so the SVGs never depend on it being installed);
+fontTools is needed only for that step. The PNGs (app icon, social preview)
+are rendered from these SVGs; see README.md.
+"""
+import argparse
+import os
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+SKY = "#0a1a3a"       # icon background
+RING = "#274a86"
+SWEEP = "#5ee7ff"
+LOW, MID, HIGH = "#3ddc97", "#5ee7ff", "#ffffff"
+SCAN_ON_LIGHT = "#0e7fa3"   # the cyan is too pale to read on white
+INK = "#0a1a3a"
+
+
+def mark(small=False, mono=None, tint=None):
+    """The symbol's shapes in a 100x100 box. mono: one colour for everything
+    (sweep fill kept faint); tint: grey levels for iOS's tinted icon."""
+    c = lambda colour, grey: mono or (grey if tint else colour)
+    if small:
+        return (
+            f'<circle cx="50" cy="50" r="38" fill="none" stroke="{c(RING, "#6b6b6b")}" stroke-width="7"/>'
+            f'<path d="M50 50 L50 12 A38 38 0 0 1 82.9 31 Z" fill="{c(SWEEP, "#ffffff")}" opacity="0.35"/>'
+            f'<line x1="50" y1="50" x2="82.9" y2="31" stroke="{c(SWEEP, "#ffffff")}" stroke-width="8" stroke-linecap="round"/>'
+            f'<circle cx="30" cy="64" r="7" fill="{c(LOW, "#9a9a9a")}"/>'
+            f'<circle cx="45" cy="36" r="8.5" fill="{c(HIGH, "#ffffff")}"/>'
+        )
+    ring_opacity = ' opacity="0.45"' if mono else ""
+    return (
+        f'<circle cx="50" cy="50" r="36" fill="none" stroke="{c(RING, "#6b6b6b")}" stroke-width="4"{ring_opacity}/>'
+        f'<path d="M50 50 L50 14 A36 36 0 0 1 81.2 32 Z" fill="{c(SWEEP, "#ffffff")}" opacity="0.32"/>'
+        f'<line x1="50" y1="50" x2="81.2" y2="32" stroke="{c(SWEEP, "#ffffff")}" stroke-width="4.5" stroke-linecap="round"/>'
+        f'<circle cx="50" cy="50" r="3.4" fill="{c(SWEEP, "#ffffff")}"/>'
+        f'<circle cx="27" cy="67" r="3.4" fill="{c(LOW, "#8a8a8a")}"/>'
+        f'<circle cx="35" cy="53" r="4.2" fill="{c(MID, "#c4c4c4")}"/>'
+        f'<circle cx="46" cy="36" r="5" fill="{c(HIGH, "#ffffff")}"/>'
+    )
+
+
+def svg(body, w=100, h=100, title="StratoScan"):
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}" '
+            f'role="img" aria-label="{title}"><title>{title}</title>{body}</svg>\n')
+
+
+def icon(body_fn, background):
+    """A square app icon: the mark at 92% on a background (or none). iOS
+    rounds the corners itself, cutting less than the margin left here."""
+    bg = f'<rect width="100" height="100" fill="{background}"/>' if background else ""
+    return svg(bg + f'<g transform="translate(4 4) scale(0.92)">{body_fn}</g>')
+
+
+def wordmark_paths(font_path, text_colours, cap_height):
+    """'Strato' and 'Scan' outlined from the font, scaled so capitals are
+    cap_height tall. Returns (svg_body, width)."""
+    from fontTools.pens.svgPathPen import SVGPathPen
+    from fontTools.pens.transformPen import TransformPen
+    from fontTools.ttLib import TTFont
+
+    font = TTFont(font_path)
+    cmap = font.getBestCmap()
+    glyphs = font.getGlyphSet()
+    caps = font["OS/2"].sCapHeight or font["head"].unitsPerEm * 0.7
+    s = cap_height / caps
+    x = 0.0
+    out = []
+    for part, colour in text_colours:
+        pen = SVGPathPen(glyphs)
+        for ch in part:
+            name = cmap[ord(ch)]
+            # font units are y-up; SVG is y-down, baseline at y=0
+            glyphs[name].draw(TransformPen(pen, (s, 0, 0, -s, x, 0)))
+            x += glyphs[name].width * s
+        out.append(f'<path fill="{colour}" d="{pen.getCommands()}"/>')
+    return "".join(out), x
+
+
+def write(name, text):
+    with open(os.path.join(HERE, name), "w") as f:
+        f.write(text)
+    print("wrote", name)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--font", help="ChakraPetch-SemiBold.ttf, to (re)build the wordmark files")
+    a = ap.parse_args()
+
+    write("symbol.svg", svg(mark()))
+    write("symbol-small.svg", svg(mark(small=True)))
+    write("symbol-mono.svg", svg(mark(mono="currentColor")))
+    write("symbol-mono-small.svg", svg(mark(small=True, mono="currentColor")))
+    write("icon.svg", icon(mark(), SKY))
+    write("icon-small.svg", svg(f'<rect width="100" height="100" fill="{SKY}"/>' + mark(small=True)))
+    write("icon-dark.svg", icon(mark(), None))            # iOS draws its own dark background
+    write("icon-tinted.svg", icon(mark(tint=True), None))  # grey levels; iOS applies the tint
+
+    if a.font:
+        for name, strato, scan in (("logo-on-dark.svg", "#ffffff", SWEEP),
+                                   ("logo-on-light.svg", INK, SCAN_ON_LIGHT)):
+            words, width = wordmark_paths(a.font, [("Strato", strato), ("Scan", scan)], cap_height=42)
+            # the mark on its sky tile, so the white blip and pale sweep read
+            # on a light page as well as a dark one
+            tile = f'<rect width="100" height="100" rx="22" fill="{SKY}"/><g transform="translate(10 10) scale(0.8)">{mark()}</g>'
+            body = tile + f'<g transform="translate(116 71)">{words}</g>'
+            write(name, svg(body, w=round(116 + width + 4), h=100, title="StratoScan"))
+
+
+if __name__ == "__main__":
+    main()

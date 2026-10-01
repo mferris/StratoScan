@@ -13,6 +13,8 @@ packages:
 targets:
   Radome:
     type: application
+    # a shared scheme, so xcodebuild and Xcode always have one to build
+    scheme: {}
     platform: iOS
     deploymentTarget: "17.2"
     sources:
@@ -63,6 +65,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.NelsonIndustries.radome
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # The maintainer's Apple team. A fork sets its own (Xcode › Signing).
         DEVELOPMENT_TEAM: XXXXXXXXXX
         CODE_SIGN_STYLE: Automatic
@@ -108,6 +111,8 @@ targets:
   # phone; the phone sends the radar's addresses over WatchConnectivity.
   RadomeWatch:
     type: application
+    # a shared scheme, so xcodebuild and Xcode always have one to build
+    scheme: {}
     platform: watchOS
     deploymentTarget: "10.0"
     sources:
@@ -131,6 +136,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.NelsonIndustries.radome.watchkitapp
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.10"

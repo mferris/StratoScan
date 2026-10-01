@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/logo-on-dark.svg">
+    <img src="assets/brand/logo-on-light.svg" alt="StratoScan" width="420">
+  </picture>
+</p>
+
 # StratoScan
 
 *Formerly Radome, and before that FlightRadar.*
@@ -543,7 +550,9 @@ before you do:
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Third-party components and data sources keep
+MIT — see [LICENSE](LICENSE). The StratoScan name, logo and icons are not:
+they identify the project, so a fork should use its own (see
+[assets/brand/LICENSE](assets/brand/LICENSE)). Third-party components and data sources keep
 their own licenses and terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Setting one up somewhere else
