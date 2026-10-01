@@ -391,7 +391,11 @@
     border: 1px solid var(--panel-border);
     white-space: nowrap;
     pointer-events: none;
-    will-change: left, top;
+    /* moved with transform, not left/top: the compositor shifts it without
+       laying the page out again (#35) */
+    left: 0;
+    top: 0;
+    will-change: transform;
   }
   .tag .cs { font-weight: 700; letter-spacing: 0.04em; font-size: 0.91rem; }
   .tag .type { display: none; color: var(--text-dim); margin-top: 0; }
@@ -5136,6 +5140,31 @@ function formatAltitude(alt) {
   return `${alt.toLocaleString()} ft`;
 }
 
+// Label writes that skip themselves when nothing changed. Setting text or a
+// style, even to the value it already has, makes the browser lay the page out
+// again -- and measuring the labels then forces that layout every frame, for
+// every label (#35). A change that can alter a label's size marks it for
+// measuring.
+function setText(node, el, v) {
+  if (el._text === v) return;
+  el._text = v;
+  el.textContent = v;
+  node._changed = true;
+}
+function setAttr(el, name, v) {
+  const cache = el._attr || (el._attr = {});
+  if (cache[name] === v) return;
+  cache[name] = v;
+  el.setAttribute(name, v);
+}
+function setStyle(node, el, prop, v, resizes = true) {
+  const cache = el._style || (el._style = {});
+  if (cache[prop] === v) return;
+  cache[prop] = v;
+  el.style[prop] = v;
+  if (resizes) node._changed = true;
+}
+
 function drawPlanes(dt) {
   const stageRect = stage.getBoundingClientRect();
   const scale = stageRect.width / W;
@@ -5255,16 +5284,16 @@ function drawPlanes(dt) {
       tagNodes.set(p.hex, node);
     }
     node.classList.toggle('airport-phase', !!airportPhase);
-    node.style.borderLeft = `2px solid ${color}`;
-    node.querySelector('.cs').textContent = p.cs;
-    node.querySelector('.cs').style.color = color;
+    setStyle(node, node, 'borderLeft', `2px solid ${color}`);
+    setText(node, node.querySelector('.cs'), p.cs);
+    setStyle(node, node.querySelector('.cs'), 'color', color);
     const speedTxt = p.speed === null ? '--' : Math.round(p.speed);
-    node.querySelector('.alt').textContent = `${formatAltitude(p.alt)} · ${speedTxt}kt`;
+    setText(node, node.querySelector('.alt'), `${formatAltitude(p.alt)} · ${speedTxt}kt`);
 
     const badgeEl = node.querySelector('.badge');
-    badgeEl.textContent = p.airlineLabel;
-    badgeEl.style.background = p.badgeColor;
-    badgeEl.style.display = 'inline-block';
+    setText(node, badgeEl, p.airlineLabel);
+    setStyle(node, badgeEl, 'background', p.badgeColor);
+    setStyle(node, badgeEl, 'display', 'inline-block');
 
     // Only shown once it's actually a signal worth noticing ("you've seen
     // this one before") -- every first-time sighting showing "×1" would
@@ -5273,36 +5302,36 @@ function drawPlanes(dt) {
     const seenEl = node.querySelector('.seen');
     const counts = sightingCounts.get(p.hex);
     if (counts && counts.total > 1) {
-      seenEl.textContent = `SEEN ×${counts.total}`;
-      seenEl.style.display = 'block';
+      setText(node, seenEl, `SEEN ×${counts.total}`);
+      setStyle(node, seenEl, 'display', 'block');
     } else {
-      seenEl.style.display = 'none';
+      setStyle(node, seenEl, 'display', 'none');
     }
 
     const typeEl = node.querySelector('.type');
     if (p.typeLabel) {
-      typeEl.textContent = p.typeLabel;
-      typeEl.style.display = 'block';
+      setText(node, typeEl, p.typeLabel);
+      setStyle(node, typeEl, 'display', 'block');
     } else {
-      typeEl.style.display = 'none';
+      setStyle(node, typeEl, 'display', 'none');
     }
 
     const routeEl = node.querySelector('.route');
     const route = routeCache.get(p.cs);
     if (route) {
-      routeEl.textContent = route.plausible ? route.text : `${route.text} (unconfirmed)`;
+      setText(node, routeEl, route.plausible ? route.text : `${route.text} (unconfirmed)`);
       routeEl.classList.toggle('implausible', !route.plausible);
-      routeEl.style.display = 'block';
+      setStyle(node, routeEl, 'display', 'block');
     } else {
-      routeEl.style.display = 'none';
+      setStyle(node, routeEl, 'display', 'none');
     }
 
     const ownerEl = node.querySelector('.owner');
     if (p.owner) {
-      ownerEl.textContent = p.ownerCountry ? `${p.owner} (${p.ownerCountry})` : p.owner;
-      ownerEl.style.display = 'block';
+      setText(node, ownerEl, p.ownerCountry ? `${p.owner} (${p.ownerCountry})` : p.owner);
+      setStyle(node, ownerEl, 'display', 'block');
     } else {
-      ownerEl.style.display = 'none';
+      setStyle(node, ownerEl, 'display', 'none');
     }
 
     p.node = node;
@@ -5310,9 +5339,15 @@ function drawPlanes(dt) {
 
   // --- pass 2: measure boxes, ease each toward its natural ring angle ------
   for (const p of inRange) {
-    const rect = p.node.getBoundingClientRect();
-    p.labelW = rect.width;
-    p.labelH = rect.height;
+    // Measured only when its contents changed (or every couple of seconds,
+    // for a late-loading font): measuring after a change forces a layout.
+    if (p.node._changed || p.labelW === undefined || now - (p.measuredAt || 0) > 2000) {
+      const rect = p.node.getBoundingClientRect();
+      p.labelW = rect.width;
+      p.labelH = rect.height;
+      p.measuredAt = now;
+      p.node._changed = false;
+    }
 
     const desiredAngle = p.bearing; // natural ring position matches bearing exactly
     if (p.labelAngle === undefined) {
@@ -5407,9 +5442,9 @@ function drawPlanes(dt) {
     }
     p.labelX = lx;
     p.labelY = ly;
-    p.node.style.left = lx + 'px';
-    p.node.style.top = ly + 'px';
-    p.node.style.opacity = p.opacity;
+    // whole pixels, so the text stays crisp on its own layer
+    setStyle(p.node, p.node, 'transform', `translate(${Math.round(lx)}px, ${Math.round(ly)}px)`, false);
+    setStyle(p.node, p.node, 'opacity', String(p.opacity), false);
 
     const attach = closestPointOnRect(p.anchorX, p.anchorY, lx, ly, p.labelW, p.labelH);
     const attachX = attach.x, attachY = attach.y;
@@ -5420,12 +5455,13 @@ function drawPlanes(dt) {
       leadersEl.appendChild(line);
       leaderNodes.set(p.hex, line);
     }
-    line.setAttribute('x1', p.anchorX);
-    line.setAttribute('y1', p.anchorY);
-    line.setAttribute('x2', attachX);
-    line.setAttribute('y2', attachY);
-    line.setAttribute('stroke', p.color);
-    line.style.opacity = LEADER_BASE_OPACITY * p.opacity; // preserve the CSS base opacity, just scaled by coast fade
+    // only what changed, like the labels (#35)
+    setAttr(line, 'x1', p.anchorX.toFixed(1));
+    setAttr(line, 'y1', p.anchorY.toFixed(1));
+    setAttr(line, 'x2', attachX.toFixed(1));
+    setAttr(line, 'y2', attachY.toFixed(1));
+    setAttr(line, 'stroke', p.color);
+    setStyle(line, line, 'opacity', String(LEADER_BASE_OPACITY * p.opacity), false); // CSS base opacity, scaled by coast fade
   }
 
   // remove tag/leader nodes for aircraft no longer tracked or out of range
@@ -5444,8 +5480,8 @@ function drawPlanes(dt) {
   // the overlay, and it should be readable without hunting for faint rings.
   const missed = alertSettings.networkCompare ? ghosts.length : 0;
   emptySkyTick(inRange.length);
-  countEl.textContent = inRange.length + ' AIRCRAFT'
-    + (missed ? ` · ${missed} NOT HEARD` : '');
+  setText(countEl, countEl, inRange.length + ' AIRCRAFT'
+    + (missed ? ` · ${missed} NOT HEARD` : ''));
 }
 
 let lastNetPillState = null;
