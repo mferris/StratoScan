@@ -36,6 +36,33 @@ final class PushManager: ObservableObject {
         }
     }
 
+    /// Where the nearby alerts -- notable, low overhead, helicopter -- are
+    /// about (#44): the radar, where the phone is, or both. Sent to the
+    /// relay as the 'near_radar' / 'near_me' choices.
+    enum Place: String, CaseIterable, Identifiable {
+        case radar, me, both
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .radar: return "My radar"
+            case .me: return "Where I am"
+            case .both: return "Both"
+            }
+        }
+    }
+
+    @Published var place: Place {
+        didSet {
+            UserDefaults.standard.set(place.rawValue, forKey: "stratoscan.alertPlace")
+            Task { await sendRegistration() }
+            ApproachReporter.shared.setEnabled(needsLocation)
+        }
+    }
+
+    /// The phone's (encrypted) location is wanted by its radar: for
+    /// "Approaching me", or nearby alerts about where it is.
+    var needsLocation: Bool { kinds.contains(.approach_me) || place != .radar }
+
     @Published private(set) var permission: UNAuthorizationStatus = .notDetermined
     @Published private(set) var registered = false
     @Published var message: String?
@@ -45,7 +72,7 @@ final class PushManager: ObservableObject {
             Task { await sendRegistration() }
             // Approaching me: start or stop sending this phone's (encrypted) location.
             if kinds.contains(.approach_me) != oldValue.contains(.approach_me) {
-                ApproachReporter.shared.setEnabled(kinds.contains(.approach_me))
+                ApproachReporter.shared.setEnabled(needsLocation)
             }
         }
     }
@@ -71,6 +98,7 @@ final class PushManager: ObservableObject {
         let saved = UserDefaults.standard.stringArray(forKey: "radome.alertKinds")
         // Approaching aircraft is opt-in: near an airport it can be frequent.
         kinds = Set((saved ?? Kind.allCases.filter { $0 != .approach && $0 != .approach_me }.map(\.rawValue)).compactMap(Kind.init(rawValue:)))
+        place = Place(rawValue: UserDefaults.standard.string(forKey: "stratoscan.alertPlace") ?? "") ?? .radar
     }
 
     func refreshPermission() async {
@@ -102,7 +130,8 @@ final class PushManager: ObservableObject {
     private func sendRegistration() async {
         guard let token else { return }
         do {
-            try await relay.register(token: token, environment: environment, kinds: kinds.map(\.rawValue),
+            let where_: [String] = place == .radar ? ["near_radar"] : place == .me ? ["near_me"] : ["near_radar", "near_me"]
+            try await relay.register(token: token, environment: environment, kinds: kinds.map(\.rawValue) + where_,
                                      liveActivityToken: liveActivityToken)
             registered = true
         } catch {

@@ -32,7 +32,11 @@ final class ApproachReporter: NSObject, ObservableObject, CLLocationManagerDeleg
     /// At launch: carry on if it was on (iOS relaunches the app in the
     /// background for a significant change, and this picks the update up).
     func resumeIfEnabled() {
-        if enabled { begin() }
+        // the setting predates #44; nearby alerts about the phone need it too
+        if enabled || PushManager.shared.needsLocation {
+            UserDefaults.standard.set(true, forKey: enabledKey)
+            begin()
+        }
     }
 
     func setEnabled(_ on: Bool) {

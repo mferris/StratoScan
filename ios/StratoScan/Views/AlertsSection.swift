@@ -16,6 +16,19 @@ struct AlertsSection: View {
                     }
                 }
             }
+            // Where the nearby alerts are about (#44).
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Nearby alerts are about")
+                Picker("Nearby alerts are about", selection: $push.place) {
+                    ForEach(PushManager.Place.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                Text(push.place == .radar
+                     ? "Low aircraft, helicopters and notable aircraft near your radar."
+                     : "Measured from where your phone is, within reach of your radar's antenna. Your location is sent encrypted so only your radar can read it; it needs location set to Always.")
+                    .font(.caption).foregroundColor(.secondary)
+            }
             ForEach(PushManager.Kind.allCases) { kind in
                 Toggle(isOn: Binding(
                     get: { push.kinds.contains(kind) },
@@ -26,7 +39,7 @@ struct AlertsSection: View {
                     }
                 }
             }
-            if push.kinds.contains(.approach_me) && reporter.needsAlways {
+            if push.needsLocation && reporter.needsAlways {
                 // Without Always, iOS won't wake the app when the phone moves.
                 Button("Set location to Always for “Approaching me”") {
                     if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
