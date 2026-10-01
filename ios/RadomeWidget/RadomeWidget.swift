@@ -73,9 +73,11 @@ struct RadomeWidgetView: View {
 
     private var homeScreen: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(entry.demo ? "RADOME · DEMO" : "RADOME")
+            HStack(spacing: 5) {
+                StratoScanMark(small: true).frame(width: 14, height: 14)
+                Text(entry.demo ? "STRATOSCAN · DEMO" : "STRATOSCAN")
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .lineLimit(1).minimumScaleFactor(0.7)
                     .foregroundColor(Color(red: 0.36, green: 0.45, blue: 0.47))
                 Spacer()
                 Text(entry.date, style: .time).font(.system(size: 10)).foregroundColor(.secondary)
