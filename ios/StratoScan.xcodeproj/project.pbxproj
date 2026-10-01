@@ -29,6 +29,7 @@
 		53EBD2558D2C5D02179BC7E5 /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B370E5F234924A16BBBDC64A /* AircraftFeedClient.swift */; };
 		5777BD63375DF19D2C953815 /* PlaneState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E82595BD051F46CC02FFB13 /* PlaneState.swift */; };
 		58BF1BFA5C8784D4AD22B13F /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A098FF92E33AB26325CE095F /* APIConfig.swift */; };
+		5D712035BF69F68E7FAFEEFA /* Sun.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0964DFC845B4F543036F97B /* Sun.swift */; };
 		6092AB4BC94415EAB9DEF3CF /* PairedRadarsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E69F680442A5720A8114153F /* PairedRadarsSection.swift */; };
 		62764A4C2015D31F9F971900 /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38770332E10714A40F125D1E /* DemoFeed.swift */; };
 		63AC7D46EBF48380FE2450BB /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38770332E10714A40F125D1E /* DemoFeed.swift */; };
@@ -181,6 +182,7 @@
 		92DD6C3B28E22E020AB8AF6C /* StratoScanWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StratoScanWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9B707CA4D90694E35915217F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9CA19781C6E4154AF1F3FC71 /* AirlineTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirlineTable.swift; sourceTree = "<group>"; };
+		A0964DFC845B4F543036F97B /* Sun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sun.swift; sourceTree = "<group>"; };
 		A098FF92E33AB26325CE095F /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
 		A553C39663C267646A4ED80A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A8074B62F31F78059673C06A /* StratoScanWatchWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StratoScanWatchWidget.swift; sourceTree = "<group>"; };
@@ -220,6 +222,7 @@
 			isa = PBXGroup;
 			children = (
 				16A31ACA7FCC70909950AEF1 /* Palette.swift */,
+				A0964DFC845B4F543036F97B /* Sun.swift */,
 			);
 			path = Theme;
 			sourceTree = "<group>";
@@ -648,6 +651,7 @@
 				A77D7956DFCBA6DF7ACA8167 /* SettingsView.swift in Sources */,
 				FB75EE609F71C89FEBC67D14 /* SkyView.swift in Sources */,
 				FBFA73F23B10FB7172058A19 /* StratoScanApp.swift in Sources */,
+				5D712035BF69F68E7FAFEEFA /* Sun.swift in Sources */,
 				C21AC1382A485A5E79CCDDB3 /* WatchSync.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

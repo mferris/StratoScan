@@ -27,7 +27,14 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let side = min(geo.size.width, geo.size.height) * 0.94
+            // iPad in landscape with an aircraft's details open: the radar
+            // moves left, and shrinks if it must, so the panel sits beside it
+            // rather than over it (#39).
+            let panelW = min(420, geo.size.width * 0.42)
+            let besidePanel = isPad && viewModel.selectedHex != nil && geo.size.width > geo.size.height
+            let side = min(min(geo.size.width, geo.size.height) * 0.94,
+                           besidePanel ? geo.size.width - panelW - 48 : .infinity)
+            let shift: CGFloat = besidePanel ? -(panelW + 32) / 2 : 0
 
             ZStack {
                 pal.bg.ignoresSafeArea()
@@ -52,16 +59,17 @@ struct ContentView: View {
                     .mapFilter(pal.mapFilter)
                     .frame(width: side, height: side)
                     .clipShape(Circle())
-                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                    .position(x: geo.size.width / 2 + shift, y: geo.size.height / 2)
                 }
                 Circle()
                     .stroke(pal.ringBright.opacity(0.5), lineWidth: 2)
                     .frame(width: side, height: side)
-                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                    .position(x: geo.size.width / 2 + shift, y: geo.size.height / 2)
                     .shadow(color: .black.opacity(0.6), radius: 20)
 
                 RadarView(viewModel: viewModel, diameter: side, uiScale: ui)
                     .frame(width: geo.size.width, height: geo.size.height)
+                    .offset(x: shift)
 
                 VStack {
                     hud
@@ -104,6 +112,12 @@ struct ContentView: View {
                 }
                 .padding(.top, geo.safeAreaInsets.top + 8)
 
+                if wallMode && nightNow {
+                    // After dark the wall radar dims, as the kiosk does (its
+                    // --night-dim, 55%): an overlay, not the iPad's brightness,
+                    // which would stay changed after leaving the app.
+                    Color.black.opacity(0.55).ignoresSafeArea().allowsHitTesting(false)
+                }
                 if wallMode {
                     // Wall mode: only a faint way out, top right.
                     VStack {
@@ -198,7 +212,7 @@ struct ContentView: View {
                             AircraftDetailView(viewModel: viewModel, location: location, hex: hex,
                                                findInSky: { findInSky(hex) })
                         }
-                        .frame(width: min(420, geo.size.width * 0.42))
+                        .frame(width: panelW)
                         .background(Color(.systemBackground).opacity(0.96))
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .padding(.top, 64)          // below the controls, which stay usable
@@ -221,6 +235,12 @@ struct ContentView: View {
         .animation(.easeOut(duration: 0.2), value: viewModel.selectedHex)
         .onAppear { UIApplication.shared.isIdleTimerDisabled = wallMode }
         .onChange(of: wallMode) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
+        .task(id: wallMode) {
+            while wallMode && !Task.isCancelled {
+                checkNight()
+                try? await Task.sleep(for: .seconds(60))
+            }
+        }
         .sheet(item: Binding(
             // the iPad shows details in its side panel instead
             get: { isPad ? nil : viewModel.selectedHex.map(SelectedAircraft.init) },
@@ -257,6 +277,14 @@ struct ContentView: View {
             set: { if !$0 { pairing.message = nil } })) {
             Button("OK", role: .cancel) { pairing.message = nil }
         }
+    }
+
+    /// Between sunset and sunrise at the radar (Sun), checked once a minute
+    /// while in wall mode.
+    @State private var nightNow = false
+    private func checkNight() {
+        guard let h = viewModel.home else { nightNow = false; return }
+        nightNow = Sun.isNight(lat: h.lat, lon: h.lon)
     }
 
     /// From an aircraft's details to Sky view, looking for it.
