@@ -33,6 +33,11 @@
   },
   "ASH": {
    "color": "#3a4a5a",
+   "iata": "YV",
+   "name": "Mesa Airlines"
+  },
+  "AWI": {
+   "color": "#3a4a5a",
    "iata": "ZW",
    "name": "Air Wisconsin"
   },
@@ -111,6 +116,11 @@
    "iata": "LX",
    "name": "Flexjet"
   },
+  "MXY": {
+   "color": "#1d4f91",
+   "iata": "MX",
+   "name": "Breeze Airways"
+  },
   "NKS": {
    "color": "#a68a00",
    "iata": "NK",
@@ -165,6 +175,11 @@
    "color": "#7a1030",
    "iata": "VS",
    "name": "Virgin Atlantic"
+  },
+  "VXP": {
+   "color": "#5b2c83",
+   "iata": "XP",
+   "name": "Avelo Airlines"
   }
  }
 }
