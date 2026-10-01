@@ -9,6 +9,41 @@ Both are fixed by the same change: **give gifted units a tag.**
 
 ---
 
+## Managed radars and everyone else
+
+There are two kinds of radar, and this document is about the first.
+
+**Managed:** units you give away and want to look after remotely.
+- The **radar itself** joins your tailnet as a tagged device. The person you gave it to never gets a Tailscale login and never sees your network.
+- You can reach the radar (SSH and its web page), and it gets a public address (Funnel) for its owner's app away from home.
+- The radar can't reach anything of yours.
+
+What you'll be able to do:
+- you can log in to a device on someone else's home network, so **tell them**;
+- from that shell you could also reach other devices on their network, so treat it as access they've lent you, not yours to use.
+
+**Everyone else:** bought or built their own.
+- They don't join your tailnet.
+- Alerts (through the relay), pairing and signed updates work for them exactly as for managed radars.
+- A public address, if they want one, comes from their own Tailscale account, through the setup page's "Public web address" step.
+
+## Preparing a managed radar
+
+Do this at home before it leaves, once the policy change below is in place.
+
+1. In the Tailscale admin console, under **Settings → Keys**, generate an auth key that is:
+   - **one-off**;
+   - **pre-approved**;
+   - tagged **`tag:stratoscan`**.
+
+   A device joined with a tagged key is tagged from the start, and tagged devices don't expire.
+2. On the radar's setup page, open **Public web address**:
+   - paste the key;
+   - give it a hostname (for example `stratoscan-mom`; nothing that would identify them to the public);
+   - turn the public address on.
+3. Check it from outside the house: run `ssh <user>@<hostname>` over the tailnet, and open the public address on a phone with WiFi off.
+4. At its new home, the owner only needs to give it their WiFi, on its screen. Tailscale stays joined when the network changes.
+
 ## Why an untagged unit is a problem
 
 A unit set up with a personal auth key joins as a **user-owned node**. It
@@ -124,9 +159,9 @@ step whose failure is silent until someone outside the house tries the URL.
 ## Note on SSH
 
 `fail2ban` is installed and jails `sshd`: 5 failures in 10 minutes earns a
-1-hour ban. Password authentication stays enabled on purpose — it is the
-recovery route when nothing else works — and this is what makes that safe to
-keep.
+1-hour ban. SSH has been key-only on every unit since 2026-09-28 (no
+passwords, no root login), so the recovery route when keys fail is the
+unit's own screen or its setup page, not SSH.
 
 `ignoreip` exempts `100.64.0.0/10` and `fd7a:115c:a1e0::/48` so a bad run of
 passwords can never lock the owner out of the tailnet recovery path. **That
