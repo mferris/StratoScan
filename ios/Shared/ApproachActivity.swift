@@ -27,4 +27,7 @@ struct ApproachAttributes: ActivityAttributes {
     var callsign: String
     var type: String
     var reason: String
+    /// Whose position it's approaching: "radar", or "you" -- this phone's own
+    /// location (roadmap 2.7). Absent from older alerts: the radar.
+    var about: String? = nil
 }

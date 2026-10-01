@@ -43,8 +43,20 @@ A token is only an address for Apple's push service. Apple tells the relay
 when a token stops working, and the relay then forgets it. Each phone gets
 at most 30 ordinary alerts an hour; emergencies always go through.
 
-**No locations.** Reports or events carrying a latitude or longitude field
-are rejected outright. No network addresses are stored either. An event
+For **alerts about aircraft approaching a phone** (roadmap 2.7; only for
+phones whose owner turns on "Approaching me"):
+- each unit's X25519 "box" key, signed by the unit's own Ed25519 key;
+- each such phone's latest location for each of its units, **as an opaque
+  encrypted blob**. The phone seals it to that unit's box key, after
+  checking the key's signature against the unit id it scanned at pairing,
+  so the relay can neither read it nor substitute a key of its own. Kept 6
+  hours at most, and deleted when the phone unpairs or turns the option
+  off. The unit decrypts it and runs its approach prediction for that
+  point; the approach event it sends back names the phone (it goes to that
+  phone alone) and the aircraft, without distance or direction.
+
+**No locations in the clear.** Reports or events carrying a latitude or
+longitude field are rejected outright. No network addresses are stored either. An event
 still says roughly where its unit is ("a helicopter passed within 2
 miles"), which is why events are opt-in and kept so briefly.
 

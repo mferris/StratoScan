@@ -12,7 +12,7 @@ final class PushManager: ObservableObject {
     static let shared = PushManager()
 
     enum Kind: String, CaseIterable, Identifiable {
-        case emergency, notable, low_overhead, helicopter, approach
+        case emergency, notable, low_overhead, helicopter, approach, approach_me
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -21,6 +21,7 @@ final class PushManager: ObservableObject {
             case .low_overhead: return "Low overhead"
             case .helicopter: return "Helicopters"
             case .approach: return "Approaching aircraft"
+            case .approach_me: return "Approaching me"
             }
         }
         var detail: String {
@@ -29,7 +30,8 @@ final class PushManager: ObservableObject {
             case .notable: return "Military, rare and listed aircraft within 30 nm"
             case .low_overhead: return "Anything within 2 miles below 5,000 ft"
             case .helicopter: return "Within about 3 miles"
-            case .approach: return "A live countdown on your lock screen when one of the above is about to pass over"
+            case .approach: return "A live countdown on your lock screen when one of the above is about to pass over the radar"
+            case .approach_me: return "The same countdown for wherever you are, within reach of your radar's antenna. Needs location set to Always; it's sent encrypted so only your radar can read it"
             }
         }
     }
@@ -41,6 +43,10 @@ final class PushManager: ObservableObject {
         didSet {
             UserDefaults.standard.set(kinds.map(\.rawValue), forKey: kindsKey)
             Task { await sendRegistration() }
+            // Approaching me: start or stop sending this phone's (encrypted) location.
+            if kinds.contains(.approach_me) != oldValue.contains(.approach_me) {
+                ApproachReporter.shared.setEnabled(kinds.contains(.approach_me))
+            }
         }
     }
 
@@ -64,7 +70,7 @@ final class PushManager: ObservableObject {
     private init() {
         let saved = UserDefaults.standard.stringArray(forKey: "radome.alertKinds")
         // Approaching aircraft is opt-in: near an airport it can be frequent.
-        kinds = Set((saved ?? Kind.allCases.filter { $0 != .approach }.map(\.rawValue)).compactMap(Kind.init(rawValue:)))
+        kinds = Set((saved ?? Kind.allCases.filter { $0 != .approach && $0 != .approach_me }.map(\.rawValue)).compactMap(Kind.init(rawValue:)))
     }
 
     func refreshPermission() async {
@@ -168,7 +174,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        Task { @MainActor in PushManager.shared.watchLiveActivities() }
+        Task { @MainActor in
+            PushManager.shared.watchLiveActivities()
+            // Approaching me: iOS may have relaunched the app for a location update.
+            ApproachReporter.shared.resumeIfEnabled()
+        }
         return true
     }
 

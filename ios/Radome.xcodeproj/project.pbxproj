@@ -39,9 +39,11 @@
 		7056B0F6E0348755EBB9F237 /* SkyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C3E56FB9DE77414343CF22 /* SkyView.swift */; };
 		726737634573DF876A6D429D /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 672BD01CB737B65682F25750 /* AircraftFeedClient.swift */; };
 		743522892CB30F81B4D69FF4 /* CompassView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B7C1945CDB64FA07423EC2E /* CompassView.swift */; };
+		7744F0E858002C65D90BCD8B /* ApproachReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26253A4C013AD8514EF3B480 /* ApproachReporter.swift */; };
 		7CAFC7B414B1C56CD1390D4D /* AlertsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96A6B94C53EE213482818502 /* AlertsSection.swift */; };
 		827FBF2FC0D304F6813867D5 /* RadomeWatchWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E8D4E7EBFFDEE5864973BA91 /* RadomeWatchWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		86A23D183EC9805CED42C8A6 /* ApproachActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ED9AA2CE9A2C6B5AE180774 /* ApproachActivity.swift */; };
+		86B915678F242C3E00EB0963 /* LocationBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BBA637F24BDAA61FA615362 /* LocationBox.swift */; };
 		88BFBBAE01D34D6E52743CA7 /* demo-traffic.json in Resources */ = {isa = PBXBuildFile; fileRef = 9F6A1715C56DD3725E841B89 /* demo-traffic.json */; };
 		8C0C1472DE073B3D43272768 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E19D2A0D7427942DE7CE2C0A /* Assets.xcassets */; };
 		9114ECA97E1D2692D209912F /* PushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61C08B59305FFE4DF7259DCE /* PushManager.swift */; };
@@ -75,6 +77,7 @@
 		EB80C2098169E49EFA266123 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291E986AEF670EDAD724B1DC /* SettingsView.swift */; };
 		EFA110AB126C2580B3FAFC4D /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F7AEE53D7B021629485B1A /* APIConfig.swift */; };
 		F116F0F02DB64AF8485758E5 /* AirlineTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F20F5270C45A7271C7A517F /* AirlineTable.swift */; };
+		F5C63C7EC674DBA82563210C /* LocationBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BBA637F24BDAA61FA615362 /* LocationBox.swift */; };
 		FBB4EB19F51B17D7FF2A05F0 /* RadarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C61F1870157C6C22B86BEFBC /* RadarViewModel.swift */; };
 		FC493FC02EF99FA655904688 /* Aircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5364E64D7A6AB4EC7F36A762 /* Aircraft.swift */; };
 /* End PBXBuildFile section */
@@ -150,6 +153,7 @@
 		158C48224467A873CFF7E205 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2534DE47A15B9009A7DBA41B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		253708C4759FB636D54CE7FE /* RadomeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadomeApp.swift; sourceTree = "<group>"; };
+		26253A4C013AD8514EF3B480 /* ApproachReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproachReporter.swift; sourceTree = "<group>"; };
 		26F19B466EF642F0BCA2029A /* RunwayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayClient.swift; sourceTree = "<group>"; };
 		291E986AEF670EDAD724B1DC /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		2B15F58F7CE332E6A86D2E21 /* RelayIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayIdentity.swift; sourceTree = "<group>"; };
@@ -178,6 +182,7 @@
 		960596F02F0A26C2C5BB3E9C /* PairingScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingScannerView.swift; sourceTree = "<group>"; };
 		96A6B94C53EE213482818502 /* AlertsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertsSection.swift; sourceTree = "<group>"; };
 		99C3E56FB9DE77414343CF22 /* SkyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkyView.swift; sourceTree = "<group>"; };
+		9BBA637F24BDAA61FA615362 /* LocationBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationBox.swift; sourceTree = "<group>"; };
 		9CCEAAB1034430480327F85E /* RelayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayClient.swift; sourceTree = "<group>"; };
 		9F6A1715C56DD3725E841B89 /* demo-traffic.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "demo-traffic.json"; sourceTree = "<group>"; };
 		9FA4F22EA60A35820DF1F1DD /* RouteLookupClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteLookupClient.swift; sourceTree = "<group>"; };
@@ -230,6 +235,7 @@
 		1517AD0988D78E40DC6E9735 /* Location */ = {
 			isa = PBXGroup;
 			children = (
+				26253A4C013AD8514EF3B480 /* ApproachReporter.swift */,
 				ABDBFE3DD4DBEE94C6853950 /* PhoneLocation.swift */,
 			);
 			path = Location;
@@ -350,6 +356,7 @@
 				9F6A1715C56DD3725E841B89 /* demo-traffic.json */,
 				B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */,
 				EDEF15D87D8BAE690A77DC40 /* Geo.swift */,
+				9BBA637F24BDAA61FA615362 /* LocationBox.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -584,6 +591,7 @@
 				AD798A1432A5DD2FBE050996 /* BrandMark.swift in Sources */,
 				A2C7AD80930A7B9E7EC2FB0F /* DemoFeed.swift in Sources */,
 				09BDC78A861DEF82784989E0 /* Geo.swift in Sources */,
+				F5C63C7EC674DBA82563210C /* LocationBox.swift in Sources */,
 				34B5E252D752396C044ED735 /* RadomeWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -600,12 +608,14 @@
 				F116F0F02DB64AF8485758E5 /* AirlineTable.swift in Sources */,
 				7CAFC7B414B1C56CD1390D4D /* AlertsSection.swift in Sources */,
 				86A23D183EC9805CED42C8A6 /* ApproachActivity.swift in Sources */,
+				7744F0E858002C65D90BCD8B /* ApproachReporter.swift in Sources */,
 				9AEF690EF7FD4F6FD9EAEA5E /* BrandMark.swift in Sources */,
 				743522892CB30F81B4D69FF4 /* CompassView.swift in Sources */,
 				25FC95561C8C8EC59463D039 /* ContentView.swift in Sources */,
 				3FAD0E8926CAEDF90E4DB73F /* CreditsView.swift in Sources */,
 				25C6604554AF94DA469EA92F /* DemoFeed.swift in Sources */,
 				CA5C1540FB8252CF32A4D689 /* Geo.swift in Sources */,
+				86B915678F242C3E00EB0963 /* LocationBox.swift in Sources */,
 				BA323BF2EC5128A7773F70C9 /* LogbookView.swift in Sources */,
 				91C2BCF8BF0A780884396FAB /* MapBackgroundView.swift in Sources */,
 				2DDAA7C10336F84FD9A228BC /* NormalizedAircraft.swift in Sources */,

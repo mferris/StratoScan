@@ -5,6 +5,7 @@ import UIKit
 struct AlertsSection: View {
     @EnvironmentObject private var push: PushManager
     @EnvironmentObject private var pairing: PairingStore
+    @ObservedObject private var reporter = ApproachReporter.shared
 
     var body: some View {
         Section {
@@ -24,6 +25,13 @@ struct AlertsSection: View {
                         Text(kind.detail).font(.caption).foregroundColor(.secondary)
                     }
                 }
+            }
+            if push.kinds.contains(.approach_me) && reporter.needsAlways {
+                // Without Always, iOS won't wake the app when the phone moves.
+                Button("Set location to Always for “Approaching me”") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                }
+                .font(.callout)
             }
             Button("Send a test notification") { Task { await push.sendTest() } }
                 .disabled(!push.registered)
