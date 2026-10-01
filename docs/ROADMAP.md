@@ -126,7 +126,7 @@ phone ──(pairing, notification rules)──▶ relay
 
 ## Work order (agreed 2026-09-30)
 
-The open items are done in this order, chosen so the wall display is never
+The open items are done in this order, chosen so the display is never
 at risk for long.
 
 **Rules**

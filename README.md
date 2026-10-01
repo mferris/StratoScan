@@ -9,7 +9,7 @@
 
 *Formerly Radome, and before that FlightRadar.*
 
-A live ADS-B flight radar for a wall-mounted round display, built on a
+A live ADS-B flight radar on a round display, built on a
 Raspberry Pi and a cheap SDR dongle — no subscription and no API keys. The
 radar needs nothing but its own receiver and a browser; an optional iPhone
 app brings it to your pocket.
@@ -27,7 +27,7 @@ needs are in the [shopping list](docs/SHOPPING.md).
 
 | Area | State |
 |---|---|
-| Wall radar (kiosk) | Running unattended; updates itself from signed releases. One labelled aircraft feed on the unit for every screen (`/api/aircraft`); drawing cost halved |
+| The radar (kiosk) | Running unattended; updates itself from signed releases. One labelled aircraft feed on the unit for every screen (`/api/aircraft`); drawing cost halved |
 | Phase 4 extras | Done: rewind, notable aircraft, empty-sky screen, spoken announcements, year in review, opt-in FlightAware feeding |
 | Relay (push + fleet health) | Live on Cloudflare Workers |
 | iPhone app | Working on a real iPhone: QR pairing, push alerts, widgets, Live Activity for approaching aircraft, home/away switching, the network's aircraft, zoom, "centre on me", a compass, Sky view, the logbook, demo mode |

@@ -9,7 +9,7 @@
 // containing it, so a copy kept anywhere else silently finds no modules and
 // every check "passes" against nothing -- which is why `canary` exists and
 // must be run.
-use <flightwall-enclosure.scad>
+use <retro-enclosure.scad>
 $fs = 0.4;
 $fa = 0.5;
 check = "none";
