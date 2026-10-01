@@ -83,8 +83,40 @@ def wordmark_paths(font_path, text_colours, cap_height):
             # font units are y-up; SVG is y-down, baseline at y=0
             glyphs[name].draw(TransformPen(pen, (s, 0, 0, -s, x, 0)))
             x += glyphs[name].width * s
-        out.append(f'<path fill="{colour}" d="{pen.getCommands()}"/>')
+        # ".name" means a class for the page's CSS to colour (the inline logo
+        # follows the kiosk's themes); anything else is a fill colour
+        paint = f'class="{colour[1:]}"' if colour.startswith(".") else f'fill="{colour}"'
+        out.append(f'<path {paint} d="{pen.getCommands()}"/>')
     return "".join(out), x
+
+
+# The pages that carry the mark. The logo goes between <!--brand:logo-->
+# markers (as often as they appear); the favicon replaces the page's
+# <link rel="icon" href="data:..."> in place.
+PAGES = ("index.html", "deploy/setup-ui.html", "relay/src/index.js")
+ROOT = os.path.dirname(os.path.dirname(HERE))
+
+
+def favicon_link():
+    import urllib.parse
+    small = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+             f'<rect width="100" height="100" rx="22" fill="{SKY}"/>{mark(small=True)}</svg>')
+    uri = urllib.parse.quote(small, safe=" =:/'<>.,-").replace('"', "'")
+    return f'<link rel="icon" href="data:image/svg+xml,{uri}">'
+
+
+def sync_pages(inline_logo):
+    import re
+    for rel in PAGES:
+        path = os.path.join(ROOT, rel)
+        text = open(path).read()
+        new = re.sub(r'<link rel="icon" href="data:image/svg\+xml,[^"]*">', lambda m: favicon_link(), text)
+        if inline_logo:
+            new = re.sub(r"<!--brand:logo-->.*?<!--/brand:logo-->",
+                         lambda m: f"<!--brand:logo-->{inline_logo}<!--/brand:logo-->", new, flags=re.S)
+        if new != text:
+            open(path, "w").write(new)
+            print("updated", rel)
 
 
 def write(name, text):
@@ -107,7 +139,15 @@ def main():
     write("icon-dark.svg", icon(mark(), None))            # iOS draws its own dark background
     write("icon-tinted.svg", icon(mark(tint=True), None))  # grey levels; iOS applies the tint
 
+    inline = None
     if a.font:
+        # For pages: the words take the page's colours (.ss-strato, .ss-scan)
+        words, width = wordmark_paths(a.font, [("Strato", ".ss-strato"), ("Scan", ".ss-scan")], cap_height=42)
+        w = round(116 + width + 4)
+        inline = (f'<svg class="ss-logo" viewBox="0 0 {w} 100" role="img" aria-label="StratoScan">'
+                  f'<rect width="100" height="100" rx="22" fill="{SKY}"/>'
+                  f'<g transform="translate(10 10) scale(0.8)">{mark()}</g>'
+                  f'<g transform="translate(116 71)">{words}</g></svg>')
         for name, strato, scan in (("logo-on-dark.svg", "#ffffff", SWEEP),
                                    ("logo-on-light.svg", INK, SCAN_ON_LIGHT)):
             words, width = wordmark_paths(a.font, [("Strato", strato), ("Scan", scan)], cap_height=42)
@@ -116,6 +156,7 @@ def main():
             tile = f'<rect width="100" height="100" rx="22" fill="{SKY}"/><g transform="translate(10 10) scale(0.8)">{mark()}</g>'
             body = tile + f'<g transform="translate(116 71)">{words}</g>'
             write(name, svg(body, w=round(116 + width + 4), h=100, title="StratoScan"))
+    sync_pages(inline)
 
 
 if __name__ == "__main__":

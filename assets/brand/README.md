@@ -49,8 +49,14 @@ python3 assets/brand/make.py --font path/to/ChakraPetch-SemiBold.ttf
 The `--font` flag needs `fontTools` (`pip install fonttools`) and is only
 needed to rebuild the wordmark. Then re-render the PNGs from the SVGs at
 1024 px (app icons) and 1280×640 (social preview). Any browser screenshot does
-it; the originals were made with headless Chrome. Then update the favicon
-`data:` URIs in `index.html`, `deploy/setup-ui.html` and `relay/src/index.js`.
+it; the originals were made with headless Chrome.
+
+`make.py` also keeps the pages in step: it rewrites the favicon in
+`index.html`, `deploy/setup-ui.html` and `relay/src/index.js`, and, with
+`--font`, the inline logo wherever a page has `<!--brand:logo-->` markers (the
+kiosk's start-up screen, its empty-sky screen, the setup page). Inline, the
+words are coloured by the page's CSS (`.ss-strato`, `.ss-scan`), so the logo
+follows the kiosk's themes.
 
 ## Where it came from
 
