@@ -94,7 +94,7 @@ rabbet_depth = glass_thickness;
 // the panel -- there's no room there for retainer's usual glass-overlap
 // band. Relieved locally across just this arc instead of trying to keep
 // a uniform rim everywhere. Same "270deg = -Y = bottom" convention
-// exhaust_skip_deg already uses below for the cable-exit arc.
+// the cradle's keel and the cable-exit arc use.
 relief_center_deg = 270;
 relief_arc_deg    = 50;
 
@@ -393,11 +393,16 @@ arm_b_inner_z  = shell_depth/2 + 13;   // arm_gap/2 = 13
 exhaust_z      = (rib_top_z + arm_b_inner_z) / 2;
                                    // cradle arms, the one part of the lower wall that is
                                    // actually open to air when the case is in the stand
-n_exhaust      = 24;
-exhaust_skip_deg = 50; // only the keel arc now -- with the slots moved to
-                       // mid-depth they clear the arms and rails entirely, so
-                       // the lower flanks can breathe again instead of being
-                       // blanked off.
+n_exhaust      = 24;   // on a 15-degree pitch; only those in the top arc are cut
+// Slots only across the top, between the two speakers: 30-150 degrees, nine
+// slots. The rest were removed (2026-10-01). At 0 and 180 they ran into the
+// speaker grilles, whose 90mm width spans the three slots at each side, and
+// behind the grille the speaker bracket blanks them off, so they were
+// dents rather than vents. Underneath, six landed on the retention rails
+// (retain_segs, 207-245 and 295-333). Both made the case harder to read and
+// to print for no airflow. Hot air leaves by the top anyway.
+exhaust_a0 = 30;
+exhaust_a1 = 150;
 
 // ============================================================
 module screw_ring_holes(dia, h) {
@@ -483,9 +488,12 @@ module intake_grille() {
 module exhaust_slots() {
     for (i = [0:n_exhaust-1]) {
         a = i * 360/n_exhaust;
-        skip = (a > 270 - exhaust_skip_deg/2 && a < 270 + exhaust_skip_deg/2);
-        if (!skip)
-            translate([(outer_dia/2)*cos(a), (outer_dia/2)*sin(a), exhaust_z])
+        // Centred in the wall, so the cut (wall + 2 deep) breaks out on both
+        // faces. It used to be centred on the OUTER face, which took it only
+        // 2.5mm into the 3mm wall: every slot was a blind dent, and the case
+        // had no exhaust at all.
+        if (a >= exhaust_a0 && a <= exhaust_a1)
+            translate([(outer_dia/2 - wall/2)*cos(a), (outer_dia/2 - wall/2)*sin(a), exhaust_z])
                 rotate([0,0,a]) rotate([90,0,90])
                     linear_extrude(height=wall+2, center=true)
                         hull() {

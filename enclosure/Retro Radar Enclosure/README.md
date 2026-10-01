@@ -180,6 +180,15 @@ of a solid disc. `vents_clear_of_mount` holds the new position and
 `vents_were_under_mount` is its paired control, finding the 257mm³ overlap
 the old position had.
 
+### Side slots: top only, and cut through
+
+The shell's side slots were cut all the way round. At each speaker, three of them ran across the grille. Underneath, six landed on the cradle's retention rails. None of them were vents: each cut was centred on the outer face, so it went only 2.5mm into the 3mm wall.
+
+Now there are nine, across the top between the speakers (`exhaust_a0`..`exhaust_a1`, 30–150°), and they go right through. That gives the fan's air a way out at the top, where warm air goes anyway.
+
+- `exhaust_top_only` checks that nothing is cut outside that arc.
+- `exhaust_reaches_inside` checks that each slot breaks out past the wall's inner face. It finds about 115mm³, about 13 per slot; a blind dent finds nothing.
+
 ## Checks
 
 `sh run-checks.sh`. Every target must come out with no real volume except

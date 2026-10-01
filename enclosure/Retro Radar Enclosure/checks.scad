@@ -32,7 +32,7 @@ ant_base_dia=31.25; ant_relief_dia=18; ant_relief_h=4;
 rib_h=4.0; rib_w=5; rib_z_list=[10,22]; rib_a0=340; rib_arc=220;
 grille_hole_dia=2.5; grille_pitch=4.5; grille_w=90; grille_h=40;
 speaker_d=45; speaker_angles=[0,180]; exhaust_slot_w=2.2; exhaust_slot_h=12;
-n_exhaust=24; exhaust_skip_deg=50;
+n_exhaust=24; exhaust_a0=30; exhaust_a1=150;
 ant_cable_slot_w=7; ant_cable_exit_h=7.98; ant_flange_t=7; ant_flange_insert_d=5.5; back_insert_d=8;
 
 // The SMA bulkhead variant. Restated here for the same reason as everything
@@ -125,6 +125,30 @@ else if (check=="lip_inside_bore") {      // proud of the bore locates nothing
     }
     translate([0,0,-1]) cylinder(d=outer_dia - 2*wall - 2*back_lip_gap + 0.01,
                                  h=back_lip_h + 2);
+  }
+}
+// ---- side exhaust: top arc only, and open to the inside ----------------
+// The slots used to be cut all round, through the speaker grilles and into the
+// retention rails underneath, and only 2.5mm deep in a 3mm wall, so none of
+// them reached the inside. Nothing may be cut outside the top arc
+// (exhaust_a0..exhaust_a1, with 5 degrees of margin either side)...
+else if (check=="exhaust_top_only") {
+  intersection() {
+    exhaust_slots();
+    rotate([0,0,exhaust_a1 + 5])
+      rotate_extrude(angle = 360 - (exhaust_a1 - exhaust_a0) - 10)
+        translate([0, -1]) square([outer_dia, shell_depth + 2]);
+  }
+}
+// ...and what is cut must reach past the wall's inner face. A probe ring just
+// inside the bore finds about 13mm3 per slot; a blind dent finds nothing.
+else if (check=="exhaust_reaches_inside") {
+  intersection() {
+    exhaust_slots();
+    difference() {
+      cylinder(d=outer_dia - 2*wall + 0.01, h=shell_depth);
+      translate([0,0,-1]) cylinder(d=outer_dia - 2*wall - 1, h=shell_depth + 2);
+    }
   }
 }
 // ---- vents clear of the antenna mount ---------------------------------
