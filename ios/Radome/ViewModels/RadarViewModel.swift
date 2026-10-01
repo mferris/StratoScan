@@ -90,6 +90,14 @@ final class RadarViewModel: ObservableObject {
 
     @Published private(set) var home: Coordinate?
     @Published private(set) var connected: Bool = false
+    /// Opening, or back from the background, and the radar hasn't answered
+    /// yet. Said as "connecting", not "no signal": the app opened with NO
+    /// SIGNAL for a few seconds every time, before its first fetch.
+    @Published private(set) var connecting = true
+    private var connectingSince = Date()
+    /// How long the first answer may take (home, then the away address)
+    /// before "connecting" turns into "no signal".
+    private let connectGrace: TimeInterval = 8
     @Published private(set) var aircraftCount: Int = 0
     /// In the ring, reported by a public network but not heard by this radar.
     @Published private(set) var notHeardCount: Int = 0
@@ -143,7 +151,17 @@ final class RadarViewModel: ObservableObject {
 
     private var pollTask: Task<Void, Never>?
 
+    /// The app is opening or coming back to the foreground: until the radar
+    /// answers, the screen says it is connecting.
+    func resume() {
+        if Date().timeIntervalSince(lastGoodFetch) > staleInterval {
+            connecting = true
+            connectingSince = Date()
+        }
+    }
+
     func start() {
+        resume()
         guard pollTask == nil else { return }
         Task { await typeClient.warmUp() }
 
@@ -202,11 +220,13 @@ final class RadarViewModel: ObservableObject {
             let raw = try await AircraftFeedClient.fetchFeed(network: AircraftFeedClient.showNetwork).aircraft
             lastGoodFetch = Date()
             connected = true
+            connecting = false
             let away = !DemoFeed.isOn && Endpoint.shared.whereNow == .away
             if away != viaAway { viaAway = away }
             applyUpdate(raw)
         } catch {
             connected = false
+            if Date().timeIntervalSince(connectingSince) > connectGrace { connecting = false }
         }
         checkStale()
     }
@@ -272,6 +292,6 @@ final class RadarViewModel: ObservableObject {
     }
 
     var isStale: Bool {
-        !connected || Date().timeIntervalSince(lastGoodFetch) > staleInterval
+        !connecting && (!connected || Date().timeIntervalSince(lastGoodFetch) > staleInterval)
     }
 }
