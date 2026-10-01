@@ -43,7 +43,12 @@ struct SkyView: View {
                 Color.black
                 CameraPreview(session: camera.session)
                 // redrawn 30 times a second, so labels glide between reports
-                TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in labels(in: geo.size) }
+                TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in
+                    ZStack {
+                        tracks(in: geo.size)
+                        labels(in: geo.size)
+                    }
+                }
                 VStack(spacing: 12) {
                     HStack(alignment: .top) {
                         Text(status)
@@ -191,6 +196,70 @@ struct SkyView: View {
         let have = Set(list.map(\.hex))
         list += viewModel.nearMe.values.filter { !have.contains($0.hex) }
         return list
+    }
+
+    /// Where a point in the sky lands on the screen, or nil when it's behind
+    /// the phone. The same projection as the labels: bearing and elevation
+    /// from `from`, turned into the phone's axes by its attitude.
+    private static func project(lat: Double, lon: Double, altFt: Double, from: Coordinate,
+                                m: simd_double3x3, size: CGSize, f: CGFloat) -> CGPoint? {
+        let br = Geo.haversineBearingRange(lat1: from.lat, lon1: from.lon, lat2: lat, lon2: lon)
+        let el = atan2(altFt * 0.3048, max(br.range * 1852, 1))
+        let b = br.bearing * .pi / 180
+        let d = m * SIMD3(cos(el) * cos(b), -cos(el) * sin(b), sin(el))
+        guard d.z < -0.05 else { return nil }
+        return CGPoint(x: size.width / 2 + CGFloat(d.x / -d.z) * f, y: size.height / 2 - CGFloat(d.y / -d.z) * f)
+    }
+
+    /// Each aircraft's path across the sky (#40), under the labels: a fading
+    /// line through where it has been, and a dotted one along where it's
+    /// going for the next minute. For the nearest few and the one tapped
+    /// open -- more than that and the sky fills with lines.
+    private func tracks(in size: CGSize) -> some View {
+        Canvas { ctx, _ in
+            guard let from = location.coordinate ?? viewModel.home, let m = motion.deviceFromWorld else { return }
+            let f = (size.height / 2) / tan(camera.fieldOfView * .pi / 360)
+            let now = Date()
+            let near = shown.compactMap { p -> (PlaneState, Coordinate, Double)? in
+                guard let fix = Self.estimatedPosition(p, at: now) else { return nil }
+                return (p, fix, Geo.haversineBearingRange(lat1: from.lat, lon1: from.lon, lat2: fix.lat, lon2: fix.lon).range)
+            }
+            .sorted { $0.2 < $1.2 }
+            let picked = Set(near.prefix(5).map { $0.0.hex } + [selected, sideways?.hex].compactMap { $0 })
+            for (p, fix, _) in near where picked.contains(p.hex) {
+                let colour = PlaneState.altColor(p.alt)
+                let fade = p.isNetwork ? 0.5 : 1.0
+                let altNow = p.alt == .ground ? 0 : (p.alt.feetValue ?? p.history.last?.altFt ?? 0)
+                // where it's been: segment by segment, older ones fainter
+                let past = p.history + [PlaneState.Fix(lat: fix.lat, lon: fix.lon, altFt: altNow, at: now)]
+                var prev: CGPoint? = nil
+                for pt in past {
+                    let here = Self.project(lat: pt.lat, lon: pt.lon, altFt: pt.altFt, from: from, m: m, size: size, f: f)
+                    if let a = prev, let b = here {
+                        let age = now.timeIntervalSince(pt.at)
+                        var seg = Path(); seg.move(to: a); seg.addLine(to: b)
+                        ctx.stroke(seg, with: .color(colour.opacity(fade * max(0.12, 0.75 * (1 - age / PlaneState.historySeconds)))),
+                                   style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    }
+                    prev = here
+                }
+                // where it's going: along its track and speed, a minute ahead
+                guard let gs = p.speed, gs > 30 else { continue }
+                var ahead = Path()
+                var started = false
+                for k in 0...6 {
+                    let nm = gs * Double(k * 10) / 3600
+                    let t = p.hdg * .pi / 180
+                    let la = fix.lat + nm * cos(t) / 60
+                    let lo = fix.lon + nm * sin(t) / (60 * cos(fix.lat * .pi / 180))
+                    guard let q = Self.project(lat: la, lon: lo, altFt: altNow, from: from, m: m, size: size, f: f) else { started = false; continue }
+                    if started { ahead.addLine(to: q) } else { ahead.move(to: q); started = true }
+                }
+                ctx.stroke(ahead, with: .color(colour.opacity(fade * 0.6)),
+                           style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [3, 7]))
+            }
+        }
+        .allowsHitTesting(false)
     }
 
     /// Each aircraft's label where it is on screen; for the nearest few that
