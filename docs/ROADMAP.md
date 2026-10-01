@@ -72,7 +72,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 1.7 | Recover a hung radio without a human: the watchdog power-cycles USB (uhubctl) before it reboots, since a Pi 5 reboot keeps USB powered | A hung SDR comes back on its own on a real unit |
 | 1.8 | Core feed on the device: one service merges the antenna's and the network's aircraft, labels them once (operator, type, route, owner, notable), caches the lookups, and serves `/api/aircraft` to every screen; no antenna-relative fields | Live on RDU; labels match the kiosk's on a recorded sample |
 | 1.9 | Kiosk and public page read the core feed; route and owner lookups move off visitors' browsers onto the unit | Same picture as before; public visitors no longer contact adsb.im or adsbdb |
-| 1.10 | `events.py` reads the core feed; the copied classification tables are deleted | Same alerts from the same fixtures, with no tables of its own |
+| 1.10 | ~~`events.py` reads the core feed;~~ the copied classification tables are deleted. **Done 2026-09-30:** the tables are shared from `labels.py`; `events.py` stays on readsb's `aircraft.json` on purpose (it needs the antenna-relative fields, and alerts shouldn't depend on the core feed) | Same alerts from the same fixtures, with no tables of its own |
 | 1.11 | Cut the radar's drawing cost: static layers drawn once, the sweep rotated by the compositor, only moving things redrawn | Measured on RDU: the GPU process well under half its current ~94% of a core, and cooler |
 
 ## Phase 2: the pocket
