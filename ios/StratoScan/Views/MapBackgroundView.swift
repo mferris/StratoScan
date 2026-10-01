@@ -20,6 +20,11 @@ struct MapBackgroundView: UIViewRepresentable {
     let runwayGeoJSON: Data?
     /// The theme: its place-name colours (dark-on-light for Daylight).
     var palette: Palette = .classic
+    /// Weather (#42), as on the radar's screen: precipitation radar from
+    /// RainViewer (on by default), satellite lightning from RealEarth (off by
+    /// default, and only where it covers -- the Americas).
+    var showStorms = true
+    var showLightning = false
 
     private static let styleURL = URL(string: "https://tiles.openfreemap.org/styles/liberty")!
 
@@ -37,6 +42,7 @@ struct MapBackgroundView: UIViewRepresentable {
 
     func updateUIView(_ uiView: MLNMapView, context: Context) {
         context.coordinator.setPalette(palette)
+        context.coordinator.setWeather(storms: showStorms, lightning: showLightning, at: center)
         uiView.setCenter(CLLocationCoordinate2D(latitude: center.lat, longitude: center.lon), zoomLevel: zoom, animated: false)
         context.coordinator.pendingRunwayGeoJSON = runwayGeoJSON
         context.coordinator.addRunwaysIfReady()
@@ -58,9 +64,84 @@ struct MapBackgroundView: UIViewRepresentable {
             if styleLoaded, let style = map?.style { recolorLabels(style) }
         }
 
+        // ---- weather (#42): the kiosk's refreshStorms/refreshLightning -------
+        private static let rainViewerAPI = URL(string: "https://api.rainviewer.com/public/weather-maps.json")!
+        private static let lightningTiles = "https://realearth.ssec.wisc.edu/tiles/GOESEastGLMFEDRadC/{z}/{x}/{y}.png"
+        private var storms = true, lightning = false, centre: Coordinate?
+        private var stormURL: String?
+        private var stormsCheckedAt = Date.distantPast
+        private var lightningAt = Date.distantPast
+
+        func setWeather(storms: Bool, lightning: Bool, at centre: Coordinate) {
+            self.storms = storms
+            self.lightning = lightning
+            self.centre = centre
+            applyWeather()
+        }
+
+        /// Called on every update; does work only when something is due.
+        private func applyWeather() {
+            guard styleLoaded, let style = map?.style else { return }
+            if storms {
+                if Date().timeIntervalSince(stormsCheckedAt) > 5 * 60 {   // RainViewer's own cadence
+                    stormsCheckedAt = Date()
+                    Task { await refreshStorms() }
+                }
+            } else {
+                remove("storms", from: style)
+                stormURL = nil
+                stormsCheckedAt = .distantPast
+            }
+            if lightning, let c = centre, (-135.0 ... -15.0).contains(c.lon), (-60.0 ... 60.0).contains(c.lat) {
+                if style.layer(withIdentifier: "lightning") == nil || Date().timeIntervalSince(lightningAt) > 2 * 60 {
+                    lightningAt = Date()
+                    // a fresh query string, or the tiles stay cached
+                    addRaster("lightning", url: Self.lightningTiles + "?t=\(Int(Date().timeIntervalSince1970))", opacity: 0.85, to: style)
+                }
+            } else {
+                remove("lightning", from: style)
+                lightningAt = .distantPast
+            }
+        }
+
+        private func refreshStorms() async {
+            struct Maps: Decodable {
+                struct Frame: Decodable { let path: String }
+                struct Radar: Decodable { let past: [Frame] }
+                let host: String
+                let radar: Radar
+            }
+            guard let (data, _) = try? await URLSession.shared.data(from: Self.rainViewerAPI),
+                  let maps = try? JSONDecoder().decode(Maps.self, from: data),
+                  let latest = maps.radar.past.last else { return }
+            // colour scheme 6 (NEXRAD's green-yellow-red), smoothed, snow shown
+            let url = "\(maps.host)\(latest.path)/256/{z}/{x}/{y}/6/1_1.png"
+            await MainActor.run {
+                guard self.storms, url != self.stormURL, let style = self.map?.style else { return }
+                self.stormURL = url
+                self.addRaster("storms", url: url, opacity: 0.65, to: style)
+            }
+        }
+
+        private func addRaster(_ id: String, url: String, opacity: Double, to style: MLNStyle) {
+            remove(id, from: style)
+            let source = MLNRasterTileSource(identifier: id, tileURLTemplates: [url],
+                                             options: [.tileSize: 256, .maximumZoomLevel: 7])
+            style.addSource(source)
+            let layer = MLNRasterStyleLayer(identifier: id, source: source)
+            layer.rasterOpacity = NSExpression(forConstantValue: opacity)
+            style.addLayer(layer)
+        }
+
+        private func remove(_ id: String, from style: MLNStyle) {
+            if let l = style.layer(withIdentifier: id) { style.removeLayer(l) }
+            if let s = style.source(withIdentifier: id) { style.removeSource(s) }
+        }
+
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
             styleLoaded = true
             recolorLabels(style)
+            applyWeather()
             addRunwaysIfReady()
         }
 
