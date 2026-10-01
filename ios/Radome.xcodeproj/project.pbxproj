@@ -19,8 +19,10 @@
 		250F2BE3ED0A0540AF10F808 /* PairingScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 960596F02F0A26C2C5BB3E9C /* PairingScannerView.swift */; };
 		25C6604554AF94DA469EA92F /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */; };
 		25FC95561C8C8EC59463D039 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82D0550591B3A5D10B447D6B /* ContentView.swift */; };
+		2C471C016C600955BBE1645D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 00690ADDC366714522F9D9F6 /* PrivacyInfo.xcprivacy */; };
 		2DDAA7C10336F84FD9A228BC /* NormalizedAircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1830CD86FA2C8BA2A10B2FE /* NormalizedAircraft.swift */; };
 		34B5E252D752396C044ED735 /* RadomeWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 928AFA66090FE5F082D66E43 /* RadomeWidget.swift */; };
+		3999E004BD05A191DD4A91E8 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DA2D8F50A822AE861CD65608 /* PrivacyInfo.xcprivacy */; };
 		3CFA92203001AC55818F67CE /* PhoneLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABDBFE3DD4DBEE94C6853950 /* PhoneLocation.swift */; };
 		3FAD0E8926CAEDF90E4DB73F /* CreditsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A6D09E9B61F4ACDAD3AEEA7 /* CreditsView.swift */; };
 		42627FAB6D3F32515C9A9668 /* WatchSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = F818F871D11FA58401811013 /* WatchSync.swift */; };
@@ -58,6 +60,7 @@
 		B9B67C3F95E4E43F6BE9CE9E /* PairedRadarsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F02A218B8D94A0157BAD495 /* PairedRadarsSection.swift */; };
 		BA323BF2EC5128A7773F70C9 /* LogbookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AFFC89D87DC7284FDB27E86 /* LogbookView.swift */; };
 		BB108B6E46FA39B8F7793550 /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 672BD01CB737B65682F25750 /* AircraftFeedClient.swift */; };
+		BCB9DE9F900E32EABED21AB9 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E06C1ADD16EAA843612E0E3D /* PrivacyInfo.xcprivacy */; };
 		BCCB582D19914CF9197B0275 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6119DE8FF601795FF50E7980 /* PrivacyInfo.xcprivacy */; };
 		BF48DD9B81945F2C3ADC43FF /* Aircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5364E64D7A6AB4EC7F36A762 /* Aircraft.swift */; };
 		C69753DE205589E999B71F62 /* RunwayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F19B466EF642F0BCA2029A /* RunwayClient.swift */; };
@@ -137,6 +140,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		00690ADDC366714522F9D9F6 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		058603B167FDF5E7978DDA98 /* ApproachLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproachLiveActivity.swift; sourceTree = "<group>"; };
 		07EB33AD4B25EBAB71D4C610 /* PlaneState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaneState.swift; sourceTree = "<group>"; };
 		0A6D09E9B61F4ACDAD3AEEA7 /* CreditsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditsView.swift; sourceTree = "<group>"; };
@@ -184,6 +188,8 @@
 		B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoFeed.swift; sourceTree = "<group>"; };
 		BBB1E9DB1392DDDD2FF260B0 /* AircraftDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftDetailView.swift; sourceTree = "<group>"; };
 		C61F1870157C6C22B86BEFBC /* RadarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarViewModel.swift; sourceTree = "<group>"; };
+		DA2D8F50A822AE861CD65608 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		E06C1ADD16EAA843612E0E3D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		E19D2A0D7427942DE7CE2C0A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E8D4E7EBFFDEE5864973BA91 /* RadomeWatchWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RadomeWatchWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		EDEF15D87D8BAE690A77DC40 /* Geo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geo.swift; sourceTree = "<group>"; };
@@ -257,6 +263,7 @@
 			children = (
 				058603B167FDF5E7978DDA98 /* ApproachLiveActivity.swift */,
 				37A975EE32361B1B0149E555 /* Info.plist */,
+				DA2D8F50A822AE861CD65608 /* PrivacyInfo.xcprivacy */,
 				870CEDCB8BFC1B331B0714B1 /* RadomeWidget.entitlements */,
 				928AFA66090FE5F082D66E43 /* RadomeWidget.swift */,
 			);
@@ -293,6 +300,7 @@
 			children = (
 				158C48224467A873CFF7E205 /* Assets.xcassets */,
 				2534DE47A15B9009A7DBA41B /* Info.plist */,
+				E06C1ADD16EAA843612E0E3D /* PrivacyInfo.xcprivacy */,
 				AFE8C9677953B5B9D8EF4F39 /* RadomeWatchApp.swift */,
 				0BF91D723B0AD16296EBEB5E /* WatchRadarView.swift */,
 			);
@@ -368,6 +376,7 @@
 			isa = PBXGroup;
 			children = (
 				885BB602CFC1F57B10B6536C /* Info.plist */,
+				00690ADDC366714522F9D9F6 /* PrivacyInfo.xcprivacy */,
 				739BC588C4ECB15ADF0CC3A5 /* RadomeWatchWidget.swift */,
 			);
 			path = RadomeWatchWidget;
@@ -513,6 +522,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3999E004BD05A191DD4A91E8 /* PrivacyInfo.xcprivacy in Resources */,
 				A10B30F1CAED66BDF721A147 /* demo-traffic.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -532,6 +542,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				66287C0F550914AC5CC4B106 /* Assets.xcassets in Resources */,
+				BCB9DE9F900E32EABED21AB9 /* PrivacyInfo.xcprivacy in Resources */,
 				88BFBBAE01D34D6E52743CA7 /* demo-traffic.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -540,6 +551,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2C471C016C600955BBE1645D /* PrivacyInfo.xcprivacy in Resources */,
 				121BD62F0A9CE279318F29C0 /* demo-traffic.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
