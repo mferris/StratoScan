@@ -12,6 +12,8 @@ struct RadarView: View {
     /// Canvas frame on purpose, so labels have real margin to roam into
     /// (unclipped, unlike the circular map/rings) without being cramped.
     let diameter: CGFloat
+    /// Text and symbols, scaled up on an iPad's bigger screen (#39); 1 on a phone.
+    var uiScale: CGFloat = 1
 
     private let rangeRings = 4
     @State private var pinchStart: (range: Double, centre: (east: Double, north: Double), anchor: CGPoint)?
@@ -148,7 +150,7 @@ struct RadarView: View {
             let toward = d > 1 ? CGPoint(x: (cx - radar.x) / d, y: (cy - radar.y) / d) : CGPoint(x: 0, y: -1)
             let at = CGPoint(x: radar.x + toward.x * ringR + 6, y: radar.y + toward.y * ringR + 4)
             if hypot(at.x - cx, at.y - cy) < r - 14 {
-                context.draw(Text("\(Int(nm))nm").font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundColor(labelColor),
+                context.draw(Text("\(Int(nm))nm").font(.system(size: 10 * uiScale, weight: .medium, design: .monospaced)).foregroundColor(labelColor),
                              at: at, anchor: .topLeading)
             }
         }
@@ -169,7 +171,7 @@ struct RadarView: View {
     /// not where anything is.
     private func drawCompass(_ context: inout GraphicsContext, cx: CGFloat, cy: CGFloat, r: CGFloat) {
         let compassColor = Color(hex: "#4a6b70")
-        let compassFont = Font.system(size: 13, weight: .semibold)
+        let compassFont = Font.system(size: 13 * uiScale, weight: .semibold)
         context.draw(Text("N").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: cx, y: cy - r + 16), anchor: .center)
         context.draw(Text("S").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: cx, y: cy + r - 10), anchor: .center)
         context.draw(Text("E").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: cx + r - 12, y: cy + 5), anchor: .center)
@@ -234,7 +236,7 @@ struct RadarView: View {
                 let dot = Path(ellipseIn: CGRect(x: mx - 6, y: my - 6, width: 12, height: 12))
                 context.fill(dot, with: .color(Color(hex: "#3b82f6")))
                 context.stroke(dot, with: .color(.white), lineWidth: 2)
-                context.draw(Text("YOU").font(.system(size: 9, weight: .bold, design: .monospaced))
+                context.draw(Text("YOU").font(.system(size: 9 * uiScale, weight: .bold, design: .monospaced))
                                 .foregroundColor(Color(hex: "#93c5fd")),
                              at: CGPoint(x: mx, y: my + 14), anchor: .top)
             }
@@ -327,7 +329,8 @@ struct RadarView: View {
 
     private func drawBlip(_ context: inout GraphicsContext, p: PlaneState) {
         if p.hex == viewModel.selectedHex {
-            let ring = Path(ellipseIn: CGRect(x: p.anchorX - 16, y: p.anchorY - 16, width: 32, height: 32))
+            let r = 16 * uiScale
+            let ring = Path(ellipseIn: CGRect(x: p.anchorX - r, y: p.anchorY - r, width: r * 2, height: r * 2))
             context.stroke(ring, with: .color(.white.opacity(0.85)), lineWidth: 1.5)
         }
         var tri = Path()
@@ -340,6 +343,7 @@ struct RadarView: View {
         context.drawLayer { ctx in
             ctx.translateBy(x: p.anchorX, y: p.anchorY)
             ctx.rotate(by: .radians(p.hdg * .pi / 180))
+            ctx.scaleBy(x: uiScale, y: uiScale)
             if p.isNetwork {
                 // Reported by a public network, not heard by this radar: hollow
                 // and dimmed, as on the kiosk, so a glance always tells "my
@@ -384,9 +388,9 @@ struct RadarView: View {
         )
     }
 
-    private let fontCallsign = Font.system(size: 11, weight: .bold, design: .monospaced)
-    private let fontBadge = Font.system(size: 8, weight: .bold, design: .monospaced)
-    private let fontLine = Font.system(size: 9, design: .monospaced)
+    private var fontCallsign: Font { .system(size: 11 * uiScale, weight: .bold, design: .monospaced) }
+    private var fontBadge: Font { .system(size: 8 * uiScale, weight: .bold, design: .monospaced) }
+    private var fontLine: Font { .system(size: 9 * uiScale, design: .monospaced) }
 
     private struct LabelMetrics {
         let size: CGSize
