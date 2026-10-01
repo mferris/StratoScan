@@ -98,8 +98,23 @@ struct RadarView: View {
         }
         viewModel.lastFrameTime = now
 
-        drawRings(&context, cx: cx, cy: cy, r: r)
-        drawSweep(&context, cx: cx, cy: cy, r: r, dt: dt)
+        // Rings, crosshair and sweep belong to the ground, not the screen: they
+        // centre on the radar and mark real distances from it, so zooming and
+        // panning carry them along with the map (they used to stay put while
+        // their labels changed, which said nothing about where you were).
+        let k = r / CGFloat(viewModel.rangeNm)          // points per nm
+        let c = viewModel.viewCentre
+        let radar = CGPoint(x: cx - CGFloat(c.east) * k, y: cy + CGFloat(c.north) * k)
+        // clipped to the map's circle (the whole diameter), which runs a little
+        // past the 20 nm ring at full view
+        let edge = diameter / 2
+        let view = Path(ellipseIn: CGRect(x: cx - edge, y: cy - edge, width: edge * 2, height: edge * 2))
+        context.drawLayer { ctx in
+            ctx.clip(to: view)
+            drawRings(&ctx, radar: radar, k: k, cx: cx, cy: cy, r: edge)
+            drawSweep(&ctx, radar: radar, k: k)
+        }
+        drawCompass(&context, cx: cx, cy: cy, r: r)
         drawPlanes(&context, cx: cx, cy: cy, r: r, canvasSize: canvasSize, dt: dt)
 
         viewModel.sweepAngle += sweepSpeed * dt
@@ -108,39 +123,66 @@ struct RadarView: View {
 
     // MARK: - Rings
 
-    private func drawRings(_ context: inout GraphicsContext, cx: CGFloat, cy: CGFloat, r: CGFloat) {
-        for i in 1...rangeRings {
-            let ringR = (r / CGFloat(rangeRings)) * CGFloat(i)
+    private func drawRings(_ context: inout GraphicsContext, radar: CGPoint, k: CGFloat, cx: CGFloat, cy: CGFloat, r: CGFloat) {
+        let ring = CGFloat(viewModel.ringNm)
+        let step = ring / CGFloat(rangeRings)                 // 5 nm
+        var rings: [(nm: CGFloat, major: Bool)] = (1...rangeRings).map { (step * CGFloat($0), true) }
+        // Close in, the 5 nm rings are off the screen: add one every nanomile
+        // so there is always a distance to read.
+        if viewModel.rangeNm <= 6 {
+            rings += stride(from: 1, to: ring, by: 1).filter { $0.truncatingRemainder(dividingBy: step) != 0 }.map { (CGFloat($0), false) }
+        }
+        // brighter than the rings: zoomed in they sit over busy streets
+        let labelColor = Color(hex: "#7d9ca1")
+        for (nm, major) in rings {
+            let ringR = nm * k
+            // skip rings wholly outside the view, or so big or small they're noise
+            let d = hypot(radar.x - cx, radar.y - cy)
+            if d - ringR > r || ringR - d > r * 1.02 || ringR < 6 { continue }
             var path = Path()
-            path.addEllipse(in: CGRect(x: cx - ringR, y: cy - ringR, width: ringR * 2, height: ringR * 2))
-            context.stroke(path, with: .color(i == rangeRings ? colorRingBright : colorRing), lineWidth: 1)
-
-            let nm = viewModel.rangeNm / Double(rangeRings) * Double(i)
-            let label = Text(nm >= 5 ? "\(Int(nm.rounded()))nm" : String(format: "%.1fnm", nm)).font(.system(size: 10, design: .monospaced)).foregroundColor(Color(hex: "#3d5a5f"))
-            context.draw(label, at: CGPoint(x: cx + 6, y: cy - ringR + 8), anchor: .topLeading)
+            path.addEllipse(in: CGRect(x: radar.x - ringR, y: radar.y - ringR, width: ringR * 2, height: ringR * 2))
+            context.stroke(path, with: .color(nm == ring ? colorRingBright : colorRing.opacity(major ? 1 : 0.55)), lineWidth: 1)
+            // The label sits where the ring crosses the line from the radar
+            // toward the middle of the view, so it is on screen whenever the
+            // ring is; straight north of the radar when they coincide.
+            let toward = d > 1 ? CGPoint(x: (cx - radar.x) / d, y: (cy - radar.y) / d) : CGPoint(x: 0, y: -1)
+            let at = CGPoint(x: radar.x + toward.x * ringR + 6, y: radar.y + toward.y * ringR + 4)
+            if hypot(at.x - cx, at.y - cy) < r - 14 {
+                context.draw(Text("\(Int(nm))nm").font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundColor(labelColor),
+                             at: at, anchor: .topLeading)
+            }
         }
 
+        // the crosshair: north-south and east-west through the radar
+        let reach = ring * k
         var cross = Path()
-        cross.move(to: CGPoint(x: cx, y: cy - r)); cross.addLine(to: CGPoint(x: cx, y: cy + r))
-        cross.move(to: CGPoint(x: cx - r, y: cy)); cross.addLine(to: CGPoint(x: cx + r, y: cy))
+        cross.move(to: CGPoint(x: radar.x, y: radar.y - reach)); cross.addLine(to: CGPoint(x: radar.x, y: radar.y + reach))
+        cross.move(to: CGPoint(x: radar.x - reach, y: radar.y)); cross.addLine(to: CGPoint(x: radar.x + reach, y: radar.y))
         context.stroke(cross, with: .color(Color(hex: "#16282b")), lineWidth: 1)
 
+        var dot = Path()
+        dot.addEllipse(in: CGRect(x: radar.x - 3, y: radar.y - 3, width: 6, height: 6))
+        context.fill(dot, with: .color(colorSweep))
+    }
+
+    /// N, S, E, W stay at the edge of the view: they say which way is which,
+    /// not where anything is.
+    private func drawCompass(_ context: inout GraphicsContext, cx: CGFloat, cy: CGFloat, r: CGFloat) {
         let compassColor = Color(hex: "#4a6b70")
         let compassFont = Font.system(size: 13, weight: .semibold)
         context.draw(Text("N").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: cx, y: cy - r + 16), anchor: .center)
         context.draw(Text("S").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: cx, y: cy + r - 10), anchor: .center)
         context.draw(Text("E").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: cx + r - 12, y: cy + 5), anchor: .center)
         context.draw(Text("W").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: cx - r + 12, y: cy + 5), anchor: .center)
-
-        var dot = Path()
-        dot.addEllipse(in: CGRect(x: cx - 3, y: cy - 3, width: 6, height: 6))
-        context.fill(dot, with: .color(colorSweep))
     }
 
     // MARK: - Sweep
 
-    private func drawSweep(_ context: inout GraphicsContext, cx: CGFloat, cy: CGFloat, r: CGFloat, dt: Double) {
+    /// The sweep turns about the radar, out to its 20 nm ring.
+    private func drawSweep(_ context: inout GraphicsContext, radar: CGPoint, k: CGFloat) {
         let angle = viewModel.sweepAngle
+        let r = CGFloat(viewModel.ringNm) * k
+        let cx = radar.x, cy = radar.y
         var wedge = Path()
         wedge.addEllipse(in: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
         let gradient = Gradient(stops: [
