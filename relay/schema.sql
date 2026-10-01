@@ -96,3 +96,27 @@ CREATE TABLE IF NOT EXISTS live_activity_ends (
   at     INTEGER NOT NULL,
   PRIMARY KEY (phone, hex)
 );
+
+-- Alerts for aircraft approaching where a phone is (roadmap 2.7). The phone's
+-- location is end-to-end encrypted to the one radar that runs the prediction:
+-- this relay stores and forwards it, and can never read it.
+--
+-- Each radar's X25519 "box" key, which phones encrypt to, signed by the
+-- radar's Ed25519 identity. A phone checks that signature against the radar
+-- id it scanned when pairing, so this relay can't hand it a key of its own.
+CREATE TABLE IF NOT EXISTS unit_box_keys (
+  unit     TEXT PRIMARY KEY,
+  key      TEXT NOT NULL,          -- base64url X25519 public key
+  sig      TEXT NOT NULL,          -- base64url Ed25519 signature by the unit
+  updated  INTEGER NOT NULL
+);
+
+-- A phone's latest location for one radar: an opaque, encrypted blob. Kept
+-- only LOCATION_TTL_S, and gone when the pairing is.
+CREATE TABLE IF NOT EXISTS phone_locations (
+  phone    TEXT NOT NULL,
+  unit     TEXT NOT NULL,
+  blob     TEXT NOT NULL,          -- base64url: ephemeral X25519 key, nonce, ChaCha20-Poly1305 ciphertext
+  updated  INTEGER NOT NULL,
+  PRIMARY KEY (phone, unit)
+);
