@@ -1291,6 +1291,24 @@ try {
 
 // ---- Config ------------------------------------------------------
 const DATA_URL = '/tar1090/data/aircraft.json';
+// The unit's core feed (roadmap 1.9, #33): the same aircraft, already
+// labelled -- operator by the shared labels.py, route and owner looked up on
+// the unit -- so this page needn't ask adsb.im or adsbdb itself. Trial
+// first: on with ?core=1 (the public page, then the kiosk), off otherwise,
+// and the old path stays until it has proved itself.
+const USE_CORE_FEED = new URLSearchParams(location.search).get('core') === '1';
+const CORE_URL = '/api/aircraft';
+
+// A core-feed aircraft in the shape the rest of the page reads (readsb's),
+// with the feed's own labels kept alongside.
+function fromCore(a) {
+  return {
+    hex: a.hex, flight: a.flight, lat: a.lat, lon: a.lon, gs: a.gs, track: a.track,
+    alt_baro: a.alt, seen_pos: a.seenPos, seen: a.seen, squawk: a.squawk,
+    category: a.category, emergency: a.emergency, baro_rate: a.vrate,
+    _core: a,
+  };
+}
 const RECEIVER_URL = '/tar1090/data/receiver.json';
 // Set by deploy/stratoscan-kiosk.service's launch URL (?kiosk=1) -- the
 // physical kiosk's Chromium runs --kiosk, a single locked-down fullscreen
@@ -4608,6 +4626,7 @@ function checkAirportPhaseAlert(pl) {
 // cache results (including negative ones) for the rest of the session so
 // we never look up the same callsign twice.
 function queueRouteLookup(cs, lat, lng) {
+  if (USE_CORE_FEED) return;        // the feed brings routes; never ask adsb.im from here
   if (routeCache.has(cs) || routePending.has(cs)) return;
   if (routeQueue.some(e => e.callsign === cs)) return;
   routeQueue.push({ callsign: cs, lat, lng });
@@ -4887,7 +4906,12 @@ function normalizeAircraft(a) {
   const hasCallsign = !!callsign;
   const cs = callsign || a.hex.toUpperCase();
 
-  const { icao: airlineIcao, label: airlineLabel, color: badgeColor } = airlineFor(cs, hasCallsign, a.hex);
+  // The core feed's operator label when there is one -- the unit's copy of
+  // these same rules (deploy/labels.py) -- else the page's own.
+  const op = a._core && a._core.operator;
+  const { icao: airlineIcao, label: airlineLabel, color: badgeColor } = op
+    ? { icao: op.icao || null, label: op.label, color: op.color }
+    : airlineFor(cs, hasCallsign, a.hex);
 
   return {
     hex: a.hex, cs, hasCallsign, bearing, range, alt, hdg, realHdg, speed: a.gs ?? null,
@@ -4905,12 +4929,12 @@ function normalizeAircraft(a) {
 
 async function fetchAircraft() {
   try {
-    const res = await fetch(DATA_URL, { cache: 'no-store' });
+    const res = await fetch(USE_CORE_FEED ? CORE_URL : DATA_URL, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     lastGoodFetch = performance.now();
     connected = true;
-    applyUpdate(data.aircraft || []);
+    applyUpdate(USE_CORE_FEED ? (data.aircraft || []).map(fromCore) : (data.aircraft || []));
   } catch (e) {
     connected = false;
   }
@@ -4983,7 +5007,16 @@ function applyUpdate(list) {
     // loadOwner) so the label itself can show it too, not only the panel --
     // same "fire once per hex, cache the miss too via lookupOwner" shape as
     // the type lookup just above.
-    if (n.airlineLabel === PRIVATE_LABEL && !ownerCache.has(n.hex)) {
+    if (raw._core) {
+      // Route and owner come with the feed: nothing to look up from here.
+      const c = raw._core, pl = planes.get(n.hex);
+      if (c.route && n.hasCallsign) routeCache.set(n.cs, c.route);
+      if (c.owner && pl) {
+        pl.owner = c.owner.name;
+        pl.ownerCountry = c.owner.country || null;
+        ownerCache.set(n.hex, { owner: pl.owner, country: pl.ownerCountry });
+      }
+    } else if (n.airlineLabel === PRIVATE_LABEL && !ownerCache.has(n.hex)) {
       loadOwner(n.hex);
     }
 
@@ -4994,7 +5027,7 @@ function applyUpdate(list) {
     // truly skipped when there's no real callsign yet at all (n.cs is the
     // hex fallback -- see hasCallsign in normalizeAircraft), since querying
     // a hex code as if it were a flight number can't return anything.
-    if (n.hasCallsign) {
+    if (n.hasCallsign && !raw._core) {
       queueRouteLookup(n.cs, n.lat ?? home?.lat ?? 0, n.lon ?? home?.lon ?? 0);
     }
 
@@ -5689,6 +5722,7 @@ const ownerFailedAt = new Map();   // hex -> Date.now() of the last failed attem
 const OWNER_RETRY_MS = 5 * 60 * 1000;
 async function lookupOwner(hex) {
   if (ownerCache.has(hex)) return ownerCache.get(hex);
+  if (USE_CORE_FEED) return null;   // the feed brings owners; never ask adsbdb from here
   if (ownerPending.has(hex)) return null;
   const failed = ownerFailedAt.get(hex);
   if (failed && Date.now() - failed < OWNER_RETRY_MS) return null;

@@ -14,7 +14,7 @@ PORT = 8000
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        if self.path.startswith("/tar1090/"):
+        if self.path.startswith(("/tar1090/", "/api/")):
             try:
                 with urllib.request.urlopen(PI_HOST + self.path, timeout=5) as upstream:
                     self.send_response(upstream.status)
