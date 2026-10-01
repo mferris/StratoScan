@@ -607,25 +607,30 @@ final class SkyMotion: ObservableObject {
 }
 
 /// The back camera, as a picture only.
+///
+/// Every change to the session happens on one serial queue, as Apple asks:
+/// opening Sky view from an aircraft's details ("Find in the sky") started it
+/// twice at once, and two threads adding the camera input together crashed
+/// the app (AVCaptureSession addInput: exception, 2026-10-01).
 final class SkyCamera: ObservableObject {
     let session = AVCaptureSession()
     /// The camera's field of view across its long side, in degrees.
     private(set) var fieldOfView: Double = 65
-    private var configured = false
+    private let queue = DispatchQueue(label: "stratoscan.sky.camera")
 
     func start(_ done: @escaping @MainActor (Bool) -> Void) {
         AVCaptureDevice.requestAccess(for: .video) { granted in
             Task { @MainActor in done(granted) }
             guard granted else { return }
-            DispatchQueue.global(qos: .userInitiated).async { [self] in
-                if !configured, let cam = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+            self.queue.async { [self] in
+                if session.inputs.isEmpty,
+                   let cam = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
                    let input = try? AVCaptureDeviceInput(device: cam), session.canAddInput(input) {
                     session.beginConfiguration()
                     session.sessionPreset = .high
                     session.addInput(input)
                     session.commitConfiguration()
                     fieldOfView = Double(cam.activeFormat.videoFieldOfView)
-                    configured = true
                 }
                 if !session.isRunning { session.startRunning() }
             }
@@ -633,7 +638,7 @@ final class SkyCamera: ObservableObject {
     }
 
     func stop() {
-        DispatchQueue.global(qos: .userInitiated).async { [session] in session.stopRunning() }
+        queue.async { [session] in if session.isRunning { session.stopRunning() } }
     }
 }
 
