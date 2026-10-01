@@ -549,7 +549,7 @@ async function fleetPage(env) {
     </tr>`;
   }).join('');
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>StratoScan fleet</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>StratoScan fleet</title><link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230a1a3a'/><circle cx='50' cy='50' r='38' fill='none' stroke='%23274a86' stroke-width='7'/><path d='M50 50 L50 12 A38 38 0 0 1 82.9 31 Z' fill='%235ee7ff' opacity='0.35'/><line x1='50' y1='50' x2='82.9' y2='31' stroke='%235ee7ff' stroke-width='8' stroke-linecap='round'/><circle cx='30' cy='64' r='7' fill='%233ddc97'/><circle cx='45' cy='36' r='8.5' fill='%23ffffff'/></svg>">
 <style>
   body{font:15px/1.4 system-ui,sans-serif;margin:16px;background:#0f1417;color:#e6e6e6}
   table{border-collapse:collapse;width:100%}td,th{padding:8px;border-bottom:1px solid #2a3338;text-align:left;vertical-align:top}

@@ -1,0 +1,16 @@
+StratoScan name and logo
+Copyright (c) 2026 Michael Ferris. All rights reserved.
+
+The files in this folder -- the StratoScan symbol, wordmark, app icons and
+preview image -- are NOT covered by the MIT licence that applies to the rest
+of this repository.
+
+You may use them to refer to the StratoScan project (in an article, a link,
+a review, or alongside an unmodified build of it). You may not use them, or
+anything confusingly similar, as the name or mark of a fork, a derived
+product or a service, or in any way that suggests the StratoScan project
+endorses it. A fork is welcome; give it its own name and icon.
+
+make.py, the script that writes these files, is MIT like the rest of the
+code. The wordmark's letters are outlined from Chakra Petch, used under the
+SIL Open Font License 1.1 (FONT-OFL.txt).

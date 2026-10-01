@@ -13,7 +13,12 @@ or uses, under what terms, and how each obligation is met. Reviewed
 | [MapLibre Native (iOS distribution)](https://github.com/maplibre/maplibre-gl-native-distribution) | `ios/` (Swift package, resolved at build time) | BSD-2-Clause | Not vendored. The iOS app's About/credits must carry its notice when the app ships. |
 | Sound effects (kitten, plane themes) | `sounds/` | CC0 1.0 | No obligation. Sources and processing are still credited in each theme's `CREDITS.md`. |
 | [OurAirports](https://ourairports.com/data/) airport table | `deploy/airports.json` | Public domain | None required; credited in the README. |
+| [Chakra Petch](https://github.com/m4rc1e/Chakra-Petch) typeface (outlined in the wordmark) | `assets/brand/logo-*.svg`, `social-preview.png` | SIL Open Font License 1.1 | The licence travels with the outlines as `assets/brand/FONT-OFL.txt`. The font itself is not shipped. |
 | Screenshot | `docs/screenshots/kiosk.png` | Map is an OpenStreetMap-derived work (ODbL) via OpenFreeMap / OpenMapTiles | Credited under the image in the README. Centred on RDU airport, not a private address. |
+
+The StratoScan logo and icons (`assets/brand/`, the app icons, the favicons)
+are the project's own, all rights reserved rather than MIT: see
+[assets/brand/LICENSE](assets/brand/LICENSE).
 
 Airline names and colours in `index.html` are factual identification of the
 operator, not logos or artwork.

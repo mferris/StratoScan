@@ -28,6 +28,7 @@
 		52B97D347E2A8632F33A8EF4 /* RadarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B487FEB78297D897DBF514 /* RadarView.swift */; };
 		578DBB05588D4DCA41A3E7A7 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F7AEE53D7B021629485B1A /* APIConfig.swift */; };
 		6328BE0CDA6056A768B7613A /* demo-traffic.json in Resources */ = {isa = PBXBuildFile; fileRef = 9F6A1715C56DD3725E841B89 /* demo-traffic.json */; };
+		66287C0F550914AC5CC4B106 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 158C48224467A873CFF7E205 /* Assets.xcassets */; };
 		69219F6CAF423A69A720293A /* PairingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CE87BBB53C711586B6EC6E5 /* PairingStore.swift */; };
 		69C56A89CFA9070DEACFC984 /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B1D2F7A1DF9DEA1C0C8A32 /* DemoFeed.swift */; };
 		6C1237AB31DFA25D8C05037F /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 3235AA9CD83A6D560C73BCB9 /* MapLibre */; };
@@ -138,6 +139,7 @@
 		0BF91D723B0AD16296EBEB5E /* WatchRadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRadarView.swift; sourceTree = "<group>"; };
 		0CE87BBB53C711586B6EC6E5 /* PairingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingStore.swift; sourceTree = "<group>"; };
 		13B3D352D5EFF08433519043 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		158C48224467A873CFF7E205 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2534DE47A15B9009A7DBA41B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		253708C4759FB636D54CE7FE /* RadomeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadomeApp.swift; sourceTree = "<group>"; };
 		26F19B466EF642F0BCA2029A /* RunwayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayClient.swift; sourceTree = "<group>"; };
@@ -282,6 +284,7 @@
 		7DE494D0E9B923B1767AF48E /* RadomeWatch */ = {
 			isa = PBXGroup;
 			children = (
+				158C48224467A873CFF7E205 /* Assets.xcassets */,
 				2534DE47A15B9009A7DBA41B /* Info.plist */,
 				AFE8C9677953B5B9D8EF4F39 /* RadomeWatchApp.swift */,
 				0BF91D723B0AD16296EBEB5E /* WatchRadarView.swift */,
@@ -520,6 +523,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				66287C0F550914AC5CC4B106 /* Assets.xcassets in Resources */,
 				88BFBBAE01D34D6E52743CA7 /* demo-traffic.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
