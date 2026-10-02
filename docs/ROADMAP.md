@@ -97,6 +97,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 2.17 | Radar names: set during setup (default from the place), shown on the radar and carried to phones by the pairing link; a rename on the radar reaches phones that haven't named it themselves | A new radar pairs and shows its own name on the phone |
 | 2.18 | Set up a new radar from the app: one QR code on the first-boot screen, the app joins the setup hotspot, sends home WiFi, the phone's location, time zone and name, and pairs in the same session; the browser and on-screen setup stay | A radar fresh from the factory image is set up and paired from the app alone |
 | 2.19 | Public web address during first setup: nothing to type or renew; proposed: the relay mints a one-time `tag:stratoscan` Tailscale key for a radar being set up (Cloudflare Tunnel the alternative) | A radar set up from the app is reachable away from home, and can reach nothing on the tailnet |
+| 2.20 | CarPlay, within what Apple allows without an entitlement: the approach Live Activity in CarPlay (iOS 26) and a text-only nearest-aircraft widget; alerts already reach CarPlay. No CarPlay app: a radar isn't one of Apple's CarPlay categories | In a CarPlay car or the CarPlay simulator: the Live Activity, the widget, an alert |
 
 ## Phase 3: the wrist
 
