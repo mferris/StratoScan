@@ -4,6 +4,8 @@ struct SettingsView: View {
     @ObservedObject var viewModel: RadarViewModel
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var pairing: PairingStore
+    @EnvironmentObject private var setup: RadarSetup
+    @State private var scanning = false
     @State private var baseURL: String = APIConfig.baseURL
     @State private var awayURL: String = APIConfig.awayURL ?? ""
     @State private var showNetwork: Bool = AircraftFeedClient.showNetwork
@@ -17,7 +19,7 @@ struct SettingsView: View {
                         .padding(.vertical, 4)
                 }
                 .listRowBackground(Color.clear)
-                PairedRadarsSection()
+                PairedRadarsSection(scanning: $scanning)
                 if !pairing.radars.isEmpty { AlertsSection() }
                 ThemeSection()
                 WeatherSection()
@@ -73,6 +75,41 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+        }
+        .fullScreenCover(isPresented: $scanning) {
+            ZStack(alignment: .topTrailing) {
+                PairingScannerView { url in
+                    scanning = false
+                    // Scanned on purpose from this screen: that is the confirmation.
+                    if let link = PairingStore.parse(url) {
+                        Task { await pairing.pair(link) }
+                    } else {
+                        // A new radar's setup code. Settings closes so the
+                        // setup screens (presented from the root) can show.
+                        dismiss()
+                        Task {
+                            // after Settings has gone: one screen can't present over another closing
+                            try? await Task.sleep(for: .milliseconds(700))
+                            setup.handle(url, pairing: pairing)
+                        }
+                    }
+                }
+                .ignoresSafeArea()
+                Button {
+                    scanning = false
+                } label: {
+                    Image(systemName: "xmark").font(.headline).padding(14)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .padding()
+                .accessibilityLabel("Close")
+            }
+            .overlay(alignment: .bottom) {
+                Text("Point at the code on the radar's screen")
+                    .font(.callout).padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.bottom, 40)
             }
         }
     }

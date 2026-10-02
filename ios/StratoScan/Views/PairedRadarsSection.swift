@@ -3,8 +3,11 @@ import SwiftUI
 /// Settings section: the radars this phone gets alerts from.
 struct PairedRadarsSection: View {
     @EnvironmentObject private var pairing: PairingStore
-    @EnvironmentObject private var setup: RadarSetup
-    @State private var scanning = false
+    /// Owned by SettingsView, which presents the scanner. Presented from
+    /// here, inside the Form, it was dismissed as soon as it appeared: a
+    /// list redraws its rows (Settings follows the live radar), and a sheet
+    /// attached to a row goes with it.
+    @Binding var scanning: Bool
 
     var body: some View {
         Section {
@@ -33,18 +36,6 @@ struct PairedRadarsSection: View {
             Text(pairing.radars.isEmpty
                  ? "A new radar: scan the code on its first screen to set it up from here. One already set up: on the radar, open Settings › Phone & Watch › Pair a phone, and scan that code."
                  : "Alerts say what flew by and roughly how far away, never where the radar is.")
-        }
-        .sheet(isPresented: $scanning) {
-            PairingScannerView { url in
-                scanning = false
-                // Scanned on purpose from this screen: that tap is the confirmation.
-                if let link = PairingStore.parse(url) {
-                    Task { await pairing.pair(link) }
-                } else {
-                    setup.handle(url, pairing: pairing)   // a new radar's setup code
-                }
-            }
-            .ignoresSafeArea()
         }
         .task {
             await pairing.refresh()
