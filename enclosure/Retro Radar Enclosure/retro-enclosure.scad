@@ -72,8 +72,22 @@ lip_height    = 6;            // shell's front lip (glass + retainer seat here)
 screw_r = panel_diameter/2 + rim/2;   // screw ring sits centered in the rim band
 n_screws = 8;
 screw_clear_dia = 3.4;        // M3 clearance hole (front_trim + retainer)
-insert_hole_dia = 4.2;        // M3 heat-set insert hole (shell posts)
+// Heat-set inserts: the Kadrick M2-M5 kit (2026-10-02). Its M3 inserts are
+// 4.5mm across the knurl and 3.9mm at the lead-in, in lengths of 3-8mm. A 4.0
+// hole lets the lead-in drop in square and gives the knurl 0.25mm a side to
+// melt into. It was 4.2, which left a 4.5 insert only 0.15mm of bite.
+insert_hole_dia = 4.0;        // M3 heat-set insert hole, every M3 insert in the case
 post_od = 9;                  // outer diameter of each insert post in the shell
+// The 8 front posts. They used to be only shelf_h (2mm) tall: an insert sat in
+// 2mm of plastic with open air under it, and the wall on one side only.
+// Measured 2026-10-02: 2mm of the ring round the insert was solid; below that,
+// a third of it. Now each post hangs below the shelf, merged into the wall,
+// deep enough for an M3x5 insert with plastic under it. A 45-degree cone
+// under the post means it prints without support. Screws: M3x14 (through the
+// trim's outer band, 5.6mm, and the retainer, 4mm, then 4-5mm of thread).
+front_insert_len = 5;         // M3x5 insert
+front_post_h     = 8;         // from the shelf's top face down
+front_post_cone  = 4;         // 45-degree skirt under it
 
 // ---------- RABBET (stepped bezel) + BOTTOM RELIEF ----------
 // front_trim used to be one flat ring, entirely reliant on screw tension
@@ -126,7 +140,7 @@ antenna_hole_dia   = 6.5;  // generic SMA-F/F bulkhead panel jack: 1/4-36 thread
 // on a 213mm circle locate it perfectly well on their own.
 back_plate_t   = 3;    // same as the floor it replaces
 back_post_h    = 9;    // insert post standing inside the case
-back_insert_d  = 8;    // how deep the heat-set insert hole is drilled
+back_insert_d  = 7;    // how deep the heat-set insert hole is drilled: an M3x6 insert + 1mm
 
 // ---- Back plate: locating lip ----------------------------------------
 // A rib standing off the plate's inner face that drops into the shell bore,
@@ -1320,7 +1334,37 @@ module back_plate() {
     }
 }
 
+module front_posts() {
+    top = shell_depth - lip_height + shelf_h;
+    for (i = [0:n_screws-1]) {
+        a = i * 360/n_screws;
+        translate([screw_r*cos(a), screw_r*sin(a), top - front_post_h]) {
+            cylinder(d=post_od, h=front_post_h);
+            translate([0, 0, -front_post_cone])
+                cylinder(d1=post_od - 2*front_post_cone, d2=post_od, h=front_post_cone);
+        }
+    }
+}
+
+// Cut after the whole shell is unioned: at 0 and 180 degrees a speaker
+// bracket lands in a post, and would fill a hole cut any earlier.
+module front_post_holes() {
+    top = shell_depth - lip_height + shelf_h;
+    for (i = [0:n_screws-1]) {
+        a = i * 360/n_screws;
+        translate([screw_r*cos(a), screw_r*sin(a), top - front_insert_len - 1])
+            cylinder(d=insert_hole_dia, h=front_insert_len + 1 + 0.01);
+    }
+}
+
 module shell() {
+    difference() {
+        shell_body();
+        front_post_holes();
+    }
+}
+
+module shell_body() {
     difference() {
         union() {
             // Bored straight through: the back is a separate plate now.
@@ -1365,17 +1409,10 @@ module shell() {
                     square([outer_dia/2 - retention_opening/2 + 2, shelf_h + 2]);
     }
 
-    // insert posts, now only shelf_h tall so they sit entirely below the
-    // shelf (and below retainer) instead of overlapping either
-    for (i = [0:n_screws-1]) {
-        a = i * 360/n_screws;
-        translate([screw_r*cos(a), screw_r*sin(a), shell_depth - lip_height])
-            difference() {
-                cylinder(d=post_od, h=shelf_h);
-                translate([0,0,shelf_h-8])
-                    cylinder(d=insert_hole_dia, h=9);
-            }
-    }
+    // The front insert posts: from the shelf's top face (below the retainer)
+    // down, merged into the wall, with a cone under each. Their holes are cut
+    // in shell(), after everything is unioned, as back_post_holes() is.
+    front_posts();
 
 
     // No dongle pocket. There was a fitted open-topped tray on the floor

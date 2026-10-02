@@ -58,8 +58,9 @@ They share the back plate and antenna mount.
 | Part | Qty | Approx. | Notes |
 |---|---|---|---|
 | Filament, PLA or PETG | ~1 kg | $20 | Retro: one colour. Kitten: two colours for the head, more for the stand; see its README |
-| M3 brass heat-set inserts, short (fits a 4.2 mm hole) | 19 (buy 50) | $8 | 8 for the front, 8 for the back plate, 3 for the antenna mount. Pressed in with a soldering iron |
-| M3 socket-head screws, assorted 6–20 mm | about 21 | $8 | 8 for the front trim, 8 for the back plate, 3 for the antenna mount, 2 for the USB-C connector. A kit is easiest; the exact lengths aren't listed yet |
+| M3 brass heat-set inserts: **have them** (Kadrick M2–M5 kit, 520 pcs) | 19 per case (18 for the kitten) | — | Holes sized for this kit (4.0 mm). 8 × M3×5 for the front, 8 × M3×6 for the back plate, 3 × M3×5 in the antenna mount; optionally 8 × M2×3 for the speakers. Pressed in with a soldering iron. Any M3 insert about 4.5 mm across fits |
+| M3 socket-head screws | 21 per case (20 for the kitten) | $8 | **M3 × 14:** 8 for the front trim (7 on the kitten). **M3 × 8:** 8 for the back plate and 3 for the antenna mount. 2 more for the USB-C connector, if it doesn't come with its own. A kit with these lengths is easiest |
+| M2 × 6 screws (optional) | 8 | — | Only if the speakers go on M2 inserts rather than their self-tapping screws |
 | M2.5 screws, about 6 mm | 4 | — | Hold the Pi onto the back plate's standoffs. Usually in the same kit |
 | Panel-mount USB-C extension cable, **rated 5 A / 100 W (e-marked)**, with two M3 screw holes 16.5 mm apart | 1 | $10–15 | Brings power in through the back plate. **The rating matters:** a thin extension dropped the Pi's 5 V supply to 4.96 V and caused under-voltage several times an hour, gone when the supply was plugged straight in (5.08 V). The cutout is 11 × 6.5 mm; print `usbc_gauge` to test-fit a different connector first |
 | **Antenna mounting, choose one:** | | | |
