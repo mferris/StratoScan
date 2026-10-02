@@ -25,6 +25,8 @@ struct StratoScanApp: App {
                     WidgetCenter.shared.reloadAllTimelines()
                     PushManager.shared.endFinishedActivities()
                     WatchSync.shared.push()
+                    // At home: pick up a rename made on the radar (2.17).
+                    Task { await pairing.refreshNames() }
                 }
         }
     }

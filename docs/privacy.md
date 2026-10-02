@@ -29,6 +29,10 @@ turn on:
   names the aircraft and gives its distance rounded to half a nautical
   mile with a compass direction, and the direction the aircraft is
   travelling (which it broadcasts itself). It never includes a position.
+- **The radar's name** (from its home airport's city unless you choose one)
+  stays on your home network. It's in the pairing code on the radar's
+  screen, so a phone you pair shows it, and a paired phone reads it again
+  when it's home. It's not on the public page and doesn't go to the relay.
 - **Health reports** (off unless you turn them on): software version,
   receiver health, storage wear, temperature. No location, no network
   details, nothing about what flew over.

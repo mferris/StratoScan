@@ -14,6 +14,10 @@ final class PairingStore: ObservableObject {
         var name: String
         var host: String?
         var pairedAt: Date
+        /// True once the owner names it on this phone; the radar's own name
+        /// (roadmap 2.17) then no longer replaces it. Optional so radars
+        /// saved before this decode.
+        var ownName: Bool?
         var id: String { unit }
     }
 
@@ -28,6 +32,14 @@ final class PairingStore: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: storeKey),
            let saved = try? JSONDecoder().decode([Radar].self, from: data) {
             radars = saved
+            // Paired before 2.17, nothing recorded whether the owner named it.
+            // The app's own default was "Radar N"; anything else they typed.
+            var migrated = false
+            for i in radars.indices where radars[i].ownName == nil {
+                radars[i].ownName = radars[i].name.range(of: #"^Radar \d+$"#, options: .regularExpression) == nil
+                migrated = true
+            }
+            if migrated { save() }
         }
     }
 
@@ -42,6 +54,8 @@ final class PairingStore: ObservableObject {
         let secret: String
         let host: String?
         var publicURL: String? = nil
+        /// The radar's own name, from its setup ("Raleigh"), when the link has one.
+        var name: String? = nil
     }
 
     /// A pairing link, or nil for anything else. Strict about shapes: the
@@ -61,7 +75,18 @@ final class PairingStore: ObservableObject {
             guard v.count <= 200, let u = URL(string: v), u.scheme == "https", u.host != nil else { return nil }
             return v
         }
-        return Link(unit: u, secret: s, host: h, publicURL: p)
+        return Link(unit: u, secret: s, host: h, publicURL: p, name: q("n").flatMap(Self.cleanName))
+    }
+
+    /// A radar's name as the radar gives it: 1-32 characters, no control
+    /// characters, whitespace tidied. Mirrors setup-server.py's clean_name.
+    nonisolated static func cleanName(_ v: String) -> String? {
+        let t = v.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard (1...32).contains(t.count),
+              !t.unicodeScalars.contains(where: { $0.properties.generalCategory == .control
+                                                  || $0.properties.generalCategory == .format })
+        else { return nil }
+        return t
     }
 
     /// A link waiting for the owner to confirm. Any web page or message can
@@ -87,11 +112,12 @@ final class PairingStore: ObservableObject {
         defer { busy = false }
         do {
             try await relay.pair(unit: link.unit, secret: link.secret, name: UIDevice.current.name)
-            let name = "Radar \(radars.count + 1)"
+            let name = link.name ?? "Radar \(radars.count + 1)"
             if let i = radars.firstIndex(where: { $0.unit == link.unit }) {
                 radars[i].host = link.host ?? radars[i].host
+                if radars[i].ownName != true, let n = link.name { radars[i].name = n }
             } else {
-                radars.append(Radar(unit: link.unit, name: name, host: link.host, pairedAt: Date()))
+                radars.append(Radar(unit: link.unit, name: name, host: link.host, pairedAt: Date(), ownName: false))
             }
             save()
             if let h = link.host, APIConfig.baseURL == APIConfig.defaultBaseURL {
@@ -119,11 +145,41 @@ final class PairingStore: ObservableObject {
         }
     }
 
+    /// Names the radar on this phone. Empty goes back to the radar's own
+    /// name, picked up by refreshNames(); unchanged changes nothing.
     func rename(_ radar: Radar, to name: String) {
         guard let i = radars.firstIndex(where: { $0.unit == radar.unit }) else { return }
         let t = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        radars[i].name = t.isEmpty ? radar.name : String(t.prefix(40))
+        if t.isEmpty {
+            guard radars[i].ownName == true else { return }
+            radars[i].ownName = false
+            save()
+            Task { await refreshNames() }
+            return
+        }
+        guard t != radars[i].name else { return }
+        radars[i].name = String(t.prefix(40))
+        radars[i].ownName = true
         save()
+    }
+
+    /// Follow a rename made on the radar: ask each radar on the home network
+    /// for its name (its setup server's hello, which is LAN-only, so this
+    /// only works at home; away, the last name stays). A name set on this
+    /// phone wins.
+    func refreshNames() async {
+        struct Hello: Decodable { let name: String? }
+        for radar in radars where radar.ownName != true {
+            guard let host = radar.host, let url = URL(string: "http://\(host)/setup/api/hello"),
+                  let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 3)),
+                  (resp as? HTTPURLResponse)?.statusCode == 200,
+                  let name = (try? JSONDecoder().decode(Hello.self, from: data))?.name.flatMap(Self.cleanName),
+                  let i = radars.firstIndex(where: { $0.unit == radar.unit }),
+                  radars[i].name != name, radars[i].ownName != true
+            else { continue }
+            radars[i].name = name
+            save()
+        }
     }
 
     /// The relay is the authority: a radar that unpaired this phone from its
