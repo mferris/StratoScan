@@ -16,17 +16,20 @@ struct PairingScannerView: UIViewControllerRepresentable {
                                            qualityLevel: .balanced,
                                            isHighlightingEnabled: true)
         vc.delegate = context.coordinator
-        try? vc.startScanning()
         return vc
     }
 
-    func updateUIViewController(_ vc: DataScannerViewController, context: Context) {}
+    // Started here, not in make: until the view is in a window the camera
+    // doesn't start, and the attempt fails silently.
+    func updateUIViewController(_ vc: DataScannerViewController, context: Context) {
+        if !vc.isScanning && !context.coordinator.done { try? vc.startScanning() }
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(onFound: onFound) }
 
     final class Coordinator: NSObject, DataScannerViewControllerDelegate {
         let onFound: (URL) -> Void
-        private var done = false
+        fileprivate(set) var done = false
         init(onFound: @escaping (URL) -> Void) { self.onFound = onFound }
 
         func dataScanner(_ scanner: DataScannerViewController, didAdd items: [RecognizedItem],
