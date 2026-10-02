@@ -15,6 +15,7 @@
 		0A00B4CC7833445AB4195D23 /* PairingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1090E20A438B07C7EEB72156 /* PairingStore.swift */; };
 		0B4CA60C0DA28F8ADA2393D0 /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B370E5F234924A16BBBDC64A /* AircraftFeedClient.swift */; };
 		12ACD563BAEC7EDED74E198B /* RadarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABB3E03019CAE33D8C8A990F /* RadarViewModel.swift */; };
+		1485C468E4F8E97DD13A9225 /* RadarSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A11D6B5D603001781251E7 /* RadarSetup.swift */; };
 		1FF8E6AF970A64DBEEDDACDC /* StratoScanWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E12CD0D546205422368A65C2 /* StratoScanWidget.swift */; };
 		2474402DE9D6E2A16B4EAA8A /* CreditsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E132796E2082CED29DB7C80 /* CreditsView.swift */; };
 		254629EDA76970D90591B0F6 /* RelayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC414D1F7C9C0668085FEC8E /* RelayClient.swift */; };
@@ -70,6 +71,7 @@
 		C21AC1382A485A5E79CCDDB3 /* WatchSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4000B97716592BC2F6C0F46E /* WatchSync.swift */; };
 		CFDA24419A4CB93DCDD32CB4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 808B86321C24DFDE215A7F10 /* Assets.xcassets */; };
 		D0419AF3AAF3B967830979F9 /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6905BC6DA1BAE8FB5B82B7D3 /* Geo.swift */; };
+		D257E4B524CEA75F7CE1B7A8 /* RadarSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A87888DC767A33BAAF2D5B9D /* RadarSetupView.swift */; };
 		D345098C577D7EA4D3147B31 /* ApproachReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65A687C4494E483CEDA48297 /* ApproachReporter.swift */; };
 		D9A2808D0FA7914B9A661B29 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C25B99A1198C2E5787B7C62D /* PrivacyInfo.xcprivacy */; };
 		E32113C4072A45050B7E1A9D /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A098FF92E33AB26325CE095F /* APIConfig.swift */; };
@@ -185,7 +187,9 @@
 		A0964DFC845B4F543036F97B /* Sun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sun.swift; sourceTree = "<group>"; };
 		A098FF92E33AB26325CE095F /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
 		A553C39663C267646A4ED80A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A7A11D6B5D603001781251E7 /* RadarSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarSetup.swift; sourceTree = "<group>"; };
 		A8074B62F31F78059673C06A /* StratoScanWatchWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StratoScanWatchWidget.swift; sourceTree = "<group>"; };
+		A87888DC767A33BAAF2D5B9D /* RadarSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarSetupView.swift; sourceTree = "<group>"; };
 		ABB3E03019CAE33D8C8A990F /* RadarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarViewModel.swift; sourceTree = "<group>"; };
 		ABF1D0E823BF135A626E31C8 /* ApproachActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproachActivity.swift; sourceTree = "<group>"; };
 		ADFE70925019421DA58CD9F3 /* demo-traffic.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "demo-traffic.json"; sourceTree = "<group>"; };
@@ -265,6 +269,15 @@
 				BF585A4164DCE73E0A7A5475 /* WatchRadarView.swift */,
 			);
 			path = StratoScanWatch;
+			sourceTree = "<group>";
+		};
+		4EE8AB0D0F430F4A64D7AACE /* Setup */ = {
+			isa = PBXGroup;
+			children = (
+				A7A11D6B5D603001781251E7 /* RadarSetup.swift */,
+				A87888DC767A33BAAF2D5B9D /* RadarSetupView.swift */,
+			);
+			path = Setup;
 			sourceTree = "<group>";
 		};
 		52E825E725DB690EA3473E75 /* Models */ = {
@@ -383,6 +396,7 @@
 				52E825E725DB690EA3473E75 /* Models */,
 				34EE312F0E816F372A2BA7B4 /* Networking */,
 				F2F7AC84DDFF979C6BE651A7 /* Pairing */,
+				4EE8AB0D0F430F4A64D7AACE /* Setup */,
 				26EC111CA7C65B0CBF2D670E /* Theme */,
 				9845B043468053F96680B144 /* ViewModels */,
 				29C48750C4D553482F4D2A23 /* Views */,
@@ -642,6 +656,8 @@
 				7A0AFB71E8F03D2A97F71761 /* PhoneLocation.swift in Sources */,
 				5777BD63375DF19D2C953815 /* PlaneState.swift in Sources */,
 				6A8895D5B4BD6C96C7599F99 /* PushManager.swift in Sources */,
+				1485C468E4F8E97DD13A9225 /* RadarSetup.swift in Sources */,
+				D257E4B524CEA75F7CE1B7A8 /* RadarSetupView.swift in Sources */,
 				2AC5C03DF6FFAA7D3D45F7F3 /* RadarView.swift in Sources */,
 				12ACD563BAEC7EDED74E198B /* RadarViewModel.swift in Sources */,
 				254629EDA76970D90591B0F6 /* RelayClient.swift in Sources */,

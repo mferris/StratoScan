@@ -136,6 +136,29 @@ def start():
     return offer
 
 
+RE_HASH = re.compile(r"^[0-9a-f]{64}$")
+
+
+def offer_hash(secret_hash):
+    """Open a code whose secret only the PHONE holds (roadmap 2.18).
+
+    Setting up from the app, the phone makes the secret and hands this unit
+    only its SHA-256, over the setup network. The unit offers that hash to
+    the relay as soon as it is online, and the phone, back on its own WiFi,
+    pairs with the secret it kept. So the secret never exists here at all,
+    and nothing has to find this unit on the new network first.
+    """
+    if not isinstance(secret_hash, str) or not RE_HASH.match(secret_hash):
+        raise ValueError("not a SHA-256")
+    r = _call("POST", "/v1/unit/pairing", {"secret_hash": secret_hash})
+    return {"offered": True, "expires": int(r.get("expires") or time.time() + 600)}
+
+
+def unit():
+    """This unit's public id (its Ed25519 key): what a phone pairs with."""
+    return {"unit": hb.unit_id(hb.load_key(create=True))}
+
+
 def cancel():
     _drop_offer()
     _call("POST", "/v1/unit/pairing/cancel", {})

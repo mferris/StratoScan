@@ -3,6 +3,7 @@ import SwiftUI
 /// Settings section: the radars this phone gets alerts from.
 struct PairedRadarsSection: View {
     @EnvironmentObject private var pairing: PairingStore
+    @EnvironmentObject private var setup: RadarSetup
     @State private var scanning = false
 
     var body: some View {
@@ -19,7 +20,7 @@ struct PairedRadarsSection: View {
                 }
             }
             if PairingScannerView.isAvailable {
-                Button("Scan a radar's pairing code") { scanning = true }
+                Button("Scan a radar's code") { scanning = true }
             }
             if pairing.busy { ProgressView() }
             // Said here while Settings is open; ContentView says it otherwise.
@@ -30,14 +31,18 @@ struct PairedRadarsSection: View {
             Text("Paired radars")
         } footer: {
             Text(pairing.radars.isEmpty
-                 ? "On the radar, open Settings › Phone & Watch › Pair a phone, then point your iPhone's Camera at the code."
+                 ? "A new radar: scan the code on its first screen to set it up from here. One already set up: on the radar, open Settings › Phone & Watch › Pair a phone, and scan that code."
                  : "Alerts say what flew by and roughly how far away, never where the radar is.")
         }
         .sheet(isPresented: $scanning) {
             PairingScannerView { url in
                 scanning = false
                 // Scanned on purpose from this screen: that tap is the confirmation.
-                if let link = PairingStore.parse(url) { Task { await pairing.pair(link) } }
+                if let link = PairingStore.parse(url) {
+                    Task { await pairing.pair(link) }
+                } else {
+                    setup.handle(url, pairing: pairing)   // a new radar's setup code
+                }
             }
             .ignoresSafeArea()
         }

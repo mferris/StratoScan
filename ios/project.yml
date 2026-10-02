@@ -36,6 +36,8 @@ targets:
         com.apple.developer.usernotifications.time-sensitive: true
         # Shared settings with the widget (the radar's address, demo mode).
         com.apple.security.application-groups: [group.com.NelsonIndustries.radome]
+        # Setting up a new radar (2.18): join its setup network from the app.
+        com.apple.developer.networking.HotspotConfiguration: true
     info:
       path: StratoScan/App/Info.plist
       properties:
@@ -61,6 +63,7 @@ targets:
             # stratoscan:// from units on 2026.10.01.2+; radome:// still accepted from older ones
             CFBundleURLSchemes: [stratoscan, radome]
         NSCameraUsageDescription: "To scan a StratoScan radar's pairing code, and to show aircraft over the camera image in Sky view. Nothing is recorded or sent."
+        NSLocalNetworkUsageDescription: "To reach your radar on your home WiFi, and to set up a new one."
         NSLocationWhenInUseUsageDescription: "To show where you are on the radar, and to aim the compass and Sky view. It stays on this phone unless you turn on a feature that says otherwise."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Only if you turn on alerts for aircraft approaching you: when you move, your location is sent encrypted so only your own radar can read it, to warn you of aircraft about to pass over. Turn it off any time in Settings."
         CFBundleDisplayName: StratoScan

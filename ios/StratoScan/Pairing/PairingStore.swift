@@ -132,6 +132,27 @@ final class PairingStore: ObservableObject {
         }
     }
 
+    /// A radar just paired by setting it up from this phone (2.18): the
+    /// relay already linked them, so this only records it and asks for alerts.
+    func adopt(unit: String, name: String, host: String?) {
+        if let i = radars.firstIndex(where: { $0.unit == unit }) {
+            radars[i].host = host ?? radars[i].host
+            if radars[i].ownName != true { radars[i].name = name }
+        } else {
+            radars.append(Radar(unit: unit, name: name, host: host, pairedAt: Date(), ownName: false))
+        }
+        save()
+        message = "Set up and paired. Alerts from \(name) will come to this phone."
+        Task { await PushManager.shared.enable() }
+    }
+
+    /// Where the radar answers on the home network, once found.
+    func setHost(_ host: String, unit: String) {
+        guard let i = radars.firstIndex(where: { $0.unit == unit }) else { return }
+        radars[i].host = host
+        save()
+    }
+
     func unpair(_ radar: Radar) async {
         busy = true
         defer { busy = false }

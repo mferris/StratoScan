@@ -41,6 +41,8 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>To scan a StratoScan radar's pairing code, and to show aircraft over the camera image in Sky view. Nothing is recorded or sent.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>To reach your radar on your home WiFi, and to set up a new one.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Only if you turn on alerts for aircraft approaching you: when you move, your location is sent encrypted so only your own radar can read it, to warn you of aircraft about to pass over. Turn it off any time in Settings.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
