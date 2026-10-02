@@ -33,10 +33,14 @@ CORE = {
     # what the Pi, fan and speakers bolt to
     "cradle_rails", "cradle_arm", "fan_mount", "speaker_bracket",
     "back_posts", "back_post_holes", "screw_ring_holes",
+    # the front screw posts and their heat-set insert holes
+    "front_posts", "front_post_holes",
+    # the outer shell: the body less the front insert holes
+    "shell",
     # the display clamp
     "retainer",
-    # cooling
-    "exhaust_slots",
+    # Cooling is NOT shared: the retro case vents through nine side slots
+    # across the top; the kitten has none and vents through its hollow ears.
     # the antenna mount, all of it -- both variants. They share the flange,
     # the arm, the bolt circle and the counter-tilt, and differ only at the
     # far end: a socket cut for one antenna's base, or an SMA bulkhead that
@@ -50,7 +54,7 @@ CORE = {
 # that differs is a failure -- including a module added later. A new shared
 # module that quietly diverges is exactly the thing this test exists to catch.
 COSMETIC = {
-    "shell":      "same cylinder, posts, rails, fan and vents; rivets/ribs vs ears",
+    "shell_body": "same cylinder, posts, rails and fan; rivets, ribs and side slots vs ears",
     "front_trim": "same screw ring; the kitten adds a nose and whisker grooves, "
                   "and omits the one screw the nose sits on",
     "stand":      "wholly different: a plinth with paws and a tail vs a plain base",
