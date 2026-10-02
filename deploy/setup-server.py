@@ -29,6 +29,7 @@ import secrets
 import socket
 import threading
 import time
+import unicodedata
 
 LISTEN = ("127.0.0.1", 8086)
 SOCK_PATH = "/run/stratoscan/setupd.sock"
@@ -304,6 +305,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 # uses it away from home. Already public by definition, and
                 # this route is refused on the Funnel itself.
                 "publicUrl": public_url(),
+                # The radar's name, so a paired phone at home follows a rename.
+                "name": radar_name(st),
             })
         if path == "/setup/api/claim" and self.command == "POST":
             return self._claim(st)
@@ -351,6 +354,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._proxy_verb("wifi_rollback")
         if path == "/setup/api/location" and self.command == "POST":
             return self._location(st)
+        if path == "/setup/api/name" and self.command == "POST":
+            r = set_name((self._body() or {}).get("name"))
+            if r is None:
+                return self._err(400, "bad_name", f"Use 1-{NAME_MAX} letters, numbers or spaces.")
+            return self._send(200, {"result": r})
         if path == "/setup/api/airport" and self.command == "POST":
             return self._airport(st)
         if path == "/setup/api/locale" and self.command == "POST":
@@ -527,6 +535,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         else:
             st.pop("location", None)
             st.pop("airport", None)
+            st.pop("name", None)
             st["steps"] = {k: v for k, v in (st.get("steps") or {}).items()
                            if k in ("password", "wifi", "remote")}
             save_state(st)
@@ -540,6 +549,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "steps": st.get("steps", {}),
             "location": actual_location() or st.get("location"),
             "airport": actual_airport() or st.get("airport"),
+            "name": radar_name(st),
+            "nameIsOwn": "name" in st,
             "remote": ts.get("result") if ts.get("ok") else None,
             "pendingChange": pend.get("result") if pend.get("ok") else None,
         })
@@ -682,10 +693,12 @@ def dress_offer(offer):
              (a.startswith("172.") and a.split(".")[1].isdigit() and 16 <= int(a.split(".")[1]) <= 31)]
     if addrs:
         link += f"&h={addrs[0]}"
+    from urllib.parse import quote
     pub = public_url()
     if pub:
-        from urllib.parse import quote
         link += f"&p={quote(pub, safe='')}"
+    # The radar's name, so the phone shows "Raleigh" rather than "Radar 1".
+    link += f"&n={quote(radar_name(), safe='')}"
     return {**offer, "link": link, "qr": qr_svg(link)}
 
 
@@ -784,6 +797,11 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             if not out:
                 return self._json(400, {"error": {"message": "No timezone or country given."}})
             return self._json(200, {"ok": True, "result": out})
+        if path == "/onboard/name":
+            r = set_name(body.get("name"))
+            if r is None:
+                return self._json(400, {"error": {"message": f"Use 1-{NAME_MAX} letters, numbers or spaces."}})
+            return self._json(200, {"ok": True, "result": r})
         if path == "/onboard/airport":
             return self._verb("set_airport", {"code": body.get("code"),
                                               "atcMount": body.get("atcMount", "")})
@@ -937,6 +955,8 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             "steps": st.get("steps", {}),
             "location": actual_location() or st.get("location"),
             "airport": actual_airport() or st.get("airport"),
+            "name": radar_name(st),
+            "nameIsOwn": "name" in st,
             "network": net,
             "remote": rem,
         }).encode()
@@ -995,6 +1015,62 @@ def actual_location():
         return {"lat": float(lat.group(1)), "lon": float(lon.group(1))}
     except ValueError:
         return None
+
+
+# ---- the radar's name (roadmap 2.17) ----------------------------------------
+# The owner's label for this radar, shown on its screen and on paired phones
+# ("Raleigh", "Mom's radar"). Until one is set, it is suggested from the home
+# airport's city. It goes into the pairing link and the LAN-only hello, never
+# anything public: it may well be a family or street name.
+NAME_MAX = 32
+_airport_cities = {}
+
+
+def clean_name(v):
+    """A usable name, or None. Whitespace collapsed; no control characters."""
+    if not isinstance(v, str):
+        return None
+    v = " ".join(v.split())
+    if not 1 <= len(v) <= NAME_MAX:
+        return None
+    if any(unicodedata.category(c).startswith("C") for c in v):
+        return None
+    return v
+
+
+def suggested_name(st=None):
+    """The home airport's city ("Raleigh" for RDU), or its code, or StratoScan."""
+    ap = actual_airport() or (st or {}).get("airport") or {}
+    code = ap.get("code") if isinstance(ap, dict) else None
+    if not code:
+        return "StratoScan"
+    if not _airport_cities:
+        try:
+            with open(AIRPORTS_JSON) as f:
+                _airport_cities.update({a["code"]: a.get("city") or "" for a in json.load(f)["airports"]})
+        except Exception:
+            pass
+    city = (_airport_cities.get(code) or "").split("/")[0].strip()
+    return clean_name(city) or code
+
+
+def radar_name(st=None):
+    st = st if st is not None else load_state()
+    return clean_name(st.get("name")) or suggested_name(st)
+
+
+def set_name(v):
+    """Set the name; an empty one goes back to the suggestion."""
+    st = load_state()
+    if isinstance(v, str) and not v.strip():
+        st.pop("name", None)
+    else:
+        name = clean_name(v)
+        if name is None:
+            return None
+        st["name"] = name
+    save_state(st)
+    return {"name": radar_name(st), "own": "name" in st}
 
 
 def actual_airport():

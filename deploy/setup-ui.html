@@ -141,6 +141,17 @@
     <div class="msg" id="airMsg"></div>
   </div>
 
+  <!-- name (roadmap 2.17) -->
+  <div class="card">
+    <h2>Name</h2>
+    <p class="note">What this radar is called on its screen and on paired phones, such as
+      "Raleigh" or "Mom's radar". Left blank, it's the home airport's city. Not shown on the
+      public page.</p>
+    <input id="radarName" maxlength="32" placeholder="From the home airport">
+    <button id="nameBtn">Save name</button>
+    <div class="msg" id="nameMsg"></div>
+  </div>
+
   <!-- locale -->
   <div class="card">
     <h2>Time zone and region <span class="tick hide" id="tickLoc2">✓</span></h2>
@@ -331,6 +342,8 @@ async function refresh() {
     if (s.airport) { $('atcMount').value = s.airport.atcMount || '';
                      $('tickAir').classList.remove('hide'); }
     if (s.steps?.remote) $('tickRem').classList.remove('hide');
+    $('radarName').value = s.nameIsOwn ? (s.name || '') : '';
+    $('radarName').placeholder = s.name ? `${s.name} (from the home airport)` : 'From the home airport';
     if (s.pendingChange) show($('wifiMsg'), 'warn',
       'A network change is waiting to be confirmed. If this page is working, press Join again to keep it.');
   } catch (e) {}
@@ -465,7 +478,17 @@ $('airBtn').onclick = async () => {
     const cc = (picked.match(/,\s*([A-Z]{2})\)\s*$/) || [])[1];
     if (cc) loadLocale(cc);
     $('tickAir').classList.remove('hide');
+    refresh();   // the suggested name follows the airport
   } catch (e) { show($('airMsg'), 'err', e.message); }
+};
+
+$('nameBtn').onclick = async () => {
+  hide($('nameMsg'));
+  try {
+    const r = await api('name', { method: 'POST', body: JSON.stringify({ name: $('radarName').value }) });
+    show($('nameMsg'), 'ok', `Named ${r.result.name}. Paired phones pick it up next time they're at home.`);
+    refresh();
+  } catch (e) { show($('nameMsg'), 'err', e.message); }
 };
 
 $('remBtn').onclick = async () => {

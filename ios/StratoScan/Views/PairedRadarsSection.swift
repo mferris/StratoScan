@@ -41,7 +41,10 @@ struct PairedRadarsSection: View {
             }
             .ignoresSafeArea()
         }
-        .task { await pairing.refresh() }
+        .task {
+            await pairing.refresh()
+            await pairing.refreshNames()
+        }
         .onDisappear { pairing.message = nil }
     }
 }
@@ -56,9 +59,15 @@ struct RadarDetailView: View {
 
     var body: some View {
         Form {
-            Section("Name") {
-                TextField("Name", text: $name)
+            Section {
+                TextField(radar.name, text: $name)
                     .onSubmit { pairing.rename(radar, to: name) }
+            } header: {
+                Text("Name")
+            } footer: {
+                Text(radar.ownName == true
+                     ? "Your name for it, on this phone. Clear it to use the name set on the radar."
+                     : "The name set on the radar. Type your own to use it on this phone instead.")
             }
             Section {
                 Button("Unpair this radar", role: .destructive) { confirming = true }

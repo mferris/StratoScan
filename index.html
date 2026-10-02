@@ -3269,6 +3269,7 @@ document.getElementById('kbd').addEventListener('pointerup', (e) => {
 // Fails silently when the setup service is absent, so a hand-built unit that
 // never had one behaves exactly as before.
 const ONBOARD_URL = 'http://127.0.0.1:8090/onboard';
+let radarName = '';   // this radar's name, once the setup service has said it
 const ONBOARD_POLL_MS = 5000;
 
 async function refreshOnboarding() {
@@ -3281,6 +3282,9 @@ async function refreshOnboarding() {
   } catch (e) {
     // no setup service on this unit -- nothing to show, ever
   }
+  // The radar's name (roadmap 2.17), from the loopback-only endpoint, so it
+  // shows on this screen and never on the public page.
+  if (d && typeof d.name === 'string') radarName = d.name;
   if (!d || d.claimed) { el.classList.remove('show'); return; }
   // Never reappear on top of someone who is actively using the setup screens.
   if (settingsPanelEl.classList.contains('show')) { el.classList.remove('show'); return; }
@@ -6157,7 +6161,10 @@ function renderPhone() {
     const qr = o.qr
       ? `<img class="sp-qr" alt="Pairing code" src="data:image/svg+xml;base64,${btoa(o.qr)}">`
       : `<div class="sp-sub" style="padding:10px 0">QR codes need a software update on this radar.</div>`;
+    let forName = '';
+    try { forName = new URL(o.link).searchParams.get('n') || ''; } catch (e) { /* older unit */ }
     return head + `
+      ${forName ? `<div class="sp-label" style="padding:8px 0 0">Pairing with ${esc(forName)}</div>` : ''}
       <div class="sp-sub" style="padding:8px 0;line-height:1.6">Point your iPhone's Camera at this code,
         then tap the StratoScan banner. Or scan it from the StratoScan app.</div>
       ${qr}
@@ -7051,7 +7058,12 @@ function renderDeviceSetup() {
     ? (rem.publicUrl ? `Public page at ${rem.publicUrl}` : `Connected as ${rem.magicDnsName || 'this device'}`)
     : 'Not connected';
 
+  const nameNow = d.name
+    ? (d.nameIsOwn ? d.name : `${d.name} (from the home airport; tap to choose your own)`)
+    : 'Not set';
   return `<div class="sp-back">&#8592; Settings</div><div class="sp-title">Device setup</div>${busy}${msg}
+    <div class="sp-menu-row" data-act="set-name"><div><div class="sp-label">Name</div>
+      <div class="sp-sub">${esc(nameNow)}. Shown on paired phones</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="wifi"><div><div class="sp-label">WiFi</div>
       <div class="sp-sub">${esc(wifiNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-act="set-timezone"><div><div class="sp-label">Time zone and region</div>
@@ -7127,6 +7139,20 @@ async function handleDeviceTap(row) {
   }
 
   if (dev) { deviceView = dev; wifiNets = []; airportRows = []; return renderSettingsPanel(); }
+
+  if (act === 'set-name') {
+    const cur = deviceStatus && deviceStatus.nameIsOwn ? deviceStatus.name : '';
+    const v = await openKeyboard('NAME FOR THIS RADAR  (empty = from the home airport)', cur);
+    if (v === null) return;
+    deviceBusy = true; renderSettingsPanel();
+    try {
+      const r = await deviceApi('/onboard/name', { method: 'POST', body: JSON.stringify({ name: v }) });
+      radarName = (r && r.result && r.result.name) || radarName;
+      deviceMsg = `Named ${radarName}. Paired phones pick it up next time they're home.`;
+      await loadDeviceStatus();
+    } catch (e) { deviceMsg = e.message; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
 
   if (act === 'set-password') {
     const pw = await openKeyboard('NEW ADMIN PASSWORD  (8+ characters)', '', { secret: true });
@@ -7390,6 +7416,7 @@ function renderSettingsMenu() {
     <div class="sp-close">&times;</div>
     <div class="sp-brand">${BRAND_LOGO}</div>
     <div class="sp-title">Settings</div>
+    ${radarName ? `<div class="sp-sub" style="padding:0 0 8px">${esc(radarName)}</div>` : ''}
     ${SETTINGS_GROUPS.map(({ key, label, sub }) => `
       <div class="sp-menu-row" data-group="${key}">
         <div>
