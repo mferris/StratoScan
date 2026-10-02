@@ -12,6 +12,8 @@
 // nothing and every check "passes" against empty geometry.
 use <kitten-enclosure-twotone.scad>
 check = "none";
+// front heat-set inserts (restated): shelf top face, insert length, hole
+fi_top = 57; fi_len = 5; fi_hole = 4.0;
 // Must match the design's resolution or the checks validate different
 // geometry from what gets exported. This said $fn=96 while the design moved
 // to adaptive $fa/$fs, and the giveaway was the canary reporting volume to
@@ -388,6 +390,26 @@ else if (check=="top_wall_solid") {
     shell();
     translate([-1.1, outer_dia/2 - wall, 29.25]) cube([2.2, wall, 12]);
   }
+}
+// ---- front heat-set inserts: plastic all round, holes open ---------------
+// The front posts used to give an insert 2mm of plastic. Every M3x5 insert
+// must now have a 1.75mm-thick ring of plastic all round it for its whole
+// length (front_insert_len below the shelf's top face, z = 57)...
+else if (check=="front_inserts_surrounded") {
+  for (i = [0:n_screws-1]) { a = i*360/n_screws;
+    difference() {
+      translate([screw_r*cos(a), screw_r*sin(a), fi_top - fi_len])
+        difference() { cylinder(d=8, h=fi_len); translate([0,0,-1]) cylinder(d=fi_hole + 0.5, h=fi_len + 2); }
+      shell();
+    } }
+}
+// ...and each hole is open for the insert (about 57mm3 each, 450 for eight).
+else if (check=="front_insert_holes_open") {
+  for (i = [0:n_screws-1]) { a = i*360/n_screws;
+    difference() {
+      translate([screw_r*cos(a), screw_r*sin(a), fi_top - fi_len]) cylinder(d=fi_hole - 0.2, h=fi_len);
+      shell();
+    } }
 }
 else if (check=="canary") { shell(); }
 

@@ -13,6 +13,8 @@ use <retro-enclosure.scad>
 $fs = 0.4;
 $fa = 0.5;
 check = "none";
+// front heat-set inserts (restated): shelf top face, insert length, hole
+fi_top = 57; fi_len = 5; fi_hole = 4.0;
 outer_dia=223.34; wall=3; shell_depth=61; screw_r=106.67; n_screws=8;
 speaker_angles=[0,180]; back_plate_t=3;
 // Restated because `use <>` imports modules and functions but NOT variables.
@@ -102,6 +104,26 @@ else if (check=="key_blocks_180") { intersection() { rotate([0,0,180]) back_plat
 else if (check=="key_blocks_225") { intersection() { rotate([0,0,225]) back_plate(); back_key(); } }
 else if (check=="key_blocks_270") { intersection() { rotate([0,0,270]) back_plate(); back_key(); } }
 else if (check=="key_blocks_315") { intersection() { rotate([0,0,315]) back_plate(); back_key(); } }
+// ---- front heat-set inserts: plastic all round, holes open ---------------
+// The front posts used to give an insert 2mm of plastic. Every M3x5 insert
+// must now have a 1.75mm-thick ring of plastic all round it for its whole
+// length (front_insert_len below the shelf's top face, z = 57)...
+else if (check=="front_inserts_surrounded") {
+  for (i = [0:n_screws-1]) { a = i*360/n_screws;
+    difference() {
+      translate([screw_r*cos(a), screw_r*sin(a), fi_top - fi_len])
+        difference() { cylinder(d=8, h=fi_len); translate([0,0,-1]) cylinder(d=fi_hole + 0.5, h=fi_len + 2); }
+      shell();
+    } }
+}
+// ...and each hole is open for the insert (about 57mm3 each, 450 for eight).
+else if (check=="front_insert_holes_open") {
+  for (i = [0:n_screws-1]) { a = i*360/n_screws;
+    difference() {
+      translate([screw_r*cos(a), screw_r*sin(a), fi_top - fi_len]) cylinder(d=fi_hole - 0.2, h=fi_len);
+      shell();
+    } }
+}
 else if (check=="canary") { shell(); }
 
 // ---- the locating lip -------------------------------------------------

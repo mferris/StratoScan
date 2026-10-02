@@ -300,6 +300,30 @@ is its paired positive control — an empty result from the first would also be
 what a probe in the wrong place produces, so a probe at a normal position has
 to find a real hole for the pair to mean anything.
 
+## Heat-set inserts
+
+Every screw that gets undone goes into a brass M3 heat-set insert. The holes are sized for the Kadrick M2–M5 kit: its M3 inserts are 4.5 mm across the knurl and 3.9 mm at the lead-in. Every insert hole is **4.0 mm**, so the lead-in drops in square and the knurl melts 0.25 mm a side into the plastic. (They were 4.2, which left a 4.5 mm insert only 0.15 mm of bite.)
+
+| Where | Count | Insert | Screw | Notes |
+|---|---|---|---|---|
+| Front posts in the shell (front trim and retainer screw into these) | 8 posts, 7 used | M3 × 5 | M3 × 14 | Pressed from the front, flush with the shelf the retainer sits on |
+| Back posts in the shell (back plate screws into these) | 8 | M3 × 6 | M3 × 8 | Pressed from the back face, flush |
+| Antenna mount flange | 3 | M3 × 5 | M3 × 8 | The pocket is in the mount; the screws come from inside the case, through the back plate |
+| Speaker bosses (optional) | 8 | M2 × 3 | M2 × 6 | The 2.6 mm pilot takes an M2 insert or the speaker's self-tapping screws |
+
+**The front posts are new.** They used to be only 2 mm tall: an insert sat in 2 mm of plastic with open air under it and the wall on one side only (measured: a third of the ring round it was solid). Now each post hangs 8 mm below the shelf, merged into the wall, with a 45° cone under it so it prints without support. The holes are cut after the whole shell is unioned, so the speaker brackets at 0° and 180° can't fill them.
+
+- `front_inserts_surrounded` proves every front insert has a 1.75 mm ring of plastic all round it for its full length. Run against the old shell, it finds 545 mm³ missing.
+- `front_insert_holes_open` is its positive control.
+
+The kitten's bezel has seven screws (see *Seven screws, not eight*). The post under the nose needs no insert.
+
+**Pressing them:** a soldering iron with an M3 insert tip, at about 220 °C for PLA or 245 °C for PETG.
+1. Start the insert square in the hole.
+2. Let it sink under its own weight plus light pressure. Don't push hard.
+3. Stop when it is flush.
+4. Hold a flat, cool piece of metal on it for a few seconds while the plastic sets, so it stays square.
+
 ## Checks
 
 `sh run-checks.sh` runs every target in `checks.scad` and reports the

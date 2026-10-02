@@ -84,8 +84,17 @@ rabbet_depth  = glass_thickness;
 screw_r = panel_diameter/2 + rim/2;
 n_screws = 8;
 screw_clear_dia = 3.4;
-insert_hole_dia = 4.2;
+// Heat-set inserts: the Kadrick M2-M5 kit. Its M3 inserts are 4.5mm across
+// the knurl and 3.9mm at the lead-in, 3-8mm long. A 4.0 hole gives the knurl
+// 0.25mm a side to melt into (4.2 left 0.15mm). Same as the retro case.
+insert_hole_dia = 4.0;
 post_od = 9;
+// The 8 front posts hang 8mm below the shelf's top face, merged into the
+// wall, with a 45-degree cone under each, so an M3x5 insert has plastic all
+// round it. They were 2mm tall. Screws: M3x14. See the retro case's notes.
+front_insert_len = 5;
+front_post_h     = 8;
+front_post_cone  = 4;
 
 relief_center_deg = 270;
 relief_arc_deg    = 50;
@@ -246,7 +255,7 @@ ant_sma_boss_h  = 10;    // panel sits at 7-10, clear of the cable bore's 6mm to
 ant_sma_cavity_d = 25;
 
 back_post_h    = 9;    // insert post standing inside the case
-back_insert_d  = 8;    // depth of the heat-set insert hole
+back_insert_d  = 7;    // depth of the heat-set insert hole: an M3x6 insert + 1mm
 
 // ---- Back plate: locating lip ----------------------------------------
 // A rib standing off the plate's inner face that drops into the shell bore,
@@ -1145,7 +1154,37 @@ module back_plate() {
     }
 }
 
+module front_posts() {
+    top = shell_depth - lip_height + shelf_h;
+    for (i = [0:n_screws-1]) {
+        a = i * 360/n_screws;
+        translate([screw_r*cos(a), screw_r*sin(a), top - front_post_h]) {
+            cylinder(d=post_od, h=front_post_h);
+            translate([0, 0, -front_post_cone])
+                cylinder(d1=post_od - 2*front_post_cone, d2=post_od, h=front_post_cone);
+        }
+    }
+}
+
+// Cut after the whole shell is unioned, so nothing landing in a post (a
+// speaker bracket at 0 and 180) can fill its hole.
+module front_post_holes() {
+    top = shell_depth - lip_height + shelf_h;
+    for (i = [0:n_screws-1]) {
+        a = i * 360/n_screws;
+        translate([screw_r*cos(a), screw_r*sin(a), top - front_insert_len - 1])
+            cylinder(d=insert_hole_dia, h=front_insert_len + 1 + 0.01);
+    }
+}
+
 module shell() {
+    difference() {
+        shell_body();
+        front_post_holes();
+    }
+}
+
+module shell_body() {
     difference() {
         union() {
             difference() {
@@ -1188,15 +1227,8 @@ module shell() {
                     square([outer_dia/2 - retention_opening/2 + 2, shelf_h + 2]);
     }
 
-    // 8 insert posts, entirely below the shelf
-    for (i = [0:n_screws-1]) {
-        a = i * 360/n_screws;
-        translate([screw_r*cos(a), screw_r*sin(a), shell_depth - lip_height])
-            difference() {
-                cylinder(d=post_od, h=shelf_h);
-                translate([0,0,shelf_h-8]) cylinder(d=insert_hole_dia, h=9);
-            }
-    }
+    // 8 front insert posts, below the shelf's top face; holes cut in shell()
+    front_posts();
 
 }
 
