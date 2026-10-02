@@ -97,6 +97,7 @@ extension SettingsView {
 
 #Preview {
     SettingsView(viewModel: RadarViewModel()).environmentObject(PairingStore()).environmentObject(PushManager.shared)
+        .environmentObject(RadarSetup())
 }
 
 

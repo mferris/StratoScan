@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var showLogbook = false
     @State private var showSettings = false
     @EnvironmentObject private var pairing: PairingStore
+    @EnvironmentObject private var setup: RadarSetup
     @Environment(\.horizontalSizeClass) private var sizeClass
     /// iPad (#39): a full-screen radar with no controls, the screen kept awake.
     @AppStorage("stratoscan.wallMode") private var wallMode = false
@@ -306,6 +307,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showSettings) {
             SettingsView(viewModel: viewModel).environmentObject(pairing).environmentObject(PushManager.shared)
+                .environmentObject(setup)
         }
         .confirmationDialog("Pair with this radar?", isPresented: Binding(
             get: { pairing.pendingLink != nil },
@@ -412,5 +414,5 @@ struct ContentView: View {
 private struct SelectedAircraft: Identifiable { let id: String }
 
 #Preview {
-    ContentView().environmentObject(PairingStore())
+    ContentView().environmentObject(PairingStore()).environmentObject(RadarSetup())
 }

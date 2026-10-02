@@ -94,6 +94,16 @@ adsb.lol sees that rounded location and your IP address, like any web
 request. Nothing else is sent, and a button in Sky view turns it off again.
 The camera picture in Sky view is never recorded or sent.
 
+### Setting up a radar from the app
+
+Scanning a new radar's first-run code lets the app set it up:
+- It joins the radar's own setup network.
+- It sends the radar **this phone's location** (you are standing next to it), time zone and region.
+- It sends a name and your home WiFi password, over that network straight to the radar.
+- It claims the radar with an admin password that it makes and keeps in this phone's Keychain.
+
+Pairing needs no second code. The phone makes a one-time secret and gives the radar only a fingerprint of it, which the radar hands the relay once it's online. Nothing from setup is kept in the app beyond the paired radar and that password.
+
 ## The relay
 
 The relay is a small service run by the StratoScan maintainer on Cloudflare.

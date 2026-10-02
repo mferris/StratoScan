@@ -307,6 +307,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "publicUrl": public_url(),
                 # The radar's name, so a paired phone at home follows a rename.
                 "name": radar_name(st),
+                # Who this is, so the app setting it up finds the same radar
+                # again on the home network (by <hostname>.local) and pairs
+                # with it. Both are public facts on the LAN anyway.
+                "unit": unit_id(),
+                "hostname": socket.gethostname(),
             })
         if path == "/setup/api/claim" and self.command == "POST":
             return self._claim(st)
@@ -321,9 +326,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._status(st)
         if path == "/setup/api/airports":
             return self._airports()
-        if path == "/setup/api/locale":
+        # GET only: this came before the POST route below and caught every
+        # POST too, so saving the time zone from the setup page fetched the
+        # list instead and changed nothing (found 2026-10-02).
+        if path == "/setup/api/locale" and self.command == "GET":
             return self._locale()
-        if path == "/setup/api/ota":
+        # GET only, for the same reason as locale: this used to catch the
+        # POST below, so Check and Install on the setup page did nothing.
+        if path == "/setup/api/ota" and self.command == "GET":
             return self._send(200, call_setupd("ota_status", {})["result"])
         if path == "/setup/api/feeding" and self.command == "GET":
             return self._proxy_verb("feeding_status")
@@ -354,6 +364,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._proxy_verb("wifi_rollback")
         if path == "/setup/api/location" and self.command == "POST":
             return self._location(st)
+        if path == "/setup/api/setup/join" and self.command == "POST":
+            return self._setup_join(st)
+        if path == "/setup/api/setup/offer" and self.command == "POST":
+            # Already online (Ethernet, or WiFi set some other way): offer the
+            # phone's code now rather than after a join.
+            h = (self._body() or {}).get("secretHash")
+            if not (isinstance(h, str) and RE_SECRET_HASH.match(h)):
+                return self._err(400, "bad_request", "That pairing code is not usable.")
+            return self._proxy_verb("pair_offer_hash", {"hash": h})
         if path == "/setup/api/name" and self.command == "POST":
             r = set_name((self._body() or {}).get("name"))
             if r is None:
@@ -468,6 +487,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return self._proxy_verb("wifi_connect", {
             "ssid": b.get("ssid"), "psk": b.get("psk"), "hidden": bool(b.get("hidden"))})
 
+    def _setup_join(self, st):
+        b = self._body() or {}
+        ssid, psk, h = b.get("ssid"), b.get("psk") or "", b.get("secretHash")
+        if not isinstance(ssid, str) or not ssid.strip() or not isinstance(psk, str):
+            return self._err(400, "bad_request", "Pick a network first.")
+        if h is not None and not (isinstance(h, str) and RE_SECRET_HASH.match(h)):
+            return self._err(400, "bad_request", "That pairing code is not usable.")
+        st["join"] = {"ssid": ssid, "state": "joining", "at": int(time.time())}
+        save_state(st)
+        threading.Thread(target=join_in_background, args=(ssid, psk, h), daemon=True).start()
+        # 202: the answer has to leave before the setup network does.
+        return self._send(202, {"result": {"state": "joining", "ssid": ssid}})
+
     def _location(self, st):
         b = self._body() or {}
         r = call_setupd("set_location", {"lat": b.get("lat"), "lon": b.get("lon")})
@@ -551,6 +583,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "airport": actual_airport() or st.get("airport"),
             "name": radar_name(st),
             "nameIsOwn": "name" in st,
+            "join": st.get("join"),
             "remote": ts.get("result") if ts.get("ok") else None,
             "pendingChange": pend.get("result") if pend.get("ok") else None,
         })
@@ -676,6 +709,16 @@ def qr_svg(text):
     return img.to_string(encoding="unicode")
 
 
+_qr_cache = {"text": None, "svg": None}
+
+
+def qr_cached(text):
+    """qr_svg for the first-run screen, which polls every few seconds."""
+    if _qr_cache["text"] != text:
+        _qr_cache.update(text=text, svg=qr_svg(text))
+    return _qr_cache["svg"]
+
+
 def public_url():
     """The unit's public HTTPS address when its Funnel is on, else None."""
     ts = _onboard_probe()[2] or {}
@@ -683,16 +726,21 @@ def public_url():
     return u if isinstance(u, str) and u.startswith("https://") else None
 
 
+def home_address():
+    """The home-network address, not Tailscale's (100.64.0.0/10) or any other
+    overlay: the app uses it for the radar view on the owner's WiFi."""
+    addrs = [a for a in lan_addresses() if a.startswith(("192.168.", "10.")) or
+             (a.startswith("172.") and a.split(".")[1].isdigit() and 16 <= int(a.split(".")[1]) <= 31)]
+    return addrs[0] if addrs else None
+
+
 def dress_offer(offer):
     if not isinstance(offer, dict) or not offer.get("link"):
         return offer
     link = offer["link"]
-    # The home-network address, not Tailscale's (100.64.0.0/10) or any other
-    # overlay: the app uses it for the radar view on the owner's WiFi.
-    addrs = [a for a in lan_addresses() if a.startswith(("192.168.", "10.")) or
-             (a.startswith("172.") and a.split(".")[1].isdigit() and 16 <= int(a.split(".")[1]) <= 31)]
-    if addrs:
-        link += f"&h={addrs[0]}"
+    addr = home_address()
+    if addr:
+        link += f"&h={addr}"
     from urllib.parse import quote
     pub = public_url()
     if pub:
@@ -700,6 +748,80 @@ def dress_offer(offer):
     # The radar's name, so the phone shows "Raleigh" rather than "Radar 1".
     link += f"&n={quote(radar_name(), safe='')}"
     return {**offer, "link": link, "qr": qr_svg(link)}
+
+
+# ---- setting up from the app (roadmap 2.18) ----------------------------------
+# A new radar's first-run screen shows one QR code. The app scans it, joins the
+# setup network itself, claims the radar with the code, sends the location,
+# time zone, name and home WiFi, and pairs -- in one flow.
+#
+#   stratoscan://setup?c=<claim code>&w=<setup network>&k=<its password>&a=<its address>
+#   stratoscan://setup?c=<claim code>&h=<LAN address>      (already on a network)
+#
+# Everything in it is already on the screen in words; the QR saves typing it.
+def setup_link(code, hotspot):
+    from urllib.parse import quote
+    if not code:
+        return None
+    q = [f"c={quote(code, safe='')}"]
+    hs = hotspot or {}
+    if hs.get("active") and hs.get("ssid"):
+        q += [f"w={quote(hs['ssid'], safe='')}", f"k={quote(hs.get('psk') or '', safe='')}",
+              f"a={quote(hs.get('address') or '10.42.0.1', safe='')}"]
+    else:
+        addr = home_address()
+        if not addr:
+            return None
+        q.append(f"h={addr}")
+    return "stratoscan://setup?" + "&".join(q)
+
+
+_unit = {"id": None}
+
+
+def unit_id():
+    """This radar's public id, which a phone pairs with. Cached: it never
+    changes short of a factory reset, which restarts this server anyway."""
+    if _unit["id"] is None:
+        r = call_setupd("unit_id", {}, timeout=30)
+        if r.get("ok") and isinstance(r.get("result"), dict):
+            _unit["id"] = r["result"].get("unit")
+    return _unit["id"]
+
+
+RE_SECRET_HASH = re.compile(r"^[0-9a-f]{64}$")
+JOIN_DELAY_S = 3
+JOIN_OFFER_TRIES = 12
+JOIN_OFFER_GAP_S = 10
+
+
+def join_in_background(ssid, psk, secret_hash, delay=JOIN_DELAY_S, sleep=time.sleep):
+    """Join the home WiFi from the setup network, then offer the phone's code.
+
+    From the setup network the phone can't confirm the switch the way the
+    browser page does: the setup network goes when the radar leaves it, and
+    the phone with it. So, as on the radar's own screen, the radar confirms
+    once it is really online (wifi_connect has already proved an address, a
+    route and a real response). If the join fails, setupd puts the setup
+    network back, and the phone can rejoin it and read why from /status.
+    """
+    sleep(delay)                     # let the 202 reach the phone first
+    r = call_setupd("wifi_connect", {"ssid": ssid, "psk": psk}, timeout=150)
+    ok = bool(r.get("ok"))
+    if ok:
+        call_setupd("wifi_confirm")
+    st = load_state()
+    st["join"] = {"ssid": ssid, "state": "ok" if ok else "failed",
+                  "code": None if ok else r.get("code", "failed"), "at": int(time.time())}
+    if ok:
+        st.setdefault("steps", {})["wifi"] = True
+    save_state(st)
+    if ok and secret_hash:
+        # The relay can take a moment to reach on a network just joined.
+        for _ in range(JOIN_OFFER_TRIES):
+            if call_setupd("pair_offer_hash", {"hash": secret_hash}, timeout=30).get("ok"):
+                break
+            sleep(JOIN_OFFER_GAP_S)
 
 
 def pair_verb(action, phone=None):
@@ -947,9 +1069,13 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
         # headroom to spare. Short enough that the setup screens still show
         # live values, long enough that polling is nearly free.
         hs, net, rem = _onboard_probe()
+        setup_lnk = None if st.get("claimed") else setup_link(
+            claim_code(), hs.get("result") if hs.get("ok") else None)
         body = json.dumps({
             "claimed": bool(st.get("claimed")),
             "claimCode": None if st.get("claimed") else claim_code(),
+            "setupLink": setup_lnk,
+            "setupQr": qr_cached(setup_lnk) if setup_lnk else None,
             "hotspot": hs.get("result") if hs.get("ok") else None,
             "addresses": lan_addresses(),
             "steps": st.get("steps", {}),

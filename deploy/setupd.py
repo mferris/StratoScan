@@ -940,6 +940,16 @@ def pair_start():
     return _pairing_call("start")
 
 
+def pair_offer_hash(h):
+    if not isinstance(h, str) or not re.match(r"^[0-9a-f]{64}$", h):
+        raise Err("bad_hash", "not a SHA-256")
+    return _pairing_call("offer_hash", h)
+
+
+def unit_id():
+    return _pairing_call("unit")
+
+
 def pair_cancel():
     return _pairing_call("cancel")
 
@@ -1397,6 +1407,8 @@ VERBS = {
     "pair_status": lambda p: pair_status(),
     "pair_start": lambda p: pair_start(),
     "pair_cancel": lambda p: pair_cancel(),
+    "pair_offer_hash": lambda p: pair_offer_hash(p.get("hash")),
+    "unit_id": lambda p: unit_id(),
     "pair_remove": lambda p: pair_remove(p.get("phone")),
     "feeding_status": lambda p: feeding_status(),
     "set_feeding": lambda p: set_feeding(p.get("flightaware")),
@@ -1413,7 +1425,7 @@ MUTATING = {"wifi_connect", "wifi_confirm", "wifi_rollback", "hotspot_start",
             "set_timezone", "set_wifi_country", "ota_apply",
             "tailscale_funnel", "reboot", "reset_settings", "reset_full",
             "tailscale_login_start", "set_health_report", "set_feeding",
-            "pair_start", "pair_cancel", "pair_remove"}
+            "pair_start", "pair_cancel", "pair_remove", "pair_offer_hash"}
 
 
 class Handler(socketserver.StreamRequestHandler):

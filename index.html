@@ -1074,6 +1074,10 @@
   #onboard b { color: #fff; font-size: 1.15em; }
   #onboard .code { font-size: 1.6rem; letter-spacing: .18em; color: #fff; margin-top: 14px; }
   #onboard .foot { margin-top: 16px; font-size: .78rem; color: var(--text-dim); }
+  #onboard .ob-app { display: flex; align-items: center; gap: 14px; text-align: left;
+                     font-size: .9rem; line-height: 1.5; margin: 0 auto 4px; max-width: 30em; }
+  #onboard .ob-qr { width: 150px; height: 150px; background: #fff; border-radius: 8px;
+                    padding: 6px; flex: none; }
   /* The overlay covers the whole screen, including the gear button, so
      without this the on-screen setup route is unreachable on exactly the
      devices that need it most: a new one, with no phone to hand. */
@@ -3312,8 +3316,17 @@ async function refreshOnboarding() {
   }
   if (d.claimCode) steps.push('Enter the code below when asked');
 
+  // One code for the StratoScan app (roadmap 2.18): it joins the setup network,
+  // claims the radar and does every step from the phone. The typed steps stay
+  // for anyone setting it up from a browser instead.
+  const appQr = d.setupQr
+    ? `<div class="ob-app"><img class="ob-qr" alt="Set up with the StratoScan app"
+         src="data:image/svg+xml;base64,${btoa(d.setupQr)}">
+       <div><b>Easiest:</b> scan this with your iPhone's Camera to set up with the StratoScan app.</div></div>
+       <div class="foot" style="margin:6px 0 4px">Or, from any browser:</div>`
+    : '';
   document.getElementById('onboardInner').innerHTML =
-    `<h2>SET UP THIS RADAR</h2>` +
+    `<h2>SET UP THIS RADAR</h2>` + appQr +
     `<ol><li>${steps.join('</li><li>')}</li></ol>` +
     (d.claimCode
       ? `<div class="code">${esc(d.claimCode)}</div>`
