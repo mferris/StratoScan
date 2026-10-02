@@ -34,6 +34,16 @@ dozens of times an evening ("Cannot enable. Maybe the USB cable is bad?");
 the screen showed NO SIGNAL each time until the watchdog reset it. With the
 adapter removed, the drop-outs stopped.
 
+**If the speakers won't fit beside it** (2026-10-02): the straight USB-A plug in
+the Pi, plus the curve of its cable, sticks out about 35–45 mm past the Pi's
+edge, where the cases' side speakers sit. The fix to try first is a **one-piece
+short micro-USB to USB-A cable, about 15–20 cm, with a right-angle (90°) USB-A
+end**. It's moulded as one part, so unlike the adapter it adds no extra
+connection. Angled ends come as "up" or "down"; which one turns the cable toward
+the back plate depends on which of the Pi's ports it's in, so a pair of each is
+the easy way (about $8–12). If the drop-outs come back with it, go back to the
+FlyCatcher's own cable: the watchdog still recovers the receiver either way.
+
 **Check first:** set up the Pi, receiver and antenna, and confirm real
 aircraft appear before you buy the display. See
 [project-spec.md](project-spec.md), "Purchase Plan".
