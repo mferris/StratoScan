@@ -221,6 +221,10 @@ BOX_INFO = b"stratoscan-box-v1"
 LOCATION_INFO = b"stratoscan-location-v1"
 BOX_KEY_CONTEXT = "stratoscan-boxkey-v1:"
 LOCATION_POLL_S = 60
+# While none of this unit's phones share a location, ask far less often: every
+# 60 s was ~1,440 relay requests a day per radar for nothing, most of the
+# relay's load. A phone that turns sharing on is picked up within this.
+LOCATION_IDLE_POLL_S = 600
 LOCATION_MAX_AGE_S = 6 * 3600          # older than this, it no longer says where the phone is
 BOX_PUBLISH_EVERY_S = 24 * 3600
 PHONE_LOOKUP_NM = 10                   # type lookups for aircraft this close to a phone
@@ -648,8 +652,11 @@ class PhoneLocations:
         if status != 200 or not isinstance(reply, dict):
             self.next_poll = now + (3600 if status == 404 else 300)
             return None
+        rows = reply.get("locations") or []
+        if not rows:
+            self.next_poll = now + LOCATION_IDLE_POLL_S
         points = {}
-        for row in reply.get("locations") or []:
+        for row in rows:
             if not isinstance(row, dict) or not isinstance(row.get("phone"), str) or not isinstance(row.get("blob"), str):
                 continue
             fix = decrypt_location(self._box(), row["blob"], row["phone"])

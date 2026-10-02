@@ -202,6 +202,22 @@ check("not polled again before its interval", calls == [])
 locs.tick(d4, now=NOW + ev.LOCATION_POLL_S + 1)
 check("then polled, without republishing the key", [c[1] for c in calls] == ["/v1/unit/locations"])
 
+# Nobody sharing a location: ask far less often (it was every minute regardless).
+quiet_calls = []
+def quiet_relay(method, path, payload=None):
+    quiet_calls.append(path)
+    return 200, ({"ok": True} if path == "/v1/unit/boxkey" else {"locations": []})
+quiet = ev.PhoneLocations(call=quiet_relay)
+d6 = ev.Detector()
+quiet.tick(d6, now=NOW)
+check("with no phone sharing, the next poll is the idle interval",
+      quiet.next_poll == NOW + ev.LOCATION_IDLE_POLL_S and ev.LOCATION_IDLE_POLL_S >= 10 * ev.LOCATION_POLL_S)
+quiet_calls.clear()
+quiet.tick(d6, now=NOW + ev.LOCATION_POLL_S + 1)
+check("so a minute later it doesn't ask", quiet_calls == [])
+quiet.tick(d6, now=NOW + ev.LOCATION_IDLE_POLL_S + 1)
+check("and asks again once the idle interval is up", quiet_calls == ["/v1/unit/locations"])
+
 old = ev.PhoneLocations(call=lambda *a: (404, None))
 d5 = ev.Detector()
 check("an older relay without these endpoints is quietly left alone",
