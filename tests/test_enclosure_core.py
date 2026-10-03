@@ -48,6 +48,9 @@ CORE = {
     "antenna_mount", "antenna_mount_sma", "antenna_socket_gauge",
     "ant_axis_frame", "ant_barrel_base", "ant_bolt_holes", "ant_cable_bore",
     "ant_insert_bores", "ant_insert_bosses",
+    # the twin mount (1090 + 978 MHz) and its check helpers
+    "antenna_mount_twin", "ant_twin_frame", "ant_twin_teardrop", "ant_twin_plug_path",
+    "ant_twin_envelopes", "ant_twin_panel_ring", "ant_twin_hole_probe",
 }
 
 # The only shared names allowed to differ, and why. Anything NOT listed here

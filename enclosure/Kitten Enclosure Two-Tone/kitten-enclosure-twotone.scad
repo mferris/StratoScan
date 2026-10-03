@@ -967,6 +967,115 @@ module antenna_mount_sma() {
     }
 }
 
+// ---- the twin mount: 1090 and 978 MHz side by side (roadmap 5.3) ------
+// The FlyCatcher has two inputs, 1090 and 978 MHz, and the antenna bundle two
+// hinged whips with SMA plugs. One mount holds both: the same flange, bolt
+// circle and arm as the others, ending in a crossbar with a bulkhead jack at
+// each end. Bought for it: two SMA male to SMA female bulkhead RG316 jumpers,
+// about 30cm -- the bulkhead end in a tower, the plug end on the FlyCatcher.
+//
+// The counter-tilt stays. The whips' hinges could take up the case's lean,
+// but a hinge holds firmly only at its stops (straight, or folded flat), and
+// part-way it sags over months. With the jacks counter-tilted the whips stand
+// vertical with their hinges straight, and can still fold down to move it.
+//
+// 80mm apart: two antennas this close in frequency detune each other when
+// bunched, and further apart than this the crossbar outgrows the head.
+//
+// Each cable is threaded plug-first: down its tower, along the tunnel in the
+// crossbar, down the arm, and through the plate's 11mm hole (ant_cable_dia),
+// which an SMA plug passes. Then the bulkhead goes up through its panel and
+// its nut goes on top. Everything a plug travels through is at least
+// ant_cable_dia across; twin_plug_path_clear in the checks holds that.
+ant_twin_sep    = 80;    // between the two jacks
+ant_twin_boss_d = 22;    // as ant_sma_boss_d
+ant_twin_band   = 18;    // the crossbar's depth along the antenna axis
+ant_twin_top    = 32;    // top of each tower, along the axis from the arm's end
+ant_twin_plug_d = 9.3;   // an SMA plug's hex across its corners
+
+// One jack's frame: the counter-tilted antenna axis, moved out along X.
+module ant_twin_frame(s) {
+    ant_axis_frame() translate([s * ant_twin_sep/2, 0, 0]) children();
+}
+
+// A horizontal bore that prints without support: a circle with a 45-degree
+// roof on the side that faces up when the mount prints flange-down (local +Y).
+module ant_twin_teardrop(d, h) {
+    hull() {
+        cylinder(d=d, h=h);
+        translate([0, d/2 * 0.41, 0]) rotate([0,0,45])
+            translate([-d/4, -d/4, 0]) cube([d/2, d/2, h]);
+    }
+}
+
+module antenna_mount_twin() {
+    difference() {
+        union() {
+            translate([0, ant_mount_y, -back_plate_t - ant_flange_t])
+                cylinder(d=ant_flange_d, h=ant_flange_t);
+            translate([0, ant_mount_y, -back_plate_t - ant_stub_len])
+                cylinder(d=ant_stub_dia, h=ant_stub_len);
+            // the crossbar, through the arm's end
+            ant_axis_frame() hull() for (s = [-1, 1])
+                translate([s * ant_twin_sep/2, 0, -ant_twin_band/2])
+                    cylinder(d=ant_twin_boss_d, h=ant_twin_band);
+            // a tower at each end
+            for (s = [-1, 1]) ant_twin_frame(s)
+                translate([0, 0, -ant_twin_band/2])
+                    cylinder(d=ant_twin_boss_d, h=ant_twin_top + ant_twin_band/2);
+        }
+        for (s = [-1, 1]) ant_twin_frame(s) {
+            // the jack's hole through the panel at the top
+            translate([0, 0, ant_twin_top - ant_sma_panel_t - 0.01])
+                cylinder(d=ant_sma_hole, h=ant_sma_panel_t + 0.02, $fn=48);
+            // the space behind it, down into the tunnel
+            ant_twin_teardrop(ant_sma_cavity, ant_twin_top - ant_sma_panel_t);
+        }
+        // the tunnel along the crossbar, from tower to tower through the arm
+        ant_axis_frame() translate([-ant_twin_sep/2, 0, 0]) rotate([0, 90, 0])
+            rotate([0, 0, 90]) ant_twin_teardrop(ant_cable_dia, ant_twin_sep);
+        // and the straight run down the arm and out through the flange, which
+        // the tunnel meets at the arm's end
+        translate([0, ant_mount_y, -back_plate_t - ant_stub_len - 2])
+            cylinder(d=ant_cable_dia, h=ant_stub_len + 2.01);
+        ant_flange_insert_bores();
+        // nothing may stand proud of the plate's outer face
+        translate([-300, -300, -back_plate_t]) cube([600, 600, 600]);
+    }
+}
+
+// The route a cable's plug takes, as a solid a little under the bores: down
+// each tower, along the tunnel, down the arm. For the checks.
+module ant_twin_plug_path() {
+    for (s = [-1, 1]) ant_twin_frame(s)
+        translate([0, 0, 0]) cylinder(d=ant_twin_plug_d, h=ant_twin_top - ant_sma_panel_t - 0.5);
+    ant_axis_frame() translate([-ant_twin_sep/2, 0, 0]) rotate([0, 90, 0])
+        cylinder(d=ant_twin_plug_d, h=ant_twin_sep);
+    translate([0, ant_mount_y, -back_plate_t - ant_stub_len])
+        cylinder(d=ant_twin_plug_d, h=ant_stub_len - 0.5);
+}
+
+// For the checks: the ring of panel round each jack hole, and a probe a
+// little under the hole, down its middle.
+module ant_twin_panel_ring() {
+    for (s = [-1, 1]) ant_twin_frame(s)
+        difference() {
+            translate([0, 0, ant_twin_top - ant_sma_panel_t]) cylinder(d=ant_twin_boss_d, h=ant_sma_panel_t);
+            translate([0, 0, ant_twin_top - ant_sma_panel_t - 1]) cylinder(d=ant_sma_hole, h=ant_sma_panel_t + 2);
+        }
+}
+module ant_twin_hole_probe() {
+    for (s = [-1, 1]) ant_twin_frame(s)
+        translate([0, 0, ant_twin_top - ant_sma_panel_t - 0.5]) cylinder(d=ant_sma_hole - 0.5, h=ant_sma_panel_t + 1);
+}
+
+// Each whip's swept envelope, straight up its axis from the top of its tower:
+// 15mm across (the hinge housing) and 220mm long.
+module ant_twin_envelopes() {
+    for (s = [-1, 1]) ant_twin_frame(s)
+        translate([0, 0, ant_twin_top]) cylinder(d=15, h=220);
+}
+
 
 // Eight arcs at bore diameter, one per gap between the insert posts, with a
 // lead-in chamfer on the outer top edge so the plate finds its own centre
@@ -1561,6 +1670,7 @@ else if (part == "stand") stand();
 else if (part == "back_plate") back_plate();
 else if (part == "antenna_mount") antenna_mount();
 else if (part == "antenna_mount_sma") antenna_mount_sma();
+else if (part == "antenna_mount_twin") antenna_mount_twin();
 else if (part == "usbc_gauge") usbc_gauge();
 else if (part == "antenna_socket_gauge") antenna_socket_gauge();
 else if (part == "stand_body")     part_stand_body();

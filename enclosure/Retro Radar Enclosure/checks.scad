@@ -124,6 +124,36 @@ else if (check=="front_insert_holes_open") {
       shell();
     } }
 }
+// ---- the twin mount (1090 + 978 MHz) ----------------------------------
+// Same flange and bolts as the others, so the same two interference checks.
+else if (check=="twin_vs_plate") {
+  intersection() { antenna_mount_twin(); back_plate(); }
+}
+else if (check=="twin_vs_stand") {
+  intersection() {
+    antenna_mount_twin();
+    translate([0,0,base_h + cradle_od/2 - 3])
+      rotate([90 - stand_angle,0,0])
+        translate([0,0,-shell_depth/2]) stand();
+  }
+}
+// Each cable goes in plug-first, so the whole route -- down a tower, along
+// the crossbar, down the arm -- must be open at least an SMA plug's width.
+else if (check=="twin_plug_path_clear") {
+  intersection() { antenna_mount_twin(); ant_twin_plug_path(); }
+}
+// Both whips, swept 220mm up from their towers, must miss the case.
+else if (check=="twin_antennas_clear_case") {
+  intersection() { ant_twin_envelopes(); shell(); }
+}
+// POSITIVE controls: the panels the jacks clamp to are there, and the jack
+// holes through them are open.
+else if (check=="twin_panels_present") {
+  intersection() { antenna_mount_twin(); ant_twin_panel_ring(); }
+}
+else if (check=="twin_holes_open") {
+  difference() { ant_twin_hole_probe(); antenna_mount_twin(); }
+}
 else if (check=="canary") { shell(); }
 
 // ---- the locating lip -------------------------------------------------

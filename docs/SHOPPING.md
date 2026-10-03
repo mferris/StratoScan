@@ -23,7 +23,7 @@ browser, before any display or case.
 | [Raspberry Pi 27 W USB-C power supply](https://www.raspberrypi.com/products/27w-power-supply/) | 1 | $12 | A weaker supply causes under-voltage and USB drop-outs |
 | High-endurance microSD card, 64–128 GB | 1 | $15–25 | For example SanDisk High Endurance or Samsung PRO Endurance. Writes measure about 2.25 GB/day, fine for about 10 years on an endurance card |
 | ADS-B receiver (1090 MHz SDR with a built-in filter) | 1 | $30–46 | Either the Nooelec FlyCatcher (what RDU uses) or the [FlightAware Pro Stick Plus](https://flightaware.store/products/pro-stick-plus) |
-| [NooElec ADS-B Discovery 5 dBi antenna bundle](https://www.amazon.com/NooElec-ADS-B-Discovery-Antenna-Bundle/dp/B01J9DH9U2) | 1 | $25 | 1090 MHz whip, plus a 978 MHz one for the future UAT receiver. **Placement matters more than any part:** a window or outdoor spot heard 14 aircraft where an indoor puck heard 1 |
+| [NooElec ADS-B Discovery 5 dBi antenna bundle](https://www.amazon.com/NooElec-ADS-B-Discovery-Antenna-Bundle/dp/B01J9DH9U2) | 1 | $25 | Hinged whips for 1090 and 978 MHz; the FlyCatcher has an input for each. Its small right-angle pigtails are MCX, for USB-stick receivers, and aren't needed. **Placement matters more than any part:** a window or outdoor spot heard 14 aircraft where an indoor puck heard 1 |
 
 **Connect the receiver directly.** The FlyCatcher mounts on the Pi as a HAT,
 but its data still goes over USB: use the short USB-A to micro-USB jumper that
@@ -67,6 +67,7 @@ They share the back plate and antenna mount.
 
 | Part | Qty | Approx. | Notes |
 |---|---|---|---|
+| SMA male to SMA female **bulkhead** jumper, RG316, ~30 cm (12") | 2 | ~$8–10 a pair | One per antenna, for the twin antenna mount (`antenna_mount_twin`): the bulkhead end in the mount, the plug on the FlyCatcher. **SMA, not RP-SMA** (RP-SMA has no centre pin) |
 | Filament: **ASA** recommended | ~1 kg | $25–30 | Retro: one colour. Kitten: two colours for the head, more for the stand; see its README. **Why ASA:** a radar usually sits in a window for reception, where sun on a dark case can pass 60 °C. PLA starts to soften around 55–60 °C, so it's fine for a test fit but can sag or warp in a sunny window. PETG holds to about 75–80 °C; ASA and ABS hold to about 95–100 °C. ASA also doesn't yellow or go brittle in sunlight, and prints as cleanly as ABS. It needs an enclosed printer (the Bambu H2D is one). On a two-nozzle printer, print the support *interface* in a material that won't bond, so supports lift off cleanly: PETG under ASA/ABS (or Bambu Support for ABS), PLA under PETG. **Bought on Amazon:** Polymaker ASA, Dark Grey Green for the retro case (Grey if it sits in full sun), with PETG as the support interface |
 | M3 brass heat-set inserts: **have them** (Kadrick M2–M5 kit, 520 pcs) | 19 per case (18 for the kitten) | — | Holes sized for this kit (4.0 mm). 8 × M3×5 for the front, 8 × M3×6 for the back plate, 3 × M3×5 in the antenna mount; optionally 8 × M2×3 for the speakers. Pressed in with a soldering iron. Any M3 insert about 4.5 mm across fits |
 | M3 socket-head screws | 21 per case (20 for the kitten) | $8 | **M3 × 14:** 8 for the front trim (7 on the kitten). **M3 × 8:** 8 for the back plate and 3 for the antenna mount. 2 more for the USB-C connector, if it doesn't come with its own. A kit with these lengths is easiest |
