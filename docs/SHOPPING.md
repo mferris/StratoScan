@@ -67,7 +67,7 @@ They share the back plate and antenna mount.
 
 | Part | Qty | Approx. | Notes |
 |---|---|---|---|
-| Filament, PLA or PETG | ~1 kg | $20 | Retro: one colour. Kitten: two colours for the head, more for the stand; see its README |
+| Filament: **ASA** recommended | ~1 kg | $25–30 | Retro: one colour. Kitten: two colours for the head, more for the stand; see its README. **Why ASA:** a radar usually sits in a window for reception, where sun on a dark case can pass 60 °C. PLA starts to soften around 55–60 °C, so it's fine for a test fit but can sag or warp in a sunny window. PETG holds to about 75–80 °C; ASA and ABS hold to about 95–100 °C. ASA also doesn't yellow or go brittle in sunlight, and prints as cleanly as ABS. It needs an enclosed printer (the Bambu H2D is one). On a two-nozzle printer, print the support *interface* in the matching support material (Bambu Support for ABS for ASA/ABS, Support for PLA/PETG for PETG), so supports lift off cleanly |
 | M3 brass heat-set inserts: **have them** (Kadrick M2–M5 kit, 520 pcs) | 19 per case (18 for the kitten) | — | Holes sized for this kit (4.0 mm). 8 × M3×5 for the front, 8 × M3×6 for the back plate, 3 × M3×5 in the antenna mount; optionally 8 × M2×3 for the speakers. Pressed in with a soldering iron. Any M3 insert about 4.5 mm across fits |
 | M3 socket-head screws | 21 per case (20 for the kitten) | $8 | **M3 × 14:** 8 for the front trim (7 on the kitten). **M3 × 8:** 8 for the back plate and 3 for the antenna mount. 2 more for the USB-C connector, if it doesn't come with its own. A kit with these lengths is easiest |
 | M2 × 6 screws (optional) | 8 | — | Only if the speakers go on M2 inserts rather than their self-tapping screws |
