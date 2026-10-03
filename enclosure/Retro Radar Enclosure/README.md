@@ -16,6 +16,7 @@ the rest follows.
 | `back_plate` | removable back — locating lip, PCB standoffs, both vent grilles, one USB-C pass-through, antenna-mount inserts |
 | `antenna_mount` | bolt-on arm carrying the antenna socket (identical to the kitten's) |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
+| `antenna_mount_twin` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight |
 | `usbc_gauge` | test coupon: five candidate USB-C cutouts, to fit the connector before printing a whole plate |
 
 Two extra targets, `test_antenna` and `test_speaker`, clip the real shell
@@ -221,6 +222,23 @@ Every screw that gets undone goes into a brass M3 heat-set insert. The holes are
 2. Let it sink under its own weight plus light pressure. Don't push hard.
 3. Stop when it is flush.
 4. Hold a flat, cool piece of metal on it for a few seconds while the plastic sets, so it stays square.
+
+### The twin mount: 1090 and 978 MHz
+
+The FlyCatcher has two antenna inputs, 1090 and 978 MHz, and the Nooelec bundle has a hinged whip for each. `antenna_mount_twin` holds both.
+- **Same base as the others:** the flange and three bolts, so nothing else changes.
+- **A crossbar** with a bulkhead jack at each end, 80 mm apart. Antennas this close in frequency detune each other when bunched together.
+- **Counter-tilted,** like the single mounts, so the whips stand vertical with their hinges straight. Hinges hold firmly only at their stops, and part-way they sag over time.
+
+**Cables:** two SMA male to SMA female bulkhead jumpers, RG316, about 30 cm (SMA, not RP-SMA). The small right-angle pigtails in the antenna bundle are MCX, for Nooelec's USB sticks, and aren't used.
+
+**Fitting the cables:** thread each one plug-first, down its tower, along the tunnel in the crossbar, down the arm, and through the back plate's 11 mm hole. Then push the bulkhead up through its tower's panel and put the nut on top. The 1090 whip is the shorter one.
+
+**Checks:**
+- `twin_plug_path_clear`: an SMA plug's width is open along the whole route. A probe 12.5 mm across, too fat for the bore, does hit it.
+- `twin_antennas_clear_case`: both whips, swept 220 mm up, miss the case (and the kitten's ears). The same envelopes moved 60 mm down do hit it.
+- `twin_vs_plate`, `twin_vs_stand`: no collisions with the back plate or the stand.
+- `twin_panels_present`, `twin_holes_open`: positive controls; the panels are there and the jack holes are open.
 
 ## Checks
 

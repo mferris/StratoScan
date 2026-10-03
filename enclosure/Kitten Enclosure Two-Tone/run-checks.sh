@@ -20,7 +20,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 # Must come out with no real volume: a real interference, or a region of the
 # stand that no coloured part claims, which would print as a hole.
-EMPTY="front_inserts_surrounded key_fits mount_vs_plate driver_path_clear sma_mount_vs_plate sma_barrel_fits ear_vs_post recess_vs_post whisker_through head_in_cradle
+EMPTY="twin_vs_plate twin_vs_stand twin_plug_path_clear twin_antennas_clear_case front_inserts_surrounded key_fits mount_vs_plate driver_path_clear sma_mount_vs_plate sma_barrel_fits ear_vs_post recess_vs_post whisker_through head_in_cradle
        tail_over_paw tail_vs_left_paw tail_vs_head paws_vs_head ears_vs_cradle
        whisker_vs_screws whisker_vs_nose whisker_off_nose nose_screw_removed
        antenna_clears_head mount_hidden plate_vs_shell mount_vs_stand sma_mount_vs_stand
@@ -102,7 +102,7 @@ done
 # find a real hole. A 3.2mm probe through the bezel is about 56mm3; the
 # threshold only has to separate that from nothing.
 echo "Positive controls — must find real geometry:"
-for c in key_blocks_45 key_blocks_90 key_blocks_135 key_blocks_180 key_blocks_225 key_blocks_270 key_blocks_315 other_screws_present back_inserts_open lip_present usbc_open ant_plate_holes_open ant_flange_inserts_open driver_path_was_blocked vents_were_under_mount socket_gauge_works cable_slot_other_side connector_gauge_works usbc_screw_probe_works sma_passage_joins sma_panel_present sma_hole_open claws_stand_proud top_wall_solid front_insert_holes_open; do
+for c in key_blocks_45 key_blocks_90 key_blocks_135 key_blocks_180 key_blocks_225 key_blocks_270 key_blocks_315 other_screws_present back_inserts_open lip_present usbc_open ant_plate_holes_open ant_flange_inserts_open driver_path_was_blocked vents_were_under_mount socket_gauge_works cable_slot_other_side connector_gauge_works usbc_screw_probe_works sma_passage_joins sma_panel_present sma_hole_open claws_stand_proud top_wall_solid front_insert_holes_open twin_panels_present twin_holes_open; do
     out="$TMP/$c.stl"
     "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
     v=$(vol_of "$out")
