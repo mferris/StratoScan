@@ -124,6 +124,21 @@ struct RadarWidget: Widget {
         .configurationDisplayName("Radar")
         .description("The aircraft around your StratoScan radar, as a radar. Good in StandBy.")
         .supportedFamilies([.systemSmall, .systemLarge])
+        .notInCarPlay()
+    }
+}
+
+private extension WidgetConfiguration {
+    /// CarPlay (iOS 26) offers small widgets on the car's screen. A moving
+    /// radar is not something to put in front of a driver, so this one is
+    /// kept off it; "Aircraft overhead" -- a count and the nearest, in words
+    /// -- is the one for the car (roadmap 2.20).
+    func notInCarPlay() -> some WidgetConfiguration {
+        if #available(iOS 26.0, *) {
+            return disfavoredLocations([.carPlay], for: [.systemSmall, .systemLarge])
+        } else {
+            return self
+        }
     }
 }
 
