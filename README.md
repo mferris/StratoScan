@@ -20,8 +20,8 @@ app brings it to your pocket.
 
 ## Status
 
-*As of 2026-09-30.* One unit (RDU) runs around the clock on release
-`2026.09.30.11`. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md), tracked
+*As of 2026-10-03.* One unit (RDU) runs around the clock on release
+`2026.10.02.1`. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md), tracked
 as [issues](https://github.com/mferris/StratoScan/issues), and the parts it still
 needs are in the [shopping list](docs/SHOPPING.md).
 
@@ -29,12 +29,14 @@ needs are in the [shopping list](docs/SHOPPING.md).
 |---|---|
 | The radar (kiosk) | Running unattended; updates itself from signed releases. One labelled aircraft feed on the unit for every screen (`/api/aircraft`); drawing cost halved |
 | Phase 4 extras | Done: rewind, notable aircraft, empty-sky screen, spoken announcements, year in review, opt-in FlightAware feeding |
-| Relay (push + fleet health) | Live on Cloudflare Workers |
-| iPhone and iPad app | Working on a real iPhone: QR pairing, push alerts (including aircraft approaching *you*), widgets, Live Activity, home/away switching, the network's aircraft, zoom, a compass, Sky view with tracks, the logbook, weather, colour themes; a no-radar mode and an iPad layout (simulator-tested) |
+| Relay (push, fleets, health) | Live on Cloudflare Workers. Fleets: groups of radars with their own administrators, who see health and visit counts, never locations |
+| iPhone and iPad app | Working on a real iPhone: QR pairing, push alerts (about the radar, where you are, or both, including aircraft approaching *you*), widgets, Live Activity (also on CarPlay), home/away switching, the network's aircraft, zoom, a compass, Sky view with tracks, the logbook, weather, colour themes, radar names. Setting up a new radar from the app, one QR code to paired (simulator-tested). A no-radar mode and an iPad layout (simulator-tested) |
 | Apple Watch app | Built (glance radar, complications, Smart Stack); waiting for TestFlight to reach a real Watch |
 | Security review | Full scan done 2026-09-28; every finding fixed and verified on the running unit |
 | Factory SD image | Builds and passes its checks in CI; not yet test-flashed or published |
-| Next up | Factory image test, the Watch on a real wrist, RTC battery fitting, alerts for aircraft approaching the phone, hardware v2 (light sensor, bezel) |
+| Built, rolling out to the unit | Visitor counts for the public page (counts, not tracking), fleets on the radar's setup page, setting up from the app; the kiosk's switch to the core feed |
+| Cases | Retro and Kitten: heat-set insert posts, a twin antenna mount (1090 and 978 MHz, or external antennas), cleaner speaker grilles |
+| Next up | Factory image test, the Watch on a real wrist, hardware v2 (light sensor, bezel), a second receiver for 978 MHz |
 
 ## What it does
 

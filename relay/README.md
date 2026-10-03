@@ -60,6 +60,25 @@ longitude field are rejected outright. No network addresses are stored either. A
 still says roughly where its unit is ("a helicopter passed within 2
 miles"), which is why events are opt-in and kept so briefly.
 
+## Fleets
+
+A fleet is a group of radars with its own administrators (roadmap 1.13): for example, the radars one person has given to their family, or a club's radars.
+
+**Making one** (the maintainer, on `/fleet` behind `FLEET_TOKEN`):
+1. Use **Create fleet** to get an **invite code** and an **administrator link**. Each is shown **once**; the relay keeps only their SHA-256.
+2. Send the invite code to radar owners. Send the link only to the administrator.
+3. From the same section, **New invite code** replaces the code (the old one stops working), and **New administrator link** adds an administrator.
+
+**Joining:** a radar's owner enters the invite code on the radar's setup page, under *Fleet*. The radar sends it, signed with its own key, to `POST /v1/unit/fleet`. It leaves with `POST /v1/unit/fleet/leave`, from the same card. A radar is in at most one fleet. Joining turns its health reports on, and leaving puts them back the way they were.
+
+**Administrators:** opening the link sets an `HttpOnly`, `Secure`, `SameSite=Strict` cookie and redirects to `/f`, so the secret doesn't stay in the address bar. `/f` shows that fleet's radars only:
+- name, software version, last report and health;
+- the public page's views and visitors over the last 7 days.
+
+It never shows a location (health reports carry none), phones or alerts. An administrator can remove a radar or replace the invite code.
+
+**Storage:** three tables, `fleets`, `fleet_admins` and `fleet_members`, in `schema.sql`. On the live database they were created with `wrangler d1 execute --command`, because `--file` needs an API permission the maintainer's login doesn't have.
+
 ## Security model
 
 - Each unit signs every request with its own Ed25519 key, generated on the
