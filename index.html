@@ -7142,6 +7142,11 @@ function renderDeviceSetup() {
       <div class="sp-sub">${esc(airNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="remote"><div><div class="sp-label">Remote access</div>
       <div class="sp-sub">${esc(remNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
+    ${fleetState && fleetState.available !== false ? `
+    <div class="sp-stat"><div><div class="sp-label">Fleet</div>
+      <div class="sp-sub">${fleetState.fleet
+        ? `In "${esc(fleetState.fleet.name || '')}": its administrator sees this radar's health and visit counts, never its location. Leave on the setup page.`
+        : 'Not in a fleet. Join one with an invite code on the setup page.'}</div></div></div>` : ''}
     <div class="sp-menu-row" data-act="set-password"><div><div class="sp-label">Admin password</div>
       <div class="sp-sub">${esc(pwNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-act="hotspot-toggle"><div><div class="sp-label">Setup network</div>
@@ -7153,9 +7158,13 @@ function renderDeviceSetup() {
       <div class="sp-chevron">&#8250;</div></div>`;
 }
 
+let fleetState = null;   // /onboard/fleet: { available, fleet: { name } | null }
+
 async function loadDeviceStatus() {
   try { deviceStatus = await deviceApi('/onboard'); }
   catch (e) { deviceStatus = null; }
+  try { fleetState = await deviceApi('/onboard/fleet'); }
+  catch (e) { fleetState = null; }
 }
 
 async function handleDeviceTap(row) {

@@ -111,6 +111,17 @@ Scanning a new radar's first-run code lets the app set it up:
 
 Pairing needs no second code. The phone makes a one-time secret and gives the radar only a fingerprint of it, which the radar hands the relay once it's online. Nothing from setup is kept in the app beyond the paired radar and that password.
 
+### Fleets
+
+A radar can join a **fleet**, a group of radars looked after by one person (the relative who gave it to you, say), but only when its owner enters the fleet's invite code on the setup page. It can leave at any time from the same place.
+
+While it's in one:
+- health reports are on;
+- its administrator sees the radar's health, its name and its public page's daily visit counts;
+- the administrator never sees its location (reports carry none), its phones or its alerts.
+
+Leaving puts health reports back the way they were. The relay keeps only fingerprints of invite codes and administrator links, never the secrets themselves.
+
 ## The relay
 
 The relay is a small service run by the StratoScan maintainer on Cloudflare.

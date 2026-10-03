@@ -219,6 +219,23 @@
     <div class="msg" id="pairMsg"></div>
   </div>
 
+  <!-- fleet (roadmap 1.13) -->
+  <div class="card">
+    <h2>Fleet</h2>
+    <p class="note">A fleet is a group of radars looked after by one person, such as the family member
+      who gave you this one. Its administrator sees whether this radar is working (its software, receiver,
+      storage and temperature), its name, and how many people view its public page.
+      <b>Never</b> its location, your phones or your alerts. You can leave at any time.</p>
+    <div id="fleetNow" class="note">Checking…</div>
+    <div id="fleetJoin" class="hide">
+      <label>Invite code</label>
+      <input id="fleetCode" placeholder="XXXX-XXXX-XXXX" autocapitalize="characters" autocomplete="off">
+      <button id="fleetJoinBtn">Join fleet</button>
+    </div>
+    <button class="sec hide" id="fleetLeaveBtn">Leave this fleet</button>
+    <div class="msg" id="fleetMsg"></div>
+  </div>
+
   <!-- public page visitors (roadmap 1.12) -->
   <div class="card">
     <h2>Public page visitors</h2>
@@ -339,7 +356,7 @@ $('authBtn').onclick = async () => {
     refresh();
     // These cards need the session: loading them before sign-in was
     // refused, and left them saying "not available" until a reload.
-    otaLoad(); healthLoad(); faLoad(); pairLoad(); visitsLoad();
+    otaLoad(); healthLoad(); faLoad(); pairLoad(); visitsLoad(); fleetLoad();
   } catch (e) { show($('authMsg'), 'err', e.message); }
 };
 
@@ -490,6 +507,37 @@ $('airBtn').onclick = async () => {
     $('tickAir').classList.remove('hide');
     refresh();   // the suggested name follows the airport
   } catch (e) { show($('airMsg'), 'err', e.message); }
+};
+
+function fleetRender(f) {
+  const inFleet = f && f.fleet;
+  $('fleetNow').textContent = !f || f.available === false ? 'Not available on this radar yet: it needs a software update.'
+    : inFleet ? `In the fleet "${f.fleet.name}". Health reports are on while it is.` : 'Not in a fleet.';
+  $('fleetJoin').classList.toggle('hide', !!inFleet || (f && f.available === false));
+  $('fleetLeaveBtn').classList.toggle('hide', !inFleet);
+}
+
+async function fleetLoad() {
+  try { fleetRender((await api('fleet')).result); } catch (e) { $('fleetNow').textContent = e.message; }
+}
+
+$('fleetJoinBtn').onclick = async () => {
+  hide($('fleetMsg'));
+  try {
+    const r = await api('fleet', { method: 'POST', body: JSON.stringify({ action: 'join', code: $('fleetCode').value }) });
+    show($('fleetMsg'), 'ok', `Joined "${r.result.fleet.name}".`);
+    $('fleetCode').value = '';
+    fleetLoad(); healthLoad();
+  } catch (e) { show($('fleetMsg'), 'err', e.message); }
+};
+
+$('fleetLeaveBtn').onclick = async () => {
+  hide($('fleetMsg'));
+  try {
+    await api('fleet', { method: 'POST', body: JSON.stringify({ action: 'leave' }) });
+    show($('fleetMsg'), 'ok', 'Left the fleet. Health reports are back the way they were.');
+    fleetLoad(); healthLoad();
+  } catch (e) { show($('fleetMsg'), 'err', e.message); }
 };
 
 async function visitsLoad() {

@@ -120,3 +120,29 @@ CREATE TABLE IF NOT EXISTS phone_locations (
   updated  INTEGER NOT NULL,
   PRIMARY KEY (phone, unit)
 );
+
+-- Fleets (roadmap 1.13): groups of radars with their own administrators. A
+-- radar joins only when its owner enters the fleet's invite code, and can
+-- leave at any time. Only fingerprints of the invite code and of each
+-- administrator's sign-in link are stored; both are shown once when made.
+CREATE TABLE IF NOT EXISTS fleets (
+  id           TEXT PRIMARY KEY,
+  name         TEXT NOT NULL,
+  invite_hash  TEXT NOT NULL,   -- SHA-256 of the normalised invite code
+  created      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS fleets_invite ON fleets (invite_hash);
+
+CREATE TABLE IF NOT EXISTS fleet_admins (
+  fleet       TEXT NOT NULL,
+  label       TEXT,
+  token_hash  TEXT NOT NULL UNIQUE,   -- SHA-256 of the administrator's link token
+  created     INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS fleet_members (
+  unit    TEXT PRIMARY KEY,   -- a radar is in at most one fleet
+  fleet   TEXT NOT NULL,
+  joined  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS fleet_members_fleet ON fleet_members (fleet);

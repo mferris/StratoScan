@@ -28,6 +28,7 @@ import os
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 
 # The maintainer's relay (relay/, deployed on Cloudflare). Reporting still
@@ -38,6 +39,9 @@ KEY_PATH = os.path.join(STATE_DIR, "unit.key")
 CONFIG = os.path.join(STATE_DIR, "heartbeat.json")    # {"enabled": bool}
 LAST = os.path.join(STATE_DIR, "last-report.json")
 IO_SNAPSHOT = os.path.join(STATE_DIR, "io-snapshot.json")   # sectors written at the last report
+FLEET = os.path.join(STATE_DIR, "fleet.json")    # {"name", "joined", "health_was"} while in a fleet
+SETUP_HELLO = "http://127.0.0.1:8086/setup/api/hello"     # the radar's name
+VISITS_URL = "http://127.0.0.1:8087/visits"               # the public page's visit counts
 OTA_STATE = "/var/lib/stratoscan-ota"
 REPORT_EVERY_S = 6 * 3600
 RETRY_AFTER_FAILURE_S = 30 * 60
@@ -217,7 +221,33 @@ def collect():
                     "throttled": throttled},
         "memory_mb": mem,
         "last_watchdog_reboot_age_s": _age("/var/lib/stratoscan-setup/last-watchdog-reboot"),
+        **fleet_extras(),
     }
+
+
+def _local_json(url):
+    try:
+        with urllib.request.urlopen(url, timeout=3) as r:
+            return json.loads(r.read())
+    except Exception:
+        return {}
+
+
+def fleet_extras():
+    """What a fleet's administrator sees beyond health, sent only while this
+    radar is in a fleet (roadmap 1.13): its name, and its public page's daily
+    visit counts for the last week. Counts only; never a location."""
+    if not fleet():
+        return {}
+    out = {}
+    name = _local_json(SETUP_HELLO).get("name")
+    if isinstance(name, str) and name:
+        out["name"] = name[:32]
+    days = _local_json(VISITS_URL).get("days")
+    if isinstance(days, list):
+        out["visits"] = [{"date": d.get("date"), "views": int(d.get("views") or 0),
+                          "unique": int(d.get("unique") or 0)} for d in days[-7:] if isinstance(d, dict)]
+    return out
 
 
 # ---- sending ----------------------------------------------------------------
@@ -262,6 +292,74 @@ def send(report=None):
         return False, f"HTTP {e.code}"
     except Exception as e:
         return False, type(e).__name__
+
+
+# ---- fleets (roadmap 1.13) ----------------------------------------------------
+
+def fleet():
+    """The fleet this radar is in, as {"name", ...}, or {} for none."""
+    return _json(FLEET)
+
+
+def _call(method, path, payload=None):
+    """A signed request to the relay. Returns (status, reply)."""
+    key = load_key(create=True)
+    body = b"" if method == "GET" else json.dumps(payload or {}, separators=(",", ":")).encode()
+    headers = {"Content-Type": "application/json",
+               "User-Agent": "StratoScan-unit/1 (+https://github.com/mferris/StratoScan)"}
+    headers.update(sign_headers(key, method, path, body))
+    req = urllib.request.Request(RELAY_URL.rstrip("/") + path, data=None if method == "GET" else body,
+                                 headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as r:
+            return r.status, json.loads(r.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read() or b"{}")
+        except ValueError:
+            return e.code, {}
+    except Exception as e:
+        return 0, {"error": f"Couldn't reach the StratoScan service ({type(e).__name__})."}
+
+
+def _write_fleet(d):
+    os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+    tmp = FLEET + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(d, f)
+    os.replace(tmp, FLEET)
+
+
+def fleet_join(code):
+    """Join the fleet whose invite code this is. Joining turns health reports
+    on -- they are what the fleet's administrator sees -- and leaving puts
+    them back the way they were."""
+    if not RELAY_URL:
+        raise ValueError("No StratoScan service is configured.")
+    status, r = _call("POST", "/v1/unit/fleet", {"code": code})
+    if status != 200:
+        raise ValueError(r.get("error") or f"The StratoScan service said no (HTTP {status}).")
+    name = str((r.get("fleet") or {}).get("name") or "")[:40]
+    was = fleet().get("health_was", enabled())
+    _write_fleet({"name": name, "joined": int(time.time()), "health_was": bool(was)})
+    set_enabled(True)
+    ok, detail = send()          # so the administrator sees it straight away
+    _record(ok, detail)
+    return {"fleet": {"name": name}}
+
+
+def fleet_leave():
+    status, r = _call("POST", "/v1/unit/fleet/leave", {})
+    if status not in (200, 404):
+        raise ValueError(r.get("error") or f"The StratoScan service said no (HTTP {status}).")
+    was = fleet().get("health_was")
+    try:
+        os.remove(FLEET)
+    except FileNotFoundError:
+        pass
+    if was is not None:
+        set_enabled(bool(was))
+    return {"fleet": None}
 
 
 def _record(ok, detail, at=None):
