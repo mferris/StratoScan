@@ -18,11 +18,16 @@ enum AircraftFeedClient {
 
     /// The radar's labelled core feed (/api/aircraft), or readsb's plain
     /// aircraft.json from a radar that doesn't have it yet.
+    /// Marks the app's own requests, so the radar's public-page visitor
+    /// counts (roadmap 1.12) show its owner's app apart from visitors.
+    static let appHeader = "X-StratoScan-App"
+
     static func fetchFeed(network: Bool) async throws -> AircraftFeedResponse {
         if DemoFeed.isOn { return AircraftFeedResponse(aircraft: DemoFeed.aircraft(), now: nil) }
         await Endpoint.shared.resolve()
         if Date() >= coreMissingUntil {
             var req = URLRequest(url: APIConfig.url("/api/aircraft" + (network ? "?network=1" : "")))
+            req.setValue("1", forHTTPHeaderField: Self.appHeader)
             req.cachePolicy = .reloadIgnoringLocalCacheData
             req.timeoutInterval = 8
             let data: Data
@@ -45,6 +50,7 @@ enum AircraftFeedClient {
 
     private static func fetchReadsb() async throws -> [RawAircraft] {
         var req = URLRequest(url: APIConfig.url("/tar1090/data/aircraft.json"))
+        req.setValue("1", forHTTPHeaderField: Self.appHeader)
         req.cachePolicy = .reloadIgnoringLocalCacheData
         req.timeoutInterval = 8
         let data: Data
@@ -66,6 +72,7 @@ enum AircraftFeedClient {
         if DemoFeed.isOn { return DemoFeed.home }
         await Endpoint.shared.resolve()
         var req = URLRequest(url: APIConfig.url("/tar1090/data/receiver.json"))
+        req.setValue("1", forHTTPHeaderField: Self.appHeader)
         req.cachePolicy = .reloadIgnoringLocalCacheData
         req.timeoutInterval = 8      // not iOS's default 60 s: the widget must not hang
         let (data, response) = try await URLSession.shared.data(for: req)

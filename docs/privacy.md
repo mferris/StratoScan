@@ -33,6 +33,13 @@ turn on:
   stays on your home network. It's in the pairing code on the radar's
   screen, so a phone you pair shows it, and a paired phone reads it again
   when it's home. It's not on the public page and doesn't go to the relay.
+- **Visitor counts for the public page** (when the radar has one): how many
+  page views and visitors, by hour, device type and referring site, kept
+  90 days on the radar for its owner. No cookies. A visitor is recognised
+  for one day by a code made from their address with a key that is thrown
+  away at midnight and never written down; only counts are saved. Nothing
+  identifies a visitor, and the counts don't leave the radar unless it's in
+  a fleet (roadmap 1.13).
 - **Health reports** (off unless you turn them on): software version,
   receiver health, storage wear, temperature. No location, no network
   details, nothing about what flew over.

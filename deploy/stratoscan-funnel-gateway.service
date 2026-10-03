@@ -9,6 +9,9 @@ RestartSec=5
 # 127.0.0.1-only listener; no elevated privileges needed
 DynamicUser=yes
 NoNewPrivileges=yes
+# Visitor counts (roadmap 1.12): counts only, kept 90 days. Without this the
+# gateway still counts, in memory, and starts from zero when it restarts.
+StateDirectory=stratoscan-visits
 
 [Install]
 WantedBy=default.target

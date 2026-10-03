@@ -52,6 +52,17 @@ struct RadarDetailView: View {
     let radar: PairingStore.Radar
     @State private var name = ""
     @State private var confirming = false
+    @State private var visits: Visits?
+
+    /// The public page's visitor counts, from the radar itself (its setup
+    /// server, LAN only), so only at home.
+    struct Visits: Decodable {
+        struct Day: Decodable { let views: Int?; let unique: Int?; let app_minutes: Int? }
+        let available: Bool?
+        let today: Day?
+        let days: [Day]?
+        let basis: String?
+    }
 
     var body: some View {
         Form {
@@ -65,6 +76,25 @@ struct RadarDetailView: View {
                      ? "Your name for it, on this phone. Clear it to use the name set on the radar."
                      : "The name set on the radar. Type your own to use it on this phone instead.")
             }
+            if let v = visits {
+                Section {
+                    if v.available == true, let t = v.today {
+                        LabeledContent("Page views today", value: "\(t.views ?? 0)")
+                        if v.basis == "visitors" {
+                            LabeledContent("Visitors today", value: "\(t.unique ?? 0)")
+                        }
+                        LabeledContent("Page views, last 7 days", value: "\((v.days ?? []).suffix(7).reduce(0) { $0 + ($1.views ?? 0) })")
+                        LabeledContent("Your app away from home today", value: "\(t.app_minutes ?? 0) min")
+                    } else {
+                        Text("This radar doesn't count visitors yet; it needs a software update.")
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Visitors to its public page")
+                } footer: {
+                    Text("Counts only: no cookies, and nothing that identifies anyone. More on the radar: Settings › Statistics › Public page visitors.")
+                }
+            }
             Section {
                 Button("Unpair this radar", role: .destructive) { confirming = true }
             } footer: {
@@ -73,6 +103,12 @@ struct RadarDetailView: View {
         }
         .navigationTitle(radar.name)
         .onAppear { name = radar.name }
+        .task {
+            guard let host = radar.host, let url = URL(string: "http://\(host)/setup/api/visits"),
+                  let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 4)),
+                  (resp as? HTTPURLResponse)?.statusCode == 200 else { return }
+            visits = try? JSONDecoder().decode(Visits.self, from: data)
+        }
         .onDisappear { pairing.rename(radar, to: name) }
         .confirmationDialog("Stop alerts from \(radar.name)?", isPresented: $confirming, titleVisibility: .visible) {
             Button("Unpair", role: .destructive) {

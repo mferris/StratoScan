@@ -313,6 +313,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "unit": unit_id(),
                 "hostname": socket.gethostname(),
             })
+        if path == "/setup/api/visits":
+            # The public page's visitor counts (1.12), for the owner's app at
+            # home. Counts only, and this route is refused on the Funnel.
+            return self._send(200, visits_summary())
         if path == "/setup/api/claim" and self.command == "POST":
             return self._claim(st)
         if path == "/setup/api/login" and self.command == "POST":
@@ -824,6 +828,19 @@ def join_in_background(ssid, psk, secret_hash, delay=JOIN_DELAY_S, sleep=time.sl
             sleep(JOIN_OFFER_GAP_S)
 
 
+VISITS_URL = "http://127.0.0.1:8087/visits"   # funnel-gateway.py's loopback listener
+
+
+def visits_summary():
+    """The public page's visitor counts, from the gateway, or why not."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(VISITS_URL, timeout=2) as r:
+            return {"available": True, **json.loads(r.read())}
+    except Exception:
+        return {"available": False}
+
+
 def pair_verb(action, phone=None):
     """One pairing action for either surface. Returns a setupd-style reply."""
     if action == "status":
@@ -1045,6 +1062,8 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
                 "forCountry": z["result"].get("forCountry", []),
                 "all": z["result"].get("timezones", []),
             })
+        if p == "/onboard/visits":
+            return self._json(200, visits_summary())
         if p == "/onboard/pair":
             return self._relay(pair_verb("status"))
         if p == "/onboard/airports":
