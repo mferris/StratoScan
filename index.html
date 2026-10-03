@@ -6575,6 +6575,10 @@ const STATS_SCREENS = [
   { key: 'nearby',    label: 'Close encounters', sub: () => `Everything that came within ${ALERT_RADIUS_MI} miles` },
   { key: 'records',   label: 'Records',       sub: () => 'Farthest, closest, highest, fastest, busiest times' },
   { key: 'scorecard', label: 'Receiver scorecard', sub: scorecardSubtitle },
+  // The public page's visitor counts (1.12): the owner's, so only on the
+  // radar's own screen, never offered to someone viewing the public page.
+  ...(IS_KIOSK ? [{ key: 'visitors', label: 'Public page visitors',
+                    sub: () => 'How many people look at this radar online: counts, not tracking' }] : []),
 ];
 
 // Rounding a share to whole numbers prints "100%" next to a line saying ten
@@ -6676,6 +6680,7 @@ function renderStatsScreen(key, st) {
   const title = `<div class="sp-title">${esc(screen ? screen.label : 'Statistics')}</div>`;
 
   if (key === 'scorecard') return renderScorecard();
+  if (key === 'visitors') return renderVisitors(back, title);
   if (key === 'year') return renderYearInReview(back, title);
 
   if (!st) {
@@ -6839,6 +6844,46 @@ function fmtHour(h) {
   if (h === 0) return '12am';
   if (h === 12) return 'noon';
   return h < 12 ? `${h}am` : `${h - 12}pm`;
+}
+
+// ---- Public page visitors (roadmap 1.12) ----------------------------------
+// Read from funnel-gateway.py through the setup service's loopback listener.
+let visitorStats = null;
+
+function renderVisitors(back, title) {
+  const v = visitorStats;
+  if (!v) return `${back}${title}<div class="sp-sub" style="padding:10px 0">Loading…</div>`;
+  if (!v.available) {
+    return `${back}${title}<div class="sp-sub" style="padding:10px 0;line-height:1.7">
+      Not counted on this radar yet: it needs a software update. Counting only
+      covers the public web address, so a radar without one has nothing to count.</div>`;
+  }
+  const t = v.today || {};
+  const last7 = (v.days || []).slice(-7);
+  const sum = (rows, f) => rows.reduce((n, r) => n + (r[f] || 0), 0);
+  const byVisitor = v.basis === 'visitors';
+  const devices = Object.entries(v.devices || {}).sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => statRow({ phone: 'Phones', tablet: 'Tablets', computer: 'Computers' }[k] || k, statNum(n))).join('');
+  const refs = (v.referrers || []).map(([site, n]) => statRow(site === 'other' ? 'Other sites' : site, statNum(n))).join('');
+  const hours = v.hours7 || [];
+  const peak = hours.indexOf(Math.max(...hours, 0));
+  return `${back}${title}
+    <div class="sp-section-title">Today</div>
+    ${statRow('Page views', statNum(t.views || 0))}
+    ${byVisitor ? statRow('Visitors', statNum(t.unique || 0), 'People, counted once each today') : ''}
+    ${statRow('Your app, away from home', `${statNum(t.app_minutes || 0)} min`)}
+    <div class="sp-section-title">Last 7 days</div>
+    ${statRow('Page views', statNum(sum(last7, 'views')))}
+    ${byVisitor ? statRow('Visitors', statNum(sum(last7, 'unique')), 'Each day counted on its own') : ''}
+    ${sum(last7, 'views') ? statRow('Busiest hour', fmtHour(peak)) : ''}
+    ${statRow('Robots and link previews', statNum(sum(last7, 'bots')), 'Not counted as visitors')}
+    ${devices ? `<div class="sp-section-title">On, last 30 days</div>${devices}` : ''}
+    ${refs ? `<div class="sp-section-title">Came from, last 30 days</div>${refs}` : ''}
+    <div class="sp-sub" style="padding:12px 0;line-height:1.7">
+      Counts only. No cookies, and nothing is kept that could identify anyone:
+      ${byVisitor ? 'a visitor is recognised for one day by a code that is thrown away at midnight.'
+                  : 'only page loads are counted, not who made them.'}
+      ${v.kept ? 'Kept for 90 days.' : 'Kept until the radar restarts; a setup update keeps them for 90 days.'}</div>`;
 }
 
 function renderStatistics() {
@@ -7440,7 +7485,8 @@ function renderSettingsMenu() {
       </div>
     `).join('')}
       <div class="sp-sub" style="padding:16px 0 4px;opacity:.65;font-size:.72rem;line-height:1.5">StratoScan™ and the
-      StratoScan logo are trademarks of Michael Ferris. © 2026 Michael Ferris. Open source under the MIT licence.</div>
+      StratoScan logo are trademarks of Michael Ferris. © 2026 Michael Ferris. Open source under the MIT licence.
+      Visits to this page are counted for its owner: counts only, with no cookies and nothing that identifies you.</div>
   `;
 }
 
@@ -7652,6 +7698,11 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     if (statsView === 'year') {
       yearStats = null;
       loadYearStats().then(() => { if (statsView === 'year') renderSettingsPanel(); });
+    }
+    if (statsView === 'visitors') {
+      visitorStats = null;
+      deviceApi('/onboard/visits').then(v => { visitorStats = v; }, () => { visitorStats = { available: false }; })
+        .then(() => { if (statsView === 'visitors') renderSettingsPanel(); });
     }
     renderSettingsPanel();
     return;

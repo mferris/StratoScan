@@ -219,6 +219,14 @@
     <div class="msg" id="pairMsg"></div>
   </div>
 
+  <!-- public page visitors (roadmap 1.12) -->
+  <div class="card">
+    <h2>Public page visitors</h2>
+    <p class="note">How many people look at this radar's public web address. Counts only: no
+      cookies, and nothing is kept that could identify anyone.</p>
+    <div id="visits" class="note">Loading…</div>
+  </div>
+
   <!-- health reports -->
   <div class="card">
     <h2>Health reports</h2>
@@ -331,7 +339,7 @@ $('authBtn').onclick = async () => {
     refresh();
     // These cards need the session: loading them before sign-in was
     // refused, and left them saying "not available" until a reload.
-    otaLoad(); healthLoad(); faLoad(); pairLoad();
+    otaLoad(); healthLoad(); faLoad(); pairLoad(); visitsLoad();
   } catch (e) { show($('authMsg'), 'err', e.message); }
 };
 
@@ -483,6 +491,23 @@ $('airBtn').onclick = async () => {
     refresh();   // the suggested name follows the airport
   } catch (e) { show($('airMsg'), 'err', e.message); }
 };
+
+async function visitsLoad() {
+  const el = $('visits');
+  try {
+    const v = await api('visits');
+    if (!v.available) { el.textContent = 'Not counted yet: this needs a software update.'; return; }
+    const t = v.today || {}, d7 = (v.days || []).slice(-7);
+    const sum = f => d7.reduce((n, r) => n + (r[f] || 0), 0);
+    const lines = [`Today: ${t.views || 0} page views` + (v.basis === 'visitors' ? `, ${t.unique || 0} visitors` : ''),
+                   `Last 7 days: ${sum('views')} page views` + (v.basis === 'visitors' ? `, ${sum('unique')} visitors (each day on its own)` : ''),
+                   `Your app away from home today: ${t.app_minutes || 0} min`];
+    const refs = (v.referrers || []).slice(0, 5).map(([s, n]) => `${s === 'other' ? 'other sites' : s} (${n})`);
+    if (refs.length) lines.push(`Came from (30 days): ${refs.join(', ')}`);
+    el.textContent = '';
+    lines.forEach(l => { const p = document.createElement('div'); p.textContent = l; el.appendChild(p); });
+  } catch (e) { el.textContent = 'Not available right now.'; }
+}
 
 $('nameBtn').onclick = async () => {
   hide($('nameMsg'));

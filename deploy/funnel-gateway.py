@@ -18,10 +18,15 @@ rounded to 2 decimal places -- about 0.7 miles of fuzz, plenty to keep the
 map/radar centered correctly at the app's actual range scale, but no longer
 a literal street address to anyone who curls the Funnel URL.
 """
+import hashlib
 import http.server
 import json
+import os
 import posixpath
 import re
+import secrets
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -140,6 +145,232 @@ SECURITY_HEADERS = {
 }
 
 
+# ---- visitor counts (roadmap 1.12) -----------------------------------------
+# How many people look at this radar's public page, for its owner. Counts,
+# not tracking: no cookies, nothing written about any one visitor.
+#
+# * Unique visitors in a day: each page load's address and browser are hashed
+#   with a random salt made fresh each day and kept only in memory, and the
+#   hashes are held in memory only until midnight. What is saved is counts.
+#   Yesterday's hashes can't be linked to today's or turned back into an
+#   address, because the salt that made them is gone.
+# * The address is the LAST entry of X-Forwarded-For: the one Tailscale's
+#   proxy adds. Earlier entries are whatever the client sent. Without the
+#   header at all, unique visitors aren't counted, only page views, and the
+#   summary says so ("basis").
+# * The owner's own app, away from home, sends X-StratoScan-App and is
+#   counted apart: minutes it was in use, not visits.
+# * Only page loads count, not the page's own polling once it is open.
+#   Obvious robots (crawlers, link previews, curl) are counted as robots.
+#
+# Saved to VISITS_DIR (the service's StateDirectory) every few minutes, and
+# 90 days are kept. If the directory isn't there -- a unit whose service file
+# predates this, until the installer is re-run -- the counts live in memory
+# and restart from zero when the gateway does.
+VISITS_DIR = (os.environ.get("STRATOSCAN_VISITS_DIR") or os.environ.get("STATE_DIRECTORY")
+              or "/var/lib/stratoscan-visits")
+STATS_LISTEN = ("127.0.0.1", 8087)        # loopback only; Funnel points at LISTEN
+VISITS_KEEP_DAYS = 90
+VISITS_SAVE_S = 600
+APP_HEADER = "X-StratoScan-App"
+PAGE_PATHS = ("/", "/index.html")
+MAX_REFERRERS = 20                         # per day; the rest are "other"
+BOT_RE = re.compile(r"bot|crawl|spider|slurp|curl|wget|python|httpclient|okhttp|headless"
+                    r"|preview|facebookexternalhit|whatsapp|discord|slack|telegram", re.I)
+
+
+def device_kind(ua):
+    """phone, tablet, computer, or bot -- from the browser's own description."""
+    if not ua or BOT_RE.search(ua):
+        return "bot"
+    if "iPad" in ua or "Tablet" in ua or ("Android" in ua and "Mobile" not in ua):
+        return "tablet"
+    if "iPhone" in ua or "Mobile" in ua or "Android" in ua:
+        return "phone"
+    return "computer"
+
+
+def referrer_site(ref, own_host):
+    """The site a visitor came from (the host name only, never the address),
+    or None for none, or this radar itself."""
+    if not ref:
+        return None
+    try:
+        host = (urllib.parse.urlsplit(ref).hostname or "").lower()
+    except ValueError:
+        return None
+    if host.startswith("www."):
+        host = host[4:]
+    own = (own_host or "").split(":")[0].lower()
+    if not host or host == own or not re.match(r"^[a-z0-9.-]{1,80}$", host):
+        return None
+    return host
+
+
+def visitor_address(headers):
+    xff = headers.get("X-Forwarded-For") or ""
+    parts = [p.strip() for p in xff.split(",") if p.strip()]
+    return parts[-1] if parts else None
+
+
+def _new_day():
+    return {"views": 0, "unique": 0, "bots": 0, "app_minutes": 0, "app_devices": 0,
+            "hours": [0] * 24, "devices": {}, "referrers": {}, "basis": "views"}
+
+
+class Visits:
+    def __init__(self, directory=VISITS_DIR, now=time.time):
+        self.lock = threading.Lock()
+        self.dir = directory
+        self.now = now
+        self.days = {}
+        self._day = None
+        self._salt = b""
+        self._seen = set()          # today's visitor hashes; memory only
+        self._app_seen = set()
+        self._app_minutes = set()
+        self._saved_at = now()
+        self._load()
+
+    def _path(self):
+        return os.path.join(self.dir, "visits.json")
+
+    def _load(self):
+        try:
+            with open(self._path()) as f:
+                d = json.load(f)
+            if isinstance(d.get("days"), dict):
+                self.days = d["days"]
+        except (OSError, ValueError):
+            pass
+
+    def persistent(self):
+        return os.path.isdir(self.dir) and os.access(self.dir, os.W_OK)
+
+    def save(self):
+        if not self.persistent():
+            return False
+        keep = sorted(self.days)[-VISITS_KEEP_DAYS:]
+        self.days = {k: self.days[k] for k in keep}
+        tmp = self._path() + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump({"days": self.days}, f, separators=(",", ":"))
+        os.replace(tmp, self._path())
+        return True
+
+    def _roll(self, day):
+        if day != self._day:
+            self._day = day
+            self._salt = secrets.token_bytes(16)
+            self._seen.clear()
+            self._app_seen.clear()
+            self._app_minutes.clear()
+
+    def _hash(self, addr, ua):
+        if not addr:
+            return None
+        return hashlib.sha256(self._salt + addr.encode() + b"|" + ua.encode()).hexdigest()[:16]
+
+    def record(self, method, path, headers):
+        """One public request. `path` is already normalised."""
+        is_app = headers.get(APP_HEADER) is not None
+        is_page = method == "GET" and path in PAGE_PATHS
+        if not (is_app or is_page):
+            return
+        t = self.now()
+        lt = time.localtime(t)
+        day = time.strftime("%Y-%m-%d", lt)
+        ua = headers.get("User-Agent") or ""
+        addr = visitor_address(headers)
+        with self.lock:
+            self._roll(day)
+            d = self.days.setdefault(day, _new_day())
+            if addr:
+                d["basis"] = "visitors"
+            v = self._hash(addr, ua)
+            if is_app:
+                minute = int(t // 60)
+                if minute not in self._app_minutes:
+                    self._app_minutes.add(minute)
+                    d["app_minutes"] += 1
+                if v and v not in self._app_seen:
+                    self._app_seen.add(v)
+                    d["app_devices"] += 1
+            else:
+                kind = device_kind(ua)
+                if kind == "bot":
+                    d["bots"] += 1
+                else:
+                    d["views"] += 1
+                    d["hours"][lt.tm_hour] += 1
+                    d["devices"][kind] = d["devices"].get(kind, 0) + 1
+                    if v and v not in self._seen:
+                        self._seen.add(v)
+                        d["unique"] += 1
+                    site = referrer_site(headers.get("Referer"), headers.get("Host"))
+                    if site:
+                        refs = d["referrers"]
+                        if site not in refs and len(refs) >= MAX_REFERRERS:
+                            site = "other"
+                        refs[site] = refs.get(site, 0) + 1
+            if t - self._saved_at >= VISITS_SAVE_S:
+                self._saved_at = t
+                try:
+                    self.save()
+                except OSError:
+                    pass
+
+    def summary(self, days=30):
+        """For the owner: today, the last `days` days, and their totals."""
+        with self.lock:
+            keys = sorted(self.days)[-days:]
+            rows = [{"date": k, **{f: self.days[k].get(f, 0) for f in
+                     ("views", "unique", "bots", "app_minutes", "app_devices")}} for k in keys]
+            hours, devices, refs = [0] * 24, {}, {}
+            for k in keys[-7:]:
+                for i, n in enumerate(self.days[k].get("hours", [])[:24]):
+                    hours[i] += n
+            for k in keys:
+                for name, n in self.days[k].get("devices", {}).items():
+                    devices[name] = devices.get(name, 0) + n
+                for name, n in self.days[k].get("referrers", {}).items():
+                    refs[name] = refs.get(name, 0) + n
+            today = time.strftime("%Y-%m-%d", time.localtime(self.now()))
+            basis = "visitors" if any(self.days[k].get("basis") == "visitors" for k in keys) else "views"
+            return {
+                "today": next((r for r in rows if r["date"] == today),
+                              {"date": today, "views": 0, "unique": 0, "bots": 0, "app_minutes": 0, "app_devices": 0}),
+                "days": rows,
+                "hours7": hours,
+                "devices": devices,
+                "referrers": sorted(refs.items(), key=lambda kv: -kv[1])[:10],
+                "basis": basis,
+                "kept": self.persistent(),
+            }
+
+
+VISITS = None   # made at start-up; record() is never called before
+
+
+class _StatsHandler(http.server.BaseHTTPRequestHandler):
+    """Loopback-only: the setup server reads the counts from here for the
+    radar's screen, its setup page and the owner's app at home."""
+
+    def do_GET(self):
+        if self.path.split("?", 1)[0] != "/visits" or VISITS is None:
+            self.send_error(404)
+            return
+        body = json.dumps(VISITS.summary()).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, fmt, *args):
+        pass
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Relay redirects to the client instead of following them here.
 
@@ -193,6 +424,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self._is_local_only(self.path):
             self.send_error(404)  # 404, not 403 -- don't confirm it exists
             return
+        if VISITS is not None:
+            try:
+                VISITS.record(self.command, self._normalise(self.path), self.headers)
+            except Exception:
+                pass    # counting must never get in the way of serving
         # Public traffic may read the shared stores but never write them.
         if self.command != "GET" and self._is_read_only_public(self.path):
             self.send_error(403, "Read-only")
@@ -313,5 +549,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass  # every request from every public viewer would otherwise hit the journal
 
 
+def _save_and_exit(*_):
+    try:
+        VISITS.save()
+    except Exception:
+        pass
+    os._exit(0)
+
+
 if __name__ == "__main__":
-    http.server.ThreadingHTTPServer(LISTEN, Handler).serve_forever()
+    import signal
+    VISITS = Visits()
+    signal.signal(signal.SIGTERM, _save_and_exit)     # systemd stops it with SIGTERM
+    threading.Thread(target=lambda: http.server.ThreadingHTTPServer(STATS_LISTEN, _StatsHandler).serve_forever(),
+                     daemon=True).start()
+    try:
+        http.server.ThreadingHTTPServer(LISTEN, Handler).serve_forever()
+    finally:
+        try:
+            VISITS.save()
+        except OSError:
+            pass
