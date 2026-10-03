@@ -164,6 +164,12 @@ at risk for long.
 | 8. Hardware v2 | 5.5 light sensor, 5.1 bezel, 5.2 presence, 5.3 978 MHz | As parts arrive: case, print, then software that changes nothing without the part. 5.5's first step (finding a real backlight control) is read-only and can be done anytime | Low |
 | Factory image | 1.5 | Test-flash today's image soon, to prove the pipeline; rebuild after step 5 so gifted units carry the new architecture | None |
 
+**Next, agreed 2026-10-03** (after the radar names and app setup work):
+1. **Releases to RDU**, 2–3 days apart: the location-polling fix with the radar side of 2.18 (about Oct 4–5), then 1.9's switch to the core feed on its own (about Oct 7).
+2. **1.12** visitor counts (#50).
+3. **1.13** fleets (#51). Moved ahead of CarPlay because the family gift units need them.
+4. **2.20** CarPlay (#49).
+
 **Dependencies** (still true within the order above)
 
 - 1.8 comes before 1.9, 1.10 and 2.8. 1.11 is independent.
