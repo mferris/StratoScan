@@ -74,6 +74,8 @@ phone ──(pairing, notification rules)──▶ relay
 | 1.9 | Kiosk and public page read the core feed; route and owner lookups move off visitors' browsers onto the unit | Same picture as before; public visitors no longer contact adsb.im or adsbdb |
 | 1.10 | ~~`events.py` reads the core feed;~~ the copied classification tables are deleted. **Done 2026-09-30:** the tables are shared from `labels.py`; `events.py` stays on readsb's `aircraft.json` on purpose (it needs the antenna-relative fields, and alerts shouldn't depend on the core feed) | Same alerts from the same fixtures, with no tables of its own |
 | 1.11 | Cut the radar's drawing cost: static layers drawn once, the sweep rotated by the compositor, only moving things redrawn | Measured on RDU: the GPU process well under half its current ~94% of a core, and cooler |
+| 1.12 | Visitor counts for each radar's public page, for its owner: views, unique visitors (a daily-salted hash, never stored), the owner's app counted apart, hour of day, device type, referring site; no cookies, no stored addresses; on the radar's screen, setup page and app (#50) | Visits from a phone on mobile data show within a minute; nothing stored holds an address |
+| 1.13 | Fleets with their own administrators on the relay: radars join by their owner's invite code and can leave any time; administrators see health and visit counts per radar and in total, never locations, phones or alerts; per-administrator sign-in (#51) | The family fleet with RDU in it; a second fleet sees none of it |
 
 ## Phase 2: the pocket
 
