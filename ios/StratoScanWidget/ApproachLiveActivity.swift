@@ -10,7 +10,9 @@ struct ApproachLiveActivity: Widget {
 
     var body: some WidgetConfiguration {
         // On iOS 18, the small family also puts it in the Apple Watch's Smart
-        // Stack (roadmap 3.2): watchOS mirrors the phone's Live Activity.
+        // Stack (roadmap 3.2): watchOS mirrors the phone's Live Activity. On
+        // iOS 26 the same small layout is what CarPlay shows (roadmap 2.20),
+        // so it is written to be read at a glance: who, and how long.
         if #available(iOS 18.0, *) {
             return configuration.supplementalActivityFamilies([.small])
         } else {
@@ -99,7 +101,9 @@ struct ApproachLiveActivity: Widget {
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(context.attributes.callsign).font(.headline).lineLimit(1)
-                countdown(context).font(.caption.monospacedDigit()).foregroundColor(teal)
+                // the number that matters, big enough to take in with a glance
+                countdown(context).font(.title3.weight(.semibold).monospacedDigit()).foregroundColor(teal)
+                    .minimumScaleFactor(0.7).lineLimit(1)
             }
         }
         .foregroundColor(.white)
