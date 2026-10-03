@@ -334,6 +334,8 @@ The FlyCatcher has two antenna inputs, 1090 and 978 MHz, and the Nooelec bundle 
 
 **Cables:** two SMA male to SMA female bulkhead jumpers, RG316, about 30 cm (SMA, not RP-SMA). The small right-angle pigtails in the antenna bundle are MCX, for Nooelec's USB sticks, and aren't used.
 
+**Whip or external antenna, the user's choice:** each tower's jack is an ordinary SMA socket on the outside of the case. Screw on the Nooelec whip, or the coax from an antenna mounted outside or in a window; nothing inside changes. An outdoor antenna with an N-type connector needs an N-male to SMA-male cable. Leave the FlyCatcher's bias-tee switch off unless the outdoor antenna has a powered amplifier that needs it.
+
 **Fitting the cables:** thread each one plug-first, down its tower, along the tunnel in the crossbar, down the arm, and through the back plate's 11 mm hole. Then push the bulkhead up through its tower's panel and put the nut on top. The 1090 whip is the shorter one.
 
 **Checks:**
