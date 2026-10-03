@@ -62,9 +62,15 @@ def icon(body_fn, background):
     return svg(bg + f'<g transform="translate(4 4) scale(0.92)">{body_fn}</g>')
 
 
-def wordmark_paths(font_path, text_colours, cap_height):
+def wordmark_paths(font_path, text_colours, cap_height, tm=True):
     """'Strato' and 'Scan' outlined from the font, scaled so capitals are
-    cap_height tall. Returns (svg_body, width)."""
+    cap_height tall, then a small trademark sign (TM) at cap height in the
+    first part's colour. Returns (svg_body, width).
+
+    The TM is part of the wordmark so it travels with the name wherever the
+    logo is shown: the radar's screen, the setup page, the README, the apps.
+    It is TM, not R: (R) may only be used once the mark is registered."""
+    from fontTools.pens.boundsPen import BoundsPen
     from fontTools.pens.svgPathPen import SVGPathPen
     from fontTools.pens.transformPen import TransformPen
     from fontTools.ttLib import TTFont
@@ -87,6 +93,20 @@ def wordmark_paths(font_path, text_colours, cap_height):
         # follows the kiosk's themes); anything else is a fill colour
         paint = f'class="{colour[1:]}"' if colour.startswith(".") else f'fill="{colour}"'
         out.append(f'<path {paint} d="{pen.getCommands()}"/>')
+    if tm:
+        name = cmap[0x2122]
+        bp = BoundsPen(glyphs)
+        glyphs[name].draw(bp)
+        x0, y0, x1, y1 = bp.bounds
+        st = s * (0.36 * caps) / (y1 - y0)       # about a third of a capital
+        gap = 0.06 * caps * s
+        pen = SVGPathPen(glyphs)
+        # top of the sign level with the tops of the capitals
+        glyphs[name].draw(TransformPen(pen, (st, 0, 0, -st, x + gap - st * x0, st * y1 - cap_height)))
+        colour = text_colours[0][1]
+        paint = f'class="{colour[1:]}"' if colour.startswith(".") else f'fill="{colour}"'
+        out.append(f'<path {paint} d="{pen.getCommands()}"/>')
+        x += gap + st * (x1 - x0)
     return "".join(out), x
 
 
@@ -166,6 +186,12 @@ def main():
         words, width = wordmark_paths(a.font, [("Strato", INK), ("Scan", SCAN_ON_LIGHT)], cap_height=42)
         write("wordmark-on-light.svg", svg(f'<g transform="translate(1 44)">{words}</g>',
                                            w=round(width + 2), h=46, title="StratoScan"))
+        # The apps' copies are these files exactly; keep them so.
+        for src, dst in (("wordmark-on-dark.svg", "ios/StratoScan/App/Assets.xcassets/Wordmark.imageset/Wordmark.svg"),
+                         ("wordmark-on-light.svg", "ios/StratoScan/App/Assets.xcassets/WordmarkLight.imageset/WordmarkLight.svg"),
+                         ("wordmark-on-dark.svg", "ios/StratoScanWatch/Assets.xcassets/Wordmark.imageset/Wordmark.svg")):
+            with open(os.path.join(HERE, src)) as f, open(os.path.join(ROOT, dst), "w") as g:
+                g.write(f.read())
     sync_pages(inline)
 
 
