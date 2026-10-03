@@ -368,6 +368,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._proxy_verb("wifi_rollback")
         if path == "/setup/api/location" and self.command == "POST":
             return self._location(st)
+        if path == "/setup/api/fleet" and self.command == "GET":
+            return self._proxy_verb("fleet_status")
+        if path == "/setup/api/fleet" and self.command == "POST":
+            b = self._body() or {}
+            if b.get("action") == "join":
+                r = call_setupd("fleet_join", {"code": b.get("code")}, timeout=60)
+            elif b.get("action") == "leave":
+                r = call_setupd("fleet_leave", {}, timeout=60)
+            else:
+                return self._err(400, "bad_action", "Use join or leave.")
+            if r.get("ok"):
+                return self._send(200, {"result": r.get("result")})
+            return self._err(400, r.get("code", "failed"), friendly(r.get("code", ""), r.get("detail", "")))
         if path == "/setup/api/setup/join" and self.command == "POST":
             return self._setup_join(st)
         if path == "/setup/api/setup/offer" and self.command == "POST":
@@ -1062,6 +1075,9 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
                 "forCountry": z["result"].get("forCountry", []),
                 "all": z["result"].get("timezones", []),
             })
+        if p == "/onboard/fleet":
+            r = call_setupd("fleet_status", {}, timeout=10)
+            return self._json(200, r.get("result") if r.get("ok") else {"available": False})
         if p == "/onboard/visits":
             return self._json(200, visits_summary())
         if p == "/onboard/pair":

@@ -35,6 +35,7 @@ import {
   LOCATION_TTL_S, LOCATION_MIN_GAP_S, LOCATION_BLOB_MAX, BOX_KEY_CONTEXT, NEARBY_KINDS,
 } from './limits.js';
 import * as apns from './apns.js';
+import { fleetRoutes } from './fleets.js';
 
 const nowS = () => Math.floor(Date.now() / 1000);
 
@@ -638,7 +639,7 @@ async function listUnits(env) {
   return results || [];
 }
 
-async function fleetPage(env) {
+async function fleetPage(env, fleetsHtml = '') {
   const now = nowS();
   const rows = (await listUnits(env)).map(u => {
     const { flags, p } = assess(u, now);
@@ -665,6 +666,7 @@ async function fleetPage(env) {
 </style></head><body>
 <h1>StratoScan fleet</h1><p>${rows ? '' : 'No unit has reported yet.'}</p>
 <table><tr><th>Unit</th><th>Version</th><th>Last report</th><th>Uptime</th><th>Status</th><th>Alerts 24h</th><th></th></tr>${rows}</table>
+${fleetsHtml}
 </body></html>`;
   return new Response(html, {
     headers: {
@@ -690,6 +692,8 @@ async function nameUnit(request, env) {
   return new Response(null, { status: 303, headers: { Location: '/fleet' } });
 }
 
+const fleets = fleetRoutes({ json, signedJson, nowS, maintainer, needAuth, assess, esc, ago });
+
 export default {
   async fetch(request, env, ctx) {
     const { pathname } = new URL(request.url);
@@ -711,10 +715,12 @@ export default {
     if (pathname === '/v1/unit/locations' && m === 'GET') return unitLocations(request, env);
     if (pathname === '/v1/phone/boxkey' && m === 'POST') return phoneBoxKey(request, env);
     if (pathname === '/v1/phone/location' && m === 'POST') return phoneLocation(request, env);
+    const fleetReply = await fleets.route(request, env, pathname, m);
+    if (fleetReply) return fleetReply;
     if (pathname === '/fleet' || pathname === '/fleet.json' || pathname === '/fleet/name') {
       const state = maintainer(request, env);
       if (state !== 'ok') return needAuth(state);
-      if (pathname === '/fleet' && m === 'GET') return fleetPage(env);
+      if (pathname === '/fleet' && m === 'GET') return fleetPage(env, await fleets.fleetsSection(env));
       if (pathname === '/fleet.json' && m === 'GET') {
         const now = nowS();
         return json(200, (await listUnits(env)).map(u => ({ ...u, payload: undefined, ...assess(u, now) })));

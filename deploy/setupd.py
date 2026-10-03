@@ -891,6 +891,30 @@ def health_status():
             "last": hb._json(hb.LAST) or None}
 
 
+def fleet_status():
+    hb = _heartbeat()
+    if hb is None:
+        return {"available": False}
+    f = hb.fleet()
+    return {"available": True, "fleet": {"name": f.get("name")} if f else None}
+
+
+def _fleet_call(fn, *args):
+    hb = _heartbeat()
+    if hb is None:
+        raise Err("unavailable", "health reporting is not installed")
+    try:
+        return getattr(hb, fn)(*args)
+    except ValueError as e:
+        raise Err("fleet", str(e))
+
+
+def fleet_join(code):
+    if not isinstance(code, str) or not re.match(r"^[A-Za-z0-9 -]{12,20}$", code):
+        raise Err("bad_code", "That doesn't look like an invite code.")
+    return _fleet_call("fleet_join", code)
+
+
 def set_health_report(enabled):
     if not isinstance(enabled, bool):
         raise Err("bad_enabled", "enabled must be true or false")
@@ -1408,6 +1432,9 @@ VERBS = {
     "pair_start": lambda p: pair_start(),
     "pair_cancel": lambda p: pair_cancel(),
     "pair_offer_hash": lambda p: pair_offer_hash(p.get("hash")),
+    "fleet_status": lambda p: fleet_status(),
+    "fleet_join": lambda p: fleet_join(p.get("code")),
+    "fleet_leave": lambda p: _fleet_call("fleet_leave"),
     "unit_id": lambda p: unit_id(),
     "pair_remove": lambda p: pair_remove(p.get("phone")),
     "feeding_status": lambda p: feeding_status(),
@@ -1425,7 +1452,8 @@ MUTATING = {"wifi_connect", "wifi_confirm", "wifi_rollback", "hotspot_start",
             "set_timezone", "set_wifi_country", "ota_apply",
             "tailscale_funnel", "reboot", "reset_settings", "reset_full",
             "tailscale_login_start", "set_health_report", "set_feeding",
-            "pair_start", "pair_cancel", "pair_remove", "pair_offer_hash"}
+            "pair_start", "pair_cancel", "pair_remove", "pair_offer_hash",
+            "fleet_join", "fleet_leave"}
 
 
 class Handler(socketserver.StreamRequestHandler):
