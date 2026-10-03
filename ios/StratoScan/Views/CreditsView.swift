@@ -15,6 +15,8 @@ struct CreditsView: View {
                 Text("StratoScan shows the aircraft your own StratoScan radar hears, and sends you its alerts.")
                 LabeledContent("Version", value: version)
                 Link("Source code (MIT licence)", destination: URL(string: "https://github.com/mferris/StratoScan")!)
+            } footer: {
+                Text("StratoScan™ and the StratoScan logo are trademarks of Michael Ferris. © 2026 Michael Ferris.")
             }
 
             Section("Map") {

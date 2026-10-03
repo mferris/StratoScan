@@ -575,7 +575,10 @@ before you do:
 
 ## License
 
-MIT — see [LICENSE](LICENSE). The StratoScan name, logo and icons are not:
+StratoScan™ and the StratoScan logo are trademarks of Michael Ferris.
+© 2026 Michael Ferris.
+
+The code is MIT — see [LICENSE](LICENSE). The StratoScan name, logo and icons are not:
 they identify the project, so a fork should use its own (see
 [assets/brand/LICENSE](assets/brand/LICENSE)). Third-party components and data sources keep
 their own licenses and terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
