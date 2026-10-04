@@ -319,6 +319,19 @@ struct ContentView: View {
                  + (pairing.pendingLink?.name.map { "\nIt calls itself “\($0)”." } ?? "")
                  + (pairing.pendingLink?.host.map { "\nRadar at \($0)" } ?? ""))
         }
+        // A new radar's setup link, opened from outside the app (2.18): it
+        // joins a WiFi network and sends it the home WiFi password, so it
+        // needs a yes first, the same as pairing.
+        .confirmationDialog("Set up a new radar?", isPresented: Binding(
+            get: { setup.pendingLink != nil },
+            set: { if !$0 { setup.pendingLink = nil } }), titleVisibility: .visible) {
+            Button("Set up") { setup.confirmPending() }
+            Button("Cancel", role: .cancel) { setup.pendingLink = nil }
+        } message: {
+            Text("Only from the code on a radar's own first screen. "
+                 + (setup.pendingLink?.ssid.map { "Your phone will join its setup network “\($0)” and send it your home WiFi password. " }
+                    ?? (setup.pendingLink?.lan.map { "It will set up the radar at \($0) on this network. " } ?? "")))
+        }
         .alert(pairing.message ?? "", isPresented: Binding(
             get: { pairing.message != nil && !showSettings },
             set: { if !$0 { pairing.message = nil } })) {

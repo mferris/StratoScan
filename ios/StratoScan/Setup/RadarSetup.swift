@@ -52,6 +52,11 @@ final class RadarSetup: ObservableObject {
     }
 
     @Published var link: Link?
+    /// A setup link waiting for the owner's yes. Anything can open a
+    /// stratoscan:// link, and this flow joins a WiFi network and sends it a
+    /// WiFi password, so nothing starts from a link without an explicit tap.
+    /// A code scanned on purpose from Settings skips this (start directly).
+    @Published var pendingLink: Link?
     @Published private(set) var step: Step = .joining
     @Published private(set) var detail = ""
     @Published var name = ""
@@ -70,15 +75,30 @@ final class RadarSetup: ObservableObject {
 
     // MARK: - The link
 
+    /// Only a home-network address: a private IPv4 address, with an optional
+    /// port, or a .local name. The setup flow sends a WiFi password and makes
+    /// an admin password for whatever answers here, so a link must not be able
+    /// to point it at a host on the internet.
+    nonisolated static func isPrivateHost(_ v: String) -> Bool {
+        let host = v.split(separator: ":", maxSplits: 1).first.map(String.init) ?? ""
+        let port = v.contains(":") ? String(v.split(separator: ":", maxSplits: 1).last ?? "") : nil
+        if let p = port, Int(p).map({ !(1...65535).contains($0) }) ?? true { return false }
+        if host.hasSuffix(".local") {
+            return host.count <= 64 && host.range(of: #"^[a-z0-9]([a-z0-9-]*[a-z0-9])?\.local$"#, options: [.regularExpression, .caseInsensitive]) != nil
+        }
+        let segs = host.split(separator: ".", omittingEmptySubsequences: false)
+        let parts = segs.compactMap { Int($0) }
+        // every segment a number: "10.0.0.1.evil.com" is not an address
+        guard segs.count == 4, parts.count == 4, parts.allSatisfy({ (0...255).contains($0) }) else { return false }
+        return parts[0] == 10 || (parts[0] == 192 && parts[1] == 168) || (parts[0] == 172 && (16...31).contains(parts[1]))
+    }
+
     nonisolated static func parse(_ url: URL) -> Link? {
         guard ["stratoscan", "radome"].contains(url.scheme?.lowercased() ?? ""), url.host?.lowercased() == "setup",
               let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return nil }
         func q(_ n: String) -> String? { items.first { $0.name == n }?.value }
         guard let c = q("c"), (4...32).contains(c.count) else { return nil }
-        let addrChars = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-:")
-        func addr(_ v: String?) -> String? {
-            v.flatMap { $0.count <= 253 && !$0.isEmpty && $0.unicodeScalars.allSatisfy(addrChars.contains) ? $0 : nil }
-        }
+        func addr(_ v: String?) -> String? { v.flatMap { isPrivateHost($0) ? $0 : nil } }
         let w = q("w").flatMap { (1...32).contains($0.utf8.count) ? $0 : nil }
         let k = q("k").flatMap { (8...63).contains($0.count) ? $0 : nil }
         let a = addr(q("a")), h = addr(q("h"))
@@ -86,12 +106,20 @@ final class RadarSetup: ObservableObject {
         return Link(code: c, ssid: w, psk: k, address: w != nil ? a : nil, lan: w == nil ? h : nil)
     }
 
-    /// Handles a scanned or opened link. Returns false when it is not a setup link.
+    /// Handles an opened link. Returns false when it is not a setup link. The
+    /// flow waits for confirmPending(): see pendingLink.
     @discardableResult
     func handle(_ url: URL, pairing: PairingStore) -> Bool {
         guard let l = Self.parse(url) else { return false }
-        start(l, pairing: pairing)
+        self.pairing = pairing
+        pendingLink = l
         return true
+    }
+
+    func confirmPending() {
+        guard let l = pendingLink, let p = pairing else { return }
+        pendingLink = nil
+        start(l, pairing: p)
     }
 
     func start(_ l: Link, pairing: PairingStore) {

@@ -488,6 +488,19 @@ before you do:
   directly. The gateway also strips each aircraft's distance and bearing
   *from the antenna* (`r_dst`, `r_dir`) out of the public `aircraft.json`:
   with two or three aircraft positions, those fields pinpoint the receiver, which undid the rounding entirely.
+- **readsb writes more than the page needs, and the rest locates the
+  antenna.** `aircraft.binCraft.zst`, the binary feed tar1090 prefers,
+  carries the receiver's position *unrounded* in its header — found on the
+  live tunnel on 2026-10-04, next to a rounded `receiver.json` — and
+  `outline.json` (the range outline, drawn around the antenna), the
+  `history_*.json` files and `chunks/` are past snapshots. Under
+  `/tar1090/data/`, `/tar1090/chunks/` and `/tar1090/globe_history/` the
+  gateway now serves only the two files it rewrites and two counters-only
+  ones, and the public `receiver.json` tells tar1090 not to ask for the rest.
+  [`tests/test_funnel_gateway_tar1090.py`](tests/test_funnel_gateway_tar1090.py)
+  pins it. The lesson, twice over now: anything readsb writes is a candidate
+  for leaking the position, so the public rule is an allowlist, not a list
+  of known offenders.
 - **External data (route text, photo credits, aircraft type) is escaped
   before it touches the DOM.** Some of it — a photographer's display name on
   planespotters.net, for instance — is third-party user-submitted content
