@@ -426,7 +426,7 @@
      COLORS.airportHighlight/drawPlanes) -- a rectangular outline rather than a
      literal circle, since the tag is a box, but same color/purpose: this
      plane is plausibly on RDU's frequency right now (landing/taking off
-     within AIRPORT_PROXIMITY_NM), worth a glance if ATC audio is on. */
+     within AIRPORT_PROXIMITY_NM). */
   /* The rare-aircraft reason, in the detail panel. Uses the same accent as
      the landing/takeoff ring so "the app is pointing at something" reads
      consistently, rather than introducing a fourth alert colour. */
@@ -1319,7 +1319,7 @@ const RECEIVER_URL = '/tar1090/data/receiver.json';
 // window with no tab bar/window switcher reachable by touch. Learned the
 // hard way: window.open() there can leave the display stuck on whatever it
 // opened with no way back short of an SSH restart. Anything that opens a
-// new window/tab (see ensureAtcAudio below) must check this first and
+// new window/tab (the LiveATC link once did) must check this first and
 // refuse on the kiosk; it's unrestricted on a normal browser tab (laptop,
 // phone, the Funnel URL), where a second tab is just a second tab.
 const IS_KIOSK = new URLSearchParams(location.search).get('kiosk') === '1';
@@ -1928,9 +1928,6 @@ let AIRPORT = {
   lat: 35.8776,
   lon: -78.7875,
   elevFt: 435,
-  // LiveATC mount for this field. Empty string disables the ATC feature
-  // rather than linking somewhere wrong for a relocated unit.
-  atcMount: 'krdu_app2',
 };
 
 async function loadAirportConfig() {
@@ -1947,7 +1944,6 @@ async function loadAirportConfig() {
         lat: a.lat,
         lon: a.lon,
         elevFt: typeof a.elevFt === 'number' ? a.elevFt : 0,
-        atcMount: typeof a.atcMount === 'string' ? a.atcMount : '',
       };
     }
   } catch (e) {
@@ -3439,7 +3435,7 @@ const ALERT_CLEAR_RADIUS_NM = 2.0;  // slightly wider exit threshold, so a
 // ---- Alert settings -------------------------------------------------
 // One place for every alert/sound toggle -- started as a single nearby-alert
 // on/off (the empty-tap gesture below used to flip just that), but once
-// emergency squawks, the landing/takeoff chime, and ATC audio all became separate
+// emergency squawks, the landing/takeoff chime and the rest became separate
 // concerns, a single blind toggle stopped making sense. localStorage, not
 // the shared server-side stores used elsewhere (sightings, approach track)
 // -- this is a personal display preference for whoever's looking at this
@@ -3448,7 +3444,7 @@ const ALERT_SETTINGS_KEY = 'stratoscan_alert_settings_v1';
 // volume is a plain 0..1 multiplier on the master gain; muted is kept separate
 // rather than being volume 0, so silencing it for an evening does not throw
 // away the level someone settled on. soundTheme picks the voice alerts speak in.
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, voice: false, atc: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic', quietHours: false, quietFrom: 1320, quietTo: 420, quietSunset: false, quietLetEmergencies: true };
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, voice: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic', quietHours: false, quietFrom: 1320, quietTo: 420, quietSunset: false, quietLetEmergencies: true };
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -3500,13 +3496,12 @@ for (const k of ['quietFrom', 'quietTo']) {
   if (typeof v !== 'number' || !isFinite(v)) alertSettings[k] = DEFAULT_ALERT_SETTINGS[k];
   alertSettings[k] = ((Math.round(alertSettings[k] / 30) * 30) % 1440 + 1440) % 1440;
 }
-// Force-correct a stored 'atc: true' on the kiosk itself -- this is exactly
-// the value that got left behind by testing the feature directly on the
-// physical hardware before ensureAtcAudio's own IS_KIOSK guard existed.
-// Belt-and-suspenders alongside that guard: this setting should never even
-// read as "on" here, not just silently refuse to act on it.
-if (IS_KIOSK && alertSettings.atc) {
-  alertSettings.atc = false;
+// The LiveATC link was removed (2026-10-04): it could never play on the radar
+// itself (LiveATC's terms rule out embedding their audio, and opening their
+// page from the kiosk stranded the screen), so it only ever opened a tab in
+// a laptop's browser. Forget its stored switch.
+if ('atc' in alertSettings) {
+  delete alertSettings.atc;
   saveAlertSettings();
 }
 
@@ -4579,49 +4574,6 @@ function checkEmergencySquawk(pl) {
   }
 }
 
-// ---- Live RDU ATC audio ---------------------------------------------------
-// LiveATC.net's Terms of Use (https://www.liveatc.net/legal/) require
-// consulting them before linking directly to a stream (3.15), and separately
-// bar making their service "directly available" through another dedicated
-// application "for profit or not" (3.4) -- so this deliberately does NOT
-// hotlink or embed their raw audio in an <audio> element. Instead it opens
-// their own KRDU tower player (the same page anyone gets from liveatc.net
-// itself) in a normal browser tab -- completely ordinary use of their site
-// through an interactive browser, same as bookmarking it yourself, and it
-// still gives them the page view/ad impression their FAQ note about funding
-// through advertising depends on.
-//
-// Confirmed on the real kiosk hardware: window.open() there opened LiveATC's
-// page in a way that covered the screen with no touch-reachable way back to
-// the radar -- recovered only by SSHing in and restarting the kiosk service.
-// ensureAtcAudio refuses outright on IS_KIOSK (see its definition above);
-// this is fine and reliable from any normal browser tab (laptop, phone, the
-// Funnel URL), which is the only place the settings panel now offers it.
-// krdu_twr2 (tower) was the first choice -- more directly matches "landing/
-// takeoff" comms -- but that specific feeder was found offline (stuck
-// "reconnecting..." indefinitely, confirmed directly on LiveATC's own page,
-// not something wrong in our code) when this was tested against the real
-// kiosk. krdu_app2 (approach/departure) was confirmed actually playing at
-// the same time, so that's what's wired up now. If tower comes back later,
-// swap the mount param -- both still show RDU arrival/departure traffic
-// either way, just from a different controller position.
-function liveAtcUrl() {
-  return AIRPORT.atcMount ? `https://www.liveatc.net/hlisten.php?mount=${encodeURIComponent(AIRPORT.atcMount)}` : null;
-}
-let atcWindow = null; // named-window handle so repeated calls reuse one tab instead of spawning a new one per landing
-
-function ensureAtcAudio() {
-  if (IS_KIOSK) return;
-  const url = liveAtcUrl();
-  if (!url) return; // relocated unit with no configured feed -- see AIRPORT.atcMount
-  if (atcWindow && !atcWindow.closed) return;
-  atcWindow = window.open(url, 'stratoscan_atc');
-}
-
-function closeAtcAudio() {
-  if (atcWindow && !atcWindow.closed) atcWindow.close();
-  atcWindow = null;
-}
 
 // ---- RDU landing/takeoff chime -------------------------------------------
 // Reuses airportPhaseOf's own classification (tight radius + real vertical rate
@@ -4638,7 +4590,6 @@ function checkAirportPhaseAlert(pl) {
     if (pl.airportPhaseAlerted !== phase) {
       pl.airportPhaseAlerted = phase;
       if (alertSettings.airportPhase) playAirportPhaseSound(phase);
-      if (alertSettings.atc) ensureAtcAudio();
     }
   } else {
     pl.airportPhaseAlerted = null;
@@ -5936,7 +5887,6 @@ const SETTINGS_GROUPS = [
   { key: 'alerts',   label: 'Alerts',       sub: 'What interrupts you, and how' },
   { key: 'overlays', label: 'Map overlays', sub: 'Weather, lightning and approach patterns' },
   { key: 'display',  label: 'Display',      sub: 'Night dimming and colour theme' },
-  { key: 'audio',    label: 'ATC audio',    sub: 'Live tower feed for the home airport' },
   { key: 'stats',    label: 'Statistics',   sub: 'What has flown over, and how well you hear it' },
   { key: 'phone',    label: 'Phone & Watch', sub: 'Pair the StratoScan app for alerts on your phone' },
   { key: 'device',   label: 'Device setup',  sub: 'WiFi, location, home airport, reset' },
@@ -5957,16 +5907,7 @@ function alertSettingsMeta() { return [
       : `Military and unusual aircraft types. Still learning the regular traffic (${sightingCounts.size}/${RARE_FIRST_MIN_CATALOGUE} aircraft) before it can flag first-time visitors`,
   },
   { group: 'alerts', key: 'airportPhase', label: `${AIRPORT.code} landing/takeoff chime`, sub: `Quiet tone when a plane lands or departs at ${AIRPORT.code}` },
-  {
-    group: 'audio', key: 'atc', label: `${AIRPORT.code} ATC audio`,
-    sub: 'Opens LiveATC.net’s approach/departure feed in a new tab',
-    // Confirmed on the real hardware: opening a new window/tab from inside
-    // --kiosk Chromium can strand the display with no touch-reachable way
-    // back to the radar. Disabled here, not just silently refused by
-    // ensureAtcAudio -- a switch that looks tappable but does nothing (or
-    // worse) is its own bug.
-    kioskSub: 'Not available on this display — opening a new window here can strand the kiosk with no way back via touch. Use a laptop, phone, or the Funnel URL instead.',
-  },
+
   { group: 'overlays', key: 'storms', label: 'Storm radar overlay', sub: 'Live weather radar over the map (RainViewer)' },
   { group: 'overlays', key: 'heatmap', label: `${AIRPORT.code} approach heatmap`, sub: `Density pattern built from actually observed ${AIRPORT.code} landings` },
   { group: 'overlays', key: 'lightning', label: 'Lightning overlay', sub: 'Satellite-observed strike density (GOES-East GLM, via SSEC RealEarth)', available: () => lightningCovers(home), unavailableNote: 'Not available here — GOES-East only covers the Americas' },
@@ -6005,14 +5946,14 @@ function renderSettingsPanel() {
     <div class="sp-close">&times;</div>
     <div class="sp-back">&#8592; Settings</div>
     <div class="sp-title">${esc(group ? group.label : 'Settings')}</div>
-    ${rows.map(({ key, label, sub, kioskSub, available, unavailableNote }) => {
+    ${rows.map(({ key, label, sub, available, unavailableNote }) => {
       // A row can be unavailable for where this receiver actually is -- the
       // lightning overlay's satellite only sees the Americas. Show it greyed
       // with the reason rather than hiding it, so a toggle that does nothing
       // is never offered and its absence is never a mystery.
       const unavailable = typeof available === 'function' && !available();
-      const disabled = unavailable || (key === 'atc' && IS_KIOSK);
-      const note = unavailable ? unavailableNote : (disabled ? kioskSub : sub);
+      const disabled = unavailable;
+      const note = unavailable ? unavailableNote : sub;
       return `
       <div class="sp-row${disabled ? ' disabled' : ''}" data-key="${key}"${unavailable ? ' data-unavailable="1"' : ''}>
         <div>
@@ -7100,7 +7041,7 @@ function renderDeviceSetup() {
     ? `${Number(d.location.lat).toFixed(4)}, ${Number(d.location.lon).toFixed(4)}`
     : 'Not set';
   const airNow = d.airport
-    ? `${d.airport.code}${d.airport.atcMount ? ' · ATC feed set' : ''}`
+    ? d.airport.code
     : 'Not set';
   const pwNow = d.claimed ? 'Set' : 'Not set — anyone nearby can set it';
   const hs2 = d.hotspot || {};
@@ -7839,9 +7780,6 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   const key = row.dataset.key;
   alertSettings[key] = !alertSettings[key];
   saveAlertSettings();
-  if (key === 'atc') {
-    if (alertSettings.atc) ensureAtcAudio(); else closeAtcAudio();
-  }
   if (key === 'storms') applyStormsVisibility();
   if (key === 'heatmap') applyHeatmapVisibility();
   if (key === 'networkCompare') refreshNetworkCompare();

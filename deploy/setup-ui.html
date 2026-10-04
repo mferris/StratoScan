@@ -132,11 +132,6 @@
     <label>Search</label>
     <input id="airQ" placeholder="Type a city, name or code">
     <select id="airSel" size="6"></select>
-    <label>LiveATC feed name (optional)</label>
-    <input id="atcMount" placeholder="e.g. krdu_app2 — leave blank if unsure" autocapitalize="none">
-    <div class="note">Feed names can't be worked out from the airport code, so this
-      is left blank unless you fill it in. Find yours at liveatc.net and paste the
-      <b>mount</b> value. Blank simply turns the ATC feature off.</div>
     <button id="airBtn">Save airport</button>
     <div class="msg" id="airMsg"></div>
   </div>
@@ -366,8 +361,7 @@ async function refresh() {
     if (s.steps?.wifi) $('tickWifi').classList.remove('hide');
     if (s.location) { $('lat').value = s.location.lat; $('lon').value = s.location.lon;
                       $('tickLoc').classList.remove('hide'); }
-    if (s.airport) { $('atcMount').value = s.airport.atcMount || '';
-                     $('tickAir').classList.remove('hide'); }
+    if (s.airport) $('tickAir').classList.remove('hide');
     if (s.steps?.remote) $('tickRem').classList.remove('hide');
     $('radarName').value = s.nameIsOwn ? (s.name || '') : '';
     $('radarName').placeholder = s.name ? `${s.name} (from the home airport)` : 'From the home airport';
@@ -498,7 +492,7 @@ $('airBtn').onclick = async () => {
   if (!code) return show($('airMsg'), 'err', 'Pick an airport from the list first.');
   try {
     await api('airport', { method: 'POST',
-      body: JSON.stringify({ code, atcMount: $('atcMount').value.trim() }) });
+      body: JSON.stringify({ code }) });
     show($('airMsg'), 'ok', 'Home airport set to ' + code + '.');
     // Seed the time-zone step from where that airport actually is.
     const picked = ($('airSel').selectedOptions[0]?.textContent || '');

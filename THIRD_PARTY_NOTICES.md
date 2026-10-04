@@ -55,7 +55,6 @@ none of their content; each is used within its published terms.
 | [adsb.lol](https://www.adsb.lol/privacy-license/) | Network comparison ("ghost" aircraft, receiver scorecard) | ODbL 1.0 | "Network data © ADSB.lol contributors, ODbL 1.0" appears on the scorecard. Queried at most every 15 s per unit, with rounded coordinates. |
 | [adsb.im route API](https://adsb.im/) | Flight route (city pair) | Free public API | Batched and cached per callsign for the session, as tar1090 does. |
 | [adsbdb](https://www.adsbdb.com/) | Registered owner of private aircraft | Free public API | Looked up once per aircraft when needed, with failures backed off. |
-| [LiveATC.net](https://www.liveatc.net/) | ATC audio | Streams may not be used in third-party products. | **Not embedded or streamed.** The ATC option opens LiveATC's own player page in a normal browser tab, which is ordinary use of their website. It is disabled on the kiosk. |
 | [Google Fonts](https://fonts.google.com/) | JetBrains Mono and Inter | SIL Open Font License 1.1 | Loaded from Google's CDN, not redistributed. |
 | [python-qrcode](https://github.com/lincolnloop/python-qrcode) (Debian `python3-qrcode`) | Draws the phone-pairing QR code on the unit | BSD-3-Clause | Installed from Debian on the unit; not copied into this repository. |
 | [uhubctl](https://github.com/mvp/uhubctl) (Debian `uhubctl`) | Lets the watchdog cut USB power to revive a hung radio | GPL-2.0 | Installed from Debian on the unit and run as a separate program; not copied into this repository. Source via Debian (image `MANIFEST.txt`). |
