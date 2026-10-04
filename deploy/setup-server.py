@@ -910,6 +910,15 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
         demanded that password, a forgotten one would mean a dead unit.
         """
         path = self.path.split("?", 1)[0].rstrip("/")
+        # JSON only. A browser sends a cross-origin POST with a plain content
+        # type WITHOUT asking first (no preflight), so a page the kiosk's
+        # browser was somehow steered to could fire a reset or set a password
+        # here without the Origin check ever seeing it. Requiring this type
+        # makes every browser ask first, and the answer to that names only
+        # loopback origins (_allowed_origin).
+        ctype = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+        if ctype != "application/json":
+            return self._json(415, {"error": {"message": "JSON only."}})
         try:
             n = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(n) or b"{}") if n else {}

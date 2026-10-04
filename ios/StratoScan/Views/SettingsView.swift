@@ -91,7 +91,7 @@ struct SettingsView: View {
                         Task {
                             // after Settings has gone: one screen can't present over another closing
                             try? await Task.sleep(for: .milliseconds(700))
-                            setup.handle(url, pairing: pairing)
+                            if let l = RadarSetup.parse(url) { setup.start(l, pairing: pairing) }   // scanned on purpose: that's the yes
                         }
                     }
                 }

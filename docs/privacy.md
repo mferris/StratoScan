@@ -43,8 +43,17 @@ turn on:
 - **Health reports** (off unless you turn them on): software version,
   receiver health, storage wear, temperature. No location, no network
   details, nothing about what flew over.
-- **Network comparison** (off unless you turn it on): sends an approximate
-  location to adsb.lol, to compare what your antenna hears with theirs.
+- **Network comparison** (on by default; off in the radar's Map overlays):
+  the radar asks adsb.lol for the aircraft near it, sending its location
+  rounded to about 1 km, whenever a screen that shows the network's aircraft
+  is open: its own, the public page, or the app with "aircraft the radar
+  didn't hear" on. Asked at most once every few seconds however many screens
+  are open.
+- **Share with FlightAware** (off unless you turn it on): runs FlightAware's
+  own feeder software, which sends them what the antenna hears and the
+  antenna's exact location, which their multilateration needs. FlightAware
+  shows feeder sites on its public stats pages; how precisely is set in your
+  FlightAware account, not here.
 - **Map tiles, routes, photos and weather** are fetched from the public
   services credited on the radar and in the app. Like any web request,
   they see an IP address and the area or aircraft being looked up.

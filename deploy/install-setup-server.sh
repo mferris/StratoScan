@@ -112,6 +112,15 @@ if [ "$(cat /usr/local/share/tar1090/git/.stratoscan-commit 2>/dev/null)" != "$T
 else
   echo "  already at the pinned commit"
 fi
+# tar1090's installer also serves itself on its own port (8504), on every
+# interface, with readsb's exact receiver position. Everything reaches
+# tar1090 through port 80 (and the public page through the gateway), so this
+# second door is closed (2026-10-04).
+if [ -e /etc/lighttpd/conf-enabled/95-tar1090-otherport.conf ]; then
+  rm -f /etc/lighttpd/conf-enabled/95-tar1090-otherport.conf
+  echo "  closed tar1090's extra listener on port 8504"
+  if live; then systemctl restart lighttpd; fi
+fi
 
 echo "== service accounts =="
 if ! getent group scsetup >/dev/null; then groupadd --system scsetup; fi

@@ -42,6 +42,23 @@ ROUNDED_PATH = "/tar1090/data/receiver.json"
 # computing range from the (rounded) receiver position.
 STRIPPED_PATH = "/tar1090/data/aircraft.json"
 STRIPPED_FIELDS = ("r_dst", "r_dir")
+
+# Under these, only the files named may answer publicly. readsb writes more
+# than the page needs, and the rest locate the antenna exactly, which the two
+# rewrites above exist to prevent (found 2026-10-04 on the live tunnel):
+#   aircraft.binCraft.zst  the binary feed tar1090 prefers; its header carries
+#                          the receiver's position unrounded (35.826027 where
+#                          the rounded receiver.json said 35.83)
+#   outline.json           the range outline, drawn around the antenna
+#   history_*.json, chunks/  past aircraft.json snapshots, r_dst and r_dir intact
+#   globe_history/, traces/  per-aircraft traces, likewise
+# The four allowed are the two rewritten above and two counters-only files.
+# The public receiver.json also turns binCraft, zstd, outlineJson and history
+# off, so tar1090's own page asks for none of them.
+TAR1090_PRIVATE_PREFIXES = ("/tar1090/data", "/tar1090/chunks", "/tar1090/globe_history")
+TAR1090_PUBLIC_FILES = frozenset({"/tar1090/data/aircraft.json", "/tar1090/data/receiver.json",
+                                  "/tar1090/data/stats.json", "/tar1090/data/status.json"})
+PUBLIC_RECEIVER_FLAGS = {"binCraft": False, "zstd": False, "outlineJson": False, "history": 0}
 COORD_PRECISION = 2  # decimal places -- ~0.7mi at this latitude
 
 # Paths refused for public (Funnel) traffic. /wake physically powers the
@@ -415,13 +432,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # documents; this call site just hadn't been switched over to it.
         return cls._normalise(path) == ROUNDED_PATH
 
+    @classmethod
+    def _is_tar1090_private(cls, path):
+        base = cls._normalise(path)
+        return _matches(base, TAR1090_PRIVATE_PREFIXES) and base not in TAR1090_PUBLIC_FILES
+
     def _dispatch(self):
         """Single gate for every HTTP method.
 
         Previously only do_GET and do_POST checked LOCAL_ONLY_PATHS, so any
         method added later would silently bypass it. Deny first, always.
         """
-        if self._is_local_only(self.path):
+        if self._is_local_only(self.path) or self._is_tar1090_private(self.path):
             self.send_error(404)  # 404, not 403 -- don't confirm it exists
             return
         if VISITS is not None:
@@ -492,6 +514,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         for key in ("lat", "lon"):
             if isinstance(data.get(key), (int, float)):
                 data[key] = round(data[key], COORD_PRECISION)
+        # and nothing that would send tar1090 to the files refused above
+        data.update(PUBLIC_RECEIVER_FLAGS)
 
         body = json.dumps(data).encode()
         self.send_response(200)
