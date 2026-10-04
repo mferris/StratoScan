@@ -133,6 +133,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 5.4 | Retro stand: ridges all the way round the plinth, standing out ~4 mm so the slicer supports them (as the case ribs were fixed) | Printed, with clean ridges on all four sides |
 | 5.5 | Ambient light sensor: dim the display with the room, with an adjustable darkest level; a sensor window on both cases; first find a real backlight control (the panel's HID report 9, or DDC) | The display follows the room on RDU, down to the owner's floor |
 | 5.6 | Key the back plate so it seats only upright (antenna at the top): a key on each shell's bore wall and a matching gap in one arc of the plate's locating rib; checks prove the seven wrong orientations are blocked | The plate goes in only upright, on both cases |
+| 5.7 | Power: the display's power through the Pi's USB (Waveshare's bridge arrangement) plus the receiver puts the 5 V at the Pi at 4.9 V, with under-voltage warnings a few times an hour (71 in 29 h on RDU). A second inlet for the display now; a 12 V input with two regulators in the custom board | A week at `0x0` with no under-voltage messages |
 
 ## Work order (agreed 2026-09-30)
 
