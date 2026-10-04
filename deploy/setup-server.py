@@ -841,7 +841,7 @@ def join_in_background(ssid, psk, secret_hash, delay=JOIN_DELAY_S, sleep=time.sl
             sleep(JOIN_OFFER_GAP_S)
 
 
-VISITS_URL = "http://127.0.0.1:8087/visits"   # funnel-gateway.py's loopback listener
+VISITS_URL = "http://127.0.0.1:8091/visits"   # funnel-gateway.py's loopback listener (STATS_LISTEN)
 
 
 def visits_summary():
