@@ -92,8 +92,7 @@ too.
   (general emergency)
 - **Landing/takeoff highlight** — a bright green ring around the blip and
   label of anything currently landing or departing at your home airport, plus
-  an optional quiet chime; pairs with an optional link to LiveATC.net's live
-  approach/departure audio
+  an optional quiet chime
 - **Volume, mute, and a choice of alert sound** — every chime above goes
   through one master gain, adjustable up to 300% (with a limiter, so louder
   never means distorted) plus mute, and can play the original synth tones or
@@ -107,7 +106,7 @@ too.
   period (see [`deploy/`](deploy/)) and wakes on touch, or on an alert if
   you've enabled that
 - **Settings menu** — a gear icon opens a menu grouped into short screens
-  (Alerts, Map overlays, Display, ATC audio, Device setup) rather than one
+  (Alerts, Map overlays, Display, Statistics, Phone & Watch, Device setup) rather than one
   long list; every setting is one tap from the top, and the panel scrolls by
   dragging anywhere on it. Choices persist per-device
 - **Configurable home airport** — 433 continental-US airports are bundled, so
@@ -459,7 +458,6 @@ several of these choices, but no code is shared):
 - **[planespotters.net](https://www.planespotters.net/)** — aircraft photos
 - **[Wikimedia Commons](https://commons.wikimedia.org/)** — representative type photos when no tail-specific one exists, credited with author and license
 - **[adsbdb.com](https://www.adsbdb.com/)** — registered-owner lookups for confirmed-private aircraft
-- **[LiveATC.net](https://www.liveatc.net/)** — ATC audio for the configured airport, opened as a link to their own player (see [Security](#security) below for why it's a link, not an embed)
 - **[SSEC RealEarth](https://realearth.ssec.wisc.edu/)** (UW-Madison) — satellite-observed lightning strike density (GOES-East GLM)
 - **[Protomaps](https://protomaps.com)** OpenStreetMap builds (© OpenStreetMap contributors, ODbL) — the per-unit offline fallback map built by [`deploy/offline-map.py`](deploy/offline-map.py)
 - **[OurAirports](https://ourairports.com/data/)** (public domain) — the bundled airport table in [`deploy/airports.json`](deploy/airports.json)
@@ -565,15 +563,6 @@ before you do:
   free and keyless (see [Data sources](#data-sources) above). The one secret
   the project has, Apple's push key, lives only in the relay as a Cloudflare
   secret.
-- **ATC audio is a link, not an embed.** LiveATC.net's
-  [Terms of Use](https://www.liveatc.net/legal/) require consulting them
-  before linking directly to a raw audio stream, and separately bar making
-  their service "directly available" through another dedicated application,
-  for profit or not. The ATC toggle opens their own player page in a normal
-  browser tab instead — ordinary use of their site, same as bookmarking it
-  yourself — and is disabled outright on the kiosk itself (`?kiosk=1` on its
-  launch URL), since a new browser window/tab inside `--kiosk` Chromium has
-  no touch-reachable way back to the radar.
 
 ## License
 
