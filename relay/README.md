@@ -122,6 +122,18 @@ fleet page is at `/fleet`.
 The free Cloudflare plan covers this comfortably: one small request per unit
 every 6 hours.
 
+## Scale test
+
+`node scale-test.mjs [radars] [phones per radar]` runs a simulated day for a
+fleet against the real Worker code and SQL (the D1 stand-in from `test/`),
+and prints requests, statements, rows and the worst status. Measured
+2026-10-04: a radar with one phone sharing its location costs about 1,750
+relay requests a day (1,440 of them location polls, every minute); one with
+none sharing about 175. Five radars and fifteen phones: 8,835 requests and
+19,205 D1 statements a day, every one answered 200. A hundred radars:
+175,308 a day, which is past the Workers free plan's 100,000, so a fleet of
+more than about 50 radars with phones sharing needs the $5 paid plan.
+
 ## Test
 
 ```bash
