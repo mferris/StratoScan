@@ -772,13 +772,18 @@
     box-shadow: 0 10px 40px rgba(0,0,0,0.6);
   }
   #settingsPanel.show { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+  /* The screen's heading. It used to be barely bigger than the setting names
+     under it and ran straight into the first one, so it read as one more row
+     (2026-10-04). Now clearly a heading, with a rule beneath it. */
   #settingsPanel .sp-title {
-    margin-top: 14px;
-    font-size: 0.85rem;
+    margin-top: 10px;
+    font-size: 1.15rem;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    margin-bottom: 4px;
+    padding-bottom: 10px;
+    margin-bottom: 6px;
+    border-bottom: 2px solid var(--mid);
   }
   #settingsPanel .sp-row {
     display: flex;
@@ -1199,14 +1204,23 @@
     position: absolute;
     inset: -16px -20px;
   }
+  /* Back: a button, not a whisper. It was dim, small text tucked into the
+     corner, easy to miss (2026-10-04). Now a pill in the normal text colour,
+     on its own line above the heading, clear of the close button. */
   #settingsPanel .sp-back {
-    position: absolute;
-    top: 12px;
-    left: 14px;
-    font-size: .78rem;
-    letter-spacing: .06em;
-    color: var(--text-dim);
-    padding: 6px 10px 6px 0;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 0 4px;
+    padding: 8px 16px 8px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--panel-border);
+    background: var(--switch-track-off);
+    color: var(--text);
+    font-size: .82rem;
+    font-weight: 600;
+    letter-spacing: .03em;
   }
   #settingsPanel .sp-back::before {
     content: '';
@@ -5944,7 +5958,7 @@ function renderSettingsPanel() {
   const rows = alertSettingsMeta().filter(m => m.group === settingsSection);
   settingsPanelEl.innerHTML = `
     <div class="sp-close">&times;</div>
-    <div class="sp-back">&#8592; Settings</div>
+    <div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Settings</div>
     <div class="sp-title">${esc(group ? group.label : 'Settings')}</div>
     ${rows.map(({ key, label, sub, available, unavailableNote }) => {
       // A row can be unavailable for where this receiver actually is -- the
@@ -6095,7 +6109,7 @@ function startPhonePolling() {
 }
 
 function renderPhone() {
-  const head = `<div class="sp-back">&#8592; Settings</div><div class="sp-title">Phone &amp; Watch</div>`;
+  const head = `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Settings</div><div class="sp-title">Phone &amp; Watch</div>`;
   if (!IS_KIOSK) {
     return head + `<div class="sp-sub" style="padding:10px 0;line-height:1.7">
       Pair a phone from the radar's own screen, or from this radar's setup page.
@@ -6182,7 +6196,7 @@ let otaState = null, otaPoll = null;
 function renderScorecard() {
   const st = networkStats;
   if (!alertSettings.networkCompare) {
-    return `<div class="sp-back">&#8592; Statistics</div><div class="sp-title">Receiver scorecard</div>
+    return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Statistics</div><div class="sp-title">Receiver scorecard</div>
       <div class="sp-sub" style="padding:10px 0;line-height:1.7">
         This compares what your antenna hears against a public ADS-B
         network, so you can see how much of the traffic overhead you are
@@ -6194,7 +6208,7 @@ function renderScorecard() {
       </div>`;
   }
   if (!st || !st.ready) {
-    return `<div class="sp-back">&#8592; Statistics</div><div class="sp-title">Receiver scorecard</div>
+    return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Statistics</div><div class="sp-title">Receiver scorecard</div>
       <div class="sp-sub" style="padding:10px 0;line-height:1.7">
         ${esc(networkError || 'Collecting comparisons. A few minutes of traffic gives a usable picture; a full day gives a reliable one.')}
       </div>`;
@@ -6225,7 +6239,7 @@ function renderScorecard() {
   const verdict = (low.total >= 10 && high.total >= 10 && low.pct !== null && high.pct !== null && high.pct - low.pct > 30)
     ? 'Low traffic is being missed while high traffic is heard — that is a blocked horizon (trees, roofline, indoors), not a sensitivity problem. Height and a clear view fix it; a bigger antenna will not.'
     : 'No strong altitude bias yet.';
-  return `<div class="sp-back">&#8592; Statistics</div><div class="sp-title">Receiver scorecard</div>
+  return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Statistics</div><div class="sp-title">Receiver scorecard</div>
     <div class="sp-sub" style="padding:6px 0">vs ${esc(st.source)} · ${st.samples} comparisons</div>
     ${networkError ? `<div class="sp-sub" style="padding:4px 0;color:var(--warn)">${esc(networkError)}</div>` : ''}
     <div class="sp-row"><div><div class="sp-label">Coverage</div>
@@ -6616,7 +6630,7 @@ function renderYearInReview(back, title) {
 }
 
 function renderStatsScreen(key, st) {
-  const back = '<div class="sp-back">&#8592; Statistics</div>';
+  const back = '<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Statistics</div>';
   const screen = STATS_SCREENS.find(x => x.key === key);
   const title = `<div class="sp-title">${esc(screen ? screen.label : 'Statistics')}</div>`;
 
@@ -6829,7 +6843,7 @@ function renderVisitors(back, title) {
 
 function renderStatistics() {
   if (statsView) return renderStatsScreen(statsView, flightStats);
-  return `<div class="sp-back">&#8592; Settings</div><div class="sp-title">Statistics</div>
+  return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Settings</div><div class="sp-title">Statistics</div>
     ${statsDateLine(flightStats)}
     ${STATS_SCREENS.map(({ key, label, sub }) => `
       <div class="sp-menu-row" data-stat="${key}">
@@ -6916,7 +6930,7 @@ function renderDeviceSetup() {
     const cur = (deviceStatus && deviceStatus.network) || {};
     const curLine = cur.ssid
       ? `<div class="sp-sub" style="padding:6px 0">Currently on <b>${esc(cur.ssid)}</b></div>` : '';
-    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">WiFi</div>${curLine}
+    return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Device setup</div><div class="sp-title">WiFi</div>${curLine}
             <div class="sp-menu-row" data-act="wifi-scan">
               <div><div class="sp-label">Scan for networks</div></div><div class="sp-chevron">&#8250;</div>
             </div>${busy}${msg}${list}`;
@@ -6929,7 +6943,7 @@ function renderDeviceSetup() {
         <div class="sp-chevron">&#8250;</div>
       </div>`).join('')
       || '<div class="sp-sub" style="padding:10px 0">Nothing found.</div>';
-    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Pick your address</div>${busy}${msg}${list}`;
+    return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Device setup</div><div class="sp-title">Pick your address</div>${busy}${msg}${list}`;
   }
   if (deviceView === 'timezone') {
     const list = (tzRows.length ? tzRows : []).map(z => `
@@ -6938,7 +6952,7 @@ function renderDeviceSetup() {
         <div class="sp-chevron">&#8250;</div>
       </div>`).join('')
       || '<div class="sp-sub" style="padding:10px 0">No zones found.</div>';
-    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Time zone</div>
+    return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Device setup</div><div class="sp-title">Time zone</div>
             <div class="sp-sub" style="padding:6px 0">Currently <b>${esc(tzCurrent || 'unset')}</b></div>
             <div class="sp-menu-row" data-act="tz-all">
               <div><div class="sp-label">Show all time zones</div>
@@ -6956,7 +6970,7 @@ function renderDeviceSetup() {
     const cua = (deviceStatus && deviceStatus.airport) || null;
     const cuaLine = cua
       ? `<div class="sp-sub" style="padding:6px 0">Currently <b>${esc(cua.code)}</b></div>` : '';
-    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Home airport</div>${cuaLine}
+    return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Device setup</div><div class="sp-title">Home airport</div>${cuaLine}
             <div class="sp-menu-row" data-act="airport-search">
               <div><div class="sp-label">Search airports</div>
                    <div class="sp-sub">By code, name or city</div></div>
@@ -6965,7 +6979,7 @@ function renderDeviceSetup() {
   if (deviceView === 'remote') {
     const rem = deviceStatus && deviceStatus.remote || {};
     if (rem.loginUrl) {
-      return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Remote access</div>
+      return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Device setup</div><div class="sp-title">Remote access</div>
         <div class="sp-sub" style="padding:10px 0;line-height:1.8">
           On your phone or computer, open this address and sign in to
           Tailscale. This radar is waiting.</div>
@@ -6977,7 +6991,7 @@ function renderDeviceSetup() {
                <div class="sp-sub">Check now</div></div><div class="sp-chevron">&#8250;</div></div>`;
     }
     if (rem.state === 'Running') {
-      return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Remote access</div>
+      return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Device setup</div><div class="sp-title">Remote access</div>
         <div class="sp-sub" style="padding:10px 0;line-height:1.8">
           Connected as <b>${esc(rem.magicDnsName || 'this device')}</b>.
           ${rem.publicUrl ? `Public page: <b>${esc(rem.publicUrl)}</b>` : ''}</div>
@@ -6989,7 +7003,7 @@ function renderDeviceSetup() {
                  : 'Anyone with the address can view your radar'}</div></div>
           <div class="sp-chevron">&#8250;</div></div>`;
     }
-    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Remote access</div>
+    return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Device setup</div><div class="sp-title">Remote access</div>
       <div class="sp-sub" style="padding:10px 0;line-height:1.8">
         Optional. Lets you view this radar from anywhere using your own free
         Tailscale account. You will sign in on your phone — nothing long needs
@@ -7001,7 +7015,7 @@ function renderDeviceSetup() {
         <div class="sp-chevron">&#8250;</div></div>`;
   }
   if (deviceView === 'reboot') {
-    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Restart this radar</div>
+    return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Device setup</div><div class="sp-title">Restart this radar</div>
       <div class="sp-sub" style="padding:10px 0;line-height:1.7">
         The screen will go dark and the radar will come back on its own in
         about a minute. Nothing is erased — your WiFi, location, settings and
@@ -7015,7 +7029,7 @@ function renderDeviceSetup() {
         <div class="sp-chevron">&#8250;</div></div>`;
   }
   if (deviceView === 'reset') {
-    return `<div class="sp-back">&#8592; Device setup</div><div class="sp-title">Erase everything</div>
+    return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Device setup</div><div class="sp-title">Erase everything</div>
       <div class="sp-sub" style="padding:10px 0;line-height:1.7">
         This removes the WiFi network, the remote access account, the admin
         password, this radar's location, and the flight history and approach
@@ -7060,7 +7074,7 @@ function renderDeviceSetup() {
   const nameNow = d.name
     ? (d.nameIsOwn ? d.name : `${d.name} (from the home airport; tap to choose your own)`)
     : 'Not set';
-  return `<div class="sp-back">&#8592; Settings</div><div class="sp-title">Device setup</div>${busy}${msg}
+  return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Settings</div><div class="sp-title">Device setup</div>${busy}${msg}
     <div class="sp-menu-row" data-act="set-name"><div><div class="sp-label">Name</div>
       <div class="sp-sub">${esc(nameNow)}. Shown on paired phones</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="wifi"><div><div class="sp-label">WiFi</div>
