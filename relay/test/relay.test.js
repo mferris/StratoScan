@@ -154,7 +154,12 @@ test('assess flags what needs attention', () => {
   assert.ok(assess(unit({ rtc: { fitted: true, battery_mv: 2100 } }), now).flags.includes('RTC battery low'));
   assert.ok(!assess(unit({ rtc: { fitted: false, battery_mv: 2 } }), now).flags.includes('RTC battery low'));
   assert.ok(assess(unit({ storage: { gb_per_day: 9 } }), now).flags.includes('heavy writes'));
-  assert.ok(assess(unit({ ota: { state: 'rolled_back' } }), now).flags.includes('update rolled_back'));
+  assert.ok(assess(unit({ ota: { state: 'rolled_back' } }), now).flags.includes('update rolled back'));
+  assert.ok(assess(unit({ ota: { state: 'error' } }), now).flags.includes('update error'));
+  // the nightly check's normal result, and an update in progress, are not problems
+  for (const state of ['checked', 'staged', 'applying', 'ok']) {
+    assert.ok(!assess(unit({ ota: { state } }), now).flags.some(f => f.startsWith('update')), `${state} is not flagged`);
+  }
 });
 
 // ---- unit events (roadmap 2.2) ---------------------------------------------

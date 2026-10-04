@@ -81,7 +81,11 @@ export function assess(unit, now) {
   if (p.storage && p.storage.gb_per_day > 5) flags.push('heavy writes');
   if (p.storage && p.storage.free_pct < 10) flags.push('disk full');
   if (p.rtc && p.rtc.fitted && p.rtc.battery_mv < 2500) flags.push('RTC battery low');
-  if (p.ota && p.ota.state && !['ok', 'up_to_date'].includes(p.ota.state)) flags.push(`update ${p.ota.state}`);
+  // Only the states that mean something went wrong. 'checked' is the normal
+  // state after the nightly check finds nothing new, 'staged' and 'applying'
+  // are an update in progress, 'ok' is one installed; flagging those made
+  // every healthy radar look wrong (seen on the fleet page 2026-10-04).
+  if (p.ota && ['error', 'rolled_back'].includes(p.ota.state)) flags.push(`update ${p.ota.state.replace('_', ' ')}`);
   return { flags, p };
 }
 
