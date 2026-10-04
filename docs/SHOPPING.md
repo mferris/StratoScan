@@ -22,7 +22,7 @@ browser, before any display or case.
 | [Raspberry Pi Active Cooler](https://www.raspberrypi.com/products/active-cooler/) | 1 | $5 | Needed: it drives the radar full-time, and the case holds heat in |
 | [Raspberry Pi 27 W USB-C power supply](https://www.raspberrypi.com/products/27w-power-supply/) | 1 | $12 | A weaker supply causes under-voltage and USB drop-outs |
 | High-endurance microSD card, 64–128 GB | 1 | $15–25 | For example SanDisk High Endurance or Samsung PRO Endurance. Writes measure about 2.25 GB/day, fine for about 10 years on an endurance card |
-| ADS-B receiver (1090 MHz SDR with a built-in filter) | 1 | $30–46 | Either the Nooelec FlyCatcher (what RDU uses) or the [FlightAware Pro Stick Plus](https://flightaware.store/products/pro-stick-plus) |
+| ADS-B receiver: **[Nooelec FlyCatcher](https://www.nooelec.com/store/flycatcher.html)** | 1 | $110 | What RDU uses, and the choice for every unit (2026-10-04): it mounts on the Pi as a HAT, which the cases and the twin antenna mount are built around, and it has a 978 MHz input for later. The [FlightAware Pro Stick Plus](https://flightaware.store/products/pro-stick-plus) ($45) hears the same from a USB port, for anyone building a kit on a budget |
 | [NooElec ADS-B Discovery 5 dBi antenna bundle](https://www.amazon.com/NooElec-ADS-B-Discovery-Antenna-Bundle/dp/B01J9DH9U2) | 1 | $25 | Hinged whips for 1090 and 978 MHz; the FlyCatcher has an input for each. Its small right-angle pigtails are MCX, for USB-stick receivers, and aren't needed. **Placement matters more than any part:** a window or outdoor spot heard 14 aircraft where an indoor puck heard 1 |
 
 **Connect the receiver directly.** The FlyCatcher mounts on the Pi as a HAT,
