@@ -1418,41 +1418,86 @@ const LEADER_BASE_OPACITY = 0.55; // matches #leaders line's CSS opacity -- scal
 // the main loop below) -- originally only drawn for the plane with an open
 // detail panel, but always-on for every plane in view was preferred. This
 // receiver has no server-side trace history (readsb's data/traces/*.json
-// isn't populated on this Pi), so the trail is built client-side from each
-// poll's already-computed bearing/range -- it only covers time since this
-// page was last loaded, not real flight history. See HANDOFF.md.
+// isn't populated on this Pi), so the trail is built client-side from the
+// positions the polls report -- it only covers time since this page was
+// last loaded, not real flight history. See HANDOFF.md.
+// A trail point is a REPORTED position (the raw fix, as bearing/range from
+// home), never where the blip was drawn. The blip is a guess between fixes:
+// eased toward its target (SMOOTH_TAU) and dead-reckoned along the last
+// track (DR_MAX_S, GHOST_DR_MAX_S for network aircraft), and on a turning
+// aircraft, or one whose position squitters are being missed, the guess runs
+// wide and the blip swings back when the next fix lands. Two earlier designs
+// both kept those swings: pushing the dead-reckoned position once per poll
+// drew the guessed line and then a hard vertex back to the truth, and
+// sampling the eased drawn position every 250ms (which replaced it) recorded
+// the swing itself, so trails looked jagged behind aircraft that were flying
+// smoothly, antenna and network alike. The fixes are accurate to metres, and
+// a line through them is the path actually flown; the gap from the last fix
+// to the blip is one live segment, redrawn each frame and never stored (see
+// strokeTrail), so a correction moves the blip, not the trail.
 // No time cutoff -- the whole path stays for as long as the plane itself
 // stays tracked (the trail array is discarded along with the plane object
 // once it coasts out of range, see applyUpdate's removal pass below, so
 // this never outlives what's actually on screen). TRAIL_MAX_POINTS is just
 // a safety net against unbounded growth for the rare case of a plane
 // sitting in view a very long time (e.g. a local helicopter loitering for
-// hours) -- one point per TRAIL_SAMPLE_MS, so this is a generous ceiling
-// (~30 minutes of continuous track), not a visible cutoff for any normal
-// overflight/approach.
-// How often the drawn position is recorded into the trail. The trail is a
-// record of where the blip actually WAS, so it is sampled from the render
-// loop rather than pushed once per poll from the incoming fix -- see the
-// note on p.trail in drawPlanes. 250ms sits comfortably under SMOOTH_TAU
-// (0.35s), so the recorded path resolves the easing rather than cutting
-// corners across it, without storing a point per frame.
-const TRAIL_SAMPLE_MS = 250;
-// Don't record a point the blip has not meaningfully moved to. Once the
-// eased position converges on its target -- an aircraft holding still, or
-// simply settled between fixes -- every sample would otherwise be a
-// duplicate, filling the ring buffer with coincident points and drawing
-// thousands of zero-length segments. ~0.02nm is well under half a pixel at
-// the 20nm/410px scale, so nothing visible is dropped.
+// hours) -- at most one point per poll (FETCH_INTERVAL_MS), so this is a
+// generous ceiling (two hours of continuous track), not a visible cutoff
+// for any normal overflight/approach.
+// Don't record a fix the aircraft has not meaningfully moved to: one holding
+// still (on the ground, a hovering helicopter) would otherwise fill the ring
+// buffer with coincident points and draw thousands of zero-length segments.
+// ~0.02nm is well under half a pixel at the 20nm/410px scale, so nothing
+// visible is dropped.
 const TRAIL_MIN_MOVE_NM = 0.02;
 const TRAIL_MAX_POINTS = 7200;
 // Fade-only window: older segments dim toward TRAIL_FADE_FLOOR rather than
 // disappearing, so a long flight path stays visible end to end but still
-// reads "recent vs older" at a glance.
+// reads "recent vs older" at a glance. A point's time is when its fix was
+// observed, not when a poll delivered it.
 const TRAIL_FADE_MS = 5 * 60 * 1000;
 const TRAIL_FADE_FLOOR = 0.25;
 
-function pruneTrail(trail, now) {
+function pruneTrail(trail) {
   while (trail.length > TRAIL_MAX_POINTS) trail.shift();
+}
+
+// Appends a newly reported position to a trail. `at` is when the fix was
+// observed (performance.now() terms), so the fade reads its real age.
+function recordFix(trail, bearing, range, at) {
+  const last = trail[trail.length - 1];
+  // Planar distance from the previous point: radial change, plus the arc
+  // swept at this range. Cheaper than projecting both to canvas space and
+  // exact enough for a threshold this small.
+  const moved = !last ? Infinity : Math.hypot(range - last.range,
+    range * bearingDelta(last.bearing, bearing) * Math.PI / 180);
+  if (moved < TRAIL_MIN_MOVE_NM) return;
+  trail.push({ bearing, range, t: at });
+  pruneTrail(trail);
+}
+
+// One trail on the canvas: a segment per pair of stored points, dimmed by
+// the newer point's age, then the live segment from the last point to
+// (bearing, range), where the blip is drawn this frame. The caller has set
+// the stroke style; `alpha` is its full-brightness opacity.
+function strokeTrail(trail, bearing, range, now, alpha) {
+  let pa = polarToXY(trail[0].bearing, trail[0].range);
+  for (let i = 1; i < trail.length; i++) {
+    const b = trail[i];
+    const pb = polarToXY(b.bearing, b.range);
+    ctx.globalAlpha = Math.max(TRAIL_FADE_FLOOR, 1 - (now - b.t) / TRAIL_FADE_MS) * alpha;
+    ctx.beginPath();
+    ctx.moveTo(pa.x, pa.y);
+    ctx.lineTo(pb.x, pb.y);
+    ctx.stroke();
+    pa = pb;
+  }
+  const pb = polarToXY(bearing, range);
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.moveTo(pa.x, pa.y);
+  ctx.lineTo(pb.x, pb.y);
+  ctx.stroke();
 }
 
 // HTML-escapes a value before it goes into an innerHTML template literal.
@@ -4021,6 +4066,15 @@ async function refreshNetworkCompare() {
     for (const a of (d.ac || [])) {
       if (typeof a.lat !== 'number' || typeof a.lon !== 'number') continue;
       const prev = ghostTracks.get(a.hex);
+      // identity is what makes a trail possible: carry it across the poll.
+      // A point only when the network reports a NEW position -- the same
+      // fix comes back on consecutive polls with an older seen_pos -- timed
+      // by when the network saw it, not by when this poll delivered it.
+      const trail = prev ? prev.trail : [];
+      if (home && (!prev || prev.fixLat !== a.lat || prev.fixLon !== a.lon)) {
+        const { bearing, range } = haversineBearingRange(home.lat, home.lon, a.lat, a.lon);
+        recordFix(trail, bearing, range, now - (a.seen_pos || 0) * 1000);
+      }
       ghostTracks.set(a.hex, {
         hex: a.hex,
         flight: a.flight, type: a.type, reg: a.reg, alt: a.alt,
@@ -4030,9 +4084,7 @@ async function refreshNetworkCompare() {
         category: a.category ?? null,
         fixLat: a.lat, fixLon: a.lon, fixAt: now,
         lastSeenAt: now,
-        // identity is what makes a trail possible: carry it across the poll
-        trail: prev ? prev.trail : [],
-        lastTrailAt: prev ? prev.lastTrailAt : 0,
+        trail,
         bearing: prev ? prev.bearing : 0, range: prev ? prev.range : 0,
         // carried across the poll so a lookup only ever runs once per hex
         typeLabel: prev ? prev.typeLabel : null,
@@ -4122,17 +4174,6 @@ function updateGhosts(nowMs) {
     t.fade = 1 - 0.55 * Math.min(1, ageS / GHOST_DR_MAX_S);
     if (range > RANGE_NM) continue;   // outside the drawn ring: keep tracking, don't draw
 
-    if (nowMs - (t.lastTrailAt || 0) >= TRAIL_SAMPLE_MS) {
-      t.lastTrailAt = nowMs;
-      const last = t.trail[t.trail.length - 1];
-      const moved = !last ? Infinity : Math.hypot(
-        range - last.range,
-        range * bearingDelta(last.bearing, bearing) * Math.PI / 180);
-      if (moved >= TRAIL_MIN_MOVE_NM) {
-        t.trail.push({ bearing, range, t: nowMs });
-        pruneTrail(t.trail, nowMs);
-      }
-    }
     ghosts.push(t);
   }
 }
@@ -4147,16 +4188,8 @@ function drawGhostTrails() {
   ctx.strokeStyle = COLORS.ghost;
   const now = performance.now();
   for (const g of ghosts) {
-    if (!g.trail || g.trail.length < 2) continue;
-    for (let i = 1; i < g.trail.length; i++) {
-      const a = g.trail[i - 1], b = g.trail[i];
-      const pa = polarToXY(a.bearing, a.range), pb = polarToXY(b.bearing, b.range);
-      ctx.globalAlpha = Math.max(TRAIL_FADE_FLOOR, 1 - (now - b.t) / TRAIL_FADE_MS) * 0.8 * (g.fade ?? 1);
-      ctx.beginPath();
-      ctx.moveTo(pa.x, pa.y);
-      ctx.lineTo(pb.x, pb.y);
-      ctx.stroke();
-    }
+    if (!g.trail || !g.trail.length) continue;
+    strokeTrail(g.trail, g.bearing, g.range, now, 0.8 * (g.fade ?? 1));
   }
   ctx.restore();
 }
@@ -4952,6 +4985,17 @@ async function fetchAircraft() {
   }
 }
 
+// The trail point for a poll's fix: the raw reported position relative to
+// home, not the dead-reckoned one normalizeAircraft displays (see the trail
+// notes above TRAIL_MIN_MOVE_NM), timed by when the fix was observed. With
+// no home yet, normalizeAircraft only returns aircraft it did not move, so
+// their bearing/range (readsb's r_dst/r_dir) describe the fix itself.
+function recordPlaneFix(p, n, now) {
+  if (n.fixLat === null || n.fixLon === null) return;
+  const polar = home ? haversineBearingRange(home.lat, home.lon, n.fixLat, n.fixLon) : n;
+  recordFix(p.trail, polar.bearing, polar.range, now - n.posAge * 1000);
+}
+
 function applyUpdate(list) {
   const now = performance.now();
   const seen = new Set();
@@ -4963,6 +5007,10 @@ function applyUpdate(list) {
 
     const existing = planes.get(n.hex);
     if (existing) {
+      // compared before the fix is copied over: a poll that merely carries
+      // the same fix forward (seen_pos older, blip dead-reckoned further)
+      // adds nothing to the trail
+      const newFix = n.fixLat !== existing.fixLat || n.fixLon !== existing.fixLon;
       existing.targetBearing = n.bearing;
       existing.targetRange = n.range;
       existing.cs = n.cs;
@@ -4982,6 +5030,7 @@ function applyUpdate(list) {
       existing.vrate = n.vrate;
       existing.category = n.category;
       existing.lastSeen = now;
+      if (newFix) recordPlaneFix(existing, n, now);
     } else {
       // Read before recordSightingOnce below increments it -- rarityOf needs
       // to know whether this receiver had ever seen the aircraft before now.
@@ -4997,9 +5046,9 @@ function applyUpdate(list) {
         typeDesc: null,
         wtc: null,
         lastSeen: now,
-        trail: [{ bearing: n.bearing, range: n.range, t: now }],
-        lastTrailAt: now,
+        trail: [],
       });
+      recordPlaneFix(planes.get(n.hex), n, now);
       recordSightingOnce(n.hex, 'total'); // a genuinely new visit, not just still-in-view -- see "Sighting counts" above
     }
 
@@ -5109,10 +5158,12 @@ function drawRings(ctx) {
 }
 
 // Drawn for every in-range aircraft, every frame, underneath that frame's
-// fresh blips/labels. Reuses each poll's already-computed bearing/range
-// (pushed onto p.trail in applyUpdate) rather than raw lat/lon, so a replayed
-// point lands exactly where that plane's blip actually was at the time --
-// consistent with HOME_OVERRIDE's effect on live positions too.
+// fresh blips/labels. The stored points are reported positions as
+// bearing/range from home (so HOME_OVERRIDE applies to them as it does to
+// live positions); the last of them is joined to the blip by one live
+// segment that is redrawn each frame and never stored, so the eased,
+// dead-reckoned guess the blip makes between fixes can swing without
+// leaving a kink behind it.
 function drawTrails() {
   const now = performance.now();
   ctx.save();
@@ -5120,18 +5171,9 @@ function drawTrails() {
   ctx.lineCap = 'round';
   for (const p of planes.values()) {
     if (p.range > RANGE_NM) continue; // matches drawPlanes' own in-range filter -- no point trailing a blip that isn't drawn
-    if (!p.trail || p.trail.length < 2) continue;
+    if (!p.trail || !p.trail.length) continue;
     ctx.strokeStyle = p.color || COLORS.text;
-    for (let i = 1; i < p.trail.length; i++) {
-      const a = p.trail[i - 1], b = p.trail[i];
-      const pa = polarToXY(a.bearing, a.range);
-      const pb = polarToXY(b.bearing, b.range);
-      ctx.globalAlpha = Math.max(TRAIL_FADE_FLOOR, 1 - (now - b.t) / TRAIL_FADE_MS) * 0.85;
-      ctx.beginPath();
-      ctx.moveTo(pa.x, pa.y);
-      ctx.lineTo(pb.x, pb.y);
-      ctx.stroke();
-    }
+    strokeTrail(p.trail, p.bearing, p.range, now, 0.85);
   }
   ctx.restore();
 }
@@ -5227,31 +5269,6 @@ function drawPlanes(dt) {
     p.bearing += bearingDelta(p.bearing, p.targetBearing) * alpha;
     p.bearing = ((p.bearing % 360) + 360) % 360; // keep in [0,360) -- pure accumulation would otherwise drift arbitrarily far past it over a long-lived contact (e.g. a tight holding pattern), same issue labelAngle already guards against below
     p.range += (p.targetRange - p.range) * alpha;
-
-    // Record where the blip IS, not where the last fix said it should be.
-    // The trail used to be pushed from applyUpdate straight off the incoming
-    // fix, which meant the blip glided through each correction (it chases
-    // the target with SMOOTH_TAU easing) while the trail took the correction
-    // as a hard vertex. Position squitters are missed often on weak signals
-    // -- a contact at -23dBFS was measured getting a fresh position on only
-    // 7 of 20 polls, worst gap 18.7s -- so every one of those gaps ended in
-    // a visible kink behind an aircraft that looked like it was flying
-    // smoothly. Sampling the eased position instead makes the trail the
-    // history of the drawn path, which is smooth by construction.
-    if (now - (p.lastTrailAt || 0) >= TRAIL_SAMPLE_MS) {
-      p.lastTrailAt = now;
-      const last = p.trail[p.trail.length - 1];
-      // Planar distance from the previous point: radial change, plus the arc
-      // swept at this range. Cheaper than projecting both to canvas space and
-      // exact enough for a threshold this small.
-      const moved = !last ? Infinity : Math.hypot(
-        p.range - last.range,
-        p.range * bearingDelta(last.bearing, p.bearing) * Math.PI / 180);
-      if (moved >= TRAIL_MIN_MOVE_NM) {
-        p.trail.push({ bearing: p.bearing, range: p.range, t: now });
-        pruneTrail(p.trail, now);
-      }
-    }
 
     if (p.range > RANGE_NM) continue;
     inRange.push(p);
