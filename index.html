@@ -4924,21 +4924,29 @@ function normalizeAircraft(a) {
   };
 }
 
+async function fetchFrom(core) {
+  const res = await fetch(core ? CORE_URL : DATA_URL, { cache: 'no-store' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  lastGoodFetch = performance.now();
+  connected = true;
+  applyUpdate(core ? (data.aircraft || []).map(fromCore) : (data.aircraft || []));
+}
+
 async function fetchAircraft() {
   const core = coreActive();
   try {
-    const res = await fetch(core ? CORE_URL : DATA_URL, { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    lastGoodFetch = performance.now();
-    connected = true;
-    applyUpdate(core ? (data.aircraft || []).map(fromCore) : (data.aircraft || []));
+    await fetchFrom(core);
   } catch (e) {
     if (core) {
-      // The feed didn't answer: the old path for a while, starting now, so
-      // the screen never waits on it.
-      coreDownUntil = performance.now() + CORE_RETRY_MS;
-      return fetchAircraft();
+      // The feed didn't answer. If the old path does, it is the feed that is
+      // down: use the old path for a while. If neither does, it is the
+      // connection, and the feed stays the choice for when it is back.
+      try {
+        await fetchFrom(false);
+        coreDownUntil = performance.now() + CORE_RETRY_MS;
+        return;
+      } catch (e2) { /* nothing answers */ }
     }
     connected = false;
   }
