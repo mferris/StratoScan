@@ -956,3 +956,27 @@ where a due-west aircraft's own label anchors (`LABEL_RING_RADIUS`) and can
 occasionally overlap the button. Accepted tradeoff, same as labels already
 sometimes overlap each other during heavy traffic — the button still
 renders on top (z-index) and stays tappable either way.
+
+## Trails are the reported fixes, joined to the blip by one live segment
+Reported 2026-10-04: trails were "sometimes pretty jagged", for the antenna's
+own aircraft and the network's ghosts alike. The trail was being sampled from
+the *drawn* position every 250ms (that itself replaced an earlier design that
+pushed each poll's dead-reckoned bearing/range from `applyUpdate()`; the
+"pushed onto `p.trail` in `applyUpdate()`" description above is from that
+first version). Both recorded the blip's guesswork: between fixes the blip is
+eased (`SMOOTH_TAU`) and dead-reckoned along the last track (`DR_MAX_S`,
+`GHOST_DR_MAX_S`), and on a turning aircraft, or one whose position
+squitters are being missed (`seenPos` of 5–40s is routine on RDU's weaker
+contacts; network aircraft are up to 45s stale), the guess runs wide and the
+blip swings back when the next fix lands. Every swing was a kink.
+
+Now a trail point is a reported position only: `recordFix()` appends the raw
+fix (as bearing/range from home, timed by when the fix was observed so the
+fade reads real age) when the fix *changes* — `applyUpdate()` compares
+`fixLat/fixLon` before copying them, `refreshNetworkCompare()` likewise for
+ghosts — and nothing samples the render loop any more. `strokeTrail()` draws
+the stored polyline and then one live segment from the last fix to wherever
+the blip is this frame; that segment is redrawn, never stored, so a
+correction moves the blip and not the trail. `TRAIL_SAMPLE_MS` and
+`lastTrailAt` are gone. The app's SkyView was never affected (it draws
+`PlaneState.history`, which is already fixes only).
