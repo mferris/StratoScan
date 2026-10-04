@@ -169,7 +169,7 @@ final class RadarSetup: ObservableObject {
         }
         if let r: Located = try? await api("POST", "location", ["lat": loc.latitude, "lon": loc.longitude]),
            let code = r.nearestAirports?.first?.code {
-            _ = try? await apiRaw("POST", "airport", ["code": code, "atcMount": ""])
+            _ = try? await apiRaw("POST", "airport", ["code": code])
         }
     }
 
