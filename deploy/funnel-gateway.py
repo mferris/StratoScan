@@ -169,7 +169,7 @@ SECURITY_HEADERS = {
 # and restart from zero when the gateway does.
 VISITS_DIR = (os.environ.get("STRATOSCAN_VISITS_DIR") or os.environ.get("STATE_DIRECTORY")
               or "/var/lib/stratoscan-visits")
-STATS_LISTEN = ("127.0.0.1", 8087)        # loopback only; Funnel points at LISTEN
+STATS_LISTEN = ("127.0.0.1", 8091)        # loopback only; Funnel points at LISTEN. 8081-8090 are taken
 VISITS_KEEP_DAYS = 90
 VISITS_SAVE_S = 600
 APP_HEADER = "X-StratoScan-App"
