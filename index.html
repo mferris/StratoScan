@@ -1311,11 +1311,18 @@ try {
 const DATA_URL = '/tar1090/data/aircraft.json';
 // The unit's core feed (roadmap 1.9, #33): the same aircraft, already
 // labelled -- operator by the shared labels.py, route and owner looked up on
-// the unit -- so this page needn't ask adsb.im or adsbdb itself. Trial
-// first: on with ?core=1 (the public page, then the kiosk), off otherwise,
-// and the old path stays until it has proved itself.
-const USE_CORE_FEED = new URLSearchParams(location.search).get('core') === '1';
+// the unit -- so this page needn't ask adsb.im or adsbdb itself.
+//
+// The default since 2026-10-04, after days running beside the old path and a
+// side-by-side check on RDU's public page (same aircraft, routes and owners).
+// The old path stays one more release, as a fallback: ?core=0 forces it, and
+// if the feed stops answering the page uses it by itself for five minutes,
+// looking routes and owners up itself again meanwhile.
+const USE_CORE_FEED = new URLSearchParams(location.search).get('core') !== '0';
 const CORE_URL = '/api/aircraft';
+const CORE_RETRY_MS = 5 * 60 * 1000;
+let coreDownUntil = 0;
+function coreActive() { return USE_CORE_FEED && performance.now() >= coreDownUntil; }
 
 // A core-feed aircraft in the shape the rest of the page reads (readsb's),
 // with the feed's own labels kept alongside.
@@ -4616,7 +4623,7 @@ function checkAirportPhaseAlert(pl) {
 // cache results (including negative ones) for the rest of the session so
 // we never look up the same callsign twice.
 function queueRouteLookup(cs, lat, lng) {
-  if (USE_CORE_FEED) return;        // the feed brings routes; never ask adsb.im from here
+  if (coreActive()) return;         // the feed brings routes; never ask adsb.im from here
   if (routeCache.has(cs) || routePending.has(cs)) return;
   if (routeQueue.some(e => e.callsign === cs)) return;
   routeQueue.push({ callsign: cs, lat, lng });
@@ -4918,14 +4925,21 @@ function normalizeAircraft(a) {
 }
 
 async function fetchAircraft() {
+  const core = coreActive();
   try {
-    const res = await fetch(USE_CORE_FEED ? CORE_URL : DATA_URL, { cache: 'no-store' });
+    const res = await fetch(core ? CORE_URL : DATA_URL, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     lastGoodFetch = performance.now();
     connected = true;
-    applyUpdate(USE_CORE_FEED ? (data.aircraft || []).map(fromCore) : (data.aircraft || []));
+    applyUpdate(core ? (data.aircraft || []).map(fromCore) : (data.aircraft || []));
   } catch (e) {
+    if (core) {
+      // The feed didn't answer: the old path for a while, starting now, so
+      // the screen never waits on it.
+      coreDownUntil = performance.now() + CORE_RETRY_MS;
+      return fetchAircraft();
+    }
     connected = false;
   }
 }
@@ -5712,7 +5726,7 @@ const ownerFailedAt = new Map();   // hex -> Date.now() of the last failed attem
 const OWNER_RETRY_MS = 5 * 60 * 1000;
 async function lookupOwner(hex) {
   if (ownerCache.has(hex)) return ownerCache.get(hex);
-  if (USE_CORE_FEED) return null;   // the feed brings owners; never ask adsbdb from here
+  if (coreActive()) return null;    // the feed brings owners; never ask adsbdb from here
   if (ownerPending.has(hex)) return null;
   const failed = ownerFailedAt.get(hex);
   if (failed && Date.now() - failed < OWNER_RETRY_MS) return null;
