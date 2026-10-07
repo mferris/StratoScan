@@ -105,10 +105,10 @@ relief_arc_deg    = 50;
 // and everything that stood on the floor went with it: the standoffs, the
 // fan mount, the intake and fan grilles, and the two cable glands.
 //
-// The Pi itself is mounted to the LCD panel rather than to these standoffs,
-// so taking the plate off exposes the back of the Pi and its cabling rather
-// than removing it. The 58x49 standoffs are kept as an alternative mounting
-// position; they cost nothing and removing them is a one-line change.
+// The Pi itself is mounted to the LCD panel, so taking the plate off
+// exposes the back of the Pi and its cabling rather than removing it. The
+// 58x49 standoffs that stood here as an alternative mounting were never
+// used and are gone (2026-10-07); pi_posts() keeps their geometry.
 //
 // No locating spigot: a ring into the bore lands exactly where the eight
 // screw posts are, since those straddle the bore wall. Eight screws on a
@@ -153,7 +153,7 @@ ant_bolt_pcd   = 30;
 ant_bolt_d     = 3.4;
 n_ant_bolts    = 3;
 
-ant_mount_y        = 88;   // up the plate, still well inside its rim
+ant_mount_y        = 81;   // up the plate, inside its rim, and clear of the top screw (was 88, which covered it; 2026-10-07)
 ant_mount_standoff = 26;   // how far the socket sits back from the plate
 // 26 is not a guess. Swept against the antenna's own 33mm envelope: 12mm
 // fouls the head's top rim by 876mm3, 18mm by 205mm3, and it comes clear at
@@ -1230,20 +1230,26 @@ module usbc_gauge() {
     }
 }
 
+// The Pi's 58x49 mounting posts, M2.5 pilot holes, 8mm tall. Not part of
+// the plate any more (see back_plate); defined so they can come back.
+module pi_posts() {
+    for (x = [-mount_hole_x/2, mount_hole_x/2])
+        for (y = [-mount_hole_y/2, mount_hole_y/2])
+            translate([x, y, 0])
+                difference() {
+                    cylinder(d=7, h=8);
+                    cylinder(d=2.5, h=9);
+                }
+}
+
 module back_plate() {
     difference() {
         union() {
             translate([0,0,-back_plate_t])
                 cylinder(d=outer_dia, h=back_plate_t);
-            // everything that used to stand on the floor, shifted down so
-            // what sat on the floor's top face now sits on the plate's
-            for (x = [-mount_hole_x/2, mount_hole_x/2])
-                for (y = [-mount_hole_y/2, mount_hole_y/2])
-                    translate([x, y, 0])
-                        difference() {
-                            cylinder(d=7, h=8);
-                            cylinder(d=2.5, h=9);
-                        }
+            // No Pi posts: the four 58x49 standoffs went unused for a year
+            // (the Pi mounts on the display) and were removed 2026-10-07.
+            // pi_posts() is left defined, as the retro case does.
             back_lip();
         }
         for (i = [0:n_screws-1]) {
