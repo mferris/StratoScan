@@ -20,7 +20,7 @@ speaker_angles=[0,180]; back_plate_t=3;
 // Restated because `use <>` imports modules and functions but NOT variables.
 // A stale value here checks geometry the design no longer has, and passes.
 back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9; post_od=9;
-back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40; ant_mount_y=88;
+back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40; ant_mount_y=81;
 ant_bolt_d=3.4; usbc_cut_pos=[60,-14]; usbc_screw_pitch=16.5; usbc_screw_dia=3.4; usbc_cut_w=11.0; usbc_cut_h=6.5;
 mount_hole_x=58; mount_hole_y=49; stand_angle=18;
 base_w=outer_dia*0.86; base_d=150; plinth_rib_h=4; plinth_rib_w=3; plinth_rib_z=[3.5, 9.5];
@@ -154,6 +154,27 @@ else if (check=="twin_panels_present") {
 else if (check=="twin_holes_open") {
   difference() { ant_twin_hole_probe(); antenna_mount_twin(); }
 }
+// ---- the plate's top screw vs the antenna mount (2026-10-07) ----------
+// With the flange at y=88 it reached y=108 and covered the plate's top
+// screw at (0, screw_r): the plate could not be screwed on with the mount
+// fitted. A column the width of the screw head plus a hex key's wobble,
+// from the plate's outer face out past the mount, must meet no mount.
+else if (check=="top_screw_clear_of_twin") {
+  intersection() { antenna_mount_twin(); translate([0, screw_r, -back_plate_t - 80]) cylinder(d=8, h=80); }
+}
+else if (check=="top_screw_clear_of_sma") {
+  intersection() { antenna_mount_sma(); translate([0, screw_r, -back_plate_t - 80]) cylinder(d=8, h=80); }
+}
+else if (check=="top_screw_clear_of_puck") {
+  intersection() { antenna_mount(); translate([0, screw_r, -back_plate_t - 80]) cylinder(d=8, h=80); }
+}
+// POSITIVE control: the same column against the flange where it used to be.
+else if (check=="top_screw_was_under_mount") {
+  intersection() {
+    translate([0, 88, -back_plate_t - 7]) cylinder(d=ant_flange_d, h=7);
+    translate([0, screw_r, -back_plate_t - 80]) cylinder(d=8, h=80);
+  }
+}
 else if (check=="canary") { shell(); }
 
 // ---- the locating lip -------------------------------------------------
@@ -263,15 +284,6 @@ else if (check=="usbc_open") {            // positive control
     }
     translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
       cylinder(d=usbc_screw_pitch + 6, h=back_plate_t + 2);
-  }
-}
-else if (check=="usbc_clears_standoffs") {
-  intersection() {
-    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
-      cylinder(d=usbc_screw_pitch + 6, h=back_plate_t + 20);
-    for (x=[-mount_hole_x/2, mount_hole_x/2])
-      for (y=[-mount_hole_y/2, mount_hole_y/2])
-        translate([x,y,0]) cylinder(d=7, h=8);
   }
 }
 

@@ -60,7 +60,7 @@ aircraft appear before you buy the display. See
 | USB-A to USB-C **data** cable, short | 1 | $6 | Carries the touch signal from the panel to the Pi. **Charge-only cables leave touch dead** while the picture still works |
 | Waveshare 8 Ω 5 W speaker pair | 1 pair | $10 | For the alert chimes and spoken announcements. They connect to the panel's driver board, and the sound travels over HDMI. The cases have brackets for them |
 | Pre-crimped 1.25 mm 4-pin cable (sold as "Micro JST 1.25" or "Molex PicoBlade compatible"), 10–15 cm | 1 (packs of 10) | $8 a pack | The panel's speaker socket is this plug. Solder its wires to the speaker leads and heat-shrink them: hand-crimped plugs come apart |
-| Pi mounting to the display's back: 4 × M2.5 standoffs and screws | 4 | included | In the display's box. The back plate's 58 × 49 mm standoffs are the alternative if you'd rather mount the Pi there |
+| Pi mounting to the display's back: 4 × M2.5 standoffs and screws | 4 | included | In the display's box |
 
 ### 3. The case (3D printed)
 
@@ -91,7 +91,7 @@ They share the back plate and antenna mount.
 | Antenna mount (any of the three), into its flange | 3 | M3 × 5 | M3 × 8 | The screws come from inside the case, through the plate |
 | USB-C panel connector, to the back plate | 2 | none | M3 × 6 with nuts, or the connector's own | Holes 16.5 mm apart |
 | Speakers, to their brackets | 4 each, 8 | optional M2 × 3 | M2 × 6, or M2 self-tapping | 2.6 mm pilot holes take either |
-| Pi, to the display's back | 4 | none | M2.5 × 6 and standoffs, in the display's box | or the back plate's standoffs |
+| Pi, to the display's back | 4 | none | M2.5 × 6 and standoffs, in the display's box | |
 | FlyCatcher, onto the Pi | 4 | none | M2.5 standoffs, ~16–20 mm, and screws | tall enough to clear the cooler |
 | Twin antenna mount's two SMA bulkheads | 2 | none | the jumpers' own nuts | |
 | **To buy per radar** | | **19 × M3 (8 of 5 mm, 11 of 6 mm); 8 × M2 optional** | **8 × M3×14, 11 × M3×8, 2 × M3×6 (+2 nuts), 8 × M2×6, 8 × M2.5** | one M3 kit and one M2/M2.5 kit cover several radars |
