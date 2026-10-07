@@ -937,7 +937,12 @@ ant_flange_insert_d = 5.5;  // heat-set pocket depth, leaving 1.5mm of flange be
 ant_bolt_pcd   = 30;
 ant_bolt_d     = 3.4;
 n_ant_bolts    = 3;
-ant_mount_y        = 88;
+// 88 -> 81 (2026-10-07): at 88 the 40mm flange reached y=108 and sat over
+// the plate's top screw (0, 106.7), so the plate could not be screwed on
+// with the mount fitted. At 81 the flange ends at 101, 2.9mm short of the
+// screw head's edge. The centre vent reaches only y=27, so nothing below
+// moves. top_screw_clear_of_mount in the checks holds this.
+ant_mount_y        = 81;
 // The socket the antenna's base sits down into, and the rim around it --
 // "the lip" -- that stops the base falling out sideways once it is in.
 //
@@ -1400,22 +1405,29 @@ module usbc_gauge() {
     }
 }
 
+// The Pi's 58x49 mounting posts, M2.5 pilot holes, 8mm tall. Not part of
+// the plate any more (see back_plate); defined so they can come back.
+module pi_posts() {
+    for (x = [-mount_hole_x/2, mount_hole_x/2])
+        for (y = [-mount_hole_y/2, mount_hole_y/2])
+            translate([x, y, 0])
+                difference() {
+                    cylinder(d=7, h=8);
+                    cylinder(d=2.5, h=9);
+                }
+}
+
 module back_plate() {
     difference() {
         union() {
             translate([0,0,-back_plate_t])
                 cylinder(d=outer_dia, h=back_plate_t);
 
-            // Everything that used to stand on the floor. Their own
-            // geometry is unchanged; it is only shifted down so what used
-            // to sit on the floor's top face now sits on the plate's.
-            for (x = [-mount_hole_x/2, mount_hole_x/2])
-                for (y = [-mount_hole_y/2, mount_hole_y/2])
-                    translate([x, y, 0])
-                        difference() {
-                            cylinder(d=7, h=8);
-                            cylinder(d=2.5, h=9);
-                        }
+            // No Pi posts. The four 58x49 standoffs that stood here were
+            // the Pi's original mounting, kept "as an alternative" once the
+            // Pi moved onto the display's back; nobody used them in a year
+            // and the owner asked for them gone (2026-10-07). pi_posts()
+            // below is left defined but unused, so they are one line away.
             back_lip();
             // No fan mount. There was a plate here standing perpendicular
             // to the tray, carrying a 30mm fan; the fan goes on the Pi
