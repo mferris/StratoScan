@@ -2950,9 +2950,13 @@ function syncMapToView() {
 // comparison switch; nothing recorded or counted, it is a look, not a
 // sighting.
 const VIEW_FEED_URL = '/network/around';
-const VIEW_FEED_MS = 5000;
+const VIEW_FEED_MS = 5000;             // one disc round the middle, this often...
+const VIEW_FEED_TILED_MS = 20000;      // ...a wide view, several discs (the unit tiles it), this often
+const VIEW_FEED_SINGLE_UP_TO_NM = 190; // the unit's TILE_SINGLE_UP_TO_NM
 let viewFeedOn = false;
 let viewFeedCount = 0;
+let viewFeedCovered = 0;               // how far round the middle the last answer reached, nm
+let viewFeedLast = { at: -1e9, key: '' };
 function viewLooksBeyondRing() {
   return !!home && (view.scale < 0.66 || Math.hypot(view.ox, view.oy) > R * view.scale);
 }
@@ -2960,16 +2964,27 @@ async function refreshViewFeed() {
   const on = alertSettings.networkCompare && viewLooksBeyondRing();
   if (!on) {
     if (viewFeedOn) { for (const [hex, t] of ghostTracks) if (t.fromView) ghostTracks.delete(hex); }
-    viewFeedOn = false; viewFeedCount = 0;
+    viewFeedOn = false; viewFeedCount = 0; viewFeedCovered = 0; viewFeedLast = { at: -1e9, key: '' };
     return;
   }
   viewFeedOn = true;
   const c = viewCentreLatLon();
-  const r = Math.round(Math.max(25, Math.min(250, (RANGE_NM / view.scale) * 0.75)));
+  const half = RANGE_NM / view.scale;                       // nm from the middle to the dial's edge
+  const tiled = half > VIEW_FEED_SINGLE_UP_TO_NM;
+  // A wide view is several discs, so it is asked for less often, and only
+  // once the middle has moved a way (a quarter of a disc) or the time is up.
+  const key = tiled ? `${Math.round(c.lat * 2)}|${Math.round(c.lon * 2)}|${Math.round(half / 100)}` : `${c.lat.toFixed(2)}|${c.lon.toFixed(2)}|${Math.round(half)}`;
+  const now0 = performance.now();
+  if (key === viewFeedLast.key && now0 - viewFeedLast.at < (tiled ? VIEW_FEED_TILED_MS : VIEW_FEED_MS) - 500) return;
+  viewFeedLast = { at: now0, key };
   try {
-    const res = await fetch(`${VIEW_FEED_URL}?lat=${c.lat.toFixed(3)}&lon=${c.lon.toFixed(3)}&r=${r}`, { cache: 'no-store' });
+    const res = await fetch(`${VIEW_FEED_URL}?lat=${c.lat.toFixed(3)}&lon=${c.lon.toFixed(3)}&half=${Math.round(half)}`, { cache: 'no-store' });
     if (!res.ok) return;              // asked too soon, or the network is away: keep what we have
     const d = await res.json();
+    viewFeedCovered = typeof d.covered === 'number' ? d.covered : 0;
+    // The unit answers at once with the discs it has and fetches the rest
+    // behind; while any is pending, ask again in a few seconds.
+    if (d.pending > 0) viewFeedLast = { at: now0 - VIEW_FEED_TILED_MS + VIEW_FEED_MS, key };
     const now = performance.now();
     let n = 0;
     for (const a of (d.ac || [])) {
@@ -4394,18 +4409,35 @@ function drawGhostTrails() {
 // else, inside the ring; by the map's own projection while the view looks
 // beyond it, where a flat picture from the radar would drift off the map
 // (the view can be a thousand miles away).
+let ghostK = 1;   // canvas px per CSS px, read once per frame
 function ghostXY(g) {
   if (viewFeedOn && map && typeof g.lat === 'number') {
     const pt = map.project([g.lon, g.lat]);
-    const k = W / stage.getBoundingClientRect().width;
-    return { x: pt.x * k, y: pt.y * k };
+    return { x: pt.x * ghostK, y: pt.y * ghostK };
   }
   return polarToXY(g.bearing, g.range);
 }
+const GHOST_DENSE_FROM = 600;   // this many ghosts on the dial: plain squares in one stroke of the pen
 
 function drawGhosts() {
   if (!alertSettings.networkCompare || !ghosts.length) return;
+  ghostK = W / stage.getBoundingClientRect().width;
   ctx.save();
+  if (ghosts.length >= GHOST_DENSE_FROM) {
+    // A continent's worth: a 4 px square each, one path, one fill. The glow
+    // sprites below would be thousands of draws a frame on the Pi.
+    ctx.fillStyle = COLORS.ghost;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    for (const g of ghosts) {
+      const { x, y } = ghostXY(g);
+      if (x < -4 || y < -4 || x > W + 4 || y > H + 4) continue;
+      ctx.rect(x - 2, y - 2, 4, 4);
+    }
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
   // The first version of this drew 6px rings at 0.42 alpha in
   // COLORS.textDim -- a key refreshCanvasColors never sets, so it silently
   // fell through to the muted COLORS.ground and was invisible on the light
@@ -4464,6 +4496,7 @@ function drawGhosts() {
 function findGhostAtStagePoint(x, y) {
   const HIT_RADIUS = 26;                       // CSS px; the ring itself is now 13*scale
   const scale = stage.getBoundingClientRect().width / W;   // hoisted: reading
+  ghostK = 1 / scale;
   // this inside the loop forces a layout per ghost on every tap
   let best = null, bestDistSq = Infinity;
   for (const g of ghosts) {
@@ -5658,7 +5691,9 @@ function drawPlanes(dt) {
     // Looking beyond the ring, a label for an aircraft whose blip is off the
     // dial would sit on the rim pointing at nothing: hidden until it is back.
     const offDial = p.anchorX < 0 || p.anchorY < 0 || p.anchorX > stageRect.width || p.anchorY > stageRect.height;
-    if (viewFeedOn && offDial && p.hex !== followHex) {
+    // Zoomed out past 80 nm the labels would all crowd the rim pointing at a
+    // dot in the middle (the app hides its labels there too).
+    if (viewFeedOn && (offDial || RANGE_NM / view.scale > 80) && p.hex !== followHex) {
       setStyle(p.node, p.node, 'opacity', '0', false);
       const line = leaderNodes.get(p.hex);
       if (line) setStyle(line, line, 'opacity', '0', false);
@@ -5734,7 +5769,8 @@ function drawPlanes(dt) {
   const missed = alertSettings.networkCompare ? ghosts.length - fromView : 0;
   emptySkyTick(inRange.length);
   setText(countEl, countEl, inRange.length + ' AIRCRAFT'
-    + (missed ? ` · ${missed} NOT HEARD` : '') + (fromView ? ` · ${fromView} FROM ADSB.LOL` : ''));
+    + (missed ? ` · ${missed} NOT HEARD` : '')
+    + (fromView ? ` · ${fromView} FROM ADSB.LOL` + (viewFeedCovered && viewFeedCovered < RANGE_NM / view.scale ? ` WITHIN ${viewFeedCovered}NM` : '') : ''));
 }
 
 let lastNetPillState = null;

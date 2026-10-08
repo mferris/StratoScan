@@ -139,6 +139,9 @@ final class RadarViewModel: ObservableObject {
     /// The network's aircraft around the view are asked for this often while
     /// the view rests there (adsb.lol's data changes about this often).
     let networkInterval: TimeInterval = 5
+    /// A view wider than one disc is up to nine questions, a second apart,
+    /// and several megabytes: asked less often.
+    let networkTiledInterval: TimeInterval = 30
 
     @Published private(set) var home: Coordinate?
     @Published private(set) var connected: Bool = false
@@ -366,12 +369,24 @@ final class RadarViewModel: ObservableObject {
     /// seconds while it rests there; at once when it has moved.
     private func pollNetworkAroundView() async {
         let centre = viewCentre
-        let moved = viewNetworkCentre.map { NetworkFeed.rounded($0) != NetworkFeed.rounded(centre) } ?? true
-        guard moved || Date().timeIntervalSince(viewNetworkFetchedAt) >= networkInterval else { return }
+        let tiled = rangeNm > NetworkFeed.singleUpToNm
+        // One disc follows the middle closely; a tiled view only once the middle
+        // has moved a good way (a quarter of a disc), or the time is up.
+        let moved: Bool
+        if let prev = viewNetworkCentre {
+            if tiled {
+                let o = Geo.localOffset(of: centre, from: prev)
+                moved = (o.east * o.east + o.north * o.north).squareRoot() > NetworkFeed.tileSpacingNm / 4
+            } else {
+                moved = NetworkFeed.rounded(prev) != NetworkFeed.rounded(centre)
+            }
+        } else {
+            moved = true
+        }
+        guard moved || Date().timeIntervalSince(viewNetworkFetchedAt) >= (tiled ? networkTiledInterval : networkInterval) else { return }
         viewNetworkFetchedAt = Date()
         viewNetworkCentre = centre
-        let radius = max(Double(NetworkFeed.minRadiusNm), min(Double(NetworkFeed.maxRadiusNm), rangeNm * 1.3))
-        guard let list = await NetworkFeed.fetch(around: centre, radiusNm: radius) else {
+        guard let list = await NetworkFeed.fetchView(around: centre, halfNm: rangeNm) else {
             if Date().timeIntervalSince(connectingSince) > connectGrace { connecting = false }
             return
         }
