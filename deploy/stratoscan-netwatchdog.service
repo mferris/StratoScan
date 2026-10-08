@@ -11,5 +11,13 @@ Wants=stratoscan-setupd.service
 StartLimitIntervalSec=0
 
 [Service]
-Type=oneshot
-ExecStart=/usr/bin/python3 /opt/stratoscan/net-watchdog.py
+# Long-running since 2026-10-08 (security review item 4): it keeps its own
+# two-minute cadence, so systemd no longer logs a start and a finish every
+# run. It replaced stratoscan-netwatchdog.timer, which the installer removes.
+Type=simple
+ExecStart=/usr/bin/python3 /opt/stratoscan/net-watchdog.py --loop
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

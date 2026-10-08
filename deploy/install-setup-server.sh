@@ -161,9 +161,15 @@ for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-ga
          stratoscan-events.service stratoscan-core.service \
          stratoscan-ota-check.service stratoscan-ota-check.timer \
          stratoscan-ota-auto.service stratoscan-ota-auto.timer \
-         stratoscan-netwatchdog.service stratoscan-netwatchdog.timer; do
+         stratoscan-netwatchdog.service; do
   install -m 0644 "deploy/$u" /etc/systemd/system/
 done
+# The watchdog is a long-running service since 2026-10-08; a unit installed
+# before that still has the timer, which must go so the two don't both run.
+if [ -e /etc/systemd/system/stratoscan-netwatchdog.timer ]; then
+  if live; then systemctl disable --now stratoscan-netwatchdog.timer 2>/dev/null || true; fi
+  rm -f /etc/systemd/system/stratoscan-netwatchdog.timer
+fi
 for c in 86-stratoscan-nocache.conf 89-stratoscan-photo-proxy.conf 91-stratoscan-approach-store.conf \
          93-stratoscan-sighting-store.conf 94-stratoscan-core.conf 95-stratoscan-network.conf 96-stratoscan-wake.conf \
          97-stratoscan-tts.conf 98-stratoscan-setup.conf 99-stratoscan-captive.conf; do
@@ -349,7 +355,7 @@ for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-ga
          stratoscan-sighting-store.service stratoscan-approach-store.service \
          stratoscan-network.service stratoscan-photo-proxy.service stratoscan-tts.service \
          stratoscan-events.service stratoscan-core.service \
-         stratoscan-ota-check.timer stratoscan-ota-auto.timer stratoscan-netwatchdog.timer \
+         stratoscan-ota-check.timer stratoscan-ota-auto.timer stratoscan-netwatchdog.service \
          lighttpd.service readsb.service; do
   enable_unit "$u"
 done
