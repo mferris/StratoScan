@@ -101,6 +101,14 @@ phone ──(pairing, notification rules)──▶ relay
 | 2.18 | Set up a new radar from the app: one QR code on the first-boot screen, the app joins the setup hotspot, sends home WiFi, the phone's location, time zone and name, and pairs in the same session; the browser and on-screen setup stay | A radar fresh from the factory image is set up and paired from the app alone |
 | 2.19 | Public web address during first setup: nothing to type or renew; proposed: the relay mints a one-time `tag:stratoscan` Tailscale key for a radar being set up (Cloudflare Tunnel the alternative) | A radar set up from the app is reachable away from home, and can reach nothing on the tailnet |
 | 2.20 | CarPlay, within what Apple allows without an entitlement: the approach Live Activity in CarPlay (iOS 26) and a text-only nearest-aircraft widget; alerts already reach CarPlay. No CarPlay app: a radar isn't one of Apple's CarPlay categories | In a CarPlay car or the CarPlay simulator: the Live Activity, the widget, an alert |
+| 2.21 | One switch for the public network (adsb.lol): at home it fills in what the radar missed; away from the radar, beyond its range, or with no radar it shows the sky around you, by itself | Clear on a real iPhone at home, in flight and in another city |
+| 2.22 | The map fills the screen; the ring is a line on it, not the edge of the picture | On a real iPhone and iPad |
+| 2.23 | Pan and zoom anywhere: out past the ring to the region and the world, the network's aircraft around wherever the view is, a note where no radar data reaches; zoom at every scale; the kiosk gets the same touch pan and zoom | Swipe from RDU to New York on a real iPhone and see its traffic |
+| 2.24 | Network aircraft you can see: a marker that reads on a phone in daylight, and on the kiosk | Beside heard aircraft on a real iPhone and on RDU |
+| 2.25 | Trails in the app: where each aircraft has been, as on the kiosk | On a real iPhone |
+| 2.26 | Alerts lead with what it is and where it's going: type and destination, then the callsign | A real alert on a real iPhone and Watch |
+| 2.27 | Airline marks on labels and alerts: the airline's logo (fetched, never shipped) beside its name, so a commercial flight reads at a glance | In a label and a notification on a real iPhone |
+| 2.28 | An alert opens the app on that aircraft, on the phone and the Watch | Tap a real alert on a real iPhone and Watch |
 
 ## Phase 3: the wrist
 
@@ -224,3 +232,4 @@ at risk for long.
 | 3.2 Wrist taps, Smart Stack | Smart Stack Live Activity built (4853ebc); distinct taps not started | A real Watch |
 | 5.4, 5.5 | Planned 2026-09-29 as issues #26, #27 | — |
 | 1.5 Factory image | Built: CI produces a 1.6 GB image that passes its checks (working unit, no per-unit secrets, GPL sources attached). Last built 2026.09.28 under the old name; to be rebuilt as StratoScan after 1.9. Not yet published | A test flash on a spare SD card |
+| 2.21–2.28 App batch (2026-10-08) | Filed as #54–#61 after the owner's trip with the phone: one network switch, full-screen map, pan and zoom anywhere, visible network aircraft, trails, alerts by type and destination, airline logos, alerts that open the app on the aircraft. In progress, in that order | A real iPhone, iPad and Watch |
