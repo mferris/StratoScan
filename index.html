@@ -718,7 +718,7 @@
   /* Zoom in, zoom out and (only while the view is away) home, stacked beside
      the gear: the dependable way to zoom on the panel, whatever its touch
      controller makes of a pinch; a laptop has +, - and 0 as well. */
-  #zoomInBtn, #zoomOutBtn, #homeBtn {
+  #zoomInBtn, #zoomOutBtn, #homeBtn, #lockBtn {
     position: absolute;
     left: calc(5% + 5px);              /* centred under the gear (58px wide at 5%) */
     width: 48px;
@@ -743,7 +743,30 @@
   #zoomOutBtn { top: calc(50% + 60px); transform: translateY(-50%); }
   #homeBtn    { top: 50%; left: calc(5% + 66px); transform: translateY(-50%); display: none; font-size: 1.3rem; }
   #homeBtn.show { display: flex; }
-  #zoomInBtn:active, #zoomOutBtn:active, #homeBtn:active { color: var(--text); }
+  /* The lock keeps the view where it is (no return after 45 s): below the
+     home button, shown while the view is away or held. Closed when on. */
+  #lockBtn    { top: calc(50% + 60px); left: calc(5% + 66px); transform: translateY(-50%); display: none; }
+  #lockBtn.show { display: flex; }
+  #lockBtn.on { color: var(--text); border-color: var(--mid); }
+  #lockBtn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  #lockBtn .closed, #lockBtn.on .open { display: none; }
+  #lockBtn.on .closed { display: block; }
+  #zoomInBtn:active, #zoomOutBtn:active, #homeBtn:active, #lockBtn:active { color: var(--text); }
+  /* Follow this aircraft: the view stays centred on it, zoomed, until home. */
+  #detailPanel .dp-follow {
+    position: absolute;
+    top: 12px;
+    left: 14px;
+    z-index: 2;
+    padding: 9px 14px;
+    border: 1px solid var(--mid);
+    border-radius: 999px;
+    font-size: 0.8rem;
+    letter-spacing: .08em;
+    color: var(--mid);
+    background: var(--panel-bg-strong);
+  }
+  #detailPanel .dp-follow.on { color: var(--text); background: color-mix(in srgb, var(--mid) 30%, transparent); }
   /* The gear's mirror image, on the east side of the ring. One tap from the
      radar, because "what was that?" is asked the moment something roars past
      -- not after digging through settings. */
@@ -1312,6 +1335,7 @@
   <div id="zoomInBtn" title="Zoom in" aria-label="Zoom in">+</div>
   <div id="zoomOutBtn" title="Zoom out" aria-label="Zoom out">−</div>
   <div id="homeBtn" title="Back to the radar" aria-label="Back to the radar">⌂</div>
+  <div id="lockBtn" title="Keep this view" aria-label="Keep this view"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path class="closed" d="M8 11V7a4 4 0 0 1 8 0v4"/><path class="open" d="M8 11V7a4 4 0 0 1 8 0v1"/></svg></div>
   <div id="settingsBackdrop"></div>
   <div id="settingsPanel"></div>
   <div id="splash" aria-hidden="true"><!--brand:logo--><svg class="ss-logo" viewBox="0 0 473 100" role="img" aria-label="StratoScan"><rect width="100" height="100" rx="22" fill="#0a1a3a"/><g transform="translate(10 10) scale(0.8)"><circle cx="50" cy="50" r="36" fill="none" stroke="#274a86" stroke-width="4"/><path d="M50 50 L50 14 A36 36 0 0 1 81.2 32 Z" fill="#5ee7ff" opacity="0.32"/><line x1="50" y1="50" x2="81.2" y2="32" stroke="#5ee7ff" stroke-width="4.5" stroke-linecap="round"/><circle cx="50" cy="50" r="3.4" fill="#5ee7ff"/><circle cx="27" cy="67" r="3.4" fill="#3ddc97"/><circle cx="35" cy="53" r="4.2" fill="#5ee7ff"/><circle cx="46" cy="36" r="5" fill="#ffffff"/></g><g transform="translate(116 71)"><path class="ss-strato" d="M3.3 -6.18V-11.459999999999999H10.139999999999999V-8.28L12.42 -6.0H25.5L27.9 -8.4V-16.14L25.56 -18.48H9.6L3.42 -24.599999999999998V-35.82L9.6 -42.0H28.08L34.26 -35.82V-30.48H27.419999999999998V-33.72L25.08 -36.0H12.6L10.26 -33.72V-26.759999999999998L12.6 -24.48H28.56L34.74 -18.3V-6.3L28.439999999999998 0.0H9.48ZM44.34 -5.9399999999999995V-24.119999999999997H38.940000000000005V-29.88H44.46V-39.6H51.120000000000005V-29.88H60.3V-24.119999999999997H51.120000000000005V-8.1L53.46 -5.76H60.3V0.0H50.28ZM66.0 -29.88H72.3V-24.779999999999998L77.28 -29.88H85.56V-24.06H78.78L72.78 -17.939999999999998V0.0H66.0ZM89.16 -5.34V-12.42L94.5 -17.7H109.91999999999999V-22.14L107.69999999999999 -24.36H98.28L96.06 -22.14V-20.22H89.39999999999999V-23.7L95.52 -29.88H110.46L116.58 -23.7V0.0H110.39999999999999V-4.62L105.6 0.0H94.5ZM104.94 -5.34 109.91999999999999 -10.139999999999999V-12.66H97.74L95.82 -10.799999999999999V-7.14L97.61999999999999 -5.34ZM126.77999999999999 -5.9399999999999995V-24.119999999999997H121.38V-29.88H126.89999999999999V-39.6H133.56V-29.88H142.73999999999998V-24.119999999999997H133.56V-8.1L135.89999999999998 -5.76H142.73999999999998V0.0H132.72ZM147.84 -6.0V-23.88L153.78 -29.88H170.34L176.33999999999997 -23.88V-6.0L170.34 0.0H153.78ZM167.16 -5.7 169.56 -8.1V-21.779999999999998L167.16 -24.18H157.01999999999998L154.62 -21.779999999999998V-8.1L157.01999999999998 -5.7Z"/><path class="ss-scan" d="M182.94 -6.18V-11.459999999999999H189.77999999999997V-8.28L192.05999999999997 -6.0H205.14L207.54 -8.4V-16.14L205.2 -18.48H189.23999999999998L183.05999999999997 -24.599999999999998V-35.82L189.23999999999998 -42.0H207.71999999999997L213.89999999999998 -35.82V-30.48H207.05999999999997V-33.72L204.71999999999997 -36.0H192.23999999999998L189.89999999999998 -33.72V-26.759999999999998L192.23999999999998 -24.48H208.2L214.38 -18.3V-6.3L208.07999999999998 0.0H189.11999999999998ZM220.68 -5.9399999999999995V-23.939999999999998L226.56 -29.88H242.34L248.28 -23.88V-18.96H241.5V-21.72L239.1 -24.06H229.85999999999999L227.46 -21.72V-8.16L229.85999999999999 -5.819999999999999H239.1L241.5 -8.16V-10.92H248.28V-6.0L242.34 0.0H226.56ZM253.38 -5.34V-12.42L258.71999999999997 -17.7H274.14V-22.14L271.92 -24.36H262.5L260.28 -22.14V-20.22H253.62V-23.7L259.74 -29.88H274.68L280.8 -23.7V0.0H274.62V-4.62L269.82 0.0H258.71999999999997ZM269.15999999999997 -5.34 274.14 -10.139999999999999V-12.66H261.96L260.04 -10.799999999999999V-7.14L261.84 -5.34ZM288.29999999999995 -29.88H294.59999999999997V-24.419999999999998L300.06 -29.88H309.53999999999996L315.84 -23.58V0.0H309.06V-21.72L306.71999999999997 -24.06H301.32L295.08 -17.759999999999998V0.0H288.29999999999995Z"/><path class="ss-strato" d="M326.2923782234957 -38.230830945558736H321.96V-42.0H335.08710601719196V-38.230830945558736H330.7114040114613V-26.880000000000003H326.2923782234957ZM336.6900859598854 -42.0H341.02246418338103L344.87828080229224 -34.375014326647566H344.9216045845272L348.82074498567334 -42.0H353.153123209169V-26.880000000000003H348.90739255014324V-35.11151862464183H348.82074498567334L345.78808022922635 -29.436103151862465H344.0118051575931L341.02246418338103 -35.11151862464183H340.93581661891113V-26.880000000000003H336.6900859598854Z"/></g></svg><!--/brand:logo--></div>
@@ -1677,7 +1701,7 @@ function viewCentre() { return { x: CX + view.ox, y: CY + view.oy, r: R * view.s
 function setView(ox, oy, scale) {
   const sc = Math.min(VIEW_MAX_SCALE, Math.max(VIEW_MIN_SCALE, scale));
   // the radar never further than two dials away, so a stray swipe cannot lose it
-  const lim = W * 2;
+  const lim = Math.max(W * 2, R * sc * 1.5);   // far enough to follow an aircraft near the ring at any zoom
   view.ox = Math.max(-lim, Math.min(lim, ox));
   view.oy = Math.max(-lim, Math.min(lim, oy));
   view.scale = sc;
@@ -1685,9 +1709,12 @@ function setView(ox, oy, scale) {
   syncMapToView();
   if (home) locEl.textContent = formatLoc();   // the HUD's range and the no-data note
   document.getElementById('homeBtn').classList.toggle('show', !viewIsHome());
+  const lockEl = document.getElementById('lockBtn');
+  lockEl.classList.toggle('show', !viewIsHome() || viewLocked);
+  lockEl.classList.toggle('on', viewLocked);
   canvasDirty = true;
   clearTimeout(viewResetTimer);
-  viewResetTimer = viewIsHome() ? null : setTimeout(() => setView(0, 0, 1), VIEW_RESET_MS);
+  viewResetTimer = (viewIsHome() || viewLocked || followHex) ? null : setTimeout(() => setView(0, 0, 1), VIEW_RESET_MS);
 }
 // Zoom by `k` about canvas point (mx, my): that point stays under the fingers.
 function zoomViewAbout(k, mx, my) {
@@ -2903,12 +2930,17 @@ function syncMapToView() {
 // view has been moved, that it comes back by itself, or that there is no
 // local data where it is looking (the antenna's picture ends at the ring).
 let viewFingers = 0;      // pointers on the stage during a gesture; the HUD says when there are two
+let viewLocked = false;   // the lock button: the view stays where it is, no return after 45 s
+let followHex = null;     // the aircraft the view is kept centred on, from its detail panel
 function viewRangeText() {
   const nm = RANGE_NM / view.scale;
   const t = (nm >= 5 ? nm.toFixed(0) : nm.toFixed(1)) + 'NM';
   const fingers = viewFingers >= 2 ? ` · ${viewFingers} FINGERS` : '';
-  if (viewIsHome()) return t + fingers;
+  const followed = followHex && planes.get(followHex);
+  if (followed) return t + ' · FOLLOWING ' + followed.cs + fingers;
+  if (viewIsHome()) return t + (viewLocked ? ' · LOCKED' : '') + fingers;
   const beyond = Math.hypot(view.ox, view.oy) > R * view.scale;
+  if (viewLocked) return t + (beyond ? ' · NO LOCAL DATA HERE' : '') + ' · LOCKED' + fingers;
   return t + (beyond ? ' · NO LOCAL DATA HERE' : ' · BACK IN 45 S') + fingers;
 }
 
@@ -5104,6 +5136,7 @@ function applyUpdate(list) {
     const pl = planes.get(hex);
     if (now - pl.lastSeen > COAST_TOTAL_MS) {
       confirmApproachOnDrop(pl); // catches signal loss right at touchdown, before readsb ever reports 'ground'
+      if (followHex === hex) stopFollowing(`Lost ${pl.cs}`);
       planes.delete(hex);
     }
   }
@@ -5658,6 +5691,7 @@ function tick(ts) {
     const cdt = Math.min(0.25, Math.max(0, canvasSince / 1000));
     lastCanvasTs = ts;
     canvasDirty = false;
+    if (followHex) followUpdate();
     ctx.clearRect(0, 0, W, H);
     drawTrails();
     drawRewindTrack();
@@ -5717,6 +5751,7 @@ function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES', aler
 
   detailPanelEl.innerHTML = `
     <div class="dp-close">&times;</div>
+    <div class="dp-follow${followHex === p.hex ? ' on' : ''}">${followHex === p.hex ? 'FOLLOWING' : 'FOLLOW'}</div>
     ${isAlert ? `<div class="dp-alert-tag">${alertGlyph} ${esc(alertLabel)}</div>` : ''}
     <div class="dp-photo" style="display:none"></div>
     <div class="dp-cs" style="color:${p.color}">${esc(p.cs)}</div>
@@ -7560,6 +7595,14 @@ detailPanelEl.addEventListener('pointerup', (e) => {
   detailPointerStart = null;
   if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > PANEL_DRAG_SLOP_PX) {
     e.stopPropagation(); // that was a scroll -- leave the panel open
+    return;
+  }
+  if (e.target instanceof Element && e.target.closest('.dp-follow') && detailPanelHex) {
+    e.stopPropagation();
+    const hex = detailPanelHex;
+    if (followHex === hex) stopFollowing(); else followAircraft(hex);
+    hideDetailPanel();
+    return;
   }
   // a genuine tap falls through to the stage handler, which dismisses
 });
@@ -7877,16 +7920,49 @@ function syncFingers() {
   viewFingers = viewPointers.size;
   if (home) locEl.textContent = formatLoc();
 }
+// Lock and follow (the owner's ask, 2026-10-08): a zoomed view that stays,
+// on an area or on one aircraft. The lock holds the view where it is; FOLLOW
+// on an aircraft's detail panel keeps it in the middle of the dial, zoomed
+// in (3× unless already closer), until it is lost -- then the zoom stays,
+// locked, with the radar back in the middle -- or until home. A drag while
+// following lets go of the aircraft but keeps the lock.
+function setLocked(on) {
+  viewLocked = on;
+  if (!on) followHex = null;
+  setView(view.ox, view.oy, view.scale);   // re-arms or clears the return, and refreshes the HUD and buttons
+}
+function goHome() { followHex = null; viewLocked = false; setView(0, 0, 1); }
+function followAircraft(hex) {
+  followHex = hex;
+  viewLocked = true;
+  if (view.scale < 2) view.scale = 3;
+  followUpdate(true);
+}
+function stopFollowing(why) {
+  followHex = null;
+  if (why) showToast(why);
+  setView(0, 0, view.scale);
+}
+function followUpdate(force = false) {
+  const p = followHex && planes.get(followHex);
+  if (!p) { if (followHex) stopFollowing('Lost it'); return; }
+  const angle = (p.bearing - 90) * Math.PI / 180;
+  const r = (p.range / RANGE_NM) * R * view.scale;
+  const ox = -r * Math.cos(angle), oy = -r * Math.sin(angle);
+  if (force || Math.hypot(ox - view.ox, oy - view.oy) >= 0.5) setView(ox, oy, view.scale);
+}
 for (const [id, fn] of [['zoomInBtn', () => zoomViewAbout(VIEW_STEP, CX, CY)],
                         ['zoomOutBtn', () => zoomViewAbout(1 / VIEW_STEP, CX, CY)],
-                        ['homeBtn', () => setView(0, 0, 1)]]) {
+                        ['homeBtn', goHome],
+                        ['lockBtn', () => setLocked(!viewLocked)]]) {
   document.getElementById(id).addEventListener('pointerup', (e) => { e.stopPropagation(); fn(); });
 }
-document.addEventListener('keydown', (e) => {   // a laptop: + and - zoom, 0 goes home
+document.addEventListener('keydown', (e) => {   // a laptop: + and - zoom, 0 goes home, l holds
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.metaKey || e.ctrlKey) return;
   if (e.key === '+' || e.key === '=') zoomViewAbout(VIEW_STEP, CX, CY);
   else if (e.key === '-' || e.key === '_') zoomViewAbout(1 / VIEW_STEP, CX, CY);
-  else if (e.key === '0') setView(0, 0, 1);
+  else if (e.key === '0') goHome();
+  else if (e.key === 'l') setLocked(!viewLocked);
 });
 const viewPointers = new Map();     // pointerId -> last canvas position
 let viewGesture = null;             // the drag or pinch in progress
@@ -7919,6 +7995,7 @@ stage.addEventListener('pointermove', (e) => {
     if (!viewGesture.moved && Math.hypot(p.x - viewGesture.startX, p.y - viewGesture.startY) < 12) return;
     viewGesture.moved = true;
     viewTapSuppressed = true;
+    followHex = null;
     setView(view.ox + (p.x - prev.x), view.oy + (p.y - prev.y), view.scale);
   } else if (viewPointers.size === 2 && viewGesture.pinch) {
     const now = pinchState();
