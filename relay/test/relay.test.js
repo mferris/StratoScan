@@ -8,8 +8,7 @@ import worker from '../src/index.js';
 import {
   assess, HISTORY_PER_UNIT, MAX_UNITS, MIN_INTERVAL_S, STALE_AFTER_S,
   EVENTS_PER_HOUR, EVENTS_PER_UNIT, EVENT_RETENTION_S, MAX_EVENTS_PER_REQUEST,
-  PAIRING_TTL_S, PAIRING_MAX_ATTEMPTS, MAX_PHONES_PER_UNIT,
-} from '../src/limits.js';
+  PAIRING_TTL_S, PAIRING_MAX_ATTEMPTS, MAX_PHONES_PER_UNIT, cleanEvent } from '../src/limits.js';
 import { sha256Hex, signedMessage } from '../src/auth.js';
 import { makeD1 } from './d1-sqlite.js';
 
@@ -466,7 +465,7 @@ test('a paired phone gets its alerts, signed the way Apple requires', async () =
   assert.equal(p.headers['apns-topic'], 'com.example.radome');
   assert.equal(p.headers['apns-push-type'], 'alert');
   assert.equal(p.body.aps.alert.title, 'Helicopter nearby');
-  assert.equal(p.body.aps.alert.body, 'N407XX · Bell 407 · 1,000 ft · 2 mi NE');
+  assert.equal(p.body.aps.alert.body, 'Bell 407 · 1,000 ft · 2 mi NE (N407XX)');
   assert.equal(p.body.aps['thread-id'], u.id);
 
   const [h, c, s] = p.headers.authorization.replace('bearer ', '').split('.');
@@ -485,6 +484,20 @@ test('a notification never carries a position', async () => {
   assert.equal(n.urgent, true);
   assert.equal(n.payload.aps.alert.title, 'Emergency · squawk 7700');
   assert.equal(n.payload.aps['interruption-level'], 'time-sensitive');
+});
+
+test('an alert leads with the type and the route, and ends with the callsign (#59)', () => {
+  const n = apns.notificationFor({ kind: 'low_overhead', ts: 1, hex: 'aaaaa1', flight: 'AAL1801', type: 'Boeing 737 Max 8',
+    route: 'Miami → Newark', operator: 'American Airlines', alt_ft: 1200, dist_nm: 1.5, dir: 'NE' }, 'U'.repeat(43));
+  assert.equal(n.payload.aps.alert.title, 'Low overhead');
+  assert.equal(n.payload.aps.alert.body, 'Boeing 737 Max 8 · Miami → Newark · American Airlines · 1,200 ft · 2 mi NE (AAL1801)');
+  // nothing known but the callsign: it stands alone
+  const bare = apns.notificationFor({ kind: 'helicopter', ts: 1, hex: 'aaaaa1', flight: 'N123AB' }, 'U'.repeat(43));
+  assert.equal(bare.payload.aps.alert.body, 'N123AB');
+  // the unit's route field survives cleaning, and is bounded
+  const c = cleanEvent({ kind: 'notable', ts: 100, hex: 'aaaaa1', route: 'A → B', label: 'x' }, 100);
+  assert.equal(c.route, 'A → B');
+  assert.equal(cleanEvent({ kind: 'notable', ts: 100, hex: 'aaaaa1', route: 'x'.repeat(80) }, 100).route.length, 60);
 });
 
 test('phones get only the kinds they asked for; emergencies are never rate-limited', async () => {

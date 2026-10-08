@@ -47,6 +47,11 @@ sys.path.insert(0, HERE)
 from labels import (MILITARY_HEX_RANGES, NOTABLE_TYPES, NOTABLE_LABELS,  # noqa: E402
                     military_operator, humanize_type, TypeDb, NotableDb)
 AIRCRAFT_JSON = os.environ.get("STRATOSCAN_AIRCRAFT_JSON", "/run/readsb/aircraft.json")
+# The core feed (core-feed.py) knows each flight's route, looked up once there
+# (adsb.im); an alert leads with the type and where it is going (#59). Asked
+# only while an event is being written, at most every few seconds, and a
+# feed that is down just means an alert without a route. Empty: never asked.
+CORE_FEED_URL = os.environ.get("STRATOSCAN_CORE_FEED", "http://127.0.0.1:8088/api/aircraft")
 RUN_DIR = os.environ.get("STRATOSCAN_EVENTS_RUN", "/run/stratoscan-events")
 STATUS = os.path.join(RUN_DIR, "status.json")
 # What has been reported recently, so a restart (an update, a reinstall) does
@@ -177,9 +182,42 @@ def closest_approach(a):
     return t, math.hypot(x + vx * t, y + vy * t)
 
 
+class Routes:
+    """Where each aircraft is going, as the core feed has it: hex -> route text."""
+
+    def __init__(self):
+        self.at = 0
+        self.by_hex = {}
+
+    def get(self, hex_):
+        if not CORE_FEED_URL:
+            return None
+        now = time.time()
+        if now - self.at > 5:
+            self.at = now
+            try:
+                with urllib.request.urlopen(CORE_FEED_URL, timeout=1.5) as r:
+                    feed = json.load(r)
+                self.by_hex = {
+                    x["hex"]: x["route"]["text"]
+                    for x in feed.get("aircraft", [])
+                    if isinstance(x.get("route"), dict) and x["route"].get("text")
+                    and x["route"].get("plausible") is not False
+                }
+            except Exception:
+                pass                       # keep what we had; a route is a nicety
+        return self.by_hex.get(hex_)
+
+
+ROUTES = Routes()
+
+
 def describe(a, info, now):
-    """The aircraft part of an event: identity, type, altitude, rounded distance. No position."""
+    """The aircraft part of an event: identity, type, route, altitude, rounded distance. No position."""
     ev = {"ts": int(now), "hex": a["hex"]}
+    route = ROUTES.get(a["hex"])
+    if route:
+        ev["route"] = str(route)[:60]
     flight = (a.get("flight") or "").strip()
     if flight:
         ev["flight"] = flight[:8]

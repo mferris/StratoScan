@@ -69,15 +69,21 @@ export async function send(env, phone, notification, nowS, fetchImpl = fetch) {
 
 const ft = n => `${Number(n).toLocaleString('en-US')} ft`;
 
+// What it is and where it is going first, then whose, how high and how far,
+// and the callsign last (#59): "Boeing 737 Max 8 · Miami → Newark · American
+// Airlines · 24,200 ft · 9 mi NE (AAL1801)". A callsign means little to the
+// person reading it; the type and the route mean a lot.
 function details(e) {
   const who = e.flight || e.reg || e.hex?.toUpperCase();
-  const parts = [who, e.type].filter(Boolean);
+  const parts = [e.type, e.route, e.operator].filter(Boolean);
   if (typeof e.alt_ft === 'number') parts.push(e.alt_ft <= 0 ? 'on the ground' : ft(e.alt_ft));
   if (typeof e.dist_nm === 'number') {
     const mi = e.dist_nm * 1.15078;
     parts.push(`${mi < 1 ? 'under a mile' : `${Math.round(mi)} mi`}${e.dir ? ' ' + e.dir : ''}`);
   }
-  return parts.join(' · ');
+  const body = parts.join(' · ');
+  if (!who) return body;
+  return body ? `${body} (${who})` : who;
 }
 
 // A nearby alert measured from the phone (#44) says so: "near you".
@@ -93,7 +99,6 @@ export function notificationFor(event, unit) {
   const title = (TITLES[event.kind] || (() => 'StratoScan'))(event);
   let body = event.kind === 'test' ? (event.label || 'Notifications from this radar are working.') : details(event);
   if (event.kind === 'emergency' && event.label) body = `${event.label[0].toUpperCase()}${event.label.slice(1)} · ${body}`;
-  if (event.kind === 'notable' && event.operator) body = `${event.operator} · ${body}`;
   return {
     urgent: event.kind === 'emergency',
     collapseId: event.hex ? `${event.kind}-${event.hex}` : undefined,
@@ -161,7 +166,7 @@ export function approachStart(e, unit, startToken, nowS) {
         attributes: { unit, hex: e.hex, callsign: who, type: e.type || '', reason: e.label || '', about: e.phone ? 'you' : 'radar' },
         'content-state': approachState(e, nowS, false),
         'stale-date': nowS + (e.eta_s || 0) + 120,
-        alert: { title: `${e.label || 'Aircraft'} approaching${e.phone ? ' you' : ''}`, body: `${who}${e.type ? ' · ' + e.type : ''} · ${travel(e) ? `coming from the ${travel(e).from}, heading ${travel(e).to} · ` : ''}overhead in about ${Math.max(1, Math.round((e.eta_s || 0) / 60))} min` },
+        alert: { title: `${e.label || 'Aircraft'} approaching${e.phone ? ' you' : ''}`, body: `${e.type || who}${e.route ? ' · ' + e.route : ''} · ${travel(e) ? `coming from the ${travel(e).from}, heading ${travel(e).to} · ` : ''}overhead in about ${Math.max(1, Math.round((e.eta_s || 0) / 60))} min${e.type ? ` (${who})` : ''}` },
       },
     },
   };

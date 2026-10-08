@@ -88,6 +88,8 @@ enum AircraftFeedClient {
 /// What the widget shows: how many aircraft are in range, nearest first.
 struct Nearby {
     struct Plane {
+        /// Which aircraft (for the Watch to pick out the one an alert was about, #61).
+        var hex: String = ""
         let callsign: String
         let altitudeText: String
         let distanceNm: Double
@@ -115,7 +117,7 @@ struct Nearby {
             case .feet(let ft): alt = ft >= 18000 ? "FL\(Int((ft / 100).rounded()))" : "\(Int(ft).formatted()) ft"
             }
             let dir = points[Int(((br.bearing.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360) / 45).rounded()) % 8]
-            return Plane(callsign: cs.isEmpty ? a.hex.uppercased() : cs, altitudeText: alt, distanceNm: br.range, direction: dir,
+            return Plane(hex: a.hex, callsign: cs.isEmpty ? a.hex.uppercased() : cs, altitudeText: alt, distanceNm: br.range, direction: dir,
                          bearing: br.bearing, isNetwork: a.isNetwork)
         }
         .sorted { $0.distanceNm < $1.distanceNm }

@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 import WatchConnectivity
 
 /// StratoScan on the wrist (roadmap 3.1): a glance at the radar, and the
@@ -6,15 +7,23 @@ import WatchConnectivity
 /// whose addresses the phone sends over (WatchSync on the phone).
 @main
 struct StratoScanWatchApp: App {
-    init() { WatchReceiver.shared.start() }
+    init() { WatchReceiver.shared.start(); UNUserNotificationCenter.current().delegate = WatchReceiver.shared }
     var body: some Scene {
         WindowGroup { WatchRadarView() }
     }
 }
 
-/// Stores the radar's addresses the phone sends.
-final class WatchReceiver: NSObject, WCSessionDelegate {
+/// Stores the radar's addresses the phone sends, and the aircraft a tapped
+/// alert is about (#61), which the glance picks out.
+final class WatchReceiver: NSObject, ObservableObject, WCSessionDelegate, UNUserNotificationCenterDelegate {
     static let shared = WatchReceiver()
+    @Published var highlightHex: String?
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        guard let info = response.notification.request.content.userInfo["stratoscan"] as? [String: Any],
+              let hex = info["hex"] as? String else { return }
+        await MainActor.run { highlightHex = hex.lowercased() }
+    }
 
     func start() {
         guard WCSession.isSupported() else { return }
