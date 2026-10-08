@@ -1056,3 +1056,19 @@ keep http for the page: https is for the app's setup flow. Not yet on RDU
 installer. The pinning handshake itself is unverified until a unit with a
 certificate exists: the first managed build is where to check it
 (`tests/test_setup_tls.py` covers the unit side and the link).
+
+## Why a pinch on the panel never worked, and the fix (2026-10-08)
+Raspberry Pi OS's `autotouch` (an autostart script) maps a touch screen in
+the kiosk user's `~/.config/labwc/rc.xml` with `mouseEmulation="yes"`, and
+labwc then turns every touch into mouse events: one pointer, so Chromium
+and the page never see a second finger (the HUD's finger counter stayed at
+one). The Waveshare controller itself reports multi-touch. With
+`mouseEmulation="no"` (and `kill -HUP labwc` to reload) the page gets real
+touch pointer events, the HUD says 2 FINGERS and the pinch zooms; taps,
+the settings list's drag-scroll and panning still behave. autotouch leaves
+any existing `<touch ... mouseEmulation>` line alone, so the installer now
+writes the setting (flips autotouch's line, or adds `<touch
+mouseEmulation="no"/>` for every touch device on a unit without one);
+`tests/test_kiosk_touch.py` runs that block on the three cases. The
+kiosk's `--disable-pinch` Chromium flag was innocent and stays: the page's
+`touch-action` is what keeps the browser from zooming itself.

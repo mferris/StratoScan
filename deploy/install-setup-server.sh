@@ -417,6 +417,29 @@ if [ -n "$KIOSK_USER" ] && [ "$KIOSK_USER" != "root" ]; then
   else
     echo "  user units installed and enabled"
   fi
+  # Real touch events for the panel (2026-10-08). Raspberry Pi OS's autotouch
+  # tool maps a touch screen with mouseEmulation="yes", which makes labwc turn
+  # every touch into mouse events: one pointer, so the page can never see a
+  # second finger and a pinch does nothing. autotouch leaves the line alone
+  # once any <touch ... mouseEmulation> line exists, so it is written here:
+  # flipped on a unit that has autotouch's line, added (for every touch
+  # device) on one that has none. The page keeps the browser from zooming
+  # itself with touch-action, so real touch is safe for the kiosk.
+  RC="$KHOME/.config/labwc/rc.xml"
+  if grep -qs 'touch[^>]*mouseEmulation="yes"' "$RC"; then
+    sed 's/\(<touch[^>]*mouseEmulation=\)"yes"/\1"no"/' "$RC" > "$RC.tmp" && mv "$RC.tmp" "$RC"
+    echo "  touch: real touch events (was mouse emulation)"
+  elif ! grep -qs 'touch[^>]*mouseEmulation' "$RC"; then
+    install -d -o "$KIOSK_USER" -g "$KIOSK_USER" "$KHOME/.config/labwc"
+    if [ -f "$RC" ] && grep -q '</openbox_config>' "$RC"; then
+      awk '/<\/openbox_config>/ { print "\t<touch mouseEmulation=\"no\"/>" } { print }' "$RC" > "$RC.tmp" && mv "$RC.tmp" "$RC"
+    else
+      printf '<?xml version="1.0"?>\n<openbox_config xmlns="http://openbox.org/3.4/rc">\n\t<touch mouseEmulation="no"/>\n</openbox_config>\n' > "$RC"
+    fi
+    chown "$KIOSK_USER:$KIOSK_USER" "$RC"
+    echo "  touch: real touch events"
+  fi
+  if live; then pkill -HUP -x labwc 2>/dev/null || true; fi   # labwc re-reads its config on SIGHUP
 else
   echo "  WARNING: no kiosk user (run via sudo from the desktop user's account, or set KIOSK_USER)"
 fi
