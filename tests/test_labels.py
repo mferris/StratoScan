@@ -28,7 +28,7 @@ def check(ok, what):
 
 
 page = open(os.path.join(ROOT, "index.html"), encoding="utf-8").read()
-swift = open(os.path.join(ROOT, "ios", "StratoScan", "Models", "AirlineTable.swift"), encoding="utf-8").read()
+swift = open(os.path.join(ROOT, "ios", "Shared", "AirlineTable.swift"), encoding="utf-8").read()
 
 # airlines: airlines.json <-> index.html's AIRLINES
 block = re.search(r"const AIRLINES = \{(.*?)\n\};", page, re.S).group(1)

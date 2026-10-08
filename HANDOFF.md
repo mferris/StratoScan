@@ -980,3 +980,21 @@ the blip is this frame; that segment is redrawn, never stored, so a
 correction moves the blip and not the trail. `TRAIL_SAMPLE_MS` and
 `lastTrailAt` are gone. The app's SkyView was never affected (it draws
 `PlaneState.history`, which is already fixes only).
+
+## The panel can be dragged and pinched (roadmap 2.23, 2026-10-08)
+The owner asked for the app's pan and zoom on the radar's own screen too.
+Everything drawn from the radar -- `polarToXY`, the dial (`drawRings`), the
+sweep (`drawSweep`, and the CSS-animated sweep canvas's `transform-origin`)
+-- now goes through one `view` object: an offset of the radar's centre from
+the dial's, in canvas px, and a scale (1 = the 20 nm ring at the dial's
+edge). `setView()` applies it, redraws the static layers, moves the map
+(`syncMapToView()`: centre and zoom from the offset and scale) and refreshes
+the HUD, and arms a 45 s timer that brings the view home. Pointer events on
+the stage do the gestures: one pointer drags, two pinch about their midpoint,
+a wheel zooms about the cursor, a double-click zooms in; a drag of under
+12 px is still a tap, anything more sets `viewTapSuppressed` so the tap
+handler lets it go. The data does not follow the view (the antenna's
+aircraft and the network's near the radar are all there is), so the HUD says
+"NO LOCAL DATA HERE" when the dial's centre is outside the ring. Labels keep
+their place on the dial's rim, by bearing from the radar, with longer leader
+lines when the view has moved; that may want revisiting.
