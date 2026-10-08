@@ -1,0 +1,18 @@
+#!/usr/sbin/nft -f
+# StratoScan managed unit (security review 2026-10-04, item 6): SSH only
+# over Tailscale, so a radar on a shared network -- a flat, a workplace --
+# does not offer its SSH port to the neighbours. The tailnet's policy
+# (docs/gifting-a-unit.md) is what lets the maintainer in; this makes sure
+# nothing else can try. Everything else is untouched: the radar's page (80)
+# stays on the LAN for its owner, and the public tunnel is outbound-only.
+# Installed by install-setup-server.sh only with MANAGED=1.
+table inet stratoscan {
+    chain input {
+        type filter hook input priority 0; policy accept;
+        iifname "lo" accept
+        tcp dport 22 iifname "tailscale0" accept
+        tcp dport 22 ip saddr 100.64.0.0/10 accept
+        tcp dport 22 ip6 saddr fd7a:115c:a1e0::/48 accept
+        tcp dport 22 drop
+    }
+}

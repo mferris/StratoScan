@@ -177,3 +177,43 @@ trigger a ban. Tune in `/etc/fail2ban/jail.local` if that is too tight:
 sudo fail2ban-client set sshd unbanip <your-ip>   # clear a ban now
 sudo fail2ban-client status sshd                  # see what is banned
 ```
+
+
+## Installing a managed radar
+
+The installer does the unit-side hardening itself when told the radar is a
+managed one (security review 2026-10-04, items 6 and 8). Make one SSH key
+pair per fleet first, so a key found on one unit opens nothing else:
+
+```
+ssh-keygen -t ed25519 -f ~/.ssh/stratoscan-fleet-family -C "stratoscan fleet: family"
+```
+
+Then, on the unit, from the checkout:
+
+```
+MANAGED=1 MAINTAINER_USER=<the unit's login user> \
+MAINTAINER_PUBKEY="$(cat ~/.ssh/stratoscan-fleet-family.pub)" \
+sudo sh deploy/install-setup-server.sh
+```
+
+What that changes, and only that:
+
+- **SSH only over Tailscale.** An nftables rule drops port 22 from anywhere
+  but the tailnet (`deploy/stratoscan-managed.nft`). The radar's page stays
+  on the LAN for its owner; the public tunnel was outbound-only already.
+- **A narrow sudo rule.** The login user may run the maintenance commands
+  as root (`deploy/stratoscan-maintainer.sudoers`: apply or check an update,
+  restart or look at the StratoScan services, read the journal, reboot) and
+  nothing else; Raspberry Pi OS's `NOPASSWD: ALL` is removed and the user
+  leaves the `sudo` group. Real changes reach the unit as signed updates.
+  Service-file changes, which the updater refuses, need the owner at the
+  keyboard; keep them rare.
+- **Writes to the shared stores only from private addresses**
+  (`deploy/92-stratoscan-managed-writes.conf`), so a radar on a shared
+  network takes its sighting and approach records only from its own LAN,
+  its setup hotspot or the tailnet.
+- **The fleet's key** goes into the user's `authorized_keys`, once.
+
+Nothing here runs on RDU or on a unit its owner administers: without
+`MANAGED=1` the installer skips the whole block.
