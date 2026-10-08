@@ -62,8 +62,10 @@ turn on:
   the ring, or pan it elsewhere, and the radar asks adsb.lol for the aircraft
   round the middle of the view, rounded to about 5 km: a place on a map, not
   anyone's location. The public page can do the same, so the radar answers
-  at most one such question every five seconds, and nothing about these
-  aircraft is recorded or counted.
+  at most one such question every five seconds (a view wider than one of
+  adsb.lol's 250 nm discs is up to nine questions, a second apart, nine in
+  any twenty seconds in all), and nothing about these aircraft is recorded
+  or counted.
 
 ## The iPhone app
 

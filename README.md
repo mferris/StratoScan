@@ -56,8 +56,10 @@ too.
   from about 2 nm across the dial to the whole world; the lock beside them keeps
   a view, and FOLLOW on an aircraft's details keeps it in the middle, zoomed in.
   Beyond the ring, where the antenna's picture ends, the network's aircraft
-  appear round the middle of the view (adsb.lol, within 250 nm, fetched by the
-  radar itself, so a visitor's browser still talks only to the radar); the map
+  appear round the middle of the view: adsb.lol serves 250 nm discs, so a
+  wide view is a grid of up to nine of them, about 530 nm round the middle,
+  asked a second apart (the radar asks, so a visitor's browser still talks
+  only to the radar; the phone app does the same for itself); the map
   follows, the sweep turns about the radar wherever it is, and after 45
   seconds without a touch the view comes home by itself. The antenna's
   picture ends at its ring, and the display says so when you look past it

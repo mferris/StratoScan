@@ -405,7 +405,8 @@ struct ContentView: View {
         } else if viewModel.source == .network {
             // the network's data, and its licence's credit
             let why = !viewModel.hasRadar ? "AROUND YOU" : (!viewModel.connected && !viewModel.beyondRadar ? "YOUR RADAR IS OUT OF REACH" : "BEYOND YOUR RADAR")
-            let reach = viewModel.rangeNm * 1.3 > Double(NetworkFeed.maxRadiusNm) ? " · WITHIN 250 NM OF THE MIDDLE" : ""
+            let covered = NetworkFeed.discs(around: viewModel.viewCentre, halfNm: viewModel.rangeNm).coveredNm
+            let reach = covered < viewModel.rangeNm ? " · WITHIN \(Int(covered)) NM OF THE MIDDLE" : ""
             Text("\(why) · DATA © ADSB.LOL (ODbL)\(reach)")
                 .font(mono).tracking(2).foregroundColor(pal.textDim).multilineTextAlignment(.center)
                 .padding(.horizontal, 24).padding(.bottom, pad)
