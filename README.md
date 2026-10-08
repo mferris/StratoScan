@@ -189,14 +189,19 @@ scanning a QR code on its screen:
 - **Home-screen and lock-screen widget** — how many aircraft are overhead and
   the nearest few; a radar widget for StandBy
 - **Every aircraft, not just the ones the antenna hears** — the aircraft a
-  public network (adsb.lol) reports are drawn hollow, with a "not heard" count
-- **Zoom** — pinch on any spot, down to about a mile; the rings stay true
-  distances from the radar. Follow an aircraft, or centre on yourself
+  public network (adsb.lol) reports are drawn half-filled with an outline,
+  with a "not heard" count; one switch covers everything the network adds
+- **The whole screen, anywhere** — the map fills the screen, with the radar's
+  ring a line on it. Pinch from about a mile out to a continent, drag
+  anywhere in the world: inside the ring the aircraft are your radar's,
+  beyond it the network's around wherever you look. Away from your radar
+  the view centres on you by itself. Follow an aircraft, or centre on yourself
+- **Trails** — where each aircraft has been, fading with age, as on the radar
 - **Compass** — turn and the needle points at an aircraft, with which way it's
   coming from and going
 - **Sky view** — hold the phone up and each aircraft's label sits where it is
-  in the sky; tap one for its details. Away from home it can show the
-  aircraft around you instead (opt-in; see [privacy](docs/privacy.md))
+  in the sky; tap one for its details. Away from home it shows the
+  aircraft around you (with the public network on; see [privacy](docs/privacy.md))
 - **Logbook** — what your radar has seen: today, all-time totals, records
   (farthest, closest, highest, fastest), what flies over, when, and the
   regulars
@@ -211,7 +216,7 @@ scanning a QR code on its screen:
 - **iPad** — a big radar with details alongside, and a wall mode that dims
   at night
 - **No radar yet?** — see live aircraft around you from the public
-  adsb.lol network (opt-in), or play the demo
+  adsb.lol network, or play the demo
 - **Home and away** — on your WiFi the app talks to the radar directly; away
   from home it switches to the radar's public HTTPS page by itself. The away
   address is learned from the radar

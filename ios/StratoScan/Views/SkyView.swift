@@ -26,7 +26,9 @@ struct SkyView: View {
     @State private var cameraDenied = false
     @State private var selected: String?
     @State private var sideways: SidewaysDetail?
-    @AppStorage("stratoscan.skyNearMe") private var nearMeOn = false
+    /// The one network switch (roadmap 2.21): away from the radar, Sky view
+    /// shows the aircraft around the phone from adsb.lol when it is on.
+    private var nearMeOn: Bool { AircraftFeedClient.showNetwork }
     @Environment(\.dismiss) private var dismiss
     /// Opened from an aircraft's details ("Find in the sky"): that aircraft
     /// is always shown -- label, track, or an arrow to it -- and picked out.
@@ -86,10 +88,6 @@ struct SkyView: View {
                     if cameraDenied { settingsPrompt("Allow the camera to see the sky behind the labels.") }
                     if location.denied { settingsPrompt("Allow location to aim from where you stand.") }
                     if isAway && !nearMeOn { nearMePrompt }
-                    if isAway && nearMeOn {
-                        Button("Stop showing aircraft around me") { nearMeOn = false }
-                            .font(.caption).padding(8).background(.black.opacity(0.6)).clipShape(Capsule())
-                    }
                 }
                 .padding(.horizontal).padding(.top, 56).padding(.bottom, 40)
                 // whose view this is
@@ -116,7 +114,7 @@ struct SkyView: View {
         .task(id: nearMeKey) {
             guard nearMeOn, isAway, let me = location.coordinate else { viewModel.nearMe = [:]; return }
             while !Task.isCancelled {
-                if let list = await NearMeFeed.fetch(around: me) { NearMeFeed.apply(list, from: me, to: viewModel) }
+                if let list = await NetworkFeed.fetch(around: me) { NearMeFeed.apply(list, from: me, to: viewModel) }
                 try? await Task.sleep(for: .seconds(5))
             }
         }
@@ -136,7 +134,7 @@ struct SkyView: View {
     /// to a different ~5 km square.
     private var nearMeKey: String {
         guard nearMeOn, isAway, let me = location.coordinate else { return "off" }
-        let r = NearMeFeed.rounded(me)
+        let r = NetworkFeed.rounded(me)
         return "\(r.lat),\(r.lon)"
     }
 
@@ -207,15 +205,12 @@ struct SkyView: View {
     }
 
     private var nearMePrompt: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(String(format: "You're %.0f nm from the radar. Show the aircraft around you instead?", distanceFromRadar ?? 0))
-                .font(.callout)
-            Text("They come from adsb.lol, a public network. To ask for them the app sends adsb.lol your location, rounded to about 5 km. Nothing else leaves the phone, and you can turn it off here at any time.")
-                .font(.caption).foregroundColor(.secondary)
-            Button("Show aircraft around me") { nearMeOn = true }
-                .buttonStyle(.borderedProminent)
+        VStack(spacing: 6) {
+            Text("You're away from your radar. Turn on the public network in Settings to see the aircraft around you here.")
+                .font(.caption).multilineTextAlignment(.center)
         }
-        .padding(12).background(.black.opacity(0.75)).clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(10).background(.black.opacity(0.55)).clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 24)
     }
 
     /// The aircraft Sky view shows: the radar's, and around the phone when
@@ -503,30 +498,10 @@ private final class TurnedController<Content: View>: UIViewController {
 
 /// Aircraft around the phone, from adsb.lol's public API -- the same source
 /// the radar's network comparison uses.
+/// Sky view's copy of the network's aircraft around the phone (the fetch is
+/// Shared/NetworkFeed.swift, used by the radar view too).
 enum NearMeFeed {
-    static let radiusNm = 25
-
-    /// About 5 km: enough to find the sky's aircraft, not enough to find a house.
-    static func rounded(_ c: Coordinate) -> Coordinate {
-        Coordinate(lat: (c.lat * 20).rounded() / 20, lon: (c.lon * 20).rounded() / 20)
-    }
-
-    private struct Response: Decodable { let ac: [RawAircraft]? }
-    struct Extra: Decodable { let hex: String; let r: String?; let t: String? }
-    private struct ExtraResponse: Decodable { let ac: [Extra]? }
-
-    static func fetch(around me: Coordinate) async -> [(RawAircraft, Extra?)]? {
-        let at = rounded(me)
-        guard let url = URL(string: String(format: "https://api.adsb.lol/v2/point/%.2f/%.2f/%d", at.lat, at.lon, radiusNm)) else { return nil }
-        var req = URLRequest(url: url, timeoutInterval: 8)
-        req.setValue("StratoScan/1.0 (iOS app; Sky view)", forHTTPHeaderField: "User-Agent")
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200,
-              let list = try? JSONDecoder().decode(Response.self, from: data).ac else { return nil }
-        let extras = (try? JSONDecoder().decode(ExtraResponse.self, from: data).ac) ?? []
-        let byHex = Dictionary(extras.map { ($0.hex, $0) }, uniquingKeysWith: { a, _ in a })
-        return list.map { ($0, byHex[$0.hex]) }
-    }
+    typealias Extra = NetworkFeed.Extra
 
     @MainActor
     static func apply(_ list: [(RawAircraft, Extra?)], from me: Coordinate, to vm: RadarViewModel) {

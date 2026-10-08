@@ -4170,8 +4170,9 @@ function updateGhosts(nowMs) {
     }
     const { bearing, range } = haversineBearingRange(home.lat, home.lon, lat, lon);
     t.bearing = bearing; t.range = range;
-    // confidence fades as the extrapolation runs out of road
-    t.fade = 1 - 0.55 * Math.min(1, ageS / GHOST_DR_MAX_S);
+    // confidence fades as the extrapolation runs out of road -- but only
+    // to 70%: at 45% a ghost on a light map was a marker nobody saw (#57)
+    t.fade = 1 - 0.3 * Math.min(1, ageS / GHOST_DR_MAX_S);
     if (range > RANGE_NM) continue;   // outside the drawn ring: keep tracking, don't draw
 
     ghosts.push(t);
@@ -4207,33 +4208,35 @@ function drawGhosts() {
   // theme. A marker nobody can see is the same as no feature. It is still
   // hollow and dashed, which is what keeps it distinguishable from a real
   // contact; being faint was never what did that.
-  ctx.lineWidth = 3;
+  // Heavier than it was (3px, a 3.5px core): on the panel, on the light
+  // theme's map, the ring read as a map symbol or not at all (#57).
+  ctx.lineWidth = 4;
   ctx.strokeStyle = COLORS.ghost;
   const ghostColor = COLORS.ghost;
   for (const g of ghosts) {
     const { x, y } = polarToXY(g.bearing, g.range);
     const bs = blipScale(g.alt === 'ground' ? 'ground' : g.alt);
-    const r = Math.round(13 * bs * 2) / 2;
+    const r = Math.round(14 * bs * 2) / 2;
     ctx.globalAlpha = g.fade ?? 1;
     // A dashed ring with a glow, the same trick the real blips use. A thin
     // outline is legible in a screenshot and easy to lose on the actual
     // panel, which is the only place that matters.
-    const ring = glowSprite(`g|${ghostColor}|${r}`, r + 2, 8, c => {
-      c.lineWidth = 3;
-      c.setLineDash([5, 3]);
+    const ring = glowSprite(`g2|${ghostColor}|${r}`, r + 3, 10, c => {
+      c.lineWidth = 4;
+      c.setLineDash([6, 4]);
       c.strokeStyle = ghostColor;
       c.shadowColor = ghostColor;
-      c.shadowBlur = 8;
+      c.shadowBlur = 10;
       c.beginPath();
       c.arc(0, 0, r, 0, Math.PI * 2);
       c.stroke();
     });
     ctx.drawImage(ring, x - ring.half, y - ring.half);
     // a filled core, so it reads as an object rather than an empty annulus
-    ctx.globalAlpha = 0.6 * (g.fade ?? 1);
+    ctx.globalAlpha = 0.85 * (g.fade ?? 1);
     ctx.fillStyle = COLORS.ghost;
     ctx.beginPath();
-    ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
     ctx.fill();
     // a stalk pointing the way it is heading, so a ghost reads as an
     // aircraft rather than as a map annotation
