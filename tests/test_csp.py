@@ -41,6 +41,10 @@ check(policy.startswith("default-src 'none'"), "everything not listed is refused
 for d in ("frame-ancestors 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'none'", "report-uri /csp-report"):
     check(d in policy, "has %s" % d)
 check(fg.page_csp(sample) is policy, "the policy for the same page is cached")
+for i in range(10):
+    fg.page_csp(b"<script>v%d</script>" % i)
+check(len(fg._csp_cache) <= fg._CSP_CACHE_MAX, "the cache stays small")
+check('self.command == "GET"' in (root / "deploy" / "funnel-gateway.py").read_text(), "only a GET gets the policy (a HEAD has no body to hash)")
 
 page = (root / "index.html").read_bytes()
 real = fg.page_csp(page)
