@@ -1,0 +1,15 @@
+# StratoScan managed unit (security review 2026-10-04, item 8): the
+# maintainer's SSH login may run these as root and nothing else. Raspberry
+# Pi OS's default for the first user (NOPASSWD: ALL) is removed by the
+# installer on a managed unit, and the user leaves the sudo group. Real
+# changes reach a managed unit as signed updates (ota.py), never by hand.
+# Installed as /etc/sudoers.d/020-stratoscan-maintainer with __USER__
+# replaced, after visudo has accepted it.
+Cmnd_Alias STRATOSCAN_MAINTAIN = /opt/stratoscan/ota.py apply, /opt/stratoscan/ota.py check, \
+    /opt/stratoscan/ota.py status, \
+    /usr/bin/systemctl restart stratoscan-*, /usr/bin/systemctl status *, \
+    /usr/bin/journalctl *, /usr/sbin/reboot, \
+    /usr/bin/tailscale status, /usr/bin/tailscale ip, /usr/bin/tailscale funnel status, \
+    /usr/bin/fail2ban-client status *, /usr/bin/fail2ban-client set sshd unbanip *, \
+    /usr/sbin/nft list ruleset
+__USER__ ALL=(root) NOPASSWD: STRATOSCAN_MAINTAIN

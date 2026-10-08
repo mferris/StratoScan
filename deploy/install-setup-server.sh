@@ -257,6 +257,58 @@ else
   echo "  FAIL: unattended-upgrades is not installed or its config did not load"; exit 1
 fi
 
+# A MANAGED unit (docs/gifting-a-unit.md): one the maintainer keeps reachable
+# over the tailnet. Security review 2026-10-04, items 6 and 8. Never on RDU
+# or on a radar its owner administers: MANAGED=1 is set only when building
+# a managed radar, and nothing here runs without it.
+echo "== managed unit (MANAGED=${MANAGED:-0}) =="
+if [ "${MANAGED:-0}" = "1" ]; then
+  # SSH only over Tailscale (nftables). Debian's nftables.conf starts with
+  # `flush ruleset`, so the include must come at its end.
+  apt-get install -y -q nftables >/dev/null
+  install -d -m 0755 /etc/nftables.d
+  install -m 0644 deploy/stratoscan-managed.nft /etc/nftables.d/stratoscan-managed.nft
+  if ! grep -q 'include "/etc/nftables.d/\*.nft"' /etc/nftables.conf 2>/dev/null; then
+    printf '\n# StratoScan managed unit\ninclude "/etc/nftables.d/*.nft"\n' >> /etc/nftables.conf
+  fi
+  if live; then
+    nft -c -f /etc/nftables.conf           # a ruleset that would not load fails the install
+    systemctl enable nftables >/dev/null 2>&1 || true
+    systemctl restart nftables
+    echo "  ssh: only over Tailscale (nftables)"
+  fi
+  # The shared stores take writes only from private addresses.
+  lighttpd_conf 92-stratoscan-managed-writes.conf
+  lighttpd -tt -f /etc/lighttpd/lighttpd.conf
+  if live; then systemctl reload lighttpd; fi
+  # The maintainer's login: a narrow sudo rule in place of NOPASSWD: ALL,
+  # and the fleet's own SSH key (one key pair per fleet, MAINTAINER_PUBKEY).
+  M=${MAINTAINER_USER:-$KIOSK_USER}
+  if [ -n "$M" ] && [ "$M" != "root" ]; then
+    T=/etc/sudoers.d/020-stratoscan-maintainer
+    sed "s/__USER__/$M/g" deploy/stratoscan-maintainer.sudoers > "$T.tmp"
+    chmod 0440 "$T.tmp"
+    if visudo -cf "$T.tmp" >/dev/null 2>&1; then
+      mv "$T.tmp" "$T"
+      rm -f /etc/sudoers.d/010_pi-nopasswd
+      deluser "$M" sudo >/dev/null 2>&1 || true
+      echo "  sudo: $M may run only the maintenance commands"
+    else
+      rm -f "$T.tmp"; echo "  FAIL: the sudoers rule was rejected by visudo"; exit 1
+    fi
+    if [ -n "${MAINTAINER_PUBKEY:-}" ]; then
+      MH=$(getent passwd "$M" | cut -d: -f6)
+      install -d -m 0700 -o "$M" -g "$M" "$MH/.ssh"
+      touch "$MH/.ssh/authorized_keys"
+      grep -qxF "$MAINTAINER_PUBKEY" "$MH/.ssh/authorized_keys" || echo "$MAINTAINER_PUBKEY" >> "$MH/.ssh/authorized_keys"
+      chown "$M:$M" "$MH/.ssh/authorized_keys"; chmod 0600 "$MH/.ssh/authorized_keys"
+      echo "  ssh: this fleet's key installed for $M"
+    fi
+  else
+    echo "  WARNING: no maintainer user (set MAINTAINER_USER); sudo left as it was"
+  fi
+fi
+
 # Real-time clock battery. Without one the clock is lost at every power cut
 # and stays wrong until NTP answers. The Pi 5 can trickle-charge a
 # RECHARGEABLE cell (ML-2020), but charging must never be enabled for an
