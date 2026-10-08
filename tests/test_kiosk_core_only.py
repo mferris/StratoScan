@@ -24,7 +24,7 @@ def check(cond, msg):
 
 check("'/api/aircraft'" in code, "the page polls the core feed")
 for needle in ("adsb.im/api", "api.adsbdb.com", "/tar1090/data/aircraft.json", "core=0",
-               "USE_CORE_FEED", "coreActive(", "ROUTE_API_URL", "fetchFrom(", "routeQueue"):
+               "USE_CORE_FEED", "coreActive(", "ROUTE_API_URL", "fetchFrom(", "routeQueue", "queueRouteLookup("):
     check(needle not in code, "no %s in code" % needle)
 check(not re.search(r"https?://[a-z0-9.-]*adsb\.im", code), "no adsb.im address in code")
 check(not re.search(r"https?://[a-z0-9.-]*adsbdb", code), "no adsbdb address in code")
