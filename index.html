@@ -277,6 +277,12 @@
   }
   #sweepClip { overflow: hidden; }
   #radarSweep {
+    /* Sized and placed by drawSweep(): the dial at home, larger and centred
+       on the radar while the view is panned, so the wedge is never cut by
+       the canvas's own edge. The clip round it hides the rest. */
+    position: absolute;
+    left: 0;
+    top: 0;
     width: 100%;
     height: 100%;
     box-shadow: none;
@@ -1676,8 +1682,6 @@ function setView(ox, oy, scale) {
   view.oy = Math.max(-lim, Math.min(lim, oy));
   view.scale = sc;
   if (typeof redrawStaticLayers === 'function') redrawStaticLayers();
-  // the sweep is a canvas turned by a CSS animation: turn it about the radar
-  sweepEl.style.transformOrigin = `${(CX + view.ox) / W * 100}% ${(CY + view.oy) / H * 100}%`;
   syncMapToView();
   if (home) locEl.textContent = formatLoc();   // the HUD's range and the no-data note
   document.getElementById('homeBtn').classList.toggle('show', !viewIsHome());
@@ -5194,11 +5198,28 @@ function hexToRgba(hex, alpha) {
 // start, line end -- was the angle-0 drawing turned by sweepAngle.
 function drawSweep(ctx) {
   const sweepAngle = 0;
-  ctx.clearRect(0, 0, W, H);
+  // The sweep turns about the radar and fills the VISIBLE dial, whatever the
+  // zoom: a screen-space effect, not a plotted range (zoomed in, release
+  // 2026.10.08.2 drew it at the zoomed radius and the canvas's square edge
+  // cut it, which looked like a sweep too small for its rings). The canvas
+  // is a square centred on the radar, big enough to hold the wedge out to
+  // the dial's far edge; the dial itself at home, up to twice that panned,
+  // and the clip round it hides what falls outside the dial. With the
+  // radar off the dial there is no sensible sweep, so it fades out.
+  const d = Math.hypot(view.ox, view.oy);
+  const far = d + SWEEP_RADIUS;
+  const S = Math.min(2 * W, Math.ceil(2 * far / 64) * 64);
+  if (sweepEl.width !== S) { sweepEl.width = S; sweepEl.height = S; }
+  sweepEl.style.width = `${S / W * 100}%`;
+  sweepEl.style.height = `${S / H * 100}%`;
+  sweepEl.style.left = `${(CX + view.ox - S / 2) / W * 100}%`;
+  sweepEl.style.top = `${(CY + view.oy - S / 2) / H * 100}%`;
+  sweepEl.style.transformOrigin = '50% 50%';
+  sweepEl.style.opacity = d > SWEEP_RADIUS ? '0' : '';
+  ctx.clearRect(0, 0, S, S);
   ctx.save();
-  // about the radar's centre, out to the ring's edge, wherever the view is
-  const { x: scx, y: scy } = viewCentre();
-  const sr = SWEEP_RADIUS * view.scale;
+  const scx = S / 2, scy = S / 2;
+  const sr = Math.min(far, S / 2);
   const grad = ctx.createConicGradient(sweepAngle - Math.PI / 2, scx, scy);
   grad.addColorStop(0, hexToRgba(COLORS.sweep, 0.35));
   grad.addColorStop(0.06, hexToRgba(COLORS.sweep, 0));
