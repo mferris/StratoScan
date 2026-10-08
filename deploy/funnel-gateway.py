@@ -197,7 +197,8 @@ CSP_DIRECTIVES = (
     "report-uri /csp-report",
 )
 _INLINE_SCRIPT = re.compile(rb"<script>(.*?)</script>", re.S)
-_csp_cache = {}     # sha256 of the page bytes -> policy string (one page, one entry)
+_csp_cache = {}     # sha256 of the page bytes -> policy string (a few entries: the page, and its variants)
+_CSP_CACHE_MAX = 4
 
 
 def page_csp(page):
@@ -209,7 +210,8 @@ def page_csp(page):
             "'sha256-%s'" % base64.b64encode(hashlib.sha256(block).digest()).decode()
             for block in _INLINE_SCRIPT.findall(page) if block.strip())
         policy = "; ".join(CSP_DIRECTIVES).format(hashes=hashes)
-        _csp_cache.clear()
+        if len(_csp_cache) >= _CSP_CACHE_MAX:
+            _csp_cache.clear()
         _csp_cache[digest] = policy
     return policy
 
@@ -669,7 +671,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if k.lower() not in HOP_BY_HOP:
                 self.send_header(k, v)
         self._send_security_headers()
-        if (status == 200 and self._normalise(self.path) in PAGE_PATHS
+        # Only a GET carries the document the policy is for: a HEAD has no
+        # body to hash, and would get a policy with no script hash in it.
+        if (status == 200 and self.command == "GET" and self._normalise(self.path) in PAGE_PATHS
                 and (resp.headers.get("Content-Type") or "").startswith("text/html")):
             self.send_header(CSP_HEADER, page_csp(body))
         self.end_headers()
