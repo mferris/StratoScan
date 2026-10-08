@@ -1072,3 +1072,25 @@ mouseEmulation="no"/>` for every touch device on a unit without one);
 `tests/test_kiosk_touch.py` runs that block on the three cases. The
 kiosk's `--disable-pinch` Chromium flag was innocent and stays: the page's
 `touch-action` is what keeps the browser from zooming itself.
+
+## The panel looks anywhere, with the network's aircraft (2026-10-08, later)
+The owner asked why the phone could zoom out to a continent with adsb.lol's
+aircraft and the panel could not. Now it can: `VIEW_MIN_SCALE` is 0.01 (the
+world across the dial), and whenever the view looks beyond the ring
+(`viewLooksBeyondRing()`: zoomed out past 30 nm radius, or the middle
+panned outside the ring) the page polls `/network/around?lat&lon&r` every
+5 s with the view's middle and a radius of 0.75 × the dial's width, clamped
+25–250 nm. The unit's network-compare.py answers it (`around_payload`):
+the point rounded to 0.05°, one answer kept per place for 10 s, adsb.lol
+asked at most every 5 s whoever asks (the public page can; 429 otherwise),
+bodies up to 3 MB. The aircraft arrive as ghosts (`fromView: true`, no
+trail, no sighting, no lookups) and are drawn by `ghostXY()`: the map's own
+projection while the view looks beyond the ring (a flat picture from the
+radar drifts off the map far away), polar otherwise; a dot below 0.3×.
+The HUD shows the middle's position, NETWORK VIEW, and "N FROM ADSB.LOL"
+in the count; local aircraft whose blip is off the dial get no rim label
+meanwhile. Checked in a browser: 106 aircraft round home at 100 nm, 431
+round New York, 0 px between the two projections where they overlap.
+`tests/test_network_around.py`. Also fixed: two leftover calls to the
+removed `queueRouteLookup` (ghost enrichment, the rewind panel) that
+threw since 2026.10.08.3.

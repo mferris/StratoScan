@@ -34,6 +34,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 LISTEN = ("127.0.0.1", 8087)
@@ -58,6 +59,16 @@ RADIUS_NM = 25          # a little beyond the 20nm ring the radar draws
 RING_NM = 20            # what the radar actually shows; stats use this
 
 MAX_BODY = 400_000
+# The network round a point the radar's screen is looking at (roadmap 2.23 on
+# the kiosk, 2026-10-08): what adsb.lol serves round a point, how long one
+# answer is kept for the same place, and how often adsb.lol may be asked at
+# all, whoever asks -- the public page can, through the gateway.
+AROUND_MIN_NM, AROUND_MAX_NM = 25, 250
+AROUND_CACHE_S = 10
+AROUND_UPSTREAM_GAP_S = 5
+AROUND_MAX_BODY = 3_000_000     # a busy 250 nm disc is well over MAX_BODY
+AROUND_PLACES = 8               # answers kept at once
+_around = {"cache": {}, "last_upstream": 0.0}
 
 # Altitude bands, in feet. Chosen to separate a horizon problem from a
 # sensitivity one: if the low bands are the weak ones the antenna is being
@@ -141,10 +152,10 @@ def fresh_store():
     }
 
 
-def get_json(url, timeout=6):
+def get_json(url, timeout=6, limit=MAX_BODY):
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read(MAX_BODY).decode("utf-8", "replace"))
+        return json.loads(r.read(limit).decode("utf-8", "replace"))
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -287,27 +298,74 @@ def build_payload():
         # confident answer assembled from several different aeroplanes.
         if not ICAO_HEX.fullmatch(hexid or ""):
             continue
-        ghosts.append({
-            "hex": hexid,
-            "flight": (a.get("flight") or "").strip() or None,
-            "lat": a.get("lat"), "lon": a.get("lon"),
-            "alt": a.get("alt_baro"),
-            "gs": a.get("gs"), "track": a.get("track"),
-            "seen_pos": a.get("seen_pos"),
-            "type": a.get("t"), "reg": a.get("r"),
-            # The panel shows a ghost the same fields it shows a local
-            # contact, so the same fields have to survive this projection.
-            # baro_rate is the primary vertical rate for the same reason
-            # readsb prefers it; geom_rate is the fallback when a transponder
-            # only reports the GNSS-derived one.
-            "squawk": a.get("squawk"),
-            "vrate": a.get("baro_rate") if a.get("baro_rate") is not None
-                     else a.get("geom_rate"),
-            "emergency": a.get("emergency"),
-            "category": a.get("category"),
-        })
+        ghosts.append(ghost_entry(hexid, a))
     return {"ac": ghosts, "mine": len(mine), "network": len(theirs),
             "stats": card, "source": SOURCE_NAME, "at": time.time()}
+
+
+def ghost_entry(hexid, a):
+    """A network aircraft as the page draws it. The panel shows a ghost the
+    same fields it shows a local contact, so the same fields have to survive
+    this projection. baro_rate is the primary vertical rate for the same
+    reason readsb prefers it; geom_rate is the fallback when a transponder
+    only reports the GNSS-derived one."""
+    return {
+        "hex": hexid,
+        "flight": (a.get("flight") or "").strip() or None,
+        "lat": a.get("lat"), "lon": a.get("lon"),
+        "alt": a.get("alt_baro"),
+        "gs": a.get("gs"), "track": a.get("track"),
+        "seen_pos": a.get("seen_pos"),
+        "type": a.get("t"), "reg": a.get("r"),
+        "squawk": a.get("squawk"),
+        "vrate": a.get("baro_rate") if a.get("baro_rate") is not None
+                 else a.get("geom_rate"),
+        "emergency": a.get("emergency"),
+        "category": a.get("category"),
+    }
+
+
+def around_payload(lat, lon, radius, now=None):
+    """The network's aircraft round a point: for the radar's screen when its
+    view is panned or zoomed out past the ring. The point is rounded to 0.05
+    degrees before it leaves the unit (as the app does; it is a place on a
+    map, not anyone's location) and the radius clamped to what adsb.lol
+    serves. One answer is kept per place for AROUND_CACHE_S, and adsb.lol is
+    asked at most every AROUND_UPSTREAM_GAP_S, whoever asks: a question that
+    can't be asked yet gets that place's last answer, marked stale, or None
+    (429 to the caller)."""
+    now = time.time() if now is None else now
+    key = (round(round(lat * 20) / 20, 2), round(round(lon * 20) / 20, 2),
+           int(max(AROUND_MIN_NM, min(AROUND_MAX_NM, radius))))
+    with lock:
+        hit = _around["cache"].get(key)
+        if hit and now - hit[0] < AROUND_CACHE_S:
+            out = dict(hit[1]); out["fetched"] = round(now - hit[0], 1)
+            return out
+        if now - _around["last_upstream"] < AROUND_UPSTREAM_GAP_S:
+            if hit:
+                out = dict(hit[1]); out["fetched"] = round(now - hit[0], 1); out["stale"] = True
+                return out
+            return None
+        _around["last_upstream"] = now
+    net = get_json(SOURCE_URL.format(lat=key[0], lon=key[1], radius=key[2]),
+                   timeout=UPSTREAM_TIMEOUT, limit=AROUND_MAX_BODY)
+    ghosts = []
+    for a in net.get("ac", []):
+        if a.get("lat") is None or a.get("lon") is None:
+            continue
+        hexid = str(a.get("hex", "")).strip().lower()
+        if not ICAO_HEX.fullmatch(hexid):
+            continue
+        ghosts.append(ghost_entry(hexid, a))
+    payload = {"ac": ghosts, "centre": {"lat": key[0], "lon": key[1]}, "radius": key[2],
+               "source": SOURCE_NAME, "at": now}
+    with lock:
+        if len(_around["cache"]) >= AROUND_PLACES:
+            _around["cache"].clear()
+        _around["cache"][key] = (now, payload)
+    out = dict(payload); out["fetched"] = 0.0
+    return out
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -338,6 +396,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
             with lock:
                 card = scorecard(current())
             return self._json(200, {"stats": card, "source": SOURCE_NAME})
+        if path == "/network/around":
+            q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+            try:
+                lat = float(q.get("lat", [""])[0]); lon = float(q.get("lon", [""])[0])
+                radius = float(q.get("r", ["25"])[0])
+            except (ValueError, IndexError):
+                return self._json(400, {"error": "lat, lon and r must be numbers"})
+            if not (-90 <= lat <= 90 and -180 <= lon <= 180 and radius == radius):
+                return self._json(400, {"error": "lat or lon out of range"})
+            try:
+                out = around_payload(lat, lon, radius)
+            except (urllib.error.URLError, OSError, ValueError, KeyError) as e:
+                return self._json(503, {"error": "upstream unavailable", "detail": type(e).__name__})
+            if out is None:
+                return self._json(429, {"error": "asked too often; try again in a few seconds"})
+            return self._json(200, out)
         if path != "/network":
             return self._json(404, {"error": "not found"})
 

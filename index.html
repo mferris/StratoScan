@@ -1700,7 +1700,7 @@ const SWEEP_RADIUS = W / 2; // the sweep wedge/line fills the whole dial, not ju
 // there is, so a view dragged past the ring shows the map and nothing on it,
 // and the HUD says so.
 const view = { ox: 0, oy: 0, scale: 1 };
-const VIEW_MIN_SCALE = 0.3, VIEW_MAX_SCALE = 12, VIEW_RESET_MS = 45 * 1000;
+const VIEW_MIN_SCALE = 0.01, VIEW_MAX_SCALE = 12, VIEW_RESET_MS = 45 * 1000;   // 0.01: the whole world across the dial
 let viewResetTimer = null;
 function viewIsHome() { return view.ox === 0 && view.oy === 0 && view.scale === 1; }
 // Where the radar's centre is drawn, and the ring's radius, for this view.
@@ -1714,6 +1714,7 @@ function setView(ox, oy, scale) {
   view.scale = sc;
   if (typeof redrawStaticLayers === 'function') redrawStaticLayers();
   syncMapToView();
+  if (viewLooksBeyondRing() !== viewFeedOn) refreshViewFeed();   // the network round the view, or not
   if (home) locEl.textContent = formatLoc();   // the HUD's range and the no-data note
   document.getElementById('homeBtn').classList.toggle('show', !viewIsHome());
   const lockEl = document.getElementById('lockBtn');
@@ -2469,9 +2470,12 @@ function confirmApproachOnDrop(pl) {
 
 function formatLoc() {
   if (!home) return 'LOCATING…';
-  const ns = home.lat >= 0 ? 'N' : 'S';
-  const ew = home.lon >= 0 ? 'E' : 'W';
-  return `${Math.abs(home.lat).toFixed(4)}°${ns} ${Math.abs(home.lon).toFixed(4)}°${ew} · ${viewRangeText()}`;
+  // The radar's own position at home; the middle of the view once it has
+  // been moved, so the HUD says where it is looking.
+  const at = viewIsHome() ? home : viewCentreLatLon();
+  const ns = at.lat >= 0 ? 'N' : 'S';
+  const ew = at.lon >= 0 ? 'E' : 'W';
+  return `${Math.abs(at.lat).toFixed(4)}°${ns} ${Math.abs(at.lon).toFixed(4)}°${ew} · ${viewRangeText()}`;
 }
 
 // ---- Background map --------------------------------------------------
@@ -2923,15 +2927,75 @@ window.addEventListener('resize', () => {
 // The map under the dial follows the view (roadmap 2.23): its centre is
 // wherever the dial's centre has been dragged to, in nm from the radar at the
 // view's scale, and its zoom matches the ring's size on screen.
-function syncMapToView() {
-  if (!map || !home) return;
-  const rCss = R * (stage.getBoundingClientRect().width / W);
+function viewCentreLatLon() {
   const nmPerPx = RANGE_NM / (R * view.scale);
   const east = -view.ox * nmPerPx, north = view.oy * nmPerPx;
   const lat = home.lat + north / 60;
   const lon = home.lon + east / (60 * Math.cos(lat * Math.PI / 180));
+  return { lat, lon };
+}
+function syncMapToView() {
+  if (!map || !home) return;
+  const rCss = R * (stage.getBoundingClientRect().width / W);
+  const { lat, lon } = viewCentreLatLon();
   map.jumpTo({ center: [lon, lat], zoom: zoomForRange(RANGE_NM / view.scale, lat, rCss) });
 }
+
+// ---- the network's aircraft round the view (roadmap 2.23, 2026-10-08) ----
+// Zoomed out past the ring, or panned beyond it, the radar's own picture has
+// nothing to show; the unit then asks adsb.lol for the aircraft round the
+// middle of the view (250 nm at most, as the app does) and they are drawn
+// as ghosts, by the map's projection. Through the unit, so a visitor's
+// browser still talks to nothing but the radar; off with the network
+// comparison switch; nothing recorded or counted, it is a look, not a
+// sighting.
+const VIEW_FEED_URL = '/network/around';
+const VIEW_FEED_MS = 5000;
+let viewFeedOn = false;
+let viewFeedCount = 0;
+function viewLooksBeyondRing() {
+  return !!home && (view.scale < 0.66 || Math.hypot(view.ox, view.oy) > R * view.scale);
+}
+async function refreshViewFeed() {
+  const on = alertSettings.networkCompare && viewLooksBeyondRing();
+  if (!on) {
+    if (viewFeedOn) { for (const [hex, t] of ghostTracks) if (t.fromView) ghostTracks.delete(hex); }
+    viewFeedOn = false; viewFeedCount = 0;
+    return;
+  }
+  viewFeedOn = true;
+  const c = viewCentreLatLon();
+  const r = Math.round(Math.max(25, Math.min(250, (RANGE_NM / view.scale) * 0.75)));
+  try {
+    const res = await fetch(`${VIEW_FEED_URL}?lat=${c.lat.toFixed(3)}&lon=${c.lon.toFixed(3)}&r=${r}`, { cache: 'no-store' });
+    if (!res.ok) return;              // asked too soon, or the network is away: keep what we have
+    const d = await res.json();
+    const now = performance.now();
+    let n = 0;
+    for (const a of (d.ac || [])) {
+      if (typeof a.lat !== 'number' || typeof a.lon !== 'number') continue;
+      const mine = planes.get(a.hex);
+      if (mine && (mine.range <= RANGE_NM || a.hex === followHex)) continue;   // drawn as itself
+      const prev = ghostTracks.get(a.hex);
+      if (prev && !prev.fromView) continue;                                   // the comparison's own ghost
+      ghostTracks.set(a.hex, {
+        hex: a.hex, flight: a.flight, type: a.type, reg: a.reg, alt: a.alt,
+        gs: a.gs, track: a.track, seenPos: a.seen_pos,
+        squawk: a.squawk ?? null, vrate: typeof a.vrate === 'number' ? a.vrate : null,
+        emergency: a.emergency && a.emergency !== 'none' ? a.emergency : null,
+        category: a.category ?? null,
+        fixLat: a.lat, fixLon: a.lon, fixAt: now, lastSeenAt: now,
+        trail: [], fromView: true, enriched: true,
+        bearing: prev ? prev.bearing : 0, range: prev ? prev.range : 0,
+        typeLabel: prev ? prev.typeLabel : null, registration: prev ? prev.registration : null,
+        typeDesc: prev ? prev.typeDesc : null, typeCode: prev ? prev.typeCode : null, wtc: prev ? prev.wtc : null,
+      });
+      n++;
+    }
+    viewFeedCount = n;
+  } catch (e) { /* keep what we have */ }
+}
+setInterval(refreshViewFeed, VIEW_FEED_MS);
 
 // What the HUD says about the view: the range across the dial, and, once the
 // view has been moved, that it comes back by itself, or that there is no
@@ -2945,10 +3009,12 @@ function viewRangeText() {
   const fingers = viewFingers >= 2 ? ` · ${viewFingers} FINGERS` : '';
   const followed = followHex && planes.get(followHex);
   if (followed) return t + ' · FOLLOWING ' + followed.cs + fingers;
-  if (viewIsHome()) return t + (viewLocked ? ' · LOCKED' : '') + fingers;
-  const beyond = Math.hypot(view.ox, view.oy) > R * view.scale;
-  if (viewLocked) return t + (beyond ? ' · NO LOCAL DATA HERE' : '') + ' · LOCKED' + fingers;
-  return t + (beyond ? ' · NO LOCAL DATA HERE' : ' · BACK IN 45 S') + fingers;
+  const parts = [t];
+  if (viewFeedOn) parts.push('NETWORK VIEW');
+  else if (!viewIsHome() && Math.hypot(view.ox, view.oy) > R * view.scale) parts.push('NO LOCAL DATA HERE');
+  if (viewLocked) parts.push('LOCKED');
+  else if (!viewIsHome()) parts.push('BACK IN 45 S');
+  return parts.join(' · ') + fingers;
 }
 
 // ---- Runway outlines --------------------------------------------------
@@ -4257,9 +4323,6 @@ function enrichGhost(t) {
     // user close and reopen to see the answer arrive
     if (detailPanelHex === t.hex && detailPanelEl.classList.contains('show')) showGhostPanel(t);
   });
-  if (t.flight && /^[A-Z]{3}\d/.test(t.flight)) {
-    queueRouteLookup(t.flight, t.fixLat, t.fixLon);
-  }
 }
 
 // A ghost holds the same facts a local contact does, under different names.
@@ -4297,10 +4360,11 @@ function updateGhosts(nowMs) {
     }
     const { bearing, range } = haversineBearingRange(home.lat, home.lon, lat, lon);
     t.bearing = bearing; t.range = range;
+    t.lat = lat; t.lon = lon;
     // confidence fades as the extrapolation runs out of road -- but only
     // to 70%: at 45% a ghost on a light map was a marker nobody saw (#57)
     t.fade = 1 - 0.3 * Math.min(1, ageS / GHOST_DR_MAX_S);
-    if (range > RANGE_NM) continue;   // outside the drawn ring: keep tracking, don't draw
+    if (range > RANGE_NM && !viewFeedOn) continue;   // outside the ring: drawn only while the view looks beyond it
 
     ghosts.push(t);
   }
@@ -4326,6 +4390,19 @@ function drawGhostTrails() {
 // obvious at a glance that these are not this receiver's own contacts --
 // they are somebody else's, relayed. Drawn UNDER the real blips so a ghost
 // can never obscure an aircraft this antenna actually heard.
+// Where a ghost is drawn: by bearing and range from the radar, like everything
+// else, inside the ring; by the map's own projection while the view looks
+// beyond it, where a flat picture from the radar would drift off the map
+// (the view can be a thousand miles away).
+function ghostXY(g) {
+  if (viewFeedOn && map && typeof g.lat === 'number') {
+    const pt = map.project([g.lon, g.lat]);
+    const k = W / stage.getBoundingClientRect().width;
+    return { x: pt.x * k, y: pt.y * k };
+  }
+  return polarToXY(g.bearing, g.range);
+}
+
 function drawGhosts() {
   if (!alertSettings.networkCompare || !ghosts.length) return;
   ctx.save();
@@ -4341,9 +4418,10 @@ function drawGhosts() {
   ctx.strokeStyle = COLORS.ghost;
   const ghostColor = COLORS.ghost;
   for (const g of ghosts) {
-    const { x, y } = polarToXY(g.bearing, g.range);
+    const { x, y } = ghostXY(g);
+    if (x < -40 || y < -40 || x > W + 40 || y > H + 40) continue;   // off the dial
     const bs = blipScale(g.alt === 'ground' ? 'ground' : g.alt);
-    const r = Math.round(14 * bs * 2) / 2;
+    const r = view.scale < 0.3 ? 4 : Math.round(14 * bs * 2) / 2;   // a dot when the dial shows a continent
     ctx.globalAlpha = g.fade ?? 1;
     // A dashed ring with a glow, the same trick the real blips use. A thin
     // outline is legible in a screenshot and easy to lose on the actual
@@ -4368,7 +4446,7 @@ function drawGhosts() {
     // a stalk pointing the way it is heading, so a ghost reads as an
     // aircraft rather than as a map annotation
     ctx.globalAlpha = g.fade ?? 1;
-    if (typeof g.track === 'number') {
+    if (typeof g.track === 'number' && r > 4) {
       const a = (g.track - 90) * Math.PI / 180;
       ctx.beginPath();
       ctx.moveTo(x + r * Math.cos(a), y + r * Math.sin(a));
@@ -4389,7 +4467,7 @@ function findGhostAtStagePoint(x, y) {
   // this inside the loop forces a layout per ghost on every tap
   let best = null, bestDistSq = Infinity;
   for (const g of ghosts) {
-    const { x: gx, y: gy } = polarToXY(g.bearing, g.range);
+    const { x: gx, y: gy } = ghostXY(g);
     const dx = x - gx * scale, dy = y - gy * scale;
     const d2 = dx * dx + dy * dy;
     if (d2 <= HIT_RADIUS * HIT_RADIUS && d2 < bestDistSq) { bestDistSq = d2; best = g; }
@@ -5577,6 +5655,15 @@ function drawPlanes(dt) {
   const cxScaled = CX * scale, cyScaled = CY * scale, boundRadiusScaled = LABEL_BOUND_RADIUS * scale;
   for (const p of inRange) {
     const hw = p.labelW / 2, hh = p.labelH / 2;
+    // Looking beyond the ring, a label for an aircraft whose blip is off the
+    // dial would sit on the rim pointing at nothing: hidden until it is back.
+    const offDial = p.anchorX < 0 || p.anchorY < 0 || p.anchorX > stageRect.width || p.anchorY > stageRect.height;
+    if (viewFeedOn && offDial && p.hex !== followHex) {
+      setStyle(p.node, p.node, 'opacity', '0', false);
+      const line = leaderNodes.get(p.hex);
+      if (line) setStyle(line, line, 'opacity', '0', false);
+      continue;
+    }
     if (p.hex === followHex) {
       // Beside its blip, which the view keeps in the middle: lower right,
       // clear of the reticle, clamped to the stage.
@@ -5642,10 +5729,12 @@ function drawPlanes(dt) {
   // When the comparison is on, the interesting number is not just how many
   // this antenna heard but how many it did NOT -- that is the whole point of
   // the overlay, and it should be readable without hunting for faint rings.
-  const missed = alertSettings.networkCompare ? ghosts.length : 0;
+  let fromView = 0;
+  if (viewFeedOn) for (const g of ghosts) if (g.fromView) fromView++;
+  const missed = alertSettings.networkCompare ? ghosts.length - fromView : 0;
   emptySkyTick(inRange.length);
   setText(countEl, countEl, inRange.length + ' AIRCRAFT'
-    + (missed ? ` · ${missed} NOT HEARD` : ''));
+    + (missed ? ` · ${missed} NOT HEARD` : '') + (fromView ? ` · ${fromView} FROM ADSB.LOL` : ''));
 }
 
 let lastNetPillState = null;
@@ -7750,7 +7839,6 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     if (rewindSelected) {
       const row = (rewindRows || []).find(x => x.hex === hex);
       lookupType(hex).then(() => { if (settingsSection === 'rewind') renderSettingsPanel(); });
-      if (row && row.cs && !routeCache.has(row.cs)) queueRouteLookup(row.cs, home.lat, home.lon);
     }
     return;
   }
