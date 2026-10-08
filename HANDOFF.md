@@ -998,3 +998,13 @@ aircraft and the network's near the radar are all there is), so the HUD says
 "NO LOCAL DATA HERE" when the dial's centre is outside the ring. Labels keep
 their place on the dial's rim, by bearing from the radar, with longer leader
 lines when the view has moved; that may want revisiting.
+
+## The page reads only the core feed (roadmap 1.9, 2026-10-08)
+The fallback to readsb's `aircraft.json`, the `?core=0` switch and the
+in-browser route (adsb.im) and owner (adsbdb) lookups are gone from
+`index.html`: `fetchAircraft()` polls `/api/aircraft` and marks the page
+disconnected (NO SIGNAL) when it doesn't answer, and `lookupOwner()` only
+reads what the feed brought. A ghost from the network compare has no owner
+on the kiosk now (the feed labels only what it serves). `routeCache` and
+`ownerCache` stay as the places the feed's answers are kept for the labels
+and the detail panel. `tests/test_kiosk_core_only.py` pins all of this.
