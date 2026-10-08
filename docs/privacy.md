@@ -58,6 +58,12 @@ turn on:
 - **Map tiles, routes, photos and weather** are fetched from the public
   services credited on the radar and in the app. Like any web request,
   they see an IP address and the area or aircraft being looked up.
+- **The radar's own screen, looked beyond its ring.** Zoom the panel out past
+  the ring, or pan it elsewhere, and the radar asks adsb.lol for the aircraft
+  round the middle of the view, rounded to about 5 km: a place on a map, not
+  anyone's location. The public page can do the same, so the radar answers
+  at most one such question every five seconds, and nothing about these
+  aircraft is recorded or counted.
 
 ## The iPhone app
 
