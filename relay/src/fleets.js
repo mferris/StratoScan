@@ -114,13 +114,25 @@ export function fleetRoutes({ json, signedJson, nowS, maintainer, needAuth, asse
       <td><form method="post" action="/fleet/fleets/invite"><input type="hidden" name="fleet" value="${esc(f.id)}"><button>New invite code</button></form></td>
       <td><form method="post" action="/fleet/fleets/admin"><input type="hidden" name="fleet" value="${esc(f.id)}">
         <input name="label" maxlength="40" placeholder="who (optional)"><button>New administrator link</button></form></td></tr>`).join('');
+    const admins = (await env.DB.prepare(
+      `SELECT a.rowid AS id, f.name, a.label, a.created, a.replaced
+         FROM fleet_admins a JOIN fleets f ON f.id = a.fleet ORDER BY f.created, a.created`
+    ).all()).results || [];
+    const adminRows = admins.map(a => `<tr><td>${esc(a.name)}</td><td>${esc(a.label || '—')}</td>
+      <td>${esc(day(a.created))}${a.replaced ? `, link replaced ${esc(day(a.replaced))}` : ''}</td>
+      <td><form method="post" action="/fleet/fleets/rotate"><input type="hidden" name="admin" value="${a.id}"><button>New link</button></form></td></tr>`).join('');
     return `<h2>Fleets</h2>
       <table><tr><th>Fleet</th><th>Radars</th><th>Administrators</th><th></th><th></th></tr>${rows}</table>
       <form method="post" action="/fleet/fleets/new" style="margin-top:10px">
         <input name="name" maxlength="40" placeholder="New fleet's name" required>
         <input name="label" maxlength="40" placeholder="its first administrator (optional)">
-        <button>Create fleet</button></form>`;
+        <button>Create fleet</button></form>
+      <h2>Administrators</h2>
+      <p>A new link replaces that administrator's current one, which stops working at once.</p>
+      <table><tr><th>Fleet</th><th>Who</th><th>Since</th><th></th></tr>${adminRows}</table>`;
   }
+
+  const day = s => s ? new Date(s * 1000).toISOString().slice(0, 10) : '';
 
   async function newInvite(env, fleetId) {
     const code = randomCode();
@@ -135,13 +147,29 @@ export function fleetRoutes({ json, signedJson, nowS, maintainer, needAuth, asse
     return token;
   }
 
-  function shownOnce(request, fleetName, code, token) {
+  // A new link for an existing administrator (security review 2026-10-04,
+  // item 3): the previous one stops working at once -- a used link sits in a
+  // browser's history -- and whoever opens it is told it was replaced. Only
+  // the old link's fingerprint is kept, for that message. `by` is 'rowid'
+  // (the maintainer's page) or 'token_hash' (the administrator's own); never
+  // request input.
+  async function rotateAdmin(env, by, value) {
+    const row = await env.DB.prepare(`SELECT rowid AS id, token_hash FROM fleet_admins WHERE ${by} = ?`).bind(value).first();
+    if (!row) return null;
+    const token = randomToken();
+    await env.DB.prepare('UPDATE fleet_admins SET token_hash = ?, replaced_hash = ?, replaced = ? WHERE rowid = ?')
+      .bind(await hashOf(token), row.token_hash, nowS(), row.id).run();
+    return token;
+  }
+
+  function shownOnce(request, fleetName, code, token, { replaced = false, back = '/fleet' } = {}) {
     const link = token ? `${new URL(request.url).origin}/f/${token}` : null;
     return page('StratoScan fleet', `<h1>${esc(fleetName)}</h1>
       <p>These are shown <b>once</b>. Copy them now: only their fingerprints are kept, so they can be replaced but not shown again.</p>
       ${code ? `<p>Invite code, for radar owners to enter on their radar's setup page:<br><span class="secret">${esc(code)}</span></p>` : ''}
       ${link ? `<p>Administrator link. Whoever opens it can see this fleet's radars; send it only to the administrator:<br><span class="secret"><code>${esc(link)}</code></span></p>` : ''}
-      <p><a href="/fleet" style="color:#8cf">Back to the fleet page</a></p>`);
+      ${replaced ? '<p>It replaces the previous administrator link, which <b>no longer works</b>.</p>' : ''}
+      <p><a href="${back}" style="color:#8cf">Back</a></p>`);
   }
 
   async function maintainerPost(request, env, pathname) {
@@ -150,6 +178,13 @@ export function fleetRoutes({ json, signedJson, nowS, maintainer, needAuth, asse
     const name = String(form.get('name') || '').trim().slice(0, 40);
     const label = String(form.get('label') || '').trim().slice(0, 40);
     const fleetId = String(form.get('fleet') || '');
+    if (pathname === '/fleet/fleets/rotate') {
+      const id = Number(form.get('admin') || 0);
+      const who = await env.DB.prepare('SELECT f.name FROM fleet_admins a JOIN fleets f ON f.id = a.fleet WHERE a.rowid = ?').bind(id).first();
+      const token = who && await rotateAdmin(env, 'rowid', id);
+      if (!token) return new Response('no such administrator\n', { status: 404 });
+      return shownOnce(request, who.name, null, token, { replaced: true });
+    }
     if (pathname === '/fleet/fleets/new') {
       if (!name) return new Response('a fleet needs a name\n', { status: 400 });
       const { n } = await env.DB.prepare('SELECT COUNT(*) AS n FROM fleets').first();
@@ -213,7 +248,8 @@ export function fleetRoutes({ json, signedJson, nowS, maintainer, needAuth, asse
       <table><tr><th>Radar</th><th>Version</th><th>Last report</th><th>Status</th><th>Public page, 7 days</th><th></th></tr>${rows}</table>
       <p>Radars join with this fleet's invite code, entered on their own setup page, and their owners can leave at any time.
          You see each radar's health and how many people view its public page; never its location, its phones or its alerts.</p>
-      <form method="post" action="/f/invite"><button>Make a new invite code</button> (the old one stops working)</form>`);
+      <form method="post" action="/f/invite"><button>Make a new invite code</button> (the old one stops working)</form>
+      <form method="post" action="/f/link"><button>Replace my link</button> (the link you were sent stops working; this browser stays signed in)</form>`);
   }
 
   async function route(request, env, pathname, m) {
@@ -232,8 +268,13 @@ export function fleetRoutes({ json, signedJson, nowS, maintainer, needAuth, asse
     // administrators: the link signs in once, then a cookie carries it
     const signIn = /^\/f\/([A-Za-z0-9_-]{43})$/.exec(pathname);
     if (signIn && m === 'GET') {
-      const ok = await env.DB.prepare('SELECT 1 FROM fleet_admins WHERE token_hash = ?').bind(await hashOf(signIn[1])).first();
-      if (!ok) return page('StratoScan fleet', '<h1>StratoScan fleet</h1><p>That link isn’t valid any more. Ask for a new one.</p>', 404);
+      const hash = await hashOf(signIn[1]);
+      const ok = await env.DB.prepare('SELECT 1 FROM fleet_admins WHERE token_hash = ?').bind(hash).first();
+      if (!ok) {
+        const gone = await env.DB.prepare('SELECT replaced FROM fleet_admins WHERE replaced_hash = ?').bind(hash).first();
+        if (gone) return page('StratoScan fleet', `<h1>StratoScan fleet</h1><p>That link was replaced on ${esc(day(gone.replaced))} and no longer works. Ask for the current one.</p>`, 410);
+        return page('StratoScan fleet', '<h1>StratoScan fleet</h1><p>That link isn’t valid any more. Ask for a new one.</p>', 404);
+      }
       return new Response(null, {
         status: 303,
         headers: {
@@ -243,13 +284,21 @@ export function fleetRoutes({ json, signedJson, nowS, maintainer, needAuth, asse
         },
       });
     }
-    if (pathname === '/f' || pathname === '/f/invite' || pathname === '/f/remove') {
+    if (pathname === '/f' || pathname === '/f/invite' || pathname === '/f/remove' || pathname === '/f/link') {
       const fleet = await adminFleet(request, env);
       if (!fleet) return signInFirst();
       if (pathname === '/f' && m === 'GET') return adminPage(env, fleet, nowS());
       if (m === 'POST') {
         if (!sameSite(request)) return new Response('cross-site request refused\n', { status: 403 });
-        if (pathname === '/f/invite') return shownOnce(request, fleet.name, await newInvite(env, fleet.id), null);
+        if (pathname === '/f/invite') return shownOnce(request, fleet.name, await newInvite(env, fleet.id), null, { back: '/f' });
+        if (pathname === '/f/link') {
+          const token = await rotateAdmin(env, 'token_hash', await hashOf(cookieToken(request)));
+          if (!token) return signInFirst();
+          const shown = shownOnce(request, fleet.name, null, token, { replaced: true, back: '/f' });
+          const headers = new Headers(shown.headers);
+          headers.append('Set-Cookie', `${FLEET_COOKIE}=${token}; Path=/f; HttpOnly; Secure; SameSite=Strict; Max-Age=31536000`);
+          return new Response(await shown.text(), { status: 200, headers });
+        }
         if (pathname === '/f/remove') {
           const unit = String((await request.formData()).get('unit') || '');
           await env.DB.prepare('DELETE FROM fleet_members WHERE unit = ? AND fleet = ?').bind(unit, fleet.id).run();

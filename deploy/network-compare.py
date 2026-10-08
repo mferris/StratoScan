@@ -311,6 +311,10 @@ def build_payload():
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
+    # A client that connects and then sends nothing (or reads nothing) held a
+    # thread for good; now the socket gives up after this many seconds
+    # (security review 2026-10-04, item 7).
+    timeout = 30
     protocol_version = "HTTP/1.1"
 
     def version_string(self):

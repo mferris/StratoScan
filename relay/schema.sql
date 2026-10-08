@@ -137,7 +137,13 @@ CREATE TABLE IF NOT EXISTS fleet_admins (
   fleet       TEXT NOT NULL,
   label       TEXT,
   token_hash  TEXT NOT NULL UNIQUE,   -- SHA-256 of the administrator's link token
-  created     INTEGER NOT NULL
+  created     INTEGER NOT NULL,
+  -- A replaced link (security review 2026-10-04, item 3): the previous
+  -- token's fingerprint and when it stopped working, kept only so that
+  -- opening the old link can say so. Added to the live database on
+  -- 2026-10-08 with two ALTER TABLE ... ADD COLUMN commands.
+  replaced_hash TEXT,
+  replaced    INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS fleet_members (
