@@ -22,6 +22,7 @@ The radar never depends on any of this: a unit that cannot reach the relay,
 or has reporting off, works exactly as before.
 """
 import base64
+import grp
 import hashlib
 import json
 import os
@@ -36,6 +37,9 @@ import urllib.request
 RELAY_URL = os.environ.get("STRATOSCAN_RELAY_URL", "https://relay.stratoscan.io")
 STATE_DIR = os.environ.get("STRATOSCAN_RELAY_STATE", "/var/lib/stratoscan-relay")
 KEY_PATH = os.path.join(STATE_DIR, "unit.key")
+# The group the events service runs with (security review 2026-10-04,
+# item 1): it may read the key, never write it. Created by the installer.
+STATE_GROUP = os.environ.get("STRATOSCAN_RELAY_GROUP", "stratoscan-relay")
 CONFIG = os.path.join(STATE_DIR, "heartbeat.json")    # {"enabled": bool}
 LAST = os.path.join(STATE_DIR, "last-report.json")
 IO_SNAPSHOT = os.path.join(STATE_DIR, "io-snapshot.json")   # sectors written at the last report
@@ -76,7 +80,29 @@ def load_key(create=True):
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, KEY_PATH)
+    share_state_with_group()
     return key
+
+
+def share_state_with_group():
+    """Let the events service, which runs as its own user (security review
+    2026-10-04, item 1), read the unit key: the state directory root:<group>
+    0750 and the key 0640, root's to write. Nothing changes on a unit without
+    the group (an image built before the installer created it); there the
+    service must still run as root. Returns whether the sharing is in place."""
+    try:
+        gid = grp.getgrnam(STATE_GROUP).gr_gid
+    except KeyError:
+        return False
+    try:
+        os.chown(STATE_DIR, 0, gid)
+        os.chmod(STATE_DIR, 0o750)
+        if os.path.exists(KEY_PATH):
+            os.chown(KEY_PATH, 0, gid)
+            os.chmod(KEY_PATH, 0o640)
+        return True
+    except OSError:
+        return False
 
 
 def unit_id(key):

@@ -7,9 +7,14 @@ After=network-online.target readsb.service
 ExecStart=/usr/bin/python3 /opt/stratoscan/events.py run
 Restart=always
 RestartSec=10
-# Root only so it can read the unit key (/var/lib/stratoscan-relay, 0700
-# root). It holds no capabilities, sees the filesystem read-only apart from
-# its own tmpfs status file, and only ever makes outbound HTTPS requests.
+# Its own user since 2026-10-08 (security review item 1): it reads the unit
+# key through the stratoscan-relay group (/var/lib/stratoscan-relay is
+# root:stratoscan-relay 0750, the key 0640; the installer and heartbeat.py
+# keep it so) and can write only its own runtime directory. It holds no
+# capabilities and only ever makes outbound HTTPS requests.
+User=stratoscan-events
+Group=stratoscan-events
+SupplementaryGroups=stratoscan-relay
 CapabilityBoundingSet=
 AmbientCapabilities=
 NoNewPrivileges=yes

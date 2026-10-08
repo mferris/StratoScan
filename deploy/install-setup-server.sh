@@ -127,6 +127,29 @@ if ! getent group scsetup >/dev/null; then groupadd --system scsetup; fi
 if ! getent passwd scsetup >/dev/null; then
   useradd --system --gid scsetup --no-create-home --shell /usr/sbin/nologin scsetup
 fi
+# The events service runs as its own user and reads the unit key through
+# the stratoscan-relay group (security review 2026-10-04, item 1).
+for g in stratoscan-relay stratoscan-events; do
+  if ! getent group "$g" >/dev/null; then groupadd --system "$g"; fi
+done
+if ! getent passwd stratoscan-events >/dev/null; then
+  useradd --system --gid stratoscan-events --groups stratoscan-relay --no-create-home \
+    --shell /usr/sbin/nologin stratoscan-events
+else
+  usermod -aG stratoscan-relay stratoscan-events
+fi
+install -d /var/lib/stratoscan-relay
+chown root:stratoscan-relay /var/lib/stratoscan-relay; chmod 0750 /var/lib/stratoscan-relay
+if [ -f /var/lib/stratoscan-relay/unit.key ]; then
+  chown root:stratoscan-relay /var/lib/stratoscan-relay/unit.key; chmod 0640 /var/lib/stratoscan-relay/unit.key
+fi
+# A runtime directory the service left while it still ran as root would be
+# unwritable for its user; it is remade on the next start (the cooldown
+# memory in it is lost once, so an alert sent just before may repeat).
+if live && [ -d /run/stratoscan-events ] && [ "$(stat -c %U /run/stratoscan-events)" = root ]; then
+  systemctl stop stratoscan-events.service 2>/dev/null || true
+  rm -rf /run/stratoscan-events
+fi
 
 echo "== programs =="
 install -d -m 0755 /opt/stratoscan
