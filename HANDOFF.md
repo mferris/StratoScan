@@ -1105,8 +1105,10 @@ the middle; the rest of a continent stays empty and the answer says how
 far it reaches. The unit (`view_discs`, `tiles_payload` in
 network-compare.py, `/network/around?half=`) answers at once with the
 discs it has (`pending` counts the rest, so the page asks again in 5 s)
-and fetches the missing ones in a background thread, one at a time 1.2 s
-apart, one more try 2.5 s after a refusal, keeps a disc that still won't
+and fetches the missing ones in a background thread -- one worker at a
+time, since a second beside it would be the burst adsb.lol refuses; on
+the Pi nine discs take about 25 s -- one at a time 1.2 s apart, a disc
+fresh for 45 s from the moment it lands, one more try 2.5 s after a refusal, keeps a disc that still won't
 answer out (`partial`), caches each disc and the whole view 15 s, and
 allows nine questions per 20 s in all, whoever asks. The page asks every
 20 s for a wide view, and only once the middle has moved a quarter of a
