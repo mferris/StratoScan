@@ -3379,12 +3379,17 @@ document.getElementById('kbd').addEventListener('pointerup', (e) => {
 // Fails silently when the setup service is absent, so a hand-built unit that
 // never had one behaves exactly as before.
 const ONBOARD_URL = 'http://127.0.0.1:8090/onboard';
+// Only the page running on the radar itself (the kiosk loads it from
+// localhost) can reach that listener. Any other viewer -- a browser on the
+// LAN or the public page -- used to ask its OWN loopback every five seconds
+// for nothing, which the public page's Content-Security-Policy now reports.
+const ON_DEVICE = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 let radarName = '';   // this radar's name, once the setup service has said it
 const ONBOARD_POLL_MS = 5000;
 
 async function refreshOnboarding() {
   const el = document.getElementById('onboard');
-  if (!el) return;
+  if (!el || !ON_DEVICE) return;
   let d = null;
   try {
     const res = await fetch(ONBOARD_URL, { cache: 'no-store' });
@@ -4421,6 +4426,7 @@ let netInfo = null;        // last /onboard payload, or null if unreachable
 let netInfoReachable = false;
 
 async function refreshNetStatus() {
+  if (!ON_DEVICE) return;    // the listener is on the radar's own loopback
   try {
     const res = await fetch(ONBOARD_URL, { cache: 'no-store' });
     if (res.ok) { netInfo = await res.json(); netInfoReachable = true; }
@@ -6017,6 +6023,7 @@ function renderSettingsPanel() {
 const DEVICE_API = 'http://127.0.0.1:8090';
 
 async function deviceApi(path, opts = {}) {
+  if (!ON_DEVICE) throw new Error('Only on the radar itself.');
   const r = await fetch(DEVICE_API + path, {
     ...opts, headers: { 'Content-Type': 'application/json' } });
   let b = {};
