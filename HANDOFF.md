@@ -999,6 +999,17 @@ aircraft and the network's near the radar are all there is), so the HUD says
 their place on the dial's rim, by bearing from the radar, with longer leader
 lines when the view has moved; that may want revisiting.
 
+**2026-10-08, later:** the owner's panel did not pinch. Its controller does
+report multi-touch (ABS_MT_SLOT and friends; libinput says "touch"), so the
+cause is somewhere between labwc, Chromium (launched with `--disable-pinch`)
+and the page. Rather than guess: + and − buttons beside the gear (a tap is
+one `VIEW_STEP`, 1.5×, about the dial's centre), a ⌂ that appears while
+the view is away, the + − 0 keys on a laptop, and the HUD shows
+"· 2 FINGERS" while two pointers are down, so a pinch on the panel says
+whether the second finger reaches the page at all. Also: no pointer
+capture on the stage (it swallowed every control's tap; release
+2026.10.08.3), and a press that starts on a control is never a drag.
+
 ## The page reads only the core feed (roadmap 1.9, 2026-10-08)
 The fallback to readsb's `aircraft.json`, the `?core=0` switch and the
 in-browser route (adsb.im) and owner (adsbdb) lookups are gone from

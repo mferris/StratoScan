@@ -51,8 +51,9 @@ too.
 - **Live tracking** — polls a local [`readsb`](https://github.com/wiedehopf/readsb)
   instance every second; altitude-coded blips, smooth interpolation between
   polls, a "NO SIGNAL" banner on connection loss
-- **Touch** — drag the picture anywhere and pinch to zoom (a wheel or a
-  double-click on a laptop), from about 2 nm across the dial to 60; the map
+- **Touch** — drag the picture anywhere; zoom with the + and − buttons beside
+  the dial, a pinch, or a wheel, double-click or the + − 0 keys on a laptop,
+  from about 2 nm across the dial to 60; the map
   follows, the sweep turns about the radar wherever it is, and after 45
   seconds without a touch the view comes home by itself. The antenna's
   picture ends at its ring, and the display says so when you look past it
