@@ -55,6 +55,8 @@ export function cleanEvent(e, requestTs) {
     reg: text(e.reg, 12),
     type: text(e.type, 40),
     type_code: typeof e.type_code === 'string' && /^[A-Z0-9]{1,6}$/.test(e.type_code) ? e.type_code : undefined,
+    // Where it is going, as the unit's core feed has it ("Miami → Newark"), #59.
+    route: text(e.route, 60),
     label: text(e.label, 60),
     operator: text(e.operator, 60),
     squawk: typeof e.squawk === 'string' && /^[0-7]{4}$/.test(e.squawk) ? e.squawk : undefined,

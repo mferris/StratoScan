@@ -49,7 +49,7 @@ CORE = {
     "ant_axis_frame", "ant_barrel_base", "ant_bolt_holes", "ant_cable_bore",
     "ant_insert_bores", "ant_insert_bosses",
     # the twin mount (1090 + 978 MHz) and its check helpers
-    "antenna_mount_twin", "ant_twin_frame", "ant_twin_teardrop", "ant_twin_plug_path",
+    "antenna_mount_twin", "antenna_mount_twin_cover", "ant_twin_frame", "ant_twin_teardrop", "ant_twin_outline2d", "ant_twin_slab", "ant_twin_cover2d", "ant_twin_bore", "ant_twin_cover_placed", "ant_twin_bore_probe", "ant_twin_jack_probe", "ant_twin_barrel_probe", "ant_twin_channel_probe", "ant_twin_screw_probes",
     "ant_twin_envelopes", "ant_twin_panel_ring", "ant_twin_hole_probe",
 }
 

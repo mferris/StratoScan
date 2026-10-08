@@ -192,6 +192,17 @@ struct ContentView: View {
         // back from the background: say "connecting" until the radar answers
         .onChange(of: scenePhase) { _, phase in if phase == .active { viewModel.resume() } }
         .onReceive(location.$coordinate) { viewModel.me = $0 }
+        // An alert was tapped (#61): its aircraft's details, and the view on it.
+        .onReceive(PushManager.shared.$openHex) { hex in
+            guard let hex else { return }
+            PushManager.shared.openHex = nil
+            showSky = false; showLogbook = false; showSettings = false
+            if viewModel.plane(hex) != nil {
+                viewModel.followHex = hex
+                if viewModel.rangeNm > 5 { viewModel.setRange(5) }
+            }
+            viewModel.selectedHex = hex
+        }
         .onDisappear { viewModel.stop() }
         .animation(.easeOut(duration: 0.2), value: viewModel.selectedHex)
         .onAppear { UIApplication.shared.isIdleTimerDisabled = wallMode }

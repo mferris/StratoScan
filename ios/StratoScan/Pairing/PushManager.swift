@@ -11,6 +11,9 @@ import UserNotifications
 final class PushManager: ObservableObject {
     static let shared = PushManager()
 
+    /// The aircraft an alert was tapped for (#61): the radar opens on it.
+    @Published var openHex: String?
+
     enum Kind: String, CaseIterable, Identifiable {
         case emergency, notable, low_overhead, helicopter, approach, approach_me
         var id: String { rawValue }
@@ -222,5 +225,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async
         -> UNNotificationPresentationOptions {
         [.banner, .sound, .list]
+    }
+
+    /// Tapped: the app opens on the aircraft the alert is about (#61). The
+    /// relay puts its hex in the payload (stratoscan.hex).
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        guard let info = response.notification.request.content.userInfo["stratoscan"] as? [String: Any],
+              let hex = info["hex"] as? String, !hex.isEmpty else { return }
+        await MainActor.run { PushManager.shared.openHex = hex.lowercased() }
     }
 }
