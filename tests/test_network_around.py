@@ -122,6 +122,17 @@ for _ in range(100):
     _t.sleep(0.05)
 later = nc.tiles_payload(50.0, -100.0, 900, now=4001.0)
 check(later["pending"] == 0 and later["answered"] == 9 and len(later["ac"]) == 2, "a moment later the discs have been fetched and the view is whole")
+# While one worker is fetching, another view starts no second one.
+asked.clear(); nc._tiles["cache"].clear(); nc._tiles["discs"].clear(); nc._tiles["calls"] = []; nc._tiles["busy"].clear()
+nc.TILE_PACE_S = 0.3
+one = nc.tiles_payload(50.0, -100.0, 900, now=5000.0)
+_t.sleep(0.15)
+two = nc.tiles_payload(30.0, -100.0, 900, now=5000.2)
+check(one["pending"] == 9 and two is None, "a second wide view while the first is being fetched: nothing started, 429 for now")
+for _ in range(200):
+    if not nc._tiles["busy"]: break
+    _t.sleep(0.05)
+check(len(asked) == 9 and not nc._tiles["fetching"], "the first worker alone asked its nine, then stopped")
 nc.get_json = fake_get_json
 print("network around checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)

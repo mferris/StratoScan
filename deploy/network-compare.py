@@ -82,9 +82,10 @@ TILE_WINDOW_S, TILE_CALLS = 20, 9
 TILE_CACHE_S = 15
 TILE_PACE_S = 1.2               # between questions: adsb.lol refuses a burst (420/429, measured)
 TILE_RETRY_S = 2.5              # one more try after a refusal
+TILE_DISC_FRESH_S = 45          # a disc is asked for again after this (nine take the Pi ~25 s)
 TILE_KEEP_S = 120               # a disc's last answer is shown this long while a fresh one is fetched
 TILE_IN_THREAD = True           # the discs are fetched in the background (tests set False)
-_tiles = {"cache": {}, "discs": {}, "calls": [], "busy": set()}
+_tiles = {"cache": {}, "discs": {}, "calls": [], "busy": set(), "fetching": False}
 
 # Altitude bands, in feet. Chosen to separate a horizon problem from a
 # sensitivity one: if the low bands are the weak ones the antenna is being
@@ -371,6 +372,7 @@ def _fetch_discs(need, now):
         with lock:
             for d in need:
                 _tiles["busy"].discard(d)
+            _tiles["fetching"] = False
 
 
 def tiles_payload(lat, lon, half, now=None):
@@ -391,12 +393,18 @@ def tiles_payload(lat, lon, half, now=None):
             return out
         _tiles["calls"] = [t for t in _tiles["calls"] if now - t < TILE_WINDOW_S]
         need = [d for d in discs
-                if not (_tiles["discs"].get(d) and now - _tiles["discs"][d][0] < TILE_CACHE_S)
+                if not (_tiles["discs"].get(d) and now - _tiles["discs"][d][0] < TILE_DISC_FRESH_S)
                 and d not in _tiles["busy"]]
         room = TILE_CALLS - len(_tiles["calls"])
+        # One paced stream of questions at a time: a second worker beside
+        # the first would be the burst adsb.lol refuses.
+        if _tiles["fetching"] and TILE_IN_THREAD:
+            need = []
         need = need[:max(0, room)]
         _tiles["calls"].extend([now] * len(need))
         _tiles["busy"].update(need)
+        if need:
+            _tiles["fetching"] = True
         pending = [d for d in discs if d in _tiles["busy"]]
     if need:
         if TILE_IN_THREAD:
@@ -459,7 +467,8 @@ def _fetch_discs_inner(need, now):
                 continue
             if len(_tiles["discs"]) >= TILE_MAX_N * TILE_MAX_N * 2:
                 _tiles["discs"].clear()
-            _tiles["discs"][d] = (now, entries)
+            # stamped when it lands (a fake clock in the tests): what "fresh" counts from
+            _tiles["discs"][d] = (time.time() if TILE_IN_THREAD else now, entries)
 
 
 def around_payload(lat, lon, radius, now=None):
