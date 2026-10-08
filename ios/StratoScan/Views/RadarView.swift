@@ -421,6 +421,8 @@ struct RadarView: View {
         let callsignColor: Color
         let badgeText: String
         let badgeColor: Color
+        /// The airline's mark, when the app has it (#60).
+        var badgeMark: UIImage? = nil
         let typeLine: String?
         let altLine: String
         let routeLine: String?
@@ -442,6 +444,7 @@ struct RadarView: View {
         return LabelContent(
             callsign: p.cs, callsignColor: p.color,
             badgeText: p.airlineLabel, badgeColor: p.badgeColor,
+            badgeMark: AirlineLogoStore.shared.mark(for: p.airlineIcao),
             typeLine: p.typeLabel, altLine: altLine, routeLine: routeLine
         )
     }
@@ -459,17 +462,18 @@ struct RadarView: View {
         let pad: CGFloat = 6
         var lines: [(String, Font)] = [(c.callsign, fontCallsign)]
         if !c.badgeText.isEmpty { lines.append((c.badgeText, fontBadge)) }
+        let markW: CGFloat = c.badgeMark == nil ? 0 : markSize(context) + 4
         if let t = c.typeLine { lines.append((t, fontLine)) }
         lines.append((c.altLine, fontLine))
         if let rt = c.routeLine { lines.append((rt, fontLine)) }
 
         var maxW: CGFloat = 0
         var heights: [CGFloat] = []
-        for (text, font) in lines {
+        for (i, (text, font)) in lines.enumerated() {
             let resolved = context.resolve(Text(text).font(font))
             let sz = resolved.measure(in: CGSize(width: 400, height: 100))
-            maxW = max(maxW, sz.width)
-            heights.append(sz.height)
+            maxW = max(maxW, sz.width + (i == 1 && !c.badgeText.isEmpty ? markW + 8 : 0))
+            heights.append(i == 1 && !c.badgeText.isEmpty ? max(sz.height, markSize(context) - 3) : sz.height)
         }
         let gap: CGFloat = 2
         let totalH = heights.reduce(0, +) + gap * CGFloat(heights.count - 1)
@@ -501,12 +505,19 @@ struct RadarView: View {
 
         var lineIdx = 1
         if !content.badgeText.isEmpty {
-            // badge pill
+            // badge pill, with the airline's mark in front of its name (#60)
             let badgeResolved = context.resolve(Text(content.badgeText).font(fontBadge).foregroundColor(.white))
             let badgeTextSize = badgeResolved.measure(in: CGSize(width: 400, height: 100))
-            let badgeRect = CGRect(x: x, y: y, width: badgeTextSize.width + 8, height: metrics.lineHeights[1] + 3)
+            let ms = markSize(context)
+            let markW: CGFloat = content.badgeMark == nil ? 0 : ms + 4
+            let badgeRect = CGRect(x: x, y: y, width: badgeTextSize.width + 8 + markW, height: metrics.lineHeights[1] + 3)
             context.fill(Path(roundedRect: badgeRect, cornerRadius: 2), with: .color(content.badgeColor))
-            context.draw(badgeResolved, at: CGPoint(x: badgeRect.minX + 4, y: badgeRect.minY + 1.5), anchor: .topLeading)
+            if let mark = content.badgeMark {
+                let r = CGRect(x: badgeRect.minX + 3, y: badgeRect.midY - ms / 2, width: ms, height: ms)
+                context.fill(Path(roundedRect: r, cornerRadius: 2), with: .color(.white))
+                context.draw(Image(uiImage: mark), in: r.insetBy(dx: 1, dy: 1))
+            }
+            context.draw(badgeResolved, at: CGPoint(x: badgeRect.minX + 4 + markW, y: badgeRect.minY + 1.5), anchor: .topLeading)
             y += badgeRect.height + 2
             lineIdx = 2
         }
@@ -527,6 +538,9 @@ struct RadarView: View {
             context.draw(text, at: CGPoint(x: x, y: y), anchor: .topLeading)
         }
     }
+
+    /// The airline mark's side in a label: a touch taller than the badge text.
+    private func markSize(_ context: GraphicsContext) -> CGFloat { 13 * uiScale }
 
     /// Stable per-pair tie-break direction when two labels want the exact
     /// same spot (e.g. two aircraft momentarily at ~identical bearing/range).
