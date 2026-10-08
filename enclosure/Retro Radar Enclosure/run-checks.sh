@@ -20,7 +20,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 # Must come out with no real volume: a real interference, or a region of the
 # stand that no coloured part claims, which would print as a hole.
-EMPTY="top_screw_clear_of_twin top_screw_clear_of_sma top_screw_clear_of_puck twin_vs_plate twin_vs_stand twin_plug_path_clear twin_antennas_clear_case front_inserts_surrounded key_fits plate_vs_shell plate_outside_case lip_clears_posts lip_inside_bore
+EMPTY="twin_barrel_through_panel twin_cover_pads_clear_jack twin_channel_probe_clear twin_screw_probes_clear top_screw_clear_of_twin top_screw_clear_of_sma top_screw_clear_of_puck twin_vs_plate twin_vs_stand twin_bore_straight twin_slot_takes_jack twin_cover_fits twin_antennas_clear_case front_inserts_surrounded key_fits plate_vs_shell plate_outside_case lip_clears_posts lip_inside_bore
        vents_clear_of_mount usbc_screws_clear_window no_turret ribs_unbroken mount_vs_plate driver_path_clear sma_mount_vs_plate sma_barrel_fits connector_passes
        exhaust_top_only rivets_clear_of_grilles grille_in_front_of_ribs antenna_clears_case mount_vs_stand sma_mount_vs_stand socket_takes_base connector_has_room cable_slot_open"
 
@@ -81,7 +81,7 @@ done
 # find a real hole. A 3.2mm probe through the bezel is about 56mm3; the
 # threshold only has to separate that from nothing.
 echo "Positive controls — must find real geometry:"
-for c in key_blocks_45 key_blocks_90 key_blocks_135 key_blocks_180 key_blocks_225 key_blocks_270 key_blocks_315 back_inserts_open lip_present usbc_open ant_plate_holes_open ant_flange_inserts_open driver_path_was_blocked vents_were_under_mount socket_gauge_works cable_slot_other_side connector_gauge_works usbc_screw_probe_works turret_probe_works ribs_present exhaust_reaches_inside rivets_present grille_present plinth_ribs_front plinth_ribs_back plinth_ribs_left plinth_ribs_right sma_passage_joins sma_panel_present sma_hole_open front_insert_holes_open twin_panels_present twin_holes_open top_screw_was_under_mount; do
+for c in key_blocks_45 key_blocks_90 key_blocks_135 key_blocks_180 key_blocks_225 key_blocks_270 key_blocks_315 back_inserts_open lip_present usbc_open ant_plate_holes_open ant_flange_inserts_open driver_path_was_blocked vents_were_under_mount socket_gauge_works cable_slot_other_side connector_gauge_works usbc_screw_probe_works turret_probe_works ribs_present exhaust_reaches_inside rivets_present grille_present plinth_ribs_front plinth_ribs_back plinth_ribs_left plinth_ribs_right sma_passage_joins sma_panel_present sma_hole_open front_insert_holes_open twin_panels_present twin_holes_open top_screw_was_under_mount twin_channel_open twin_cover_seats twin_cover_screws_open twin_antennas_probe_works; do
     out="$TMP/$c.stl"
     "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
     v=$(vol_of "$out")

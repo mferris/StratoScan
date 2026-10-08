@@ -32,7 +32,8 @@ The head is one colour and prints as before:
 | `back_plate` | black | removable back — locating lip, vents, one USB-C pass-through, the antenna mount's bolt holes and cable hole |
 | `antenna_mount` | black | bolt-on arm carrying the antenna socket |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
-| `antenna_mount_twin` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight |
+| `antenna_mount_twin` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight. Two parts: this body, and the cover below |
+| `antenna_mount_twin_cover` | the 3 mm cover that closes the twin body's cable channel, on five M2 screws (`twin_assembled` shows both on the plate, for pictures only) |
 | `usbc_gauge` | — | test coupon: five candidate USB-C cutouts, to fit the connector before printing a plate |
 
 The stand is split into five bodies, one per colour region:
@@ -311,7 +312,8 @@ Every screw that gets undone goes into a brass M3 heat-set insert. The holes are
 | Front posts in the shell (front trim and retainer screw into these) | 8 posts, 7 used | M3 × 5 | M3 × 14 | Pressed from the front, flush with the shelf the retainer sits on |
 | Back posts in the shell (back plate screws into these) | 8 | M3 × 6 | M3 × 8 | Pressed from the back face, flush |
 | Antenna mount flange | 3 | M3 × 5 | M3 × 8 | The pocket is in the mount; the screws come from inside the case, through the back plate |
-| Speaker bosses (optional) | 8 | M2 × 3 | M2 × 6 | The 2.6 mm pilot takes an M2 insert or the speaker's self-tapping screws |
+| Twin antenna mount's cover | 5 | M2 × 3 | M2 × 6 | 3.0 mm holes in the cover seat (for a 3.2 mm knurl; 3.2 if the kit's inserts are the 3.5 mm kind — measure them). No counterbores: a 3 mm cover printed face-down can't roof them, so the cap heads stand 2 mm proud of a face nothing touches |
+| Speaker bosses (optional) | 8 | M2 × 3 | M2 × 6 | The 2.6 mm pilot takes the speaker's self-tapping screws; drill it to 3.0 for an M2 insert |
 
 **The front posts are new.** They used to be only 2 mm tall: an insert sat in 2 mm of plastic with open air under it and the wall on one side only (measured: a third of the ring round it was solid). Now each post hangs 8 mm below the shelf, merged into the wall, with a 45° cone under it so it prints without support. The holes are cut after the whole shell is unioned, so the speaker brackets at 0° and 180° can't fill them.
 
@@ -333,15 +335,34 @@ The FlyCatcher has two antenna inputs, 1090 and 978 MHz, and the Nooelec bundle 
 - **A crossbar** with a bulkhead jack at each end, 80 mm apart. Antennas this close in frequency detune each other when bunched together.
 - **Counter-tilted,** like the single mounts, so the whips stand vertical with their hinges straight. Hinges hold firmly only at their stops, and part-way they sag over time.
 
-**Cables:** two SMA male to SMA female bulkhead jumpers, RG316, about 30 cm (SMA, not RP-SMA). The small right-angle pigtails in the antenna bundle are MCX, for Nooelec's USB sticks, and aren't used.
+**Cables:** two SMA male to SMA female bulkhead jumpers, RG316, about 30 cm (SMA, not RP-SMA): a bulkhead end has a threaded barrel with a nut and washer, which is what holds the antenna. The small right-angle pigtails in the antenna bundle are MCX, for Nooelec's USB sticks, and aren't used.
 
 **Whip or external antenna, the user's choice:** each tower's jack is an ordinary SMA socket on the outside of the case. Screw on the Nooelec whip, or the coax from an antenna mounted outside or in a window; nothing inside changes. An outdoor antenna with an N-type connector needs an N-male to SMA-male cable. Leave the FlyCatcher's bias-tee switch off unless the outdoor antenna has a powered amplifier that needs it.
 
-**Fitting the cables:** thread each one plug-first, down its tower, along the tunnel in the crossbar, down the arm, and through the back plate's 11 mm hole. Then push the bulkhead up through its tower's panel and put the nut on top. The 1090 whip is the shorter one.
+**Two parts since 2026-10-07: a body and a flat cover.** The first version ran each cable through an internal tunnel and could not be assembled: both ends of a jumper are rigid metal about 9 mm across and 15–20 mm long, and that cannot turn a right-angle corner inside an 11 mm bore. The checks had only ever passed a straight probe down each leg. Now the crossbar and towers have an open channel on the side away from the case, closed by a cover on five M2 screws, so everything is laid in and nothing is threaded round a corner. The arm's bore runs straight on through the crossbar and out of the channel floor; it is 13 mm, and so is the plate's hole, because both plugs share it and the second has to pass the first cable. Under each tower's panel is a slot that is a close fit on the jack's hex body, so the jack cannot turn while its nut is tightened. The panel is 2 mm: the bulkhead's thread is 10 mm from its shoulder, and 2 of panel, 0.6 of washer and 2.5 of nut leave 4.9 mm for the whip's own coupling nut.
+
+**The plate's cable hole grew from 11 to 13 mm the same day.** A back plate printed before that — including one printed from the y=81 plate committed earlier on 2026-10-07 — will not pass the second plug and must be reprinted.
+
+**Before printing, measure the jumper's bulkhead end behind the shoulder:** across the flats, and whether it is a hex at all. The slot is cut for an 8 mm hex (`ant_twin_jack_af`; slot = flats + 0.8, floor so the hex's corners put the barrel under the hole). A 7 or 9 mm hex needs that number changed; a round body has nothing for the slot to hold, and the jack is then held with thin pliers through the open channel while its nut goes on, before the cover.
+
+**Printing:** body flange-down with tree supports (Bambu Support for ABS interface), as the other mounts print. The channel, slots, insert holes and jack holes all face up or sideways and need nothing; the towers' outboard ends and the bar's top edge start in mid-air, so the supports go on the face toward the case, where nobody sees the scars. Cover flat, counterbored face down, no support. ASA on a clean Engineering plate, no glue.
+
+**Fitting the cables** (cover off, body held channel-up — or the flange hanging over the bench edge, since the plugs come out of its underside):
+1. Push each plug end into the bore at the centre of the channel, straight down the arm and out through the flange — the second plug goes in beside the first cable with a wiggle. Leave about 10 cm of each cable beyond the bore's mouth.
+2. Lay one cable along the channel to each tower. Hold the jack's hex body with the barrel pointing up its tower and slide it sideways into the open slot until it stops.
+3. Push the jack up with a fingertip through the open channel: the top of the slot is a closed pocket the hex's size, and the barrel comes through the panel when the body is in it. Washer and nut on from the top, finger tight, then a quarter turn with an 8 mm (5/16") spanner — the pocket holds the jack, so nothing inside has to be held. Don't crank it; the panel is 2 mm of ASA. Check the nuts again after a week; ASA relaxes a little.
+   Set each whip so its hinge folds towards or away from the wall, not towards the other whip: that's the direction the mount is weakest, so the hinge gives before the panel does, and a folded whip then clears the other tower.
+4. Tidy the cables into the channel and fit the cover: five M2 × 6 into the M2 inserts.
+5. Pass both plugs through the plate's 13 mm hole, bolt the flange on from inside the plate with the three M3 × 8, plug 1090 and 978 into the FlyCatcher, and screw the whips on (the 1090 whip is the shorter one). For an outdoor antenna, screw its coax onto the same barrel instead, and give the coax its own strain relief within a few centimetres of the tower.
+
+To replace a cable: back plate off, cover off, nut off, slide the jack out of its slot, pull the plug back up through the bore. The mount stays bolted to the plate.
 
 **Checks:**
-- `twin_plug_path_clear`: an SMA plug's width is open along the whole route. A probe 12.5 mm across, too fat for the bore, does hit it.
-- `twin_antennas_clear_case`: both whips, swept 220 mm up, miss the case (and the kitten's ears). The same envelopes moved 60 mm down do hit it.
+- `twin_bore_straight`: a plug beside a cable (12 mm) passes straight down the 13 mm bore from the flange face to below the crossbar.
+- `twin_slot_takes_jack`: an 8 mm-across-flats hex body stands in each slot under its panel.
+- `twin_cover_fits`: the cover sits in its seat without touching the body; `twin_cover_seats` (control) finds the body when the cover is pushed 2 mm in. `twin_channel_open` and `twin_cover_screws_open` (controls) find a rod along the channel and rods through the cover's holes whole, and `twin_channel_probe_clear` and `twin_screw_probes_clear` are their complements: the same rods meet no body at all.
+- `top_screw_clear_of_twin`: the plate's top screw and a hex key clear the mount.
+- `twin_antennas_clear_case`: both whips, swept 220 mm up, miss the case (and the kitten's ears); `twin_antennas_probe_works` (control): the same envelopes moved 60 mm down the axis and 40 mm toward the case do hit it.
 - `twin_vs_plate`, `twin_vs_stand`: no collisions with the back plate or the stand.
 - `twin_panels_present`, `twin_holes_open`: positive controls; the panels are there and the jack holes are open.
 
@@ -387,8 +408,9 @@ check.
 ## Regenerating
 
 ```sh
-for p in shell front_trim retainer stand back_plate antenna_mount usbc_gauge \
-         stand_body stand_paws stand_toes stand_claws stand_tail stand_tail_tip; do
+for p in shell front_trim retainer stand back_plate usbc_gauge \
+           antenna_mount antenna_mount_sma antenna_mount_twin antenna_mount_twin_cover \
+           stand_body stand_paws stand_toes stand_claws stand_tail stand_tail_tip; do
   openscad --backend=manifold --export-format binstl \
            -D "part=\"$p\"" -o "$p.stl" kitten-enclosure-twotone.scad
 done
