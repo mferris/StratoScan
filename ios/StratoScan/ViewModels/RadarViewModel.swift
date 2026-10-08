@@ -126,8 +126,12 @@ final class RadarViewModel: ObservableObject {
     /// when the phone is back within the ring.
     @Published private(set) var awayCentred = false
     /// The app would like to know where the phone is: with the network on,
-    /// it is what tells "away" from "home" and centres the view on you.
-    var wantsLocation: Bool { networkOn && (!hasRadar || !connected || viaAway || centreOnMe) }
+    /// it is what tells "away" from "home" and centres the view on you. Not
+    /// while the first fetch is still being waited for, so a launch at home
+    /// never asks for location.
+    var wantsLocation: Bool {
+        networkOn && !isDemo && (!hasRadar || viaAway || (!connecting && !connected) || centreOnMe)
+    }
 
     let fetchInterval: TimeInterval = 1.0
     let staleInterval: TimeInterval = 15
