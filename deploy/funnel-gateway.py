@@ -18,6 +18,7 @@ rounded to 2 decimal places -- about 0.7 miles of fuzz, plenty to keep the
 map/radar centered correctly at the app's actual range scale, but no longer
 a literal street address to anyone who curls the Funnel URL.
 """
+import base64
 import hashlib
 import http.server
 import json
@@ -149,17 +150,97 @@ PUBLIC_MARKER = "X-FR-Public"
 
 # Cheap, zero-risk hardening now that this is reachable from the whole
 # public internet: clickjacking/MIME-sniffing/referrer-leak protections.
-# Deliberately NOT a Content-Security-Policy here -- this app talks to enough
-# different external hosts (map tiles, fonts, several free data APIs) that a
-# CSP tight enough to matter needs to be built and tested against the live
-# page, not improvised inline; getting it wrong risks breaking the app for
-# every public viewer, worse than the marginal defense-in-depth it'd add on
-# top of the XSS fix already in index.html.
 SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer-when-downgrade",
 }
+
+# ---- Content-Security-Policy for the page (security review 2026-10-04, #5) --
+# The last layer behind the page's own escaping: a script that slipped past
+# it could still not run, because the only scripts the browser may run are
+# the page's own file (vendor/maplibre-gl.js) and its one inline block, named
+# by the SHA-256 of its exact bytes -- computed here from the page lighttpd
+# serves, so a release that changes the page changes the hash with it, and
+# nothing is ever 'unsafe-inline' for scripts. The page has no inline event
+# handlers and no javascript: links (tests/test_csp.py keeps it so).
+#
+# The hosts are everything the page talks to (tiles and glyphs, fonts, the
+# weather, rain, lightning and places APIs); the unit's own data is 'self'.
+# Styles stay 'unsafe-inline': MapLibre and the page set them from script,
+# and an attacker who can inject style but not script gains little.
+#
+# REPORT-ONLY FIRST. Getting this wrong breaks the public page for every
+# visitor, on browsers the maintainer doesn't have, so the policy goes out as
+# Content-Security-Policy-Report-Only with violations counted (never stored)
+# at /csp-report and read on the stats listener's /csp, and is switched to
+# enforcing (CSP_ENFORCE=1 in the service's environment) only after a quiet
+# spell on the live radar.
+CSP_ENFORCE = os.environ.get("CSP_ENFORCE", "") == "1"
+CSP_DIRECTIVES = (
+    "default-src 'none'",
+    "script-src 'self' {hashes}",
+    "worker-src blob:",
+    "child-src blob:",                      # older Safari reads this for workers
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https:",    # map tiles and sprites, overlay tiles, the aircraft photos
+    "connect-src 'self' https://tiles.openfreemap.org https://api.open-meteo.com "
+    "https://api.rainviewer.com https://tilecache.rainviewer.com https://*.rainviewer.com "
+    "https://realearth.ssec.wisc.edu https://overpass-api.de https://fonts.googleapis.com",
+    "media-src 'self' blob:",
+    "manifest-src 'self'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "report-uri /csp-report",
+)
+_INLINE_SCRIPT = re.compile(rb"<script>(.*?)</script>", re.S)
+_csp_cache = {}     # sha256 of the page bytes -> policy string (one page, one entry)
+
+
+def page_csp(page):
+    """The policy for these exact page bytes."""
+    digest = hashlib.sha256(page).hexdigest()
+    policy = _csp_cache.get(digest)
+    if policy is None:
+        hashes = " ".join(
+            "'sha256-%s'" % base64.b64encode(hashlib.sha256(block).digest()).decode()
+            for block in _INLINE_SCRIPT.findall(page) if block.strip())
+        policy = "; ".join(CSP_DIRECTIVES).format(hashes=hashes)
+        _csp_cache.clear()
+        _csp_cache[digest] = policy
+    return policy
+
+
+CSP_HEADER = "Content-Security-Policy" if CSP_ENFORCE else "Content-Security-Policy-Report-Only"
+CSP_REPORT_MAX_BYTES = 8192
+CSP_REPORT_KEYS = 64
+_csp_reports = {}   # "directive blocked-host" -> count; bounded, in memory only
+_csp_lock = threading.Lock()
+
+
+def note_csp_report(body):
+    """Count a browser's violation report: which directive, which host. The
+    report itself (it can name the visitor's page URL and more) is dropped."""
+    try:
+        r = json.loads(body.decode("utf-8", "replace")).get("csp-report") or {}
+        directive = str(r.get("effective-directive") or r.get("violated-directive") or "?").split(" ")[0][:40]
+        blocked = str(r.get("blocked-uri") or "?")
+        host = blocked if blocked in ("inline", "eval", "data", "blob", "?") else (urllib.parse.urlsplit(blocked).hostname or blocked[:40])
+        key = "%s %s" % (directive, host[:60])
+    except Exception:
+        key = "unreadable"
+    with _csp_lock:
+        if key != "other" and key not in _csp_reports and len(_csp_reports) >= CSP_REPORT_KEYS - 1:
+            key = "other"      # the bound counts "other" itself
+        _csp_reports[key] = _csp_reports.get(key, 0) + 1
+
+
+def csp_summary():
+    with _csp_lock:
+        return {"header": CSP_HEADER, "reports": dict(_csp_reports)}
 
 
 # ---- visitor counts (roadmap 1.12) -----------------------------------------
@@ -378,10 +459,14 @@ class _StatsHandler(http.server.BaseHTTPRequestHandler):
     timeout = 30
 
     def do_GET(self):
-        if self.path.split("?", 1)[0] != "/visits" or VISITS is None:
+        path = self.path.split("?", 1)[0]
+        if path == "/csp":
+            body = json.dumps(csp_summary()).encode()
+        elif path == "/visits" and VISITS is not None:
+            body = json.dumps(VISITS.summary()).encode()
+        else:
             self.send_error(404)
             return
-        body = json.dumps(VISITS.summary()).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -459,6 +544,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 VISITS.record(self.command, self._normalise(self.path), self.headers)
             except Exception:
                 pass    # counting must never get in the way of serving
+        # A browser reporting a policy violation (see CSP_DIRECTIVES): counted,
+        # answered, never forwarded.
+        if self.command == "POST" and self._normalise(self.path) == "/csp-report":
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            if 0 < length <= CSP_REPORT_MAX_BYTES:
+                note_csp_report(self.rfile.read(length))
+            self.send_response(204)
+            self.end_headers()
+            return
         # Public traffic may read the shared stores but never write them.
         if self.command != "GET" and self._is_read_only_public(self.path):
             self.send_error(403, "Read-only")
@@ -569,13 +663,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
 
     def _relay(self, status, resp):
+        body = resp.read()
         self.send_response(status)
         for k, v in resp.getheaders():
             if k.lower() not in HOP_BY_HOP:
                 self.send_header(k, v)
         self._send_security_headers()
+        if (status == 200 and self._normalise(self.path) in PAGE_PATHS
+                and (resp.headers.get("Content-Type") or "").startswith("text/html")):
+            self.send_header(CSP_HEADER, page_csp(body))
         self.end_headers()
-        self.wfile.write(resp.read())
+        self.wfile.write(body)
 
     def log_message(self, fmt, *args):
         pass  # every request from every public viewer would otherwise hit the journal

@@ -1008,3 +1008,22 @@ reads what the feed brought. A ghost from the network compare has no owner
 on the kiosk now (the feed labels only what it serves). `routeCache` and
 `ownerCache` stay as the places the feed's answers are kept for the labels
 and the detail panel. `tests/test_kiosk_core_only.py` pins all of this.
+
+## The public page has a Content-Security-Policy, report-only first (2026-10-08)
+`deploy/funnel-gateway.py` adds it to the page it proxies (`page_csp()`):
+`default-src 'none'`, scripts only from the page's own files and its one
+inline block named by the SHA-256 of its exact bytes (computed from the
+page lighttpd serves, so every release's hash is right by construction;
+never `'unsafe-inline'` for scripts), the hosts the page talks to for
+tiles, fonts, weather, rain, lightning and places, `frame-ancestors 'none'`.
+It goes out as `Content-Security-Policy-Report-Only`: browsers report what
+they WOULD block to `POST /csp-report`, which the gateway counts by
+directive and host (bounded, nothing stored) and shows on its loopback
+stats listener as `GET 127.0.0.1:8091/csp`. After a quiet spell on the live
+radar, `CSP_ENFORCE=1` in the service's environment switches the header to
+enforcing. Tested report-only in Chromium against RDU's data: no
+violations once the page stopped asking the viewer's own loopback for the
+setup listener, which only the page on the radar itself (`ON_DEVICE`,
+hostname localhost or 127.0.0.1) does now. The kiosk and LAN viewers get
+the page from lighttpd, with no policy. `tests/test_csp.py` pins the
+policy, the page's lack of inline handlers, and the counter.
