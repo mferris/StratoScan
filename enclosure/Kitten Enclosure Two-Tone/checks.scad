@@ -43,7 +43,7 @@ ant_cable_slot_w=7; ant_cable_exit_h=7.98; ant_flange_t=7; ant_flange_insert_d=5
 // The SMA bulkhead variant. Restated here for the same reason as everything
 // above: `use <>` brings in modules, not variables, so a check that names one
 // of these directly needs its own copy.
-ant_sma_hole=6.5; ant_sma_panel_t=3; ant_sma_cavity=14; ant_twin_seat_y=8; ant_twin_cover_t=3;
+ant_sma_hole=6.5; ant_sma_panel_t=3; ant_sma_cavity=14; ant_twin_cover_t=3;
 ant_sma_boss_d=22; ant_sma_boss_h=10; ant_sma_cavity_d=25;
 
 // The back-plate features added with the locating lip. Restated here for the
@@ -424,6 +424,14 @@ else if (check=="twin_vs_stand") {
         translate([0,0,-shell_depth/2]) stand();
   }
 }
+else if (check=="twin_vs_stand_11") {
+  intersection() {
+    antenna_mount_twin([11, 11]);
+    translate([0,0,base_h + cradle_od/2 - 3])
+      rotate([90 - stand_angle,0,0])
+        translate([0,0,-shell_depth/2]) stand();
+  }
+}
 // The twin mount is two parts and nothing is threaded round a corner, so the
 // route is checked leg by leg: a plug beside a cable straight down the bore,
 // the jack's hex body standing in each slot, the cover in its seat.
@@ -445,7 +453,7 @@ else if (check=="twin_channel_open") {
 else if (check=="twin_cover_seats") {
   intersection() {
     antenna_mount_twin();
-    ant_axis_frame() translate([0, ant_twin_seat_y + ant_twin_cover_t - 2, 0]) rotate([90, 0, 0]) antenna_mount_twin_cover();
+    ant_axis_frame() translate([0, ant_twin_seat([8, 8]) + ant_twin_cover_t - 2, 0]) rotate([90, 0, 0]) antenna_mount_twin_cover();
   }
 }
 else if (check=="twin_cover_screws_open") {
@@ -506,6 +514,52 @@ else if (check=="twin_barrel_through_panel") {
 }
 else if (check=="twin_cover_pads_clear_jack") {
   intersection() { ant_twin_cover_placed(); ant_twin_jack_probe(); }
+}
+// ---- the 11mm style of the twin mount -----------------------------------
+// The default style above is for 8mm jack bodies; every check that depends
+// on the jack's size is repeated for the 11mm style. AF11 = [11, 11].
+else if (check=="twin_slot_takes_jack_11") {
+  intersection() { antenna_mount_twin([11, 11]); ant_twin_jack_probe([11, 11]); }
+}
+else if (check=="twin_barrel_through_panel_11") {
+  intersection() { antenna_mount_twin([11, 11]); ant_twin_barrel_probe([11, 11]); }
+}
+else if (check=="twin_cover_fits_11") {
+  intersection() { antenna_mount_twin([11, 11]); ant_twin_cover_placed([11, 11]); }
+}
+else if (check=="twin_cover_pads_clear_jack_11") {
+  intersection() { ant_twin_cover_placed([11, 11]); ant_twin_jack_probe([11, 11]); }
+}
+else if (check=="twin_vs_plate_11") {
+  intersection() { antenna_mount_twin([11, 11]); back_plate(); }
+}
+else if (check=="twin_channel_probe_clear_11") {
+  intersection() { ant_twin_channel_probe([11, 11]); antenna_mount_twin([11, 11]); }
+}
+else if (check=="twin_screw_probes_clear_11") {
+  intersection() { ant_twin_screw_probes([11, 11]); union() { antenna_mount_twin([11, 11]); ant_twin_cover_placed([11, 11]); } }
+}
+else if (check=="top_screw_clear_of_twin_11") {
+  intersection() { antenna_mount_twin([11, 11]); translate([0, screw_r, -back_plate_t - 80]) cylinder(d=8, h=80); }
+}
+else if (check=="twin_bore_straight_11") {
+  intersection() { antenna_mount_twin([11, 11]); ant_twin_bore_probe(); }
+}
+// POSITIVE controls for the 11mm style
+else if (check=="twin_channel_open_11") {
+  difference() { ant_twin_channel_probe([11, 11]); antenna_mount_twin([11, 11]); }
+}
+else if (check=="twin_cover_seats_11") {
+  intersection() {
+    antenna_mount_twin([11, 11]);
+    ant_axis_frame() translate([0, ant_twin_seat([11, 11]) + ant_twin_cover_t - 2, 0]) rotate([90, 0, 0]) antenna_mount_twin_cover([11, 11]);
+  }
+}
+else if (check=="twin_cover_screws_open_11") {
+  difference() { ant_twin_screw_probes([11, 11]); union() { antenna_mount_twin([11, 11]); ant_twin_cover_placed([11, 11]); } }
+}
+else if (check=="twin_panels_present_11") {
+  intersection() { antenna_mount_twin([11, 11]); ant_twin_panel_ring([11, 11]); }
 }
 else if (check=="canary") { shell(); }
 
