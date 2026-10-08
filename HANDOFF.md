@@ -1094,3 +1094,24 @@ round New York, 0 px between the two projections where they overlap.
 `tests/test_network_around.py`. Also fixed: two leftover calls to the
 removed `queueRouteLookup` (ghost enrichment, the rewind panel) that
 threw since 2026.10.08.3.
+
+## A wide view is a grid of discs (2026-10-08, later still)
+adsb.lol's point endpoint serves at most 250 nm round a point and refuses
+a burst (420 and 429 measured; about one question a second is fine). So a
+view wider than one disc (more than 190 nm from the middle to the dial's
+edge) is a square grid of 250 nm discs spaced 250·√2 nm so they leave no
+gap: 2×2 up to 354 nm, 3×3 beyond, never more, covering about 530 nm round
+the middle; the rest of a continent stays empty and the answer says how
+far it reaches. The unit (`view_discs`, `tiles_payload` in
+network-compare.py, `/network/around?half=`) answers at once with the
+discs it has (`pending` counts the rest, so the page asks again in 5 s)
+and fetches the missing ones in a background thread, one at a time 1.2 s
+apart, one more try 2.5 s after a refusal, keeps a disc that still won't
+answer out (`partial`), caches each disc and the whole view 15 s, and
+allows nine questions per 20 s in all, whoever asks. The page asks every
+20 s for a wide view, and only once the middle has moved a quarter of a
+disc; the HUD count says "N FROM ADSB.LOL WITHIN 530NM"; 600 ghosts or
+more are drawn as 4 px squares in one path. The app (`NetworkFeed.discs`,
+`fetchView`) does the same from the phone, 1.2 s apart with one retry,
+every 30 s for a wide view: up to nine answers of ~600 KB each, so a
+continent costs a few MB a minute on cellular. `tests/test_network_around.py`.

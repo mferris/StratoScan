@@ -69,6 +69,22 @@ AROUND_UPSTREAM_GAP_S = 5
 AROUND_MAX_BODY = 3_000_000     # a busy 250 nm disc is well over MAX_BODY
 AROUND_PLACES = 8               # answers kept at once
 _around = {"cache": {}, "last_upstream": 0.0}
+# A view wider than one disc (the owner's ask, 2026-10-08): several discs on
+# a square grid, spaced so they leave no gap, at most 3 x 3 of them covering
+# the middle of the view; the rest of a continent stays empty, and the answer
+# says how far it reaches. adsb.lol is asked at most TILE_CALLS times in any
+# TILE_WINDOW_S, in all, whoever asks.
+TILE_NM = AROUND_MAX_NM
+TILE_SPACING_NM = AROUND_MAX_NM * math.sqrt(2)
+TILE_MAX_N = 3
+TILE_SINGLE_UP_TO_NM = 190      # a view this far out still fits one disc (x1.3 <= 250)
+TILE_WINDOW_S, TILE_CALLS = 20, 9
+TILE_CACHE_S = 15
+TILE_PACE_S = 1.2               # between questions: adsb.lol refuses a burst (420/429, measured)
+TILE_RETRY_S = 2.5              # one more try after a refusal
+TILE_KEEP_S = 120               # a disc's last answer is shown this long while a fresh one is fetched
+TILE_IN_THREAD = True           # the discs are fetched in the background (tests set False)
+_tiles = {"cache": {}, "discs": {}, "calls": [], "busy": set()}
 
 # Altitude bands, in feet. Chosen to separate a horizon problem from a
 # sensitivity one: if the low bands are the weak ones the antenna is being
@@ -325,6 +341,127 @@ def ghost_entry(hexid, a):
     }
 
 
+def view_discs(lat, lon, half):
+    """Where to ask for a view `half` nm out from its middle: one disc round
+    the middle while it fits, else an n x n grid of 250 nm discs (n <= 3)
+    covering the middle; and the radius that covers."""
+    if half <= TILE_SINGLE_UP_TO_NM:
+        r = int(max(AROUND_MIN_NM, min(AROUND_MAX_NM, half * 1.3)))
+        return [(lat, lon, r)], r
+    n = max(2, min(TILE_MAX_N, math.ceil(2 * half / TILE_SPACING_NM)))
+    discs = []
+    for j in range(n):
+        for i in range(n):
+            east = (i - (n - 1) / 2) * TILE_SPACING_NM
+            north = (j - (n - 1) / 2) * TILE_SPACING_NM
+            discs.append((round(lat + north / 60, 2),
+                          round(lon + east / (60 * math.cos(math.radians(lat))), 2), int(TILE_NM)))
+    return discs, int(n * TILE_SPACING_NM / 2)
+
+
+def _fetch_discs(need, now):
+    """One question at a time, a pause between them, one more try after a
+    refusal; a disc that still won't answer keeps its last answer or stays
+    missing. Runs in the background: nine paced questions take about twenty
+    seconds, longer than the gateway's patience, so the answer to the page
+    never waits for them (tiles_payload)."""
+    try:
+        _fetch_discs_inner(need, now)
+    finally:
+        with lock:
+            for d in need:
+                _tiles["busy"].discard(d)
+
+
+def tiles_payload(lat, lon, half, now=None):
+    """The network's aircraft over a view wider than one disc: every disc of
+    view_discs() the unit has an answer for, merged by hex, AT ONCE -- with
+    the discs it is still fetching counted as pending, so the page asks
+    again soon and the picture fills in. A disc's answer is kept
+    TILE_CACHE_S before it is fetched again, shown TILE_KEEP_S meanwhile.
+    Questions to adsb.lol stay within the window; when the window is used
+    up and nothing is known yet, None (429)."""
+    now = time.time() if now is None else now
+    discs, covered = view_discs(lat, lon, half)
+    key = ("view", round(round(lat * 20) / 20, 2), round(round(lon * 20) / 20, 2), len(discs))
+    with lock:
+        hit = _tiles["cache"].get(key)
+        if hit and now - hit[0] < TILE_CACHE_S:
+            out = dict(hit[1]); out["fetched"] = round(now - hit[0], 1)
+            return out
+        _tiles["calls"] = [t for t in _tiles["calls"] if now - t < TILE_WINDOW_S]
+        need = [d for d in discs
+                if not (_tiles["discs"].get(d) and now - _tiles["discs"][d][0] < TILE_CACHE_S)
+                and d not in _tiles["busy"]]
+        room = TILE_CALLS - len(_tiles["calls"])
+        need = need[:max(0, room)]
+        _tiles["calls"].extend([now] * len(need))
+        _tiles["busy"].update(need)
+        pending = [d for d in discs if d in _tiles["busy"]]
+    if need:
+        if TILE_IN_THREAD:
+            threading.Thread(target=_fetch_discs, args=(need, now), daemon=True).start()
+        else:
+            _fetch_discs(need, now)
+            pending = []
+    merged = {}
+    answered = 0
+    with lock:
+        for d in discs:
+            kept = _tiles["discs"].get(d)
+            if kept and now - kept[0] < TILE_KEEP_S:
+                answered += 1
+                for e in kept[1]:
+                    merged.setdefault(e["hex"], e)
+    if not answered and not pending:
+        return None
+    payload = {"ac": list(merged.values()), "centre": {"lat": key[1], "lon": key[2]},
+               "covered": covered, "discs": len(discs), "answered": answered, "pending": len(pending),
+               "partial": answered < len(discs), "source": SOURCE_NAME, "at": now}
+    if answered == len(discs) and not pending:      # only a whole, settled view is worth keeping
+        with lock:
+            if len(_tiles["cache"]) >= AROUND_PLACES:
+                _tiles["cache"].clear()
+            _tiles["cache"][key] = (now, payload)
+    out = dict(payload); out["fetched"] = 0.0
+    return out
+
+
+def _fetch_discs_inner(need, now):
+    failed = 0
+    for i, d in enumerate(need):
+        if i:
+            time.sleep(TILE_PACE_S)
+        entries = None
+        for attempt in (1, 2):
+            try:
+                net = get_json(SOURCE_URL.format(lat=d[0], lon=d[1], radius=d[2]),
+                               timeout=UPSTREAM_TIMEOUT, limit=AROUND_MAX_BODY)
+            except urllib.error.HTTPError as e:
+                if attempt == 1 and e.code in (420, 429, 503):
+                    time.sleep(TILE_RETRY_S)
+                    continue
+                break
+            except (urllib.error.URLError, OSError, ValueError):
+                break
+            entries = []
+            for a in net.get("ac", []):
+                if a.get("lat") is None or a.get("lon") is None:
+                    continue
+                hexid = str(a.get("hex", "")).strip().lower()
+                if ICAO_HEX.fullmatch(hexid):
+                    entries.append(ghost_entry(hexid, a))
+            break
+        with lock:
+            _tiles["busy"].discard(d)        # pending counts only what is still to come
+            if entries is None:
+                failed += 1
+                continue
+            if len(_tiles["discs"]) >= TILE_MAX_N * TILE_MAX_N * 2:
+                _tiles["discs"].clear()
+            _tiles["discs"][d] = (now, entries)
+
+
 def around_payload(lat, lon, radius, now=None):
     """The network's aircraft round a point: for the radar's screen when its
     view is panned or zoomed out past the ring. The point is rounded to 0.05
@@ -401,12 +538,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             try:
                 lat = float(q.get("lat", [""])[0]); lon = float(q.get("lon", [""])[0])
                 radius = float(q.get("r", ["25"])[0])
+                half = float(q["half"][0]) if "half" in q else None     # the view's reach: tiles if wide
             except (ValueError, IndexError):
-                return self._json(400, {"error": "lat, lon and r must be numbers"})
+                return self._json(400, {"error": "lat, lon, r and half must be numbers"})
             if not (-90 <= lat <= 90 and -180 <= lon <= 180 and radius == radius):
                 return self._json(400, {"error": "lat or lon out of range"})
             try:
-                out = around_payload(lat, lon, radius)
+                if half is not None and half > TILE_SINGLE_UP_TO_NM:
+                    out = tiles_payload(lat, lon, min(half, 100000.0))
+                else:
+                    out = around_payload(lat, lon, half * 1.3 if half is not None else radius)
             except (urllib.error.URLError, OSError, ValueError, KeyError) as e:
                 return self._json(503, {"error": "upstream unavailable", "detail": type(e).__name__})
             if out is None:
