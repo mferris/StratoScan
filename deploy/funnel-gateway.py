@@ -372,6 +372,10 @@ VISITS = None   # made at start-up; record() is never called before
 class _StatsHandler(http.server.BaseHTTPRequestHandler):
     """Loopback-only: the setup server reads the counts from here for the
     radar's screen, its setup page and the owner's app at home."""
+    # A client that connects and then sends nothing (or reads nothing) held a
+    # thread for good; now the socket gives up after this many seconds
+    # (security review 2026-10-04, item 7).
+    timeout = 30
 
     def do_GET(self):
         if self.path.split("?", 1)[0] != "/visits" or VISITS is None:
@@ -409,6 +413,10 @@ _opener = urllib.request.build_opener(_NoRedirect)
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
+    # A client that connects and then sends nothing (or reads nothing) held a
+    # thread for good; now the socket gives up after this many seconds
+    # (security review 2026-10-04, item 7).
+    timeout = 30
     def version_string(self):
         return "StratoScan"  # don't advertise the Python/http.server version
 

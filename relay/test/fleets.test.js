@@ -163,3 +163,38 @@ test('the maintainer’s page lists fleets without their secrets', async () => {
   assert.match(html, /Family/);
   assert.ok(!html.includes(fam.code) && !html.includes(fam.token));
 });
+
+test('an administrator can replace their link; the old one says it was replaced', async () => {
+  const e = env();
+  const fam = await createFleet(e, 'Family');
+  const cookie = await signIn(e, fam.token);
+  const r = await worker.fetch(form('/f/link', {}, { cookie, auth: false }), e);
+  assert.equal(r.status, 200);
+  const html = await r.text();
+  const fresh = /\/f\/([A-Za-z0-9_-]{43})/.exec(html)?.[1];
+  assert.ok(fresh && fresh !== fam.token, 'a new link is shown once');
+  assert.match(html, /no longer works/);
+  assert.ok(r.headers.get('Set-Cookie').includes(fresh), 'this browser stays signed in with the new link');
+  const old = await worker.fetch(new Request(`${BASE}/f/${fam.token}`), e);
+  assert.equal(old.status, 410);
+  assert.match(await old.text(), /was replaced on \d{4}-\d{2}-\d{2}/);
+  assert.equal((await worker.fetch(new Request(BASE + '/f', { headers: { Cookie: cookie } }), e)).status, 401, 'the old cookie is out');
+  const now = await signIn(e, fresh);
+  assert.equal((await worker.fetch(form('/f/link', {}, { cookie: now, auth: false, origin: 'https://evil.example' }), e)).status, 403, 'never cross-site');
+});
+
+test('the maintainer can replace an administrator’s link from the fleet page', async () => {
+  const e = env();
+  const fam = await createFleet(e, 'Family');
+  const listing = await (await worker.fetch(new Request(BASE + '/fleet', { headers: { Authorization: basic } }), e)).text();
+  const id = /name="admin" value="(\d+)"/.exec(listing)?.[1];
+  assert.ok(id, 'the maintainer’s page lists the administrator');
+  const html = await (await worker.fetch(form('/fleet/fleets/rotate', { admin: id }), e)).text();
+  const fresh = /\/f\/([A-Za-z0-9_-]{43})/.exec(html)?.[1];
+  assert.ok(fresh && fresh !== fam.token);
+  assert.equal((await worker.fetch(new Request(`${BASE}/f/${fam.token}`), e)).status, 410);
+  await signIn(e, fresh);
+  assert.equal((await worker.fetch(form('/fleet/fleets/rotate', { admin: '999' }), e)).status, 404);
+  const again = await (await worker.fetch(new Request(BASE + '/fleet', { headers: { Authorization: basic } }), e)).text();
+  assert.match(again, /link replaced \d{4}-\d{2}-\d{2}/);
+});

@@ -77,7 +77,7 @@ A fleet is a group of radars with its own administrators (roadmap 1.13): for exa
 
 It never shows a location (health reports carry none), phones or alerts. An administrator can remove a radar or replace the invite code.
 
-**Storage:** three tables, `fleets`, `fleet_admins` and `fleet_members`, in `schema.sql`. On the live database they were created with `wrangler d1 execute --command`, because `--file` needs an API permission the maintainer's login doesn't have.
+**Storage:** three tables, `fleets`, `fleet_admins` and `fleet_members`, in `schema.sql`. On the live database they were created with `wrangler d1 execute --command`, because `--file` needs an API permission the maintainer's login doesn't have. An administrator's link can be replaced, by the administrator ("Replace my link" on their page) or by the maintainer: the old one stops working at once and says so when opened; `fleet_admins.replaced_hash` and `replaced` were added the same way on 2026-10-08.
 
 ## Security model
 
