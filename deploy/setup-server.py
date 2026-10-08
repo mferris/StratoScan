@@ -46,7 +46,16 @@ MAX_SESSIONS = 8
 
 _sessions = {}          # sha256(token) -> {created, seen}
 _lock = threading.Lock()
-_fail = {"count": 0, "until": 0.0}
+# Failed sign-ins, PER ADDRESS: one device on the LAN failing on purpose used
+# to keep the owner out for up to 15 minutes, because the count was global
+# (security review 2026-10-04, item 2). A slower global backstop remains, so
+# a crowd of addresses can't run through passwords together.
+_fail = {}                      # address -> {"count", "until", "last"}
+_fail_all = {"count": 0, "until": 0.0, "window": 0.0}
+FAIL_FORGET_S = 15 * 60         # an address's failures are forgotten after this quiet spell
+FAIL_ALL_WINDOW_S = 15 * 60
+FAIL_ALL_LIMIT = 50             # failures from every address together, per window...
+FAIL_ALL_DELAY_S = 30           # ...then everyone waits this long between tries
 
 
 # ------------------------------------------------------------------ state
@@ -192,25 +201,45 @@ def drop_sessions():
         _sessions.clear()
 
 
-def throttled():
-    """Exponential backoff, capped, always self-clearing.
+def _forget_old_failures(now):
+    for addr in [a for a, f in _fail.items() if now - f["last"] > FAIL_FORGET_S and now >= f["until"]]:
+        del _fail[addr]
+    if now - _fail_all["window"] > FAIL_ALL_WINDOW_S:
+        _fail_all.update(count=0, window=now)
+
+
+def throttled(addr):
+    """Exponential backoff for this address, capped, always self-clearing.
 
     Never a permanent lockout: the owner forgetting their password must not
     require re-flashing the device.
     """
-    return time.time() < _fail["until"]
+    now = time.time()
+    with _lock:
+        _forget_old_failures(now)
+        if now < _fail_all["until"]:
+            return True
+        f = _fail.get(addr)
+        return bool(f) and now < f["until"]
 
 
-def note_failure():
-    _fail["count"] += 1
-    if _fail["count"] >= 5:
-        delay = min(900, 2 ** (_fail["count"] - 5))
-        _fail["until"] = time.time() + delay
+def note_failure(addr):
+    now = time.time()
+    with _lock:
+        _forget_old_failures(now)
+        f = _fail.setdefault(addr, {"count": 0, "until": 0.0, "last": now})
+        f["count"] += 1
+        f["last"] = now
+        if f["count"] >= 5:
+            f["until"] = now + min(900, 2 ** (f["count"] - 5))
+        _fail_all["count"] += 1
+        if _fail_all["count"] >= FAIL_ALL_LIMIT:
+            _fail_all["until"] = now + FAIL_ALL_DELAY_S
 
 
-def note_success():
-    _fail["count"] = 0
-    _fail["until"] = 0.0
+def note_success(addr):
+    with _lock:
+        _fail.pop(addr, None)
 
 
 # -------------------------------------------------------------------- HTTP
@@ -224,6 +253,10 @@ SECURITY_HEADERS = {
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
+    # A client that connects and then sends nothing (or reads nothing) held a
+    # thread for good; now the socket gives up after this many seconds
+    # (security review 2026-10-04, item 7).
+    timeout = 30
     protocol_version = "HTTP/1.1"
 
     def version_string(self):
@@ -440,7 +473,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if st.get("claimed"):
             return self._err(409, "already_claimed",
                              "This device has already been set up.")
-        if throttled():
+        if throttled(self.client_address[0]):
             return self._err(429, "too_many_attempts", "Too many tries. Wait a moment.")
         b = self._body() or {}
         code, pw = b.get("claimCode") or "", b.get("password") or ""
@@ -449,12 +482,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._err(503, "no_claim_code",
                              "The device has not finished starting up.")
         if not hmac.compare_digest(code.strip().upper(), expected.strip().upper()):
-            note_failure()
+            note_failure(self.client_address[0])
             return self._err(403, "bad_claim_code",
                              "That code does not match the one on the screen.")
         if not (8 <= len(pw) <= 128):
             return self._err(400, "weak_password", "Use at least 8 characters.")
-        note_success()
+        note_success(self.client_address[0])
         st.update({"schema": 1, "claimed": True,
                    "password": hash_password(pw),
                    "steps": st.get("steps", {})})
@@ -464,13 +497,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _login(self, st):
         if not st.get("claimed"):
             return self._err(409, "not_claimed", "This device has not been set up yet.")
-        if throttled():
+        if throttled(self.client_address[0]):
             return self._err(429, "too_many_attempts", "Too many tries. Wait a moment.")
         b = self._body() or {}
         if not verify_password(b.get("password") or "", st.get("password")):
-            note_failure()
+            note_failure(self.client_address[0])
             return self._err(401, "bad_password", "That password was not accepted.")
-        note_success()
+        note_success(self.client_address[0])
         return self._send(200, {"token": new_session(), "expiresIn": SESSION_TTL})
 
     def _change_password(self, st):
@@ -889,6 +922,10 @@ ONBOARD_LISTEN = ("127.0.0.1", 8090)
 
 
 class OnboardHandler(http.server.BaseHTTPRequestHandler):
+    # A client that connects and then sends nothing (or reads nothing) held a
+    # thread for good; now the socket gives up after this many seconds
+    # (security review 2026-10-04, item 7).
+    timeout = 30
     protocol_version = "HTTP/1.1"
 
     def version_string(self):
