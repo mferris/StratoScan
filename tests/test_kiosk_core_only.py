@@ -28,6 +28,10 @@ for needle in ("adsb.im/api", "api.adsbdb.com", "/tar1090/data/aircraft.json", "
     check(needle not in code, "no %s in code" % needle)
 check(not re.search(r"https?://[a-z0-9.-]*adsb\.im", code), "no adsb.im address in code")
 check(not re.search(r"https?://[a-z0-9.-]*adsbdb", code), "no adsbdb address in code")
+# Release 2026.10.08.2 captured the pointer on the stage for pan and zoom, and
+# every control inside the stage that listens for its own pointerup (the gear,
+# the rewind button, the panels) stopped answering on the panel.
+check("setPointerCapture(" not in code, "the stage never captures the pointer (the gear's tap must reach the gear)")
 
 print("kiosk core-only checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)
