@@ -386,6 +386,13 @@
     opacity: 0.55;
   }
 
+  /* The followed aircraft's tag: bright, on top, beside its blip. */
+  .tag.followed {
+    border: 1px solid var(--text);
+    box-shadow: 0 0 14px 2px color-mix(in srgb, var(--mid) 60%, transparent);
+    z-index: 3;
+  }
+  .tag.followed .cs { color: var(--text); }
   .tag {
     position: absolute;
     font-family: 'JetBrains Mono', monospace;
@@ -756,7 +763,7 @@
   #detailPanel .dp-follow {
     position: absolute;
     top: 12px;
-    left: 14px;
+    right: 60px;              /* beside the close button, clear of the tags at the top left */
     z-index: 2;
     padding: 9px 14px;
     border: 1px solid var(--mid);
@@ -5310,6 +5317,23 @@ function setStyle(node, el, prop, v, resizes = true) {
   if (resizes) node._changed = true;
 }
 
+// The line from a blip to its tag: only what changed, like the labels (#35).
+function placeLeader(p, lx, ly) {
+  const attach = closestPointOnRect(p.anchorX, p.anchorY, lx, ly, p.labelW, p.labelH);
+  let line = leaderNodes.get(p.hex);
+  if (!line) {
+    line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    leadersEl.appendChild(line);
+    leaderNodes.set(p.hex, line);
+  }
+  setAttr(line, 'x1', p.anchorX.toFixed(1));
+  setAttr(line, 'y1', p.anchorY.toFixed(1));
+  setAttr(line, 'x2', attach.x.toFixed(1));
+  setAttr(line, 'y2', attach.y.toFixed(1));
+  setAttr(line, 'stroke', p.color);
+  setStyle(line, line, 'opacity', String(LEADER_BASE_OPACITY * p.opacity), false); // CSS base opacity, scaled by coast fade
+}
+
 function drawPlanes(dt) {
   const stageRect = stage.getBoundingClientRect();
   const scale = stageRect.width / W;
@@ -5328,7 +5352,7 @@ function drawPlanes(dt) {
     p.bearing = ((p.bearing % 360) + 360) % 360; // keep in [0,360) -- pure accumulation would otherwise drift arbitrarily far past it over a long-lived contact (e.g. a tight holding pattern), same issue labelAngle already guards against below
     p.range += (p.targetRange - p.range) * alpha;
 
-    if (p.range > RANGE_NM) continue;
+    if (p.range > RANGE_NM && p.hex !== followHex) continue;   // the followed one is drawn wherever it is
     inRange.push(p);
 
     // signal lost this poll (or several) -> hold position and fade rather
@@ -5350,7 +5374,8 @@ function drawPlanes(dt) {
     p.anchorY = y * scale;
     p.color = color;
 
-    const bscale = blipScale(p.alt);
+    const followed = p.hex === followHex;
+    const bscale = blipScale(p.alt) * (followed ? 1.4 : 1);
     ctx.save();
     ctx.globalAlpha = p.opacity;
     ctx.translate(x, y);
@@ -5394,6 +5419,28 @@ function drawPlanes(dt) {
       ctx.drawImage(ring, -ring.half, -ring.half);
       ctx.restore();
     }
+    if (followed) {
+      // A reticle round the followed aircraft, pulsing, so it can't be
+      // missed in the middle of a zoomed picture (the owner's ask).
+      const pulse = 0.65 + 0.35 * Math.sin(now / 250);
+      ctx.save();
+      ctx.globalAlpha = p.opacity * pulse;
+      ctx.translate(x, y);
+      ctx.strokeStyle = COLORS.sweep;
+      ctx.shadowColor = COLORS.sweep;
+      ctx.shadowBlur = 10;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 24, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      for (const a of [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2]) {
+        ctx.moveTo(30 * Math.cos(a), 30 * Math.sin(a));
+        ctx.lineTo(42 * Math.cos(a), 42 * Math.sin(a));
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
 
     let node = tagNodes.get(p.hex);
     if (!node) {
@@ -5404,6 +5451,7 @@ function drawPlanes(dt) {
       tagNodes.set(p.hex, node);
     }
     node.classList.toggle('airport-phase', !!airportPhase);
+    node.classList.toggle('followed', followed);
     setStyle(node, node, 'borderLeft', `2px solid ${color}`);
     setText(node, node.querySelector('.cs'), p.cs);
     setStyle(node, node.querySelector('.cs'), 'color', color);
@@ -5528,9 +5576,21 @@ function drawPlanes(dt) {
 
   const cxScaled = CX * scale, cyScaled = CY * scale, boundRadiusScaled = LABEL_BOUND_RADIUS * scale;
   for (const p of inRange) {
+    const hw = p.labelW / 2, hh = p.labelH / 2;
+    if (p.hex === followHex) {
+      // Beside its blip, which the view keeps in the middle: lower right,
+      // clear of the reticle, clamped to the stage.
+      const lx = Math.max(2, Math.min(stageRect.width - p.labelW - 2, p.anchorX + 46 * scale));
+      const ly = Math.max(2, Math.min(stageRect.height - p.labelH - 2, p.anchorY + 30 * scale));
+      p.labelX = lx;
+      p.labelY = ly;
+      setStyle(p.node, p.node, 'transform', `translate(${Math.round(lx)}px, ${Math.round(ly)}px)`, false);
+      setStyle(p.node, p.node, 'opacity', String(p.opacity), false);
+      placeLeader(p, lx, ly);
+      continue;
+    }
     const ringPt = ringPointForAngle(p.labelAngle, scale);
     let cxBox = ringPt.x, cyBox = ringPt.y; // box center
-    const hw = p.labelW / 2, hh = p.labelH / 2;
 
     // Pull the box's center radially inward, if needed, so every corner
     // stays inside the visible circle -- a few iterations converge because
@@ -5565,29 +5625,13 @@ function drawPlanes(dt) {
     // whole pixels, so the text stays crisp on its own layer
     setStyle(p.node, p.node, 'transform', `translate(${Math.round(lx)}px, ${Math.round(ly)}px)`, false);
     setStyle(p.node, p.node, 'opacity', String(p.opacity), false);
-
-    const attach = closestPointOnRect(p.anchorX, p.anchorY, lx, ly, p.labelW, p.labelH);
-    const attachX = attach.x, attachY = attach.y;
-
-    let line = leaderNodes.get(p.hex);
-    if (!line) {
-      line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      leadersEl.appendChild(line);
-      leaderNodes.set(p.hex, line);
-    }
-    // only what changed, like the labels (#35)
-    setAttr(line, 'x1', p.anchorX.toFixed(1));
-    setAttr(line, 'y1', p.anchorY.toFixed(1));
-    setAttr(line, 'x2', attachX.toFixed(1));
-    setAttr(line, 'y2', attachY.toFixed(1));
-    setAttr(line, 'stroke', p.color);
-    setStyle(line, line, 'opacity', String(LEADER_BASE_OPACITY * p.opacity), false); // CSS base opacity, scaled by coast fade
+    placeLeader(p, lx, ly);
   }
 
   // remove tag/leader nodes for aircraft no longer tracked or out of range
   for (const [hex, node] of tagNodes) {
     const pl = planes.get(hex);
-    if (!pl || pl.range > RANGE_NM) {
+    if (!pl || (pl.range > RANGE_NM && pl.hex !== followHex)) {
       node.remove();
       tagNodes.delete(hex);
       const line = leaderNodes.get(hex);
