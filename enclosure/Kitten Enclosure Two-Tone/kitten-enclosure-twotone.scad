@@ -219,6 +219,9 @@ ant_boss_dia       = 48;   // 42 -> 45 -> 48; the rim is the part that broke
 // a 9mm bore (what this was) will not pass a 9.15mm connector at all.
 ant_conn_dia       = 9.15;
 ant_cable_dia      = ant_conn_dia + 1.85;   // 11.0
+// The plate's own hole. 13, not 11, since the twin mount's two plugs share it
+// and the second has to pass the first cable (see antenna_mount_twin).
+ant_plate_hole     = 13;
 
 // ---- the SMA bulkhead variant ----------------------------------------
 // A second antenna mount, sharing this one's bolt circle, arm and
@@ -982,30 +985,131 @@ module antenna_mount_sma() {
 // 80mm apart: two antennas this close in frequency detune each other when
 // bunched, and further apart than this the crossbar outgrows the head.
 //
-// Each cable is threaded plug-first: down its tower, along the tunnel in the
-// crossbar, down the arm, and through the plate's 11mm hole (ant_cable_dia),
-// which an SMA plug passes. Then the bulkhead goes up through its panel and
-// its nut goes on top. Everything a plug travels through is at least
-// ant_cable_dia across; twin_plug_path_clear in the checks holds that.
-ant_twin_sep    = 80;    // between the two jacks
-ant_twin_boss_d = 22;    // as ant_sma_boss_d
-ant_twin_band   = 18;    // the crossbar's depth along the antenna axis
-ant_twin_top    = 32;    // top of each tower, along the axis from the arm's end
-ant_twin_plug_d = 9.3;   // an SMA plug's hex across its corners
+// Two parts, body and cover, since 2026-10-07. The first version threaded
+// each cable through an internal tunnel -- down a tower, along the crossbar,
+// down the arm -- and could not be assembled: both ends of a jumper are
+// rigid metal about 9mm across and 15-20mm long, and a body that fat cannot
+// turn a right-angle corner inside an 11mm bore (the geometry allows a few
+// millimetres of rigid length there, not twenty). The checks only ever
+// passed a straight probe down each leg. Found by the owner, printed part
+// in hand.
+//
+// Now nothing turns a corner. The crossbar and towers are one "goalpost"
+// with an open channel on the face away from the case (local +Y, which is
+// print-up when the body prints flange-down, so the channel, the slots and
+// every hole need no support; the towers' outboard ends and the bar's top
+// edge start in mid-air in that orientation and want tree supports under
+// them, on the face toward the case), closed by a flat cover that sits
+// flush inside a rim on five M2 screws. The arm's bore runs straight on through the crossbar and out of
+// the channel floor, so each plug is pushed into it end-on from open air
+// and on out through the plate. The bulkhead end slides sideways into a
+// slot under each tower's panel that is a close fit on the jack's hex body,
+// so the jack cannot turn while its nut is tightened and nothing inside has
+// to be held. Both plugs share the one bore: 13mm, because the second plug
+// (9.2mm across its nut's corners) has to pass the first cable (2.5mm);
+// the plate's hole (ant_plate_hole) is the same 13mm for the same reason.
+//
+// Panel 2mm: the bulkhead's thread is 10mm from its shoulder (measured
+// 2026-10-07), and 2 of panel + 0.6 of washer + 2.5 of nut leaves 4.9mm for
+// the whip's own coupling nut. 3mm would leave 3.9, which is marginal.
+ant_twin_sep       = 80;    // between the two jacks
+ant_twin_bar_x     = 106;   // crossbar length (local X), flush with the towers' outer faces
+ant_twin_bar_y     = 22;    // crossbar thickness, plate side to wall side (local Y)
+ant_twin_bar_z     = 30;    // crossbar height along the antenna axis: 9mm walls round the 12mm channel
+ant_twin_tower_w   = 26;    // tower square: 8.6mm walls either side of the 8.8mm slot
+ant_twin_top       = 32;    // top of each tower, along the axis from the arm's end
+ant_twin_edge_r    = 3;     // rounding of the goalpost's outline
+ant_twin_panel_t   = 2;     // the panel the jack's nut clamps (see the thread arithmetic above)
+ant_twin_hole      = 6.7;   // 1/4-36 thread measures 6.35; printed holes come out small
+ant_twin_jack_af   = 8;     // the jack's body across its flats, assumed hex. MEASURE on the real part.
+ant_twin_slot_w    = 8.8;   // the slot across X: the body's flats slide between its walls, 0.8 of play
+ant_twin_floor_y   = -4.6;  // channel floor and the slot's blind end (local Y): a hex body resting on it (9.2 across
+                            // its corners) has its axis at Y=0, under the panel hole, so "push it in until it stops" is right
+ant_twin_seat_y    = 8;     // the cover seat: where the channel opens
+ant_twin_rim       = 1.5;   // rim round the cover
+ant_twin_chan_z    = 12;    // channel width along the axis
+ant_twin_bore      = 13;    // the arm bore: a plug beside a cable. ant_plate_hole matches.
+ant_twin_cover_t   = 3;
+ant_twin_cover_gap = 0.2;   // all round the cover, in its seat
+ant_twin_cover_top = 25.8;  // the cover's tabs stop here, under the pocket (ant_twin_pocket_z)
+// Above ant_twin_pocket_z the open slot becomes a closed pocket the hex
+// body's size, so the 2mm panel over it rests on solid plastic on all four
+// sides beyond the hex (the washer bears on that), and the body is held
+// fore-aft as well as sideways. The jack goes into the open slot below and
+// is pushed up into the pocket until its barrel comes through the panel.
+ant_twin_pocket_z  = 26;
+ant_twin_pocket_y  = 4.9;   // floor -4.6 + the hex's 9.24 across corners + 0.26 of play
+// A pad on the cover's inner face at each tower fills the gap over the
+// lower part of the hex body (0.4mm clear of its corners), so the cover's
+// screws brace the jack fore-aft along its whole length.
+ant_twin_cpad_w    = 8.4;
+ant_twin_cpad_z0   = 16;
+ant_twin_cpad_z1   = 25.5;
+ant_twin_cpad_t    = 3;     // seat at Y=8 down to Y=5
+// The bar is 4mm thicker on its case side for 40mm either side of the arm,
+// so the flare under the bore's mouth (spheres, see the body) keeps 4mm of
+// wall where the arm's own wall alone would be under 1mm.
+ant_twin_m2_hole   = 3.0;   // M2 heat-set insert, 3.2mm across the knurl (3.2 if the kit's are the 3.5mm kind). MEASURE the kit's.
+ant_twin_m2_depth  = 6;     // an M2x6 through 1mm of cover under its head reaches 5mm in; the hole is a little deeper
+ant_twin_screw_hole = 2.4;  // M2 clearance through the cover. No counterbore: a 3mm cover printed
+                            // face-down cannot roof one, so the cap heads stand 2mm proud of a
+                            // face nothing touches
+ant_twin_back_pad  = 4;
+ant_twin_back_pad_w = 40;
+// Cover screws, as (X, Z) in the axis frame: one in each tower's outer wall
+// beside the slot, one in each tower's foot (solid: the channel stops at
+// |X| = 44.4), one in the bar's top wall. Each insert hole has at least
+// 2.2mm of wall on every side, and each hole in the cover (in an outline
+// inset 1.7 from the body's) at least 2.1mm to the cover's edge.
+ant_twin_screw_xz  = [[-48, 23], [48, 23], [-48, -8], [48, -8], [0, 10]];
+ant_twin_plug_d    = 9.3;   // an SMA plug's hex across its corners
 
 // One jack's frame: the counter-tilted antenna axis, moved out along X.
 module ant_twin_frame(s) {
     ant_axis_frame() translate([s * ant_twin_sep/2, 0, 0]) children();
 }
 
-// A horizontal bore that prints without support: a circle with a 45-degree
-// roof on the side that faces up when the mount prints flange-down (local +Y).
+// A bore that prints without support: a circle with a 45-degree roof on the
+// side that faces up when the body prints flange-down (local +Y).
 module ant_twin_teardrop(d, h) {
     hull() {
         cylinder(d=d, h=h);
-        translate([0, d/2 * 0.41, 0]) rotate([0,0,45])
+        // apex at r*sqrt(2): the square's side corners land on the circle, a true 45 roof
+        translate([0, d/2 * 0.707, 0]) rotate([0,0,45])
             translate([-d/4, -d/4, 0]) cube([d/2, d/2, h]);
     }
+}
+
+// The goalpost, in the axis frame's X (across) and Z (up the antenna axis).
+module ant_twin_outline2d() {
+    offset(r=ant_twin_edge_r) offset(delta=-ant_twin_edge_r) union() {
+        square([ant_twin_bar_x, ant_twin_bar_z], center=true);
+        for (s = [-1, 1])
+            translate([s*ant_twin_sep/2 - ant_twin_tower_w/2, -ant_twin_bar_z/2])
+                square([ant_twin_tower_w, ant_twin_bar_z/2 + ant_twin_top]);
+    }
+}
+
+// A 2D shape in (X, Z), extruded along the frame's Y from y0 to y1.
+module ant_twin_slab(y0, y1) {
+    translate([0, y1, 0]) rotate([90, 0, 0]) linear_extrude(height = y1 - y0) children();
+}
+
+// The cover's outline: the goalpost inset by the rim and the fit gap, and
+// stopped short of the panels.
+module ant_twin_cover2d() {
+    intersection() {
+        offset(delta = -(ant_twin_rim + ant_twin_cover_gap)) ant_twin_outline2d();
+        translate([-200, -200]) square([400, 200 + ant_twin_cover_top]);
+    }
+}
+
+// The bore in the body's own frame: straight along the plate's normal from
+// above the flange face, down the arm, through the crossbar and out of the
+// channel. One cylinder, so there is nothing for a plug to turn into.
+module ant_twin_bore() {
+    translate([0, ant_mount_y, -back_plate_t - ant_stub_len - 30])
+        cylinder(d=ant_twin_bore, h=ant_stub_len + 30 + 1);
 }
 
 module antenna_mount_twin() {
@@ -1015,58 +1119,132 @@ module antenna_mount_twin() {
                 cylinder(d=ant_flange_d, h=ant_flange_t);
             translate([0, ant_mount_y, -back_plate_t - ant_stub_len])
                 cylinder(d=ant_stub_dia, h=ant_stub_len);
-            // the crossbar, through the arm's end
-            ant_axis_frame() hull() for (s = [-1, 1])
-                translate([s * ant_twin_sep/2, 0, -ant_twin_band/2])
-                    cylinder(d=ant_twin_boss_d, h=ant_twin_band);
-            // a tower at each end
-            for (s = [-1, 1]) ant_twin_frame(s)
-                translate([0, 0, -ant_twin_band/2])
-                    cylinder(d=ant_twin_boss_d, h=ant_twin_top + ant_twin_band/2);
+            ant_axis_frame() ant_twin_slab(-ant_twin_bar_y/2, ant_twin_bar_y/2) ant_twin_outline2d();
+            // the thicker back behind the flare
+            ant_axis_frame() ant_twin_slab(-ant_twin_bar_y/2 - ant_twin_back_pad, -ant_twin_bar_y/2 + 0.01)
+                offset(r=ant_twin_edge_r) offset(delta=-ant_twin_edge_r)
+                    square([ant_twin_back_pad_w, ant_twin_bar_z], center=true);
         }
-        for (s = [-1, 1]) ant_twin_frame(s) {
-            // the jack's hole through the panel at the top
-            translate([0, 0, ant_twin_top - ant_sma_panel_t - 0.01])
-                cylinder(d=ant_sma_hole, h=ant_sma_panel_t + 0.02, $fn=48);
-            // the space behind it, down into the tunnel
-            ant_twin_teardrop(ant_sma_cavity, ant_twin_top - ant_sma_panel_t);
+        ant_axis_frame() {
+            // the cover seat: the wall-side face inside the rim, down to the seat
+            ant_twin_slab(ant_twin_seat_y, ant_twin_bar_y/2 + 1)
+                intersection() {
+                    offset(delta=-ant_twin_rim) ant_twin_outline2d();
+                    translate([-200, -200]) square([400, 200 + ant_twin_cover_top + ant_twin_cover_gap]);
+                }
+            // the channel along the bar and the open slot under each tower, one
+            // floor, open to the seat
+            ant_twin_slab(ant_twin_floor_y, ant_twin_seat_y + 1) {
+                square([ant_twin_sep + ant_twin_slot_w, ant_twin_chan_z], center=true);
+                for (s = [-1, 1])
+                    translate([s*ant_twin_sep/2 - ant_twin_slot_w/2, -ant_twin_chan_z/2])
+                        square([ant_twin_slot_w, ant_twin_chan_z/2 + ant_twin_pocket_z]);
+            }
+            // the closed pocket above it, up to the panel: the hex body's size
+            ant_twin_slab(ant_twin_floor_y, ant_twin_pocket_y)
+                for (s = [-1, 1])
+                    translate([s*ant_twin_sep/2 - ant_twin_slot_w/2, ant_twin_pocket_z - 0.01])
+                        square([ant_twin_slot_w, ant_twin_top - ant_twin_panel_t - ant_twin_pocket_z + 0.01]);
+            // the jack's hole through each panel
+            for (s = [-1, 1])
+                translate([s*ant_twin_sep/2, 0, ant_twin_top - ant_twin_panel_t - 0.01])
+                    ant_twin_teardrop(ant_twin_hole, ant_twin_panel_t + 0.02);
+            // the cover's inserts, from the seat into the body
+            for (p = ant_twin_screw_xz)
+                translate([p[0], ant_twin_seat_y - ant_twin_m2_depth, p[1]])
+                    rotate([-90, 0, 0]) cylinder(d=ant_twin_m2_hole, h=ant_twin_m2_depth + 1, $fn=24);
         }
-        // the tunnel along the crossbar, from tower to tower through the arm
-        ant_axis_frame() translate([-ant_twin_sep/2, 0, 0]) rotate([0, 90, 0])
-            rotate([0, 0, 90]) ant_twin_teardrop(ant_cable_dia, ant_twin_sep);
-        // and the straight run down the arm and out through the flange, which
-        // the tunnel meets at the arm's end
-        translate([0, ant_mount_y, -back_plate_t - ant_stub_len - 2])
-            cylinder(d=ant_cable_dia, h=ant_stub_len + 2.01);
+        ant_twin_bore();
+        // where the bore breaks through the channel floor, a flare along the
+        // bar so each cable can curve from the floor into the bore without
+        // wrapping a sharp edge. The cable bends about Z (it arrives along X
+        // and turns down), so the rounding has to be in the X-Y plane: the
+        // bore's section just under the floor, hulled with a sphere the
+        // channel's width either side of the mouth. The spheres reach 6mm
+        // below the floor at X = +-11.5, which is why the bar has its thicker
+        // back there (ant_twin_back_pad).
+        hull() {
+            intersection() {
+                ant_twin_bore();
+                ant_axis_frame() ant_twin_slab(-ant_twin_bar_y/2 - 1, ant_twin_floor_y) square([60, 60], center=true);
+            }
+            for (sx = [-1, 1]) ant_axis_frame()
+                translate([sx * (ant_twin_bore/2 + 5), ant_twin_floor_y, 0]) sphere(d=ant_twin_chan_z, $fn=48);
+        }
         ant_flange_insert_bores();
         // nothing may stand proud of the plate's outer face
         translate([-300, -300, -back_plate_t]) cube([600, 600, 600]);
     }
 }
 
-// The route a cable's plug takes, as a solid a little under the bores: down
-// each tower, along the tunnel, down the arm. For the checks.
-module ant_twin_plug_path() {
-    for (s = [-1, 1]) ant_twin_frame(s)
-        translate([0, 0, 0]) cylinder(d=ant_twin_plug_d, h=ant_twin_top - ant_sma_panel_t - 0.5);
-    ant_axis_frame() translate([-ant_twin_sep/2, 0, 0]) rotate([0, 90, 0])
-        cylinder(d=ant_twin_plug_d, h=ant_twin_sep);
-    translate([0, ant_mount_y, -back_plate_t - ant_stub_len])
-        cylinder(d=ant_twin_plug_d, h=ant_stub_len - 0.5);
+// The cover, laid out for printing: flat, outer face down, X across and Y up
+// the antenna axis. Five M2 clearance holes; a pad on the inner face at each
+// tower that reaches down over the jack's body.
+module antenna_mount_twin_cover() {
+    difference() {
+        union() {
+            linear_extrude(height = ant_twin_cover_t) ant_twin_cover2d();
+            for (s = [-1, 1])
+                translate([s*ant_twin_sep/2 - ant_twin_cpad_w/2, ant_twin_cpad_z0, ant_twin_cover_t - 0.01])
+                    cube([ant_twin_cpad_w, ant_twin_cpad_z1 - ant_twin_cpad_z0, ant_twin_cpad_t + 0.01]);
+        }
+        for (p = ant_twin_screw_xz) translate([p[0], p[1], -1])
+            cylinder(d=ant_twin_screw_hole, h=ant_twin_cover_t + 2, $fn=24);
+    }
 }
 
+// The cover in its seat on the body, for the checks and the preview.
+module ant_twin_cover_placed() {
+    ant_axis_frame() translate([0, ant_twin_seat_y + ant_twin_cover_t, 0])
+        rotate([90, 0, 0]) antenna_mount_twin_cover();
+}
+
+// ---- probes for the checks --------------------------------------------
+// A plug beside a cable, 12mm, straight down the bore from the flange face
+// to below the crossbar: must meet nothing.
+module ant_twin_bore_probe() {
+    translate([0, ant_mount_y, -back_plate_t - ant_stub_len - 20])
+        cylinder(d=ant_twin_bore - 1, h=ant_stub_len + 20 - 0.5);
+}
+// The jack's hex body, 8 across flats, standing in each slot under the
+// panel with its corners along Y: must meet nothing.
+module ant_twin_jack_probe() {
+    for (s = [-1, 1]) ant_twin_frame(s)
+        translate([0, ant_twin_floor_y + ant_twin_jack_af/(2*cos(30)) + 0.1, 11])
+            rotate([0, 0, 30])
+                cylinder(d=ant_twin_jack_af/cos(30) - 0.1, h=ant_twin_top - ant_twin_panel_t - 11 - 0.3, $fn=6);
+}
+// A rod lying along the channel, a little under its width: must be in air.
+module ant_twin_channel_probe() {
+    ant_axis_frame() translate([0, (ant_twin_floor_y + ant_twin_seat_y)/2, 0]) rotate([0, 90, 0])
+        cylinder(d=ant_twin_chan_z - 2, h=ant_twin_sep - ant_twin_slot_w - 4, center=true);
+}
+// The jack's barrel, 6.35, standing through the panel with the hex seated
+// on the floor: must meet no panel.
+module ant_twin_barrel_probe() {
+    for (s = [-1, 1]) ant_twin_frame(s)
+        translate([0, ant_twin_floor_y + ant_twin_jack_af/(2*cos(30)), ant_twin_top - ant_twin_panel_t - 1])
+            cylinder(d=6.35, h=ant_twin_panel_t + 2, $fn=48);
+}
+// Thin rods through the cover's holes into the body's insert holes, from the
+// cover's outer face down: open holes leave them whole.
+module ant_twin_screw_probes() {
+    ant_axis_frame() for (p = ant_twin_screw_xz)
+        translate([p[0], ant_twin_seat_y - ant_twin_m2_depth + 1, p[1]])
+            rotate([-90, 0, 0]) cylinder(d=2, h=ant_twin_m2_depth - 1 + ant_twin_cover_t, $fn=16);
+}
 // For the checks: the ring of panel round each jack hole, and a probe a
 // little under the hole, down its middle.
 module ant_twin_panel_ring() {
     for (s = [-1, 1]) ant_twin_frame(s)
         difference() {
-            translate([0, 0, ant_twin_top - ant_sma_panel_t]) cylinder(d=ant_twin_boss_d, h=ant_sma_panel_t);
-            translate([0, 0, ant_twin_top - ant_sma_panel_t - 1]) cylinder(d=ant_sma_hole, h=ant_sma_panel_t + 2);
+            translate([0, 0, ant_twin_top - ant_twin_panel_t]) cylinder(d=ant_twin_tower_w - 4, h=ant_twin_panel_t);
+            translate([0, 0, ant_twin_top - ant_twin_panel_t - 1]) cylinder(d=ant_twin_hole + 0.5, h=ant_twin_panel_t + 2);
         }
 }
 module ant_twin_hole_probe() {
     for (s = [-1, 1]) ant_twin_frame(s)
-        translate([0, 0, ant_twin_top - ant_sma_panel_t - 0.5]) cylinder(d=ant_sma_hole - 0.5, h=ant_sma_panel_t + 1);
+        translate([0, 0, ant_twin_top - ant_twin_panel_t - 0.5]) cylinder(d=ant_twin_hole - 0.5, h=ant_twin_panel_t + 1);
 }
 
 // Each whip's swept envelope, straight up its axis from the top of its tower:
@@ -1265,7 +1443,11 @@ module back_plate() {
         // the antenna mount screws into inserts here, and its cable passes through
         ant_insert_bores();
         translate([0, ant_mount_y, -back_plate_t - 1])
-            cylinder(d=ant_cable_dia, h=back_plate_t + 2);
+            cylinder(d=ant_plate_hole, h=back_plate_t + 2);
+        // its inner edge chamfered: both cables bend over it on the way to
+        // the receiver, and a sharp printed edge would wear the jackets
+        translate([0, ant_mount_y, -1.5])
+            cylinder(d1=ant_plate_hole, d2=ant_plate_hole + 3, h=1.5 + 0.01);
     }
 }
 
@@ -1677,6 +1859,9 @@ else if (part == "back_plate") back_plate();
 else if (part == "antenna_mount") antenna_mount();
 else if (part == "antenna_mount_sma") antenna_mount_sma();
 else if (part == "antenna_mount_twin") antenna_mount_twin();
+else if (part == "antenna_mount_twin_cover") antenna_mount_twin_cover();
+else if (part == "twin_assembled") { antenna_mount_twin(); ant_twin_cover_placed(); back_plate(); }  // for pictures
+else if (part == "none") {}  // for a file that includes this one to draw its own views
 else if (part == "usbc_gauge") usbc_gauge();
 else if (part == "antenna_socket_gauge") antenna_socket_gauge();
 else if (part == "stand_body")     part_stand_body();

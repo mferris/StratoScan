@@ -24,9 +24,9 @@ back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40; ant_mount_y=81;
 ant_bolt_d=3.4; usbc_cut_pos=[60,-14]; usbc_screw_pitch=16.5; usbc_screw_dia=3.4; usbc_cut_w=11.0; usbc_cut_h=6.5;
 mount_hole_x=58; mount_hole_y=49; stand_angle=18;
 base_w=outer_dia*0.86; base_d=150; plinth_rib_h=4; plinth_rib_w=3; plinth_rib_z=[3.5, 9.5];
-ant_stub_len=30; ant_barrel_len=14; ant_socket_dia=33; ant_socket_depth=6;
+ant_stub_len=30; ant_barrel_len=14; ant_socket_dia=33; ant_socket_depth=8;
 cradle_id=outer_dia+2; cradle_od=cradle_id+26; base_h=16;
-ant_conn_dia=9.15; ant_boss_dia=45; ant_socket_lead=2;
+ant_conn_dia=9.15; ant_boss_dia=48; ant_socket_lead=1.2;
 // Measured off the antenna: 31.25mm across the flared bottom, its widest
 // point. ant_relief_* is the clear space under the socket floor for the
 // connector, which is what was actually stopping the base from seating.
@@ -40,7 +40,7 @@ ant_cable_slot_w=7; ant_cable_exit_h=7.98; ant_flange_t=7; ant_flange_insert_d=5
 // The SMA bulkhead variant. Restated here for the same reason as everything
 // above: `use <>` brings in modules, not variables, so a check that names one
 // of these directly needs its own copy.
-ant_sma_hole=6.5; ant_sma_panel_t=3; ant_sma_cavity=14;
+ant_sma_hole=6.5; ant_sma_panel_t=3; ant_sma_cavity=14; ant_twin_seat_y=8; ant_twin_cover_t=3;
 ant_sma_boss_d=22; ant_sma_boss_h=10; ant_sma_cavity_d=25;
 
 
@@ -137,10 +137,32 @@ else if (check=="twin_vs_stand") {
         translate([0,0,-shell_depth/2]) stand();
   }
 }
-// Each cable goes in plug-first, so the whole route -- down a tower, along
-// the crossbar, down the arm -- must be open at least an SMA plug's width.
-else if (check=="twin_plug_path_clear") {
-  intersection() { antenna_mount_twin(); ant_twin_plug_path(); }
+// The twin mount is two parts and nothing is threaded round a corner, so the
+// route is checked leg by leg: a plug beside a cable straight down the bore,
+// the jack's hex body standing in each slot, the cover in its seat.
+else if (check=="twin_bore_straight") {
+  intersection() { antenna_mount_twin(); ant_twin_bore_probe(); }
+}
+else if (check=="twin_slot_takes_jack") {
+  intersection() { antenna_mount_twin(); ant_twin_jack_probe(); }
+}
+else if (check=="twin_cover_fits") {
+  intersection() { antenna_mount_twin(); ant_twin_cover_placed(); }
+}
+// POSITIVE controls: the channel is open air, the cover really sits in its
+// seat (pushed 2mm into the body it must hit), and thin rods pass through
+// the cover's holes into open insert holes.
+else if (check=="twin_channel_open") {
+  difference() { ant_twin_channel_probe(); antenna_mount_twin(); }
+}
+else if (check=="twin_cover_seats") {
+  intersection() {
+    antenna_mount_twin();
+    ant_axis_frame() translate([0, ant_twin_seat_y + ant_twin_cover_t - 2, 0]) rotate([90, 0, 0]) antenna_mount_twin_cover();
+  }
+}
+else if (check=="twin_cover_screws_open") {
+  difference() { ant_twin_screw_probes(); union() { antenna_mount_twin(); ant_twin_cover_placed(); } }
 }
 // Both whips, swept 220mm up from their towers, must miss the case.
 else if (check=="twin_antennas_clear_case") {
@@ -174,6 +196,29 @@ else if (check=="top_screw_was_under_mount") {
     translate([0, 88, -back_plate_t - 7]) cylinder(d=ant_flange_d, h=7);
     translate([0, screw_r, -back_plate_t - 80]) cylinder(d=8, h=80);
   }
+}
+// POSITIVE control for twin_antennas_clear_case: the same envelopes moved
+// 60mm down the axis AND 40mm toward the case (they start behind the plate
+// and lean away from it, so down alone never reaches the shell) do hit it.
+else if (check=="twin_antennas_probe_works") {
+  intersection() {
+    for (s = [-1, 1]) ant_twin_frame(s) translate([0, -40, 32 - 60]) cylinder(d=15, h=220);
+    shell();
+  }
+}
+// "Open" means the probes meet no body at all, not just that most of each
+// survives: the complements of twin_channel_open and twin_cover_screws_open.
+else if (check=="twin_channel_probe_clear") {
+  intersection() { ant_twin_channel_probe(); antenna_mount_twin(); }
+}
+else if (check=="twin_screw_probes_clear") {
+  intersection() { ant_twin_screw_probes(); union() { antenna_mount_twin(); ant_twin_cover_placed(); } }
+}
+else if (check=="twin_barrel_through_panel") {
+  intersection() { antenna_mount_twin(); ant_twin_barrel_probe(); }
+}
+else if (check=="twin_cover_pads_clear_jack") {
+  intersection() { ant_twin_cover_placed(); ant_twin_jack_probe(); }
 }
 else if (check=="canary") { shell(); }
 

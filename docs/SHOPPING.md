@@ -90,18 +90,19 @@ They share the back plate and antenna mount.
 | Back plate, into the shell's back posts | 8 | M3 × 6 | M3 × 8 | Press from the back face |
 | Antenna mount (any of the three), into its flange | 3 | M3 × 5 | M3 × 8 | The screws come from inside the case, through the plate |
 | USB-C panel connector, to the back plate | 2 | none | M3 × 6 with nuts, or the connector's own | Holes 16.5 mm apart |
-| Speakers, to their brackets | 4 each, 8 | optional M2 × 3 | M2 × 6, or M2 self-tapping | 2.6 mm pilot holes take either |
+| Speakers, to their brackets | 4 each, 8 | optional M2 × 3 | M2 × 6, or M2 self-tapping | 2.6 mm pilots for the self-tappers; drill to 3.0 for inserts |
 | Pi, to the display's back | 4 | none | M2.5 × 6 and standoffs, in the display's box | |
 | FlyCatcher, onto the Pi | 4 | none | M2.5 standoffs, ~16–20 mm, and screws | tall enough to clear the cooler |
-| Twin antenna mount's two SMA bulkheads | 2 | none | the jumpers' own nuts | |
-| **To buy per radar** | | **19 × M3 (8 of 5 mm, 11 of 6 mm); 8 × M2 optional** | **8 × M3×14, 11 × M3×8, 2 × M3×6 (+2 nuts), 8 × M2×6, 8 × M2.5** | one M3 kit and one M2/M2.5 kit cover several radars |
+| Twin antenna mount's two SMA bulkheads | 2 | none | the jumpers' own nuts | an 8 mm (5/16") open-ended spanner, a quarter to half a turn past finger tight |
+| Twin antenna mount's cover | 5 | M2 × 3 | M2 × 6 | 3.0 mm holes for a 3.2 mm knurl (measure the kit's) |
+| **To buy per radar** | | **19 × M3 (11 of 5 mm, 8 of 6 mm); 5 × M2; 8 × M2 optional** | **8 × M3×14, 11 × M3×8, 2 × M3×6 (+2 nuts), 13 × M2×6, 8 × M2.5** | one M3 kit and one M2/M2.5 kit cover several radars |
 
 **Everything for one radar, totalled:** about **$500** in parts with the 4 GB Pi (about $545 with 8 GB), of which the display is $160, the FlyCatcher $110 and the Pi $85; the forty-odd dollars of cables, standoffs, cells and fasteners are easy to forget and are all listed above. Printer time: about 20 hours; filament about 700 g.
 
 **Tools (once):**
 - a 3D printer (designed on a Bambu Lab printer, with an AMS for the kitten's colours);
 - a soldering iron with a heat-set insert tip, and a flat piece of metal to press inserts flush;
-- hex keys (2 mm and 2.5 mm), a small Phillips, a microSD reader;
+- hex keys (1.5, 2 and 2.5 mm), an 8 mm (5/16") open-ended spanner for the antenna jacks' nuts, a small Phillips, a microSD reader;
 - glue stick for the print bed; hot glue or Kapton tape for the speaker plug's strain relief; heat-shrink; a few zip ties.
 
 ### 4. Optional
