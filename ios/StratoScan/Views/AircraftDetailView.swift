@@ -3,6 +3,7 @@ import SwiftUI
 /// Details for one aircraft, opened by tapping it on the radar. Refreshes
 /// every second from the live plane state, like the kiosk's detail panel.
 struct AircraftDetailView: View {
+    @ObservedObject private var logos = AirlineLogoStore.shared
     @ObservedObject var viewModel: RadarViewModel
     @ObservedObject var location: PhoneLocation
     let hex: String
@@ -73,7 +74,13 @@ struct AircraftDetailView: View {
             Text(p?.cs ?? hex.uppercased())
                 .font(.system(size: 28, weight: .semibold, design: .monospaced))
             if let p {
-                Text(p.airlineLabel).foregroundColor(p.badgeColor)
+                HStack(spacing: 6) {
+                    if let mark = logos.mark(for: p.airlineIcao) {
+                        Image(uiImage: mark).resizable().scaledToFit().frame(width: 22, height: 22)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 4))
+                    }
+                    Text(p.airlineLabel).foregroundColor(p.badgeColor)
+                }
                 if let type = p.typeLabel { Text(type).foregroundColor(.secondary) }
                 if let r = p.feedRoute {
                     Text(r.plausible == false ? "\(r.text) (unconfirmed)" : r.text).font(.callout)

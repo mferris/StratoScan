@@ -197,6 +197,11 @@ scanning a QR code on its screen:
   beyond it the network's around wherever you look. Away from your radar
   the view centres on you by itself. Follow an aircraft, or centre on yourself
 - **Trails** — where each aircraft has been, fading with age, as on the radar
+- **Airline marks** — an airline's logo beside its name on labels, in the
+  details and on its alerts, so a commercial flight reads at a glance (fetched
+  from the airline's own site when first seen; none ships in the app)
+- **Alerts that read** — "Boeing 737-800 · Raleigh → Boston · Delta · 1,200 ft
+  · 2 mi NE", the callsign last; tap one and the app opens on that aircraft
 - **Compass** — turn and the needle points at an aircraft, with which way it's
   coming from and going
 - **Sky view** — hold the phone up and each aircraft's label sits where it is
