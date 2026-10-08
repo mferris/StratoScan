@@ -1639,6 +1639,46 @@ const CX = W / 2, CY = H / 2;
 const R = W * 0.38; // usable radius, leaving a wider outer band for the label ring
 const SWEEP_RADIUS = W / 2; // the sweep wedge/line fills the whole dial, not just the plotted range
 
+// ---- the view: pan and zoom on the panel (roadmap 2.23) -------------------
+// Everything drawn from the radar -- polarToXY, the dial, the sweep -- goes
+// through this: where the radar's centre sits relative to the dial's, in
+// canvas px, and a scale (1 = the 20nm ring at the dial's edge). A finger
+// drag moves it, a pinch (or a mouse wheel, on a laptop) zooms it about the
+// fingers, and after VIEW_RESET_MS without a touch it comes home by itself:
+// the panel is a display before it is a map. The data does not follow the
+// view: the antenna's aircraft and the network's near the radar are all
+// there is, so a view dragged past the ring shows the map and nothing on it,
+// and the HUD says so.
+const view = { ox: 0, oy: 0, scale: 1 };
+const VIEW_MIN_SCALE = 0.3, VIEW_MAX_SCALE = 12, VIEW_RESET_MS = 45 * 1000;
+let viewResetTimer = null;
+function viewIsHome() { return view.ox === 0 && view.oy === 0 && view.scale === 1; }
+// Where the radar's centre is drawn, and the ring's radius, for this view.
+function viewCentre() { return { x: CX + view.ox, y: CY + view.oy, r: R * view.scale }; }
+function setView(ox, oy, scale) {
+  const sc = Math.min(VIEW_MAX_SCALE, Math.max(VIEW_MIN_SCALE, scale));
+  // the radar never further than two dials away, so a stray swipe cannot lose it
+  const lim = W * 2;
+  view.ox = Math.max(-lim, Math.min(lim, ox));
+  view.oy = Math.max(-lim, Math.min(lim, oy));
+  view.scale = sc;
+  if (typeof redrawStaticLayers === 'function') redrawStaticLayers();
+  // the sweep is a canvas turned by a CSS animation: turn it about the radar
+  sweepEl.style.transformOrigin = `${(CX + view.ox) / W * 100}% ${(CY + view.oy) / H * 100}%`;
+  syncMapToView();
+  if (home) locEl.textContent = formatLoc();   // the HUD's range and the no-data note
+  canvasDirty = true;
+  clearTimeout(viewResetTimer);
+  viewResetTimer = viewIsHome() ? null : setTimeout(() => setView(0, 0, 1), VIEW_RESET_MS);
+}
+// Zoom by `k` about canvas point (mx, my): that point stays under the fingers.
+function zoomViewAbout(k, mx, my) {
+  const sc = Math.min(VIEW_MAX_SCALE, Math.max(VIEW_MIN_SCALE, view.scale * k));
+  const kk = sc / view.scale;
+  const px = CX + view.ox, py = CY + view.oy;
+  setView(mx + (px - mx) * kk - CX, my + (py - my) * kk - CY, sc);
+}
+
 let sweepAngle = 0;
 const tagsEl = document.getElementById('tags');
 const leadersEl = document.getElementById('leaders');
@@ -1919,8 +1959,8 @@ const quantizeScale = (v) => Math.round(v * 20) / 20;
 
 function polarToXY(bearingDeg, rangeNm) {
   const angle = (bearingDeg - 90) * Math.PI / 180; // 0deg = up (north)
-  const r = (rangeNm / RANGE_NM) * R;
-  return { x: CX + r * Math.cos(angle), y: CY + r * Math.sin(angle) };
+  const r = (rangeNm / RANGE_NM) * R * view.scale;
+  return { x: CX + view.ox + r * Math.cos(angle), y: CY + view.oy + r * Math.sin(angle) };
 }
 
 // shortest signed delta between two bearings, e.g. 359 -> 2 gives +3
@@ -2379,7 +2419,7 @@ function formatLoc() {
   if (!home) return 'LOCATING…';
   const ns = home.lat >= 0 ? 'N' : 'S';
   const ew = home.lon >= 0 ? 'E' : 'W';
-  return `${Math.abs(home.lat).toFixed(4)}°${ns} ${Math.abs(home.lon).toFixed(4)}°${ew} · ${RANGE_NM}NM`;
+  return `${Math.abs(home.lat).toFixed(4)}°${ns} ${Math.abs(home.lon).toFixed(4)}°${ew} · ${viewRangeText()}`;
 }
 
 // ---- Background map --------------------------------------------------
@@ -2825,9 +2865,32 @@ function recolorLabels() {
 window.addEventListener('resize', () => {
   if (!map) return;
   map.resize();
-  const rCss = R * (stage.getBoundingClientRect().width / W);
-  map.setZoom(zoomForRange(RANGE_NM, home.lat, rCss));
+  syncMapToView();
 });
+
+// The map under the dial follows the view (roadmap 2.23): its centre is
+// wherever the dial's centre has been dragged to, in nm from the radar at the
+// view's scale, and its zoom matches the ring's size on screen.
+function syncMapToView() {
+  if (!map || !home) return;
+  const rCss = R * (stage.getBoundingClientRect().width / W);
+  const nmPerPx = RANGE_NM / (R * view.scale);
+  const east = -view.ox * nmPerPx, north = view.oy * nmPerPx;
+  const lat = home.lat + north / 60;
+  const lon = home.lon + east / (60 * Math.cos(lat * Math.PI / 180));
+  map.jumpTo({ center: [lon, lat], zoom: zoomForRange(RANGE_NM / view.scale, lat, rCss) });
+}
+
+// What the HUD says about the view: the range across the dial, and, once the
+// view has been moved, that it comes back by itself, or that there is no
+// local data where it is looking (the antenna's picture ends at the ring).
+function viewRangeText() {
+  const nm = RANGE_NM / view.scale;
+  const t = (nm >= 5 ? nm.toFixed(0) : nm.toFixed(1)) + 'NM';
+  if (viewIsHome()) return t;
+  const beyond = Math.hypot(view.ox, view.oy) > R * view.scale;
+  return t + (beyond ? ' · NO LOCAL DATA HERE' : ' · BACK IN 45 S');
+}
 
 // ---- Runway outlines --------------------------------------------------
 // Fetch (home location never changes at runtime, so this only needs to
@@ -5123,24 +5186,34 @@ function applyUpdate(list) {
 function drawRings(ctx) {
   ctx.clearRect(0, 0, W, H);
   ctx.save();
-  for (let i = 1; i <= RINGS; i++) {
-    const r = (R / RINGS) * i;
+  // the dial follows the view (the radar's centre and the ring's size);
+  // the compass letters stay at the panel's edge
+  const { x: cx, y: cy, r: rr } = viewCentre();
+  // zoomed in, a ring every nm as well, so there is always a distance to read
+  const fine = view.scale >= 3;
+  const steps = fine ? RANGE_NM : RINGS;
+  for (let i = 1; i <= steps; i++) {
+    const nm = fine ? i : Math.round((RANGE_NM / RINGS) * i);
+    const r = (rr / RANGE_NM) * nm;
+    if (r < 8) continue;
     ctx.beginPath();
-    ctx.arc(CX, CY, r, 0, Math.PI * 2);
-    ctx.strokeStyle = i === RINGS ? COLORS.ringBright : COLORS.ring;
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    const major = nm % (RANGE_NM / RINGS) === 0;
+    ctx.strokeStyle = nm === RANGE_NM ? COLORS.ringBright : COLORS.ring;
+    ctx.globalAlpha = major ? 1 : 0.5;
     ctx.lineWidth = 1;
     ctx.stroke();
-
-    const nm = Math.round((RANGE_NM / RINGS) * i);
+    ctx.globalAlpha = 1;
+    if (!major && r < 60) continue;
     ctx.fillStyle = COLORS.ringLabel;
     ctx.font = '15px JetBrains Mono, monospace';
-    ctx.fillText(nm + 'nm', CX + 6, CY - r + 14);
+    ctx.fillText(nm + 'nm', cx + 6, cy - r + 14);
   }
 
   ctx.strokeStyle = COLORS.crosshair;
   ctx.beginPath();
-  ctx.moveTo(CX, CY - R); ctx.lineTo(CX, CY + R);
-  ctx.moveTo(CX - R, CY); ctx.lineTo(CX + R, CY);
+  ctx.moveTo(cx, cy - rr); ctx.lineTo(cx, cy + rr);
+  ctx.moveTo(cx - rr, cy); ctx.lineTo(cx + rr, cy);
   ctx.stroke();
 
   ctx.fillStyle = COLORS.compass;
@@ -5153,7 +5226,7 @@ function drawRings(ctx) {
   ctx.textAlign = 'left';
 
   ctx.beginPath();
-  ctx.arc(CX, CY, 4, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 4, 0, Math.PI * 2);
   ctx.fillStyle = COLORS.sweep;
   ctx.fill();
 
@@ -5198,19 +5271,22 @@ function drawSweep(ctx) {
   const sweepAngle = 0;
   ctx.clearRect(0, 0, W, H);
   ctx.save();
-  const grad = ctx.createConicGradient(sweepAngle - Math.PI / 2, CX, CY);
+  // about the radar's centre, out to the ring's edge, wherever the view is
+  const { x: scx, y: scy } = viewCentre();
+  const sr = SWEEP_RADIUS * view.scale;
+  const grad = ctx.createConicGradient(sweepAngle - Math.PI / 2, scx, scy);
   grad.addColorStop(0, hexToRgba(COLORS.sweep, 0.35));
   grad.addColorStop(0.06, hexToRgba(COLORS.sweep, 0));
   grad.addColorStop(1, hexToRgba(COLORS.sweep, 0));
   ctx.beginPath();
-  ctx.arc(CX, CY, SWEEP_RADIUS, 0, Math.PI * 2);
+  ctx.arc(scx, scy, sr, 0, Math.PI * 2);
   ctx.fillStyle = grad;
   ctx.fill();
 
-  const lineX = CX + SWEEP_RADIUS * Math.cos(sweepAngle);
-  const lineY = CY + SWEEP_RADIUS * Math.sin(sweepAngle);
+  const lineX = scx + sr * Math.cos(sweepAngle);
+  const lineY = scy + sr * Math.sin(sweepAngle);
   ctx.beginPath();
-  ctx.moveTo(CX, CY);
+  ctx.moveTo(scx, scy);
   ctx.lineTo(lineX, lineY);
   ctx.strokeStyle = COLORS.sweep;
   ctx.lineWidth = 2;
@@ -7878,7 +7954,75 @@ function findPlaneAtStagePoint(x, y) {
   return best;
 }
 
+// ---- drag to pan, pinch to zoom, a wheel on a laptop (roadmap 2.23) ------
+// Pointer events, so one code path serves fingers and a mouse. A drag that
+// moves less than a finger's width is a tap, and is left to the tap handler
+// below; anything more sets viewTapSuppressed so the tap handler lets it go.
+stage.style.touchAction = 'none';
+const viewPointers = new Map();     // pointerId -> last canvas position
+let viewGesture = null;             // the drag or pinch in progress
+let viewTapSuppressed = false;
+function stageToCanvas(e) {
+  const rect = stage.getBoundingClientRect();
+  const k = W / rect.width;
+  return { x: (e.clientX - rect.left) * k, y: (e.clientY - rect.top) * k };
+}
+function pinchState() {
+  const [a, b] = [...viewPointers.values()];
+  return { dist: Math.hypot(a.x - b.x, a.y - b.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+}
+stage.addEventListener('pointerdown', (e) => {
+  if (detailPanelEl.classList.contains('show') || settingsPanelEl.classList.contains('show')) return;
+  const p = stageToCanvas(e);
+  viewPointers.set(e.pointerId, p);
+  try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+  if (viewPointers.size === 1) viewGesture = { startX: p.x, startY: p.y, moved: false };
+  else if (viewPointers.size === 2) viewGesture = { ...pinchState(), moved: true, pinch: true };
+  if (viewPointers.size >= 2) viewTapSuppressed = true;
+});
+stage.addEventListener('pointermove', (e) => {
+  if (!viewPointers.has(e.pointerId) || !viewGesture) return;
+  const p = stageToCanvas(e);
+  const prev = viewPointers.get(e.pointerId);
+  viewPointers.set(e.pointerId, p);
+  if (viewPointers.size === 1) {
+    if (!viewGesture.moved && Math.hypot(p.x - viewGesture.startX, p.y - viewGesture.startY) < 12) return;
+    viewGesture.moved = true;
+    viewTapSuppressed = true;
+    setView(view.ox + (p.x - prev.x), view.oy + (p.y - prev.y), view.scale);
+  } else if (viewPointers.size === 2 && viewGesture.pinch) {
+    const now = pinchState();
+    if (viewGesture.dist > 0) zoomViewAbout(now.dist / viewGesture.dist, now.mid.x, now.mid.y);
+    setView(view.ox + (now.mid.x - viewGesture.mid.x), view.oy + (now.mid.y - viewGesture.mid.y), view.scale);
+    viewGesture = { ...now, moved: true, pinch: true };
+  }
+});
+function viewPointerEnd(e) {
+  if (!viewPointers.has(e.pointerId)) return;
+  viewPointers.delete(e.pointerId);
+  if (viewPointers.size === 0) viewGesture = null;
+  else if (viewPointers.size === 1) {
+    const [q] = [...viewPointers.values()];
+    viewGesture = { startX: q.x, startY: q.y, moved: true };
+  } else viewGesture = { ...pinchState(), moved: true, pinch: true };
+}
+stage.addEventListener('pointercancel', viewPointerEnd);
+stage.addEventListener('pointerup', viewPointerEnd);
+stage.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const p = stageToCanvas(e);
+  zoomViewAbout(Math.exp(-e.deltaY * 0.002), p.x, p.y);
+}, { passive: false });
+stage.addEventListener('dblclick', (e) => {   // a laptop: double-click zooms in on the spot
+  const p = stageToCanvas(e);
+  zoomViewAbout(2, p.x, p.y);
+});
+
 stage.addEventListener('pointerup', (e) => {
+  if (viewTapSuppressed) {           // the end of a drag or a pinch, not a tap
+    if (viewPointers.size === 0) viewTapSuppressed = false;
+    return;
+  }
   if (detailPanelEl.classList.contains('show')) {
     hideDetailPanel(); // any tap while open just dismisses it
     return;
