@@ -8,6 +8,7 @@ struct WatchRadarView: View {
     @State private var aircraft: [RawAircraft] = []
     @State private var nearby: Nearby?
     @State private var failed = false
+    @ObservedObject private var receiver = WatchReceiver.shared
 
     private let rangeNm = Nearby.rangeNm
 
@@ -18,9 +19,12 @@ struct WatchRadarView: View {
                 radar.frame(width: 130, height: 130)
                 if let nearby {
                     Text("\(nearby.count) AIRCRAFT").font(.system(.headline, design: .monospaced))
-                    ForEach(Array(nearby.planes.prefix(3).enumerated()), id: \.offset) { _, p in
+                    // the alert's aircraft first, when there is one (#61)
+                    let listed = nearby.planes.sorted { a, b in (a.hex == receiver.highlightHex) && b.hex != receiver.highlightHex }
+                    ForEach(Array(listed.prefix(3).enumerated()), id: \.offset) { _, p in
                         HStack {
                             Text(p.callsign).font(.system(.caption, design: .monospaced)).bold()
+                                .foregroundColor(p.hex == receiver.highlightHex ? .yellow : .primary)
                             Spacer()
                             Text(String(format: "%.1f %@", p.distanceNm, p.direction)).font(.caption2)
                         }
@@ -62,6 +66,9 @@ struct WatchRadarView: View {
                 let d = CGFloat(br.range / rangeNm) * r
                 let p = CGPoint(x: c.x + d * cos(ang), y: c.y + d * sin(ang))
                 let dot = Path(ellipseIn: CGRect(x: p.x - 3, y: p.y - 3, width: 6, height: 6))
+                if a.hex == receiver.highlightHex {
+                    ctx.stroke(Path(ellipseIn: CGRect(x: p.x - 7, y: p.y - 7, width: 14, height: 14)), with: .color(.yellow), lineWidth: 1.5)
+                }
                 if a.isNetwork { ctx.stroke(dot, with: .color(.gray), lineWidth: 1) }
                 else { ctx.fill(dot, with: .color(Color(red: 0.65, green: 0.55, blue: 0.98))) }
             }
