@@ -51,8 +51,8 @@ too.
 - **Live tracking** — polls a local [`readsb`](https://github.com/wiedehopf/readsb)
   instance every second; altitude-coded blips, smooth interpolation between
   polls, a "NO SIGNAL" banner on connection loss
-- **Touch** — drag the picture anywhere; zoom with the + and − buttons beside
-  the dial, a pinch, or a wheel, double-click or the + − 0 keys on a laptop,
+- **Touch** — drag the picture anywhere; zoom with a pinch, the + and − buttons
+  beside the dial, or a wheel, double-click or the + − 0 keys on a laptop,
   from about 2 nm across the dial to 60; the lock beside them keeps a view,
   and FOLLOW on an aircraft's details keeps it in the middle, zoomed in; the map
   follows, the sweep turns about the radar wherever it is, and after 45
