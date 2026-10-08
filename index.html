@@ -1308,21 +1308,15 @@ try {
 } catch (e) { /* storage unavailable: nothing to carry over */ }
 
 // ---- Config ------------------------------------------------------
-const DATA_URL = '/tar1090/data/aircraft.json';
-// The unit's core feed (roadmap 1.9, #33): the same aircraft, already
-// labelled -- operator by the shared labels.py, route and owner looked up on
-// the unit -- so this page needn't ask adsb.im or adsbdb itself.
-//
-// The default since 2026-10-04, after days running beside the old path and a
-// side-by-side check on RDU's public page (same aircraft, routes and owners).
-// The old path stays one more release, as a fallback: ?core=0 forces it, and
-// if the feed stops answering the page uses it by itself for five minutes,
-// looking routes and owners up itself again meanwhile.
-const USE_CORE_FEED = new URLSearchParams(location.search).get('core') !== '0';
+// The unit's core feed (roadmap 1.8, 1.9, #33): the aircraft readsb hears,
+// already labelled -- operator by the shared labels.py, route and owner
+// looked up on the unit and cached there -- so this page asks nothing else
+// for them. The default since 2026-10-04, after days beside the old path and
+// a side-by-side check on RDU's public page (same aircraft, routes and
+// owners). The old path -- readsb's aircraft.json read here, with adsb.im
+// and adsbdb asked from every visitor's browser -- was kept one release as a
+// fallback and removed on 2026-10-08 after a quiet week.
 const CORE_URL = '/api/aircraft';
-const CORE_RETRY_MS = 5 * 60 * 1000;
-let coreDownUntil = 0;
-function coreActive() { return USE_CORE_FEED && performance.now() >= coreDownUntil; }
 
 // A core-feed aircraft in the shape the rest of the page reads (readsb's),
 // with the feed's own labels kept alongside.
@@ -1357,11 +1351,6 @@ const HOME_OVERRIDE = null; // was briefly set to a different address for a one-
 // has real color (blue water, green parks, warm road tones) — we darken it
 // ourselves via the #mapbg CSS filter instead.
 const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
-// same free, no-key route API tar1090 itself uses (adsb.im asks http-loaded
-// pages to call it over http, mirrored below to match their preference)
-let ROUTE_API_URL = 'https://adsb.im/api/0/routeset';
-const ROUTE_BATCH_MS = 4000;      // how often we flush queued route lookups
-const ROUTE_BATCH_MAX = 50;       // callsigns per request
 const RANGE_NM = 20;             // outer ring range in nautical miles
 const RINGS = 2;                 // number of range rings
 // Radians per SECOND, not per frame. It was 0.008 rad/frame, which silently
@@ -1389,7 +1378,7 @@ let frameMinMs = 1000 / TARGET_FPS - 4; // slack so vsync jitter doesn't cost a 
 const CANVAS_FPS = 5;
 let canvasMinMs = 1000 / CANVAS_FPS - 4;
 const SMOOTH_TAU = 0.35;         // seconds; exponential smoothing time constant for plane motion
-// A position in aircraft.json is not "now" -- it is the last position message
+// A position from readsb is not "now" -- it is the last position message
 // readsb decoded, and `seen_pos` says how long ago that was. Measured against
 // the live feed here, that age runs a median of ~7s and a 90th percentile of
 // ~48s, because ADS-B position squitters arrive far less often than the
@@ -1401,7 +1390,7 @@ const SMOOTH_TAU = 0.35;         // seconds; exponential smoothing time constant
 // plotted, the same dead reckoning tar1090 does.
 const DR_MAX_S = 60;             // stop extrapolating past this; a minute-old fix is a guess, not a position
 const DR_MIN_GS_KT = 25;         // below this the aircraft is taxiing/parked and the track is noise
-const FETCH_INTERVAL_MS = 1000;  // how often we poll aircraft.json
+const FETCH_INTERVAL_MS = 1000;  // how often we poll the feed
 const STALE_MS = 15000;          // no good fetch in this long -> show NO SIGNAL
 const DROP_MS = 45000;           // no good fetch in this long -> clear stale blips
 
@@ -1503,9 +1492,9 @@ function strokeTrail(trail, bearing, range, now, alpha) {
 // HTML-escapes a value before it goes into an innerHTML template literal.
 // Most fields we display are tightly constrained (Mode S callsigns are a
 // fixed 6-bit charset with no room for markup), but route city names come
-// from adsb.im and photo attribution comes from planespotters.net's own
-// user-submitted photographer names -- both external, neither ours to
-// trust blindly. Escaping unconditionally is cheap and means nothing here
+// from adsb.im (asked by the unit, for the feed) and photo attribution comes
+// from planespotters.net's own user-submitted photographer names -- both
+// external, neither ours to trust blindly. Escaping unconditionally is cheap and means nothing here
 // depends on staying aware of which specific field came from where.
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1609,10 +1598,7 @@ let planes = new Map();          // hex -> plane record
 let lastGoodFetch = 0;
 let connected = false;
 let map = null;                  // MapLibre background map instance
-const routeCache = new Map();    // callsign -> { from, to } or null (looked up, no route)
-const routePending = new Set();  // callsigns currently in-flight
-let routeQueue = [];             // [{ callsign, lat, lng }, ...] awaiting the next batch
-let routeTimer = null;
+const routeCache = new Map();    // callsign -> { text, plausible }, from the feed
 
 let databaseFolder = null;       // tar1090's local hex database folder, discovered at startup
 const typeCodeTable = new Map(); // ICAO type code (e.g. "SR22") -> human-readable type string
@@ -1622,11 +1608,6 @@ const hexTypePending = new Set();
 const stockPhotoCache = new Map();   // typeLabel -> { thumb, page } or null -- keyed by type, not hex, since many tails share a type
 const stockPhotoPending = new Set();
 const ownerCache = new Map();        // hex -> { owner, country } (registered owner name + country of registration), or null if confirmed not in the registry
-
-if (location.protocol === 'http:') {
-  // adsb.im asks that http-loaded pages call their API over http too
-  ROUTE_API_URL = ROUTE_API_URL.replace('https://', 'http://');
-}
 
 // ---- Canvas setup --------------------------------------------------
 const canvas = document.getElementById('radar');
@@ -4716,73 +4697,6 @@ function checkAirportPhaseAlert(pl) {
   }
 }
 
-// ---- Route lookup --------------------------------------------------
-// Batched/cached/throttled the same way tar1090 itself queries this API:
-// collect callsigns as they're seen, flush a batch every ROUTE_BATCH_MS,
-// cache results (including negative ones) for the rest of the session so
-// we never look up the same callsign twice.
-function queueRouteLookup(cs, lat, lng) {
-  if (coreActive()) return;         // the feed brings routes; never ask adsb.im from here
-  if (routeCache.has(cs) || routePending.has(cs)) return;
-  if (routeQueue.some(e => e.callsign === cs)) return;
-  routeQueue.push({ callsign: cs, lat, lng });
-  if (!routeTimer) routeTimer = setTimeout(flushRouteQueue, ROUTE_BATCH_MS);
-}
-
-async function flushRouteQueue() {
-  routeTimer = null;
-  if (routeQueue.length === 0) return;
-  const batch = routeQueue.splice(0, ROUTE_BATCH_MAX);
-  for (const e of batch) routePending.add(e.callsign);
-
-  try {
-    const res = await fetch(ROUTE_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ planes: batch.map(({ callsign, lat, lng }) => ({ callsign, lat, lng })) }),
-      signal: AbortSignal.timeout(10000),
-    });
-    // A reply that isn't an array (an API change, an error object with a 200)
-    // used to throw inside the loop below, landing in the catch that caches
-    // nothing -- so the same callsigns were re-queried forever. Treat it as
-    // "no routes": every callsign in the batch is cached as a miss.
-    let routes = res.ok ? await res.json() : [];
-    if (!Array.isArray(routes)) routes = [];
-    const found = new Set();
-    for (const route of routes) {
-      if (!route || !route.callsign) continue;
-      found.add(route.callsign);
-      // Still shown when the API flags a route implausible for this
-      // flight's current position (e.g. a reused flight number resolving to
-      // a stale scheduled route) -- rather than silently hiding it, flag it
-      // visibly (see the .route.implausible styling) so it reads as "here's
-      // our best guess, don't trust it" instead of a wrong-but-confident
-      // city pair.
-      // Regional/commuter flight numbers commonly cover more than one leg
-      // in a day's rotation (e.g. CLT-GSO-CLT, an out-and-back) -- _airports
-      // lists every stop in order, not just an origin/destination pair, and
-      // requiring exactly 2 silently dropped every one of these (common
-      // enough on regional carriers to be the main reason their flights
-      // often showed no route at all). Join every stop instead of just the
-      // first/last, since first-to-last alone degenerates to "same city
-      // both ends" for a round trip like this one.
-      const airports = route._airports;
-      routeCache.set(route.callsign, (airports && airports.length >= 2)
-        ? { text: airports.map(ap => ap.location).join(' → '), plausible: route.plausible !== false }
-        : null);
-    }
-    for (const e of batch) {
-      if (!found.has(e.callsign)) routeCache.set(e.callsign, null);
-    }
-  } catch (e) {
-    // network hiccup — don't cache anything, so these get retried later
-  } finally {
-    for (const e of batch) routePending.delete(e.callsign);
-  }
-
-  if (routeQueue.length > 0) routeTimer = setTimeout(flushRouteQueue, ROUTE_BATCH_MS);
-}
-
 // ---- Aircraft type lookup --------------------------------------------------
 // ADS-B carries no aircraft type/model info directly. tar1090 (already
 // installed alongside readsb on this same box) ships its own local hex ->
@@ -5023,31 +4937,16 @@ function normalizeAircraft(a) {
   };
 }
 
-async function fetchFrom(core) {
-  const res = await fetch(core ? CORE_URL : DATA_URL, { cache: 'no-store' });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const data = await res.json();
-  lastGoodFetch = performance.now();
-  connected = true;
-  applyUpdate(core ? (data.aircraft || []).map(fromCore) : (data.aircraft || []));
-}
-
 async function fetchAircraft() {
-  const core = coreActive();
   try {
-    await fetchFrom(core);
+    const res = await fetch(CORE_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    lastGoodFetch = performance.now();
+    connected = true;
+    applyUpdate((data.aircraft || []).map(fromCore));
   } catch (e) {
-    if (core) {
-      // The feed didn't answer. If the old path does, it is the feed that is
-      // down: use the old path for a while. If neither does, it is the
-      // connection, and the feed stays the choice for when it is back.
-      try {
-        await fetchFrom(false);
-        coreDownUntil = performance.now() + CORE_RETRY_MS;
-        return;
-      } catch (e2) { /* nothing answers */ }
-    }
-    connected = false;
+    connected = false;   // the feed didn't answer: NO SIGNAL until it does
   }
 }
 
@@ -5130,12 +5029,10 @@ function applyUpdate(list) {
       });
     }
 
-    // Fired proactively here (not just when the detail panel opens, see
-    // loadOwner) so the label itself can show it too, not only the panel --
-    // same "fire once per hex, cache the miss too via lookupOwner" shape as
-    // the type lookup just above.
+    // Route and owner come with the feed (roadmap 1.9): nothing to look up
+    // from here. Kept on the plane as well as in the caches so the label can
+    // show them, not only the detail panel.
     if (raw._core) {
-      // Route and owner come with the feed: nothing to look up from here.
       const c = raw._core, pl = planes.get(n.hex);
       if (c.route && n.hasCallsign) routeCache.set(n.cs, c.route);
       if (c.owner && pl) {
@@ -5143,19 +5040,6 @@ function applyUpdate(list) {
         pl.ownerCountry = c.owner.country || null;
         ownerCache.set(n.hex, { owner: pl.owner, country: pl.ownerCountry });
       }
-    } else if (n.airlineLabel === PRIVATE_LABEL && !ownerCache.has(n.hex)) {
-      loadOwner(n.hex);
-    }
-
-    // Try for every real callsign, not just ones that look like a scheduled
-    // airline flight number -- on-demand/charter GA traffic (badged "Private
-    // Aircraft") occasionally does have a route adsb.im can resolve, and
-    // there's no harm in asking; a miss just caches null same as today. Only
-    // truly skipped when there's no real callsign yet at all (n.cs is the
-    // hex fallback -- see hasCallsign in normalizeAircraft), since querying
-    // a hex code as if it were a flight number can't return anything.
-    if (n.hasCallsign && !raw._core) {
-      queueRouteLookup(n.cs, n.lat ?? home?.lat ?? 0, n.lon ?? home?.lon ?? 0);
     }
 
     updateApproachTracking(planes.get(n.hex), n.fixLat, n.fixLon, n.alt);
@@ -5800,63 +5684,21 @@ function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES', aler
   if (isPrivate) loadOwner(p.hex);
 }
 
-// Registered-owner lookup for confirmed-private aircraft (a real callsign
-// that just doesn't match the airline flight-number pattern -- not the
-// "Identifying..." case, which isn't confirmed as anything yet). adsbdb.com
-// aggregates public aircraft registry data -- the FAA's releasable registry
-// for US tails, plus other countries' equivalents -- behind a free, no-key
-// API, same class of source as everything else this app already leans on
-// (adsb.im, planespotters, Wikipedia, Overpass, RainViewer). Queried by hex
-// rather than parsing a registration out of the callsign, since we always
-// have the hex and it's exactly what readsb already identifies the plane by.
-// Only a real answer (found, or a confirmed 404 -- not in the registry) gets
-// cached; a network hiccup doesn't, so it just retries next time the panel
-// opens, same reasoning as lookupStockPhoto above.
-//
-// Country of registration (registered_owner_country_name) is included too --
-// that's as far as "location" goes here, deliberately: adsbdb doesn't expose
-// anything more granular than country, and that's the right amount of detail
-// anyway -- it's public aviation-registry metadata, same category as the
-// registration number itself, not anything that narrows down a real person's
-// location the way street-address-level lookup would (see HANDOFF.md for the
-// earlier, explicitly declined request to go further than this).
-// loadOwner is called on every 1 s poll for each private aircraft until the
-// answer is cached. A slow or failing adsbdb used to mean a new fetch per
-// aircraft per second, piling up behind Chromium's per-host connection limit
-// with no timeout. One request in flight per hex, a hard timeout, and a
-// short back-off after a failure keep that bounded.
-const ownerPending = new Set();
-const ownerFailedAt = new Map();   // hex -> Date.now() of the last failed attempt
-const OWNER_RETRY_MS = 5 * 60 * 1000;
-async function lookupOwner(hex) {
-  if (ownerCache.has(hex)) return ownerCache.get(hex);
-  if (coreActive()) return null;    // the feed brings owners; never ask adsbdb from here
-  if (ownerPending.has(hex)) return null;
-  const failed = ownerFailedAt.get(hex);
-  if (failed && Date.now() - failed < OWNER_RETRY_MS) return null;
-  ownerPending.add(hex);
-  try {
-    const res = await fetch(`https://api.adsbdb.com/v0/aircraft/${hex}`,
-                            { signal: AbortSignal.timeout(8000) });
-    if (res.status === 404) { ownerCache.set(hex, null); return null; }
-    if (!res.ok) { ownerFailedAt.set(hex, Date.now()); return null; }
-    const data = await res.json();
-    const owner = data?.response?.aircraft?.registered_owner || null;
-    const country = data?.response?.aircraft?.registered_owner_country_name || null;
-    const result = owner ? { owner, country } : null;
-    ownerCache.set(hex, result);
-    ownerFailedAt.delete(hex);
-    return result;
-  } catch (e) {
-    ownerFailedAt.set(hex, Date.now());
-    return null;
-  } finally {
-    ownerPending.delete(hex);
-  }
-}
+// Registered owner of a confirmed-private aircraft (a real callsign that
+// just doesn't match an airline flight number -- not the "Identifying..."
+// case). It comes with the core feed: the unit asks adsbdb.com, which
+// aggregates public aircraft registries (the FAA's releasable registry for
+// US tails and other countries' equivalents), and caches the answer. Only the
+// owner's name and the country of registration, deliberately: public
+// registry metadata, the same category as the registration number itself,
+// nothing that narrows down a real person's location the way an address
+// would (see HANDOFF.md for the earlier, declined request to go further).
+// Until 2026-10-08 this page asked adsbdb itself when the feed was down;
+// now it only reads what the feed brought.
+function lookupOwner(hex) { return ownerCache.get(hex) || null; }
 
-async function loadOwner(hex) {
-  const info = await lookupOwner(hex);
+function loadOwner(hex) {
+  const info = lookupOwner(hex);
   if (!info) return;
   const pl = planes.get(hex);
   if (pl) { pl.owner = info.owner; pl.ownerCountry = info.country; } // so the tag can show it too, not just the detail panel
