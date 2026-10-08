@@ -575,7 +575,9 @@ class Sender:
         self.queue.extend(events)
 
     def _post(self, events):
-        key = hb.load_key(create=True)
+        key = _unit_key()
+        if key is None:
+            return 0, b"no unit key yet (nothing has paired)"
         body = json.dumps({"v": 1, "events": events}, separators=(",", ":")).encode()
         path = "/v1/events"
         headers = {"Content-Type": "application/json",
@@ -630,9 +632,19 @@ class Sender:
         return f"send failed ({why}); {len(self.queue)} queued, retrying"
 
 
+def _unit_key():
+    """The unit's signing key, or None before a phone has paired (pairing
+    creates it, as root). The service never creates it: it runs as its own
+    user with the key readable, not writable (security review 2026-10-04,
+    item 1)."""
+    return hb.load_key(create=False)
+
+
 def relay_call(method, path, payload=None):
     """(status, parsed JSON or None) from a signed request to the relay."""
-    key = hb.load_key(create=True)
+    key = _unit_key()
+    if key is None:
+        return None, None
     body = b"" if method == "GET" else json.dumps(payload or {}, separators=(",", ":")).encode()
     headers = {"Content-Type": "application/json",
                "User-Agent": "StratoScan-unit/1 (+https://github.com/mferris/StratoScan)"}
@@ -660,13 +672,19 @@ class PhoneLocations:
 
     def _box(self):
         if self.box is None:
-            self.box = box_private(hb.load_key(create=True))
+            unit = _unit_key()
+            if unit is None:
+                return None
+            self.box = box_private(unit)
         return self.box
 
     def publish(self):
         import base64
-        key = base64.urlsafe_b64encode(box_public_raw(self._box())).rstrip(b"=").decode()
-        sig = hb.load_key(create=True).sign((BOX_KEY_CONTEXT + key).encode())
+        box, unit = self._box(), _unit_key()
+        if box is None or unit is None:
+            return None
+        key = base64.urlsafe_b64encode(box_public_raw(box)).rstrip(b"=").decode()
+        sig = unit.sign((BOX_KEY_CONTEXT + key).encode())
         status, _ = self.call("POST", "/v1/unit/boxkey",
                               {"key": key, "sig": base64.urlsafe_b64encode(sig).rstrip(b"=").decode()})
         return status
@@ -694,10 +712,13 @@ class PhoneLocations:
         if not rows:
             self.next_poll = now + LOCATION_IDLE_POLL_S
         points = {}
+        box = self._box()
         for row in rows:
+            if box is None:
+                break
             if not isinstance(row, dict) or not isinstance(row.get("phone"), str) or not isinstance(row.get("blob"), str):
                 continue
-            fix = decrypt_location(self._box(), row["blob"], row["phone"])
+            fix = decrypt_location(box, row["blob"], row["phone"])
             if fix:
                 points[row["phone"]] = fix
         detector.set_points(points, now)
