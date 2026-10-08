@@ -1,0 +1,13 @@
+[Unit]
+Description=StratoScan: this radar's own TLS certificate, for the app's setup flow
+Documentation=https://github.com/mferris/StratoScan
+# Once: a unit keeps the certificate its first-run screen named.
+ConditionPathExists=!/etc/stratoscan/tls/unit.pem
+Before=lighttpd.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/stratoscan/tls-cert.sh
+
+[Install]
+WantedBy=multi-user.target
