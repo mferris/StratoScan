@@ -28,128 +28,39 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geo in
-            // iPad in landscape with an aircraft's details open: the radar
-            // moves left, and shrinks if it must, so the panel sits beside it
-            // rather than over it (#39).
+            // The whole screen, edges and all: the map under everything, the
+            // radar's ring a line on it, the aircraft, trails and labels over
+            // it (roadmap 2.22). The iPad's details panel sits over the right
+            // of the picture (#39).
             let panelW = min(420, geo.size.width * 0.42)
-            let besidePanel = isPad && viewModel.selectedHex != nil && geo.size.width > geo.size.height
-            let side = min(min(geo.size.width, geo.size.height) * 0.94,
-                           besidePanel ? geo.size.width - panelW - 48 : .infinity)
-            let shift: CGFloat = besidePanel ? -(panelW + 32) / 2 : 0
+            let full = CGSize(width: geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing,
+                              height: geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom)
+            let radius = Double(RadarView.radius(full))
 
             ZStack {
                 pal.bg.ignoresSafeArea()
 
-                // The map is clipped to a circle for the kiosk-bezel look.
-                // RadarView's rings/sweep/blips are already bounded within
-                // that same circle by construction (their polar math never
-                // exceeds radius r), so they need no explicit clip — and
-                // critically, its *labels* must NOT be clipped: they need
-                // the full rectangular frame below to roam in, exactly like
-                // the web version's separate, unclipped #tags layer.
-                if let home = viewModel.home {
-                    MapBackgroundView(
-                        center: mapCentre(home),
-                        zoom: Geo.zoomForRange(rangeNm: viewModel.rangeNm, lat: home.lat, pixels: side * 0.44),
-                        runwayGeoJSON: viewModel.runwayGeoJSON,
-                        palette: pal,
-                        showStorms: showStorms,
-                        showLightning: showLightning
-                    )
-                    // The kiosk's --map-filter for the chosen theme (Palette).
-                    .mapFilter(pal.mapFilter)
-                    .frame(width: side, height: side)
-                    .clipShape(Circle())
-                    .position(x: geo.size.width / 2 + shift, y: geo.size.height / 2)
-                }
-                Circle()
-                    .stroke(pal.ringBright.opacity(0.5), lineWidth: 2)
-                    .frame(width: side, height: side)
-                    .position(x: geo.size.width / 2 + shift, y: geo.size.height / 2)
-                    .shadow(color: .black.opacity(0.6), radius: 20)
+                MapBackgroundView(
+                    center: viewModel.viewCentre,
+                    zoom: Geo.zoomForRange(rangeNm: viewModel.rangeNm, lat: viewModel.viewCentre.lat, pixels: radius),
+                    runwayGeoJSON: viewModel.runwayGeoJSON,
+                    palette: pal,
+                    showStorms: showStorms,
+                    showLightning: showLightning
+                )
+                // The kiosk's --map-filter for the chosen theme (Palette).
+                .mapFilter(pal.mapFilter)
+                .ignoresSafeArea()
 
-                RadarView(viewModel: viewModel, diameter: side, uiScale: ui)
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .offset(x: shift)
+                RadarView(viewModel: viewModel, uiScale: ui)
+                    .ignoresSafeArea()
 
                 VStack {
                     hud
                     Spacer()
-                    if viewModel.viaAway && !viewModel.isStale {
-                        Text("AWAY · VIA THE RADAR'S PUBLIC PAGE")
-                            .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
-                            .tracking(2)
-                            .foregroundColor(pal.textDim)
-                            .padding(.bottom, geo.size.height * 0.08)
-                    } else if viewModel.aroundMe && !viewModel.isDemo && location.denied {
-                        // around me needs the phone's location
-                        VStack(spacing: 8) {
-                            Text("LOCATION IS OFF FOR STRATOSCAN")
-                                .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
-                                .tracking(2).foregroundColor(pal.bad)
-                            Button("Turn it on in Settings") {
-                                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-                            }
-                            .font(.system(size: 13 * ui, weight: .medium)).foregroundColor(pal.mid)
-                        }
-                        .padding(.bottom, geo.size.height * 0.08)
-                    } else if viewModel.aroundMe && !viewModel.isDemo && !viewModel.isStale && !viewModel.connecting {
-                        // the network's data, and its licence's credit
-                        Text("AROUND YOU · DATA © ADSB.LOL (ODbL)")
-                            .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
-                            .tracking(2)
-                            .foregroundColor(pal.textDim)
-                            .padding(.bottom, geo.size.height * 0.08)
-                    } else if viewModel.isDemo {
-                        Text("DEMO · TRAFFIC RECORDED NEAR RDU")
-                            .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
-                            .tracking(2)
-                            .foregroundColor(pal.textDim)
-                            .padding(.bottom, geo.size.height * 0.08)
-                    } else if viewModel.connecting {
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.small).tint(pal.textDim)
-                            Text(viewModel.aroundMe ? "FINDING AIRCRAFT AROUND YOU…" : "CONNECTING TO YOUR RADAR…")
-                                .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
-                                .tracking(2)
-                                .foregroundColor(pal.textDim)
-                        }
-                        .padding(.bottom, geo.size.height * 0.08)
-                    } else if viewModel.isStale {
-                        VStack(spacing: 10) {
-                            Text("NO SIGNAL — CHECK RECEIVER")
-                                .font(.system(size: 10 * ui, weight: .medium, design: .monospaced))
-                                .tracking(2)
-                                .foregroundColor(pal.bad)
-                            if pairing.radars.isEmpty && !viewModel.aroundMe {
-                                // No radar (#41): the sky around you, or the demo.
-                                VStack(spacing: 10) {
-                                    Text("No StratoScan radar yet?").font(.system(size: 14 * ui, weight: .semibold)).foregroundColor(pal.text)
-                                    Button {
-                                        location.start()
-                                        viewModel.setAroundMe(true)
-                                    } label: {
-                                        Label("See aircraft around you", systemImage: "location.viewfinder")
-                                            .font(.system(size: 14 * ui, weight: .semibold))
-                                            .padding(.horizontal, 16).padding(.vertical, 9)
-                                            .foregroundColor(pal.mid)
-                                            .background(pal.mid.opacity(0.14), in: Capsule())
-                                            .overlay(Capsule().stroke(pal.mid.opacity(0.5), lineWidth: 1))
-                                    }
-                                    .buttonStyle(.plain)
-                                    Text("Live, from the public adsb.lol network. To ask for them, the app sends adsb.lol your location rounded to about 5 km.")
-                                        .font(.system(size: 11 * ui)).foregroundColor(pal.textDim)
-                                        .multilineTextAlignment(.center).frame(maxWidth: 300 * ui)
-                                    Button("Or try the demo") { viewModel.setDemo(true) }
-                                        .font(.system(size: 13 * ui, weight: .medium))
-                                        .foregroundColor(pal.mid)
-                                }
-                            }
-                        }
-                        .padding(.bottom, geo.size.height * 0.08)
-                    }
+                    footer(geo)
                 }
-                .padding(.top, geo.safeAreaInsets.top + 8)
+                .padding(.top, 8)
 
                 if wallMode && nightNow {
                     // After dark the wall radar dims, as the kiosk does (its
@@ -186,10 +97,13 @@ struct ContentView: View {
                         // Centre on me, as in Apple Maps: the "YOU" dot shows
                         // whenever location is on (this, the compass, Sky view
                         // or "Approaching me" can turn it on); this button
-                        // centres the view on it, and back on the radar.
+                        // centres the view on it, and back on the radar. Away
+                        // from the radar it is the switch between the sky
+                        // around you and your radar's (roadmap 2.21).
                         Button {
                             location.start()
                             viewModel.centreOnMe.toggle()
+                            if !viewModel.centreOnMe { viewModel.panCentre = nil }
                         } label: {
                             Image(systemName: viewModel.centreOnMe ? "location.fill" : "location")
                                 .foregroundColor(Color(hex: viewModel.centreOnMe ? "#93c5fd" : "#5b7278"))
@@ -267,12 +181,14 @@ struct ContentView: View {
         .preferredColorScheme(pal.dark ? .dark : .light)
         .statusBarHidden(true)
         .onAppear {
+            syncHasRadar()
             viewModel.start()
-            if viewModel.aroundMe { location.start() }
+            if viewModel.wantsLocation { location.start() }
         }
-        // a radar paired: it takes over from "around me"
-        .onChange(of: pairing.radars.count) { _, n in if n > 0 && viewModel.aroundMe { viewModel.setAroundMe(false) } }
-        .onChange(of: viewModel.aroundMe) { _, on in if on { location.start() } }
+        .onChange(of: pairing.radars.count) { _, _ in syncHasRadar() }
+        // The network's view of the sky around you needs the phone's location.
+        .onChange(of: viewModel.wantsLocation) { _, wants in if wants { location.start() } }
+        .onChange(of: viewModel.centreOnMe) { _, on in if on { location.start() } }
         // back from the background: say "connecting" until the radar answers
         .onChange(of: scenePhase) { _, phase in if phase == .active { viewModel.resume() } }
         .onReceive(location.$coordinate) { viewModel.me = $0 }
@@ -296,7 +212,7 @@ struct ContentView: View {
                 .preferredColorScheme(pal.dark ? .dark : .light)
         }
         .sheet(isPresented: $showLogbook) {
-            LogbookView(noRadar: viewModel.aroundMe).preferredColorScheme(pal.dark ? .dark : .light)
+            LogbookView(noRadar: !viewModel.hasRadar).preferredColorScheme(pal.dark ? .dark : .light)
         }
         .fullScreenCover(isPresented: $showSky) {
             SkyView(viewModel: viewModel, location: location, focus: skyFocus, backToRadar: { hex in
@@ -339,6 +255,11 @@ struct ContentView: View {
         }
     }
 
+    /// A radar is paired, or one was typed in by address.
+    private func syncHasRadar() {
+        viewModel.hasRadar = !pairing.radars.isEmpty || APIConfig.baseURL != APIConfig.defaultBaseURL
+    }
+
     /// Between sunset and sunrise at the radar (Sun), checked once a minute
     /// while in wall mode.
     @State private var nightNow = false
@@ -363,7 +284,8 @@ struct ContentView: View {
             if viewModel.isZoomed {
                 // A real button: it was small text, easy to miss and to miss tapping.
                 Button { viewModel.resetView() } label: {
-                    Label("RESET VIEW", systemImage: "arrow.counterclockwise")
+                    Label(viewModel.awayFromRadar && viewModel.hasRadar ? "BACK TO THE RADAR" : "RESET VIEW",
+                          systemImage: "arrow.counterclockwise")
                         .font(.system(size: 13 * ui, weight: .semibold, design: .monospaced))
                         .tracking(1)
                         .padding(.horizontal, 16 * ui)
@@ -381,46 +303,122 @@ struct ContentView: View {
                 .tracking(1.5)
                 .foregroundColor(pal.textDim)
                 .textCase(.uppercase)
-            Text(viewModel.notHeardCount > 0
-                 ? "\(viewModel.aircraftCount) AIRCRAFT · \(viewModel.notHeardCount) NOT HEARD"
-                 : "\(viewModel.aircraftCount) AIRCRAFT")
+                .multilineTextAlignment(.center)
+            Text(countText)
                 .font(.system(size: 15 * ui, design: .monospaced))
                 .tracking(1)
                 .foregroundColor(pal.text)
         }
+        .padding(.horizontal, 12)
     }
 
+    private var countText: String {
+        if viewModel.beyondRadar || !viewModel.hasRadar {
+            let n = viewModel.networkCount + viewModel.allPlanes.filter { !$0.fromView && viewModel.distanceFromCentre($0) <= viewModel.rangeNm }.count
+            return "\(n) AIRCRAFT"
+        }
+        return viewModel.notHeardCount > 0
+            ? "\(viewModel.aircraftCount) AIRCRAFT · \(viewModel.notHeardCount) NOT HEARD"
+            : "\(viewModel.aircraftCount) AIRCRAFT"
+    }
+
+    private var rangeText: String {
+        viewModel.rangeNm >= 5 ? String(format: "%.0fNM", viewModel.rangeNm) : String(format: "%.1fNM", viewModel.rangeNm)
+    }
+
+    /// Where the view is, and what it is looking at.
     private var locationText: String {
-        guard let home = viewModel.home else { return "LOCATING…" }
-        let ns = home.lat >= 0 ? "N" : "S"
-        let ew = home.lon >= 0 ? "E" : "W"
-        let range = viewModel.rangeNm >= 5 ? String(format: "%.0fNM", viewModel.rangeNm)
-                                           : String(format: "%.1fNM", viewModel.rangeNm)
-        if let h = viewModel.followHex, let p = viewModel.planes[h] {
-            return "FOLLOWING \(p.cs) · \(range)"
+        if let h = viewModel.followHex, let p = viewModel.plane(h) {
+            return "FOLLOWING \(p.cs) · \(rangeText)"
         }
         if location.denied && viewModel.centreOnMe { return "LOCATION IS OFF FOR STRATOSCAN IN SETTINGS" }
-        if viewModel.centreOnMe, let m = viewModel.meOffset {
-            let d = hypot(m.east, m.north)
-            let points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-            let bearing = (atan2(m.east, m.north) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
-            let dir = points[Int((bearing / 45).rounded()) % 8]
-            return String(format: "YOU · %.1f NM %@ OF THE RADAR · ", d, dir) + range
+        let points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+        func fromRadar(_ br: Geo.BearingRange, _ who: String) -> String {
+            let dir = points[Int((br.bearing / 45).rounded()) % 8]
+            return br.range < 10 ? String(format: "%@ · %.1f NM %@ OF YOUR RADAR", who, br.range, dir)
+                                 : String(format: "%@ · %.0f NM %@ OF YOUR RADAR", who, br.range, dir)
         }
-        return String(format: "%.4f°%@ %.4f°%@ · ", abs(home.lat), ns, abs(home.lon), ew) + range
+        if viewModel.centreOnMe, viewModel.me != nil {
+            if let br = viewModel.meFromRadar, viewModel.hasRadar { return fromRadar(br, "YOU") + " · " + rangeText }
+            return "AROUND YOU · " + rangeText
+        }
+        if viewModel.panCentre != nil, let br = viewModel.viewFromRadar, viewModel.hasRadar, br.range > 1 {
+            return fromRadar(br, "LOOKING") + " · " + rangeText
+        }
+        guard let home = viewModel.home else { return viewModel.hasRadar ? "LOCATING…" : "FINDING YOU…" }
+        let ns = home.lat >= 0 ? "N" : "S"
+        let ew = home.lon >= 0 ? "E" : "W"
+        return String(format: "%.4f°%@ %.4f°%@ · ", abs(home.lat), ns, abs(home.lon), ew) + rangeText
     }
 
-    /// The map follows the view: the radar, a followed aircraft, the phone,
-    /// or wherever the owner has pinched or dragged to.
-    private func mapCentre(_ home: Coordinate) -> Coordinate {
-        if let h = viewModel.followHex, let p = viewModel.planes[h], let lat = p.lat, let lon = p.lon {
-            return Coordinate(lat: lat, lon: lon)
+    /// The line at the bottom: where the aircraft are coming from, or what
+    /// is needed for there to be any.
+    @ViewBuilder
+    private func footer(_ geo: GeometryProxy) -> some View {
+        let mono = Font.system(size: 10 * ui, weight: .medium, design: .monospaced)
+        let pad = geo.size.height * 0.06
+        if viewModel.isDemo {
+            Text("DEMO · TRAFFIC RECORDED NEAR RDU").font(mono).tracking(2).foregroundColor(pal.textDim).padding(.bottom, pad)
+        } else if viewModel.connecting {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small).tint(pal.textDim)
+                Text(viewModel.hasRadar ? "CONNECTING TO YOUR RADAR…" : "FINDING AIRCRAFT AROUND YOU…")
+                    .font(mono).tracking(2).foregroundColor(pal.textDim)
+            }
+            .padding(.bottom, pad)
+        } else if viewModel.networkOn && (viewModel.beyondRadar || !viewModel.hasRadar || !viewModel.connected) && location.denied && viewModel.centreOnMe {
+            // around me needs the phone's location
+            VStack(spacing: 8) {
+                Text("LOCATION IS OFF FOR STRATOSCAN").font(mono).tracking(2).foregroundColor(pal.bad)
+                Button("Turn it on in Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                }
+                .font(.system(size: 13 * ui, weight: .medium)).foregroundColor(pal.mid)
+            }
+            .padding(.bottom, pad)
+        } else if viewModel.source == .network {
+            // the network's data, and its licence's credit
+            let why = !viewModel.hasRadar ? "AROUND YOU" : (!viewModel.connected && !viewModel.beyondRadar ? "YOUR RADAR IS OUT OF REACH" : "BEYOND YOUR RADAR")
+            let reach = viewModel.rangeNm * 1.3 > Double(NetworkFeed.maxRadiusNm) ? " · WITHIN 250 NM OF THE MIDDLE" : ""
+            Text("\(why) · DATA © ADSB.LOL (ODbL)\(reach)")
+                .font(mono).tracking(2).foregroundColor(pal.textDim).multilineTextAlignment(.center)
+                .padding(.horizontal, 24).padding(.bottom, pad)
+        } else if viewModel.viaAway && !viewModel.isStale {
+            Text("AWAY · VIA THE RADAR'S PUBLIC PAGE").font(mono).tracking(2).foregroundColor(pal.textDim).padding(.bottom, pad)
+        } else if viewModel.hasRadar && viewModel.beyondRadar && !viewModel.networkOn {
+            Text("NO RADAR DATA HERE · THE PUBLIC NETWORK IS OFF IN SETTINGS")
+                .font(mono).tracking(2).foregroundColor(pal.textDim).multilineTextAlignment(.center)
+                .padding(.horizontal, 24).padding(.bottom, pad)
+        } else if viewModel.isStale {
+            VStack(spacing: 10) {
+                Text(viewModel.hasRadar ? "NO SIGNAL — CHECK RECEIVER" : "NO RADAR").font(mono).tracking(2).foregroundColor(pal.bad)
+                if pairing.radars.isEmpty {
+                    // No radar (#41): the sky around you, or the demo.
+                    VStack(spacing: 10) {
+                        Text("No StratoScan radar yet?").font(.system(size: 14 * ui, weight: .semibold)).foregroundColor(pal.text)
+                        Button {
+                            location.start()
+                            viewModel.showAroundMe()
+                        } label: {
+                            Label("See aircraft around you", systemImage: "location.viewfinder")
+                                .font(.system(size: 14 * ui, weight: .semibold))
+                                .padding(.horizontal, 16).padding(.vertical, 9)
+                                .foregroundColor(pal.mid)
+                                .background(pal.mid.opacity(0.14), in: Capsule())
+                                .overlay(Capsule().stroke(pal.mid.opacity(0.5), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        Text("Live, from the public adsb.lol network. To ask for them, the app sends adsb.lol your location rounded to about 5 km.")
+                            .font(.system(size: 11 * ui)).foregroundColor(pal.textDim)
+                            .multilineTextAlignment(.center).frame(maxWidth: 300 * ui)
+                        Button("Or try the demo") { viewModel.setDemo(true) }
+                            .font(.system(size: 13 * ui, weight: .medium))
+                            .foregroundColor(pal.mid)
+                    }
+                }
+            }
+            .padding(.bottom, pad)
         }
-        if viewModel.centreOnMe, let me = viewModel.me { return me }
-        // nm to degrees: flat is plenty within the 20 nm ring
-        let p = viewModel.pan
-        return Coordinate(lat: home.lat + p.north / 60,
-                          lon: home.lon + p.east / (60 * cos(home.lat * .pi / 180)))
     }
 }
 
