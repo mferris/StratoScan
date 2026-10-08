@@ -140,6 +140,8 @@ DEPLOY_ALLOWED = {
     "network-compare.py", "photo-proxy.py", "funnel-gateway.py",
     "setup-server.py", "setup-ui.html", "shm-guard.sh", "ota.py",
     "airports.json", "net-watchdog.py",
+    # Makes a unit's own TLS certificate once (run by its oneshot service).
+    "tls-cert.sh",
     # Builds the on-device fallback map; run by setupd and net-watchdog.
     "offline-map.py",
     # Opt-in health reports to the relay; run by net-watchdog.

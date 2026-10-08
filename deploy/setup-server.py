@@ -20,6 +20,7 @@ narrowed by requiring a code shown on the device's own screen, so claiming
 needs physical sight of the unit rather than merely being on the network.
 """
 import hashlib
+import ssl
 import hmac
 import http.server
 import json
@@ -805,10 +806,25 @@ def dress_offer(offer):
 # setup network itself, claims the radar with the code, sends the location,
 # time zone, name and home WiFi, and pairs -- in one flow.
 #
-#   stratoscan://setup?c=<claim code>&w=<setup network>&k=<its password>&a=<its address>
-#   stratoscan://setup?c=<claim code>&h=<LAN address>      (already on a network)
+#   stratoscan://setup?c=<claim code>&w=<setup network>&k=<its password>&a=<its address>&f=<certificate>
+#   stratoscan://setup?c=<claim code>&h=<LAN address>&f=<certificate>      (already on a network)
 #
 # Everything in it is already on the screen in words; the QR saves typing it.
+# f is the SHA-256 of this radar's own certificate (tls-cert.sh), so the app
+# talks to the radar over https and accepts only that certificate (security
+# review 2026-10-04, item 9); a unit without one gets plain http, as before.
+TLS_CERT = os.environ.get("STRATOSCAN_TLS_CERT", "/etc/stratoscan/tls/unit.crt")
+
+
+def tls_fingerprint():
+    """SHA-256 (hex) of this radar's certificate, or None without one."""
+    try:
+        with open(TLS_CERT) as f:
+            return hashlib.sha256(ssl.PEM_cert_to_DER_cert(f.read())).hexdigest()
+    except (OSError, ValueError):
+        return None
+
+
 def setup_link(code, hotspot):
     from urllib.parse import quote
     if not code:
@@ -823,6 +839,9 @@ def setup_link(code, hotspot):
         if not addr:
             return None
         q.append(f"h={addr}")
+    fp = tls_fingerprint()
+    if fp:
+        q.append(f"f={fp}")
     return "stratoscan://setup?" + "&".join(q)
 
 

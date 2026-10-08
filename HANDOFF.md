@@ -1027,3 +1027,21 @@ setup listener, which only the page on the radar itself (`ON_DEVICE`,
 hostname localhost or 127.0.0.1) does now. The kiosk and LAN viewers get
 the page from lighttpd, with no policy. `tests/test_csp.py` pins the
 policy, the page's lack of inline handlers, and the counter.
+
+## The app's setup flow over https, pinned to the radar's own certificate (2026-10-08)
+Security review item 9. `deploy/tls-cert.sh` makes a per-unit self-signed
+certificate once (EC P-256, 20 years) into `/etc/stratoscan/tls/`
+(`unit.pem` key+cert, root:www-data 0640; `unit.crt`), run by
+`stratoscan-tls-cert.service` before lighttpd (a drop-in orders it) and by
+the installer on a live unit. lighttpd serves https on 443 with it
+(`85-stratoscan-tls.conf`, package lighttpd-mod-openssl). The setup link on
+the first-run screen carries `f=<sha256 of the DER certificate>`
+(`setup-server.py tls_fingerprint()`), and the app (RadarSetup.swift)
+then uses https and a URLSession whose delegate accepts only that
+certificate (`Pinned`), whatever the system thinks of a self-signed one; a
+link without `f` keeps plain http, as older units do. Browsers on the LAN
+keep http for the page: https is for the app's setup flow. Not yet on RDU
+(it never runs the first-run flow); a managed unit gets it from the
+installer. The pinning handshake itself is unverified until a unit with a
+certificate exists: the first managed build is where to check it
+(`tests/test_setup_tls.py` covers the unit side and the link).
