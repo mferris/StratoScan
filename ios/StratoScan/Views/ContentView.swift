@@ -242,9 +242,7 @@ struct ContentView: View {
             Button("Pair") { pairing.confirmPending() }
             Button("Cancel", role: .cancel) { pairing.pendingLink = nil }
         } message: {
-            Text("Only pair with a code shown on your own radar's screen. This phone will get that radar's alerts."
-                 + (pairing.pendingLink?.name.map { "\nIt calls itself “\($0)”." } ?? "")
-                 + (pairing.pendingLink?.host.map { "\nRadar at \($0)" } ?? ""))
+            Text(pairingMessage)
         }
         // A new radar's setup link, opened from outside the app (2.18): it
         // joins a WiFi network and sends it the home WiFi password, so it
@@ -255,15 +253,32 @@ struct ContentView: View {
             Button("Set up") { setup.confirmPending() }
             Button("Cancel", role: .cancel) { setup.pendingLink = nil }
         } message: {
-            Text("Only from the code on a radar's own first screen. "
-                 + (setup.pendingLink?.ssid.map { "Your phone will join its setup network “\($0)” and send it your home WiFi password. " }
-                    ?? (setup.pendingLink?.lan.map { "It will set up the radar at \($0) on this network. " } ?? "")))
+            Text(setupMessage)
         }
         .alert(pairing.message ?? "", isPresented: Binding(
             get: { pairing.message != nil && !showSettings },
             set: { if !$0 { pairing.message = nil } })) {
             Button("OK", role: .cancel) { pairing.message = nil }
         }
+    }
+
+    // The two dialogs' messages, built step by step: as one expression they
+    // took GitHub's Swift compiler past its type-checking limit (CodeQL).
+    private var pairingMessage: String {
+        var text = "Only pair with a code shown on your own radar's screen. This phone will get that radar's alerts."
+        if let name = pairing.pendingLink?.name { text += "\nIt calls itself “\(name)”." }
+        if let host = pairing.pendingLink?.host { text += "\nRadar at \(host)" }
+        return text
+    }
+
+    private var setupMessage: String {
+        var text = "Only from the code on a radar's own first screen. "
+        if let ssid = setup.pendingLink?.ssid {
+            text += "Your phone will join its setup network “\(ssid)” and send it your home WiFi password. "
+        } else if let lan = setup.pendingLink?.lan {
+            text += "It will set up the radar at \(lan) on this network. "
+        }
+        return text
     }
 
     /// A radar is paired, or one was typed in by address.
