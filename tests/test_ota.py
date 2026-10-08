@@ -263,8 +263,11 @@ def main():
     ok(both == [("system", "stratoscan-setup.service")],
        "two files of one service restart it once")
     ok(ota.services_to_restart([ota.dest_for("index.html"),
-                                ota.dest_for("deploy/net-watchdog.py")]) == [],
+                                ota.dest_for("deploy/ota-auto.sh")]) == [],
        "page assets and timer oneshots need no service restart")
+    ok(ota.services_to_restart([ota.dest_for("deploy/net-watchdog.py")])
+       == [("system", "stratoscan-netwatchdog.service")],
+       "the watchdog is long-running since 2026-10-08, so its update restarts it")
     ok(ota.services_to_restart(["/etc/evil/funnel-gateway.py"]) == [],
        "only files in OPT_ROOT map to services")
     for name in ("sighting-store.py", "approach-store.py", "network-compare.py",
