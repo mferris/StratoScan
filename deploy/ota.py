@@ -453,10 +453,11 @@ def restart_kiosk():
 # changes nothing until the service restarts -- and this used to restart only
 # the kiosk. Found the hard way: a security fix to funnel-gateway.py was
 # "installed" and reported OK while the old, leaking gateway kept running for
-# hours. Timer-driven oneshots (net-watchdog.py, shm-guard.sh, ota-auto.sh)
-# and this file itself pick up a new version on their next run and need
-# nothing here.
+# hours. Timer-driven oneshots (shm-guard.sh, ota-auto.sh) and this file
+# itself pick up a new version on their next run and need nothing here.
 SERVICE_FOR = {
+    # Long-running since 2026-10-08 (it was a timer-driven oneshot before).
+    "net-watchdog.py":    ("system", "stratoscan-netwatchdog.service"),
     "sighting-store.py":  ("system", "stratoscan-sighting-store.service"),
     "approach-store.py":  ("system", "stratoscan-approach-store.service"),
     "network-compare.py": ("system", "stratoscan-network.service"),

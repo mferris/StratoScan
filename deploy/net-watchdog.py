@@ -107,6 +107,11 @@ OFFLINE_MAP = "/opt/stratoscan/offline-map.py"
 HEARTBEAT = "/opt/stratoscan/heartbeat.py"
 NOTABLE_DB = "/opt/stratoscan/notable-db.py"
 MIN_REBOOT_INTERVAL_S = 6 * 3600
+# The long-running form (security review 2026-10-04, item 4): one process
+# with its own cadence instead of a systemd timer, which logged three lines
+# per run -- about 2,000 a day -- for a job that mostly has nothing to say.
+LOOP_S = 120                       # the old timer's OnUnitActiveSec
+BOOT_DELAY_S = 45                  # and its OnBootSec: NetworkManager's chance first
 
 
 def run(argv, timeout=45):
@@ -548,5 +553,19 @@ def main():
     return 0
 
 
+def loop():
+    """Run main() every LOOP_S seconds for good; a failed run is logged, not fatal."""
+    wait = BOOT_DELAY_S - _uptime()
+    if wait > 0:
+        sleep(wait)
+    while True:
+        started = time.monotonic()
+        try:
+            main()
+        except Exception as e:
+            print(f"net-watchdog: run failed ({type(e).__name__}: {e})", flush=True)
+        sleep(max(1.0, LOOP_S - (time.monotonic() - started)))
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(loop() if "--loop" in sys.argv[1:] else main())

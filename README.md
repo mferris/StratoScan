@@ -334,7 +334,7 @@ next person can claim it.
 
 Two services run as `systemctl --user` rather than system units (the
 screensaver and display-wake endpoint) because they need the graphical
-session's `WAYLAND_DISPLAY`. A `stratoscan-netwatchdog` timer rolls back any
+session's `WAYLAND_DISPLAY`. The `stratoscan-netwatchdog` service (its own two-minute loop) rolls back any
 unconfirmed network change at boot and raises the hotspot when there is no
 usable connection — so a mistyped WiFi password reverts itself rather than
 stranding the device.
