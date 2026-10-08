@@ -34,8 +34,13 @@ final class RadarSetup: ObservableObject {
         let psk: String?
         let address: String?
         let lan: String?
+        /// SHA-256 (hex) of the radar's own certificate, from the link on its
+        /// screen: then the flow runs over https and accepts only that
+        /// certificate (security review 2026-10-04, item 9). A radar made
+        /// before certificates has none, and keeps plain http.
+        var fingerprint: String? = nil
         /// Where the radar answers during setup.
-        var base: String { "http://\(address ?? lan ?? "10.42.0.1")" }
+        var base: String { "\(fingerprint == nil ? "http" : "https")://\(address ?? lan ?? "10.42.0.1")" }
         var onSetupNetwork: Bool { ssid != nil }
     }
 
@@ -102,8 +107,9 @@ final class RadarSetup: ObservableObject {
         let w = q("w").flatMap { (1...32).contains($0.utf8.count) ? $0 : nil }
         let k = q("k").flatMap { (8...63).contains($0.count) ? $0 : nil }
         let a = addr(q("a")), h = addr(q("h"))
+        let f = q("f").flatMap { $0.count == 64 && $0.allSatisfy(\.isHexDigit) ? $0.lowercased() : nil }
         guard (w != nil && k != nil) || h != nil else { return nil }
-        return Link(code: c, ssid: w, psk: k, address: w != nil ? a : nil, lan: w == nil ? h : nil)
+        return Link(code: c, ssid: w, psk: k, address: w != nil ? a : nil, lan: w == nil ? h : nil, fingerprint: f)
     }
 
     /// Handles an opened link. Returns false when it is not a setup link. The
@@ -125,6 +131,7 @@ final class RadarSetup: ObservableObject {
     func start(_ l: Link, pairing: PairingStore) {
         self.pairing = pairing
         link = l
+        session = l.fingerprint.map { URLSession(configuration: .ephemeral, delegate: Pinned($0), delegateQueue: nil) } ?? .shared
         token = nil; unit = nil; hostname = nil; secret = nil
         networks = []; ssid = ""; psk = ""; name = ""
         Task { await connect() }
@@ -292,7 +299,7 @@ final class RadarSetup: ObservableObject {
         let deadline = Date().addingTimeInterval(60)
         while Date() < deadline {
             for host in candidates {
-                if let h = try? await hello("http://\(host)", timeout: 3), h.unit == unit {
+                if let h = try? await hello("\(scheme)://\(host)", timeout: 3), h.unit == unit {
                     pairing?.setHost(host, unit: unit ?? "")
                     if APIConfig.baseURL == APIConfig.defaultBaseURL { APIConfig.baseURL = "http://\(host)" }
                     Endpoint.shared.invalidate()
@@ -321,9 +328,29 @@ final class RadarSetup: ObservableObject {
         let hostname: String?
     }
 
+    /// Accepts the radar's own certificate and nothing else when the link
+    /// named one, whatever the system makes of a self-signed certificate; a
+    /// link without one leaves the system to judge (it never sees https).
+    private final class Pinned: NSObject, URLSessionDelegate {
+        let fingerprint: String
+        init(_ fingerprint: String) { self.fingerprint = fingerprint }
+        func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge) async
+            -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+            guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+                  let trust = challenge.protectionSpace.serverTrust else { return (.performDefaultHandling, nil) }
+            guard let leaf = (SecTrustCopyCertificateChain(trust) as? [SecCertificate])?.first else {
+                return (.cancelAuthenticationChallenge, nil)
+            }
+            let got = SHA256.hash(data: SecCertificateCopyData(leaf) as Data).map { String(format: "%02x", $0) }.joined()
+            return got == fingerprint ? (.useCredential, URLCredential(trust: trust)) : (.cancelAuthenticationChallenge, nil)
+        }
+    }
+    private var session = URLSession.shared
+    private var scheme: String { link?.fingerprint == nil ? "http" : "https" }
+
     private func hello(_ base: String, timeout: TimeInterval = 4) async throws -> Hello {
         guard let url = URL(string: base + "/setup/api/hello") else { throw URLError(.badURL) }
-        let (data, resp) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: timeout))
+        let (data, resp) = try await session.data(for: URLRequest(url: url, timeoutInterval: timeout))
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
         return try JSONDecoder().decode(Hello.self, from: data)
     }
@@ -350,7 +377,7 @@ final class RadarSetup: ObservableObject {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let t = token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await session.data(for: req)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             struct E: Decodable { struct M: Decodable { let message: String? }; let error: M? }
