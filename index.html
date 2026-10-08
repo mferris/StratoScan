@@ -7807,7 +7807,15 @@ function findPlaneAtStagePoint(x, y) {
 // Pointer events, so one code path serves fingers and a mouse. A drag that
 // moves less than a finger's width is a tap, and is left to the tap handler
 // below; anything more sets viewTapSuppressed so the tap handler lets it go.
+//
+// NO setPointerCapture here (release 2026.10.08.2 had it, and the gear, the
+// rewind button and everything else inside the stage that listens for its
+// own pointerup stopped answering: capture retargets the pointerup to the
+// stage). The stage covers the screen, so the pointer stays over it for the
+// whole drag anyway; one that leaves the window ends the gesture. A press
+// that starts on a control or a panel is theirs, never a drag.
 stage.style.touchAction = 'none';
+const VIEW_NOT_A_DRAG = '#gearBtn, #rewindBtn, #detailPanel, #detailBackdrop, #settingsPanel, #settingsBackdrop, #onboard, #kbd, #splash';
 const viewPointers = new Map();     // pointerId -> last canvas position
 let viewGesture = null;             // the drag or pinch in progress
 let viewTapSuppressed = false;
@@ -7822,9 +7830,9 @@ function pinchState() {
 }
 stage.addEventListener('pointerdown', (e) => {
   if (detailPanelEl.classList.contains('show') || settingsPanelEl.classList.contains('show')) return;
+  if (e.target instanceof Element && e.target.closest(VIEW_NOT_A_DRAG)) return;
   const p = stageToCanvas(e);
   viewPointers.set(e.pointerId, p);
-  try { stage.setPointerCapture(e.pointerId); } catch (err) {}
   if (viewPointers.size === 1) viewGesture = { startX: p.x, startY: p.y, moved: false };
   else if (viewPointers.size === 2) viewGesture = { ...pinchState(), moved: true, pinch: true };
   if (viewPointers.size >= 2) viewTapSuppressed = true;
@@ -7857,6 +7865,7 @@ function viewPointerEnd(e) {
 }
 stage.addEventListener('pointercancel', viewPointerEnd);
 stage.addEventListener('pointerup', viewPointerEnd);
+stage.addEventListener('pointerleave', viewPointerEnd);
 stage.addEventListener('wheel', (e) => {
   e.preventDefault();
   const p = stageToCanvas(e);
