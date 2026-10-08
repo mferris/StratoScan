@@ -1000,69 +1000,84 @@ module antenna_mount_sma() {
 // every hole need no support; the towers' outboard ends and the bar's top
 // edge start in mid-air in that orientation and want tree supports under
 // them, on the face toward the case), closed by a flat cover that sits
-// flush inside a rim on five M2 screws. The arm's bore runs straight on through the crossbar and out of
-// the channel floor, so each plug is pushed into it end-on from open air
-// and on out through the plate. The bulkhead end slides sideways into a
-// slot under each tower's panel that is a close fit on the jack's hex body,
-// so the jack cannot turn while its nut is tightened and nothing inside has
-// to be held. Both plugs share the one bore: 13mm, because the second plug
-// (9.2mm across its nut's corners) has to pass the first cable (2.5mm);
-// the plate's hole (ant_plate_hole) is the same 13mm for the same reason.
+// flush inside a rim on five M2 screws. The arm's bore runs straight on
+// through the crossbar and out of the channel floor, so each plug is pushed
+// into it end-on from open air and on out through the plate. The bulkhead
+// end slides sideways into a slot under each tower's panel that is a close
+// fit on the jack's hex body, so the jack cannot turn while its nut is
+// tightened and nothing inside has to be held. Both plugs share the one
+// bore: 13mm, because the second plug (9.2mm across its nut's corners) has
+// to pass the first cable (2.5mm); the plate's hole (ant_plate_hole) is
+// the same 13mm for the same reason.
 //
 // Panel 2mm: the bulkhead's thread is 10mm from its shoulder (measured
 // 2026-10-07), and 2 of panel + 0.6 of washer + 2.5 of nut leaves 4.9mm for
 // the whip's own coupling nut. 3mm would leave 3.9, which is marginal.
+//
+// Two styles of this mount (2026-10-08): the owner's jumpers come with an
+// 8mm hex body or an 11mm one, and a mount is printed for one kind. Every
+// size that depends on the body -- slot, pocket, tower width, the bar's
+// thickness, the cover's tab and pad, the screw positions -- is a function
+// of the jack size, and the mount's modules take the pair of sizes as an
+// argument (antenna_mount_twin([11, 11])), so one source prints either, or
+// a mixed one if that is ever wanted. The cover can carry each side's
+// frequency so nobody has to guess which whip goes where.
+//
+// Sides are indexed as seen from BEHIND the case, which is where anyone
+// fitting a whip stands: [0] is the viewer's LEFT (local +X) and [1] the
+// RIGHT (local -X).
+ant_twin_jack_af   = [8, 8];            // the default style; the dispatcher has antenna_mount_twin_8 and _11
+ant_twin_hole      = [6.7, 6.7];        // panel holes: a 1/4-36 barrel measures 6.35 and printed holes come out small
+ant_twin_labels    = ["1090", "978"];   // engraved in the cover under each tower; "" for none
+ant_twin_label_on  = true;
 ant_twin_sep       = 80;    // between the two jacks
-ant_twin_bar_x     = 106;   // crossbar length (local X), flush with the towers' outer faces
-ant_twin_bar_y     = 22;    // crossbar thickness, plate side to wall side (local Y)
 ant_twin_bar_z     = 30;    // crossbar height along the antenna axis: 9mm walls round the 12mm channel
-ant_twin_tower_w   = 26;    // tower square: 8.6mm walls either side of the 8.8mm slot
 ant_twin_top       = 32;    // top of each tower, along the axis from the arm's end
-ant_twin_edge_r    = 3;     // rounding of the goalpost's outline
+ant_twin_corner_r  = 6;     // the goalpost's corners, in the plane of the bar (tower tops, bar ends)
+ant_twin_edge_r    = 1.5;   // every other edge: the same round the cases have, not a box
 ant_twin_panel_t   = 2;     // the panel the jack's nut clamps (see the thread arithmetic above)
-ant_twin_hole      = 6.7;   // 1/4-36 thread measures 6.35; printed holes come out small
-ant_twin_jack_af   = 8;     // the jack's body across its flats, assumed hex. MEASURE on the real part.
-ant_twin_slot_w    = 8.8;   // the slot across X: the body's flats slide between its walls, 0.8 of play
-ant_twin_floor_y   = -4.6;  // channel floor and the slot's blind end (local Y): a hex body resting on it (9.2 across
-                            // its corners) has its axis at Y=0, under the panel hole, so "push it in until it stops" is right
-ant_twin_seat_y    = 8;     // the cover seat: where the channel opens
-ant_twin_rim       = 1.5;   // rim round the cover
+ant_twin_wall      = 8.6;   // tower wall either side of its slot
 ant_twin_chan_z    = 12;    // channel width along the axis
+ant_twin_floor_y   = -4.6;  // the channel floor (local Y); each slot has its own, where the hex seats
 ant_twin_bore      = 13;    // the arm bore: a plug beside a cable. ant_plate_hole matches.
 ant_twin_cover_t   = 3;
 ant_twin_cover_gap = 0.2;   // all round the cover, in its seat
-ant_twin_cover_top = 25.8;  // the cover's tabs stop here, under the pocket (ant_twin_pocket_z)
-// Above ant_twin_pocket_z the open slot becomes a closed pocket the hex
-// body's size, so the 2mm panel over it rests on solid plastic on all four
-// sides beyond the hex (the washer bears on that), and the body is held
-// fore-aft as well as sideways. The jack goes into the open slot below and
-// is pushed up into the pocket until its barrel comes through the panel.
-ant_twin_pocket_z  = 26;
-ant_twin_pocket_y  = 4.9;   // floor -4.6 + the hex's 9.24 across corners + 0.26 of play
-// A pad on the cover's inner face at each tower fills the gap over the
-// lower part of the hex body (0.4mm clear of its corners), so the cover's
-// screws brace the jack fore-aft along its whole length.
-ant_twin_cpad_w    = 8.4;
-ant_twin_cpad_z0   = 16;
-ant_twin_cpad_z1   = 25.5;
-ant_twin_cpad_t    = 3;     // seat at Y=8 down to Y=5
-// The bar is 4mm thicker on its case side for 40mm either side of the arm,
-// so the flare under the bore's mouth (spheres, see the body) keeps 4mm of
-// wall where the arm's own wall alone would be under 1mm.
+ant_twin_rim       = 1.5;   // rim round the cover
+ant_twin_pocket_z  = 26;    // above this the open slot becomes a closed pocket the hex body's size,
+                            // so the 2mm panel over it rests on solid plastic on every side beyond
+                            // the hex (the washer bears on that) and the body is held fore-aft too
+ant_twin_cover_top = 25.8;  // the cover's tabs stop under the pocket
 ant_twin_m2_hole   = 3.0;   // M2 heat-set insert, 3.2mm across the knurl (3.2 if the kit's are the 3.5mm kind). MEASURE the kit's.
-ant_twin_m2_depth  = 6;     // an M2x6 through 1mm of cover under its head reaches 5mm in; the hole is a little deeper
+ant_twin_m2_depth  = 6;
 ant_twin_screw_hole = 2.4;  // M2 clearance through the cover. No counterbore: a 3mm cover printed
                             // face-down cannot roof one, so the cap heads stand 2mm proud of a
                             // face nothing touches
-ant_twin_back_pad  = 4;
+ant_twin_back_pad  = 4;     // the bar is thicker on its case side behind the flare under the bore's mouth
 ant_twin_back_pad_w = 40;
+ant_twin_label_size = 6;
+ant_twin_label_depth = 0.6;
+ant_twin_plug_d    = 9.3;   // an SMA plug's hex across its corners
+
+// Everything sized from a jack body `a` (across flats), and from a pair
+// `af` = [left, right]. Functions, so the checks (which `use` this file and
+// see its functions but not its variables) can size their probes the same
+// way for either style.
+function ant_twin_corners(a)  = a / cos(30);                            // the hex across its corners
+function ant_twin_slot_w(a)   = a + 0.8;                                // its flats slide between the slot's walls
+function ant_twin_slot_y0(a)  = -ant_twin_corners(a) / 2;              // seated on this floor, the barrel is under the hole
+function ant_twin_pocket_y(a) = ant_twin_corners(a) / 2 + 0.26;        // the pocket's far wall
+function ant_twin_tower_w(a)  = ant_twin_slot_w(a) + 2 * ant_twin_wall;
+function ant_twin_screw_x(a)  = ant_twin_sep/2 + ant_twin_slot_w(a)/2 + ant_twin_wall/2;  // mid-wall beside the slot
+function ant_twin_side(af, s) = af[s > 0 ? 0 : 1];
+function ant_twin_seat(af)    = max(ant_twin_pocket_y(af[0]), ant_twin_pocket_y(af[1])) + 3;  // 3mm of wall between pocket and seat
+function ant_twin_bar_y(af)   = 2 * (ant_twin_seat(af) + ant_twin_cover_t);              // the cover flush with the bar
 // Cover screws, as (X, Z) in the axis frame: one in each tower's outer wall
 // beside the slot, one in each tower's foot (solid: the channel stops at
-// |X| = 44.4), one in the bar's top wall. Each insert hole has at least
-// 2.2mm of wall on every side, and each hole in the cover (in an outline
-// inset 1.7 from the body's) at least 2.1mm to the cover's edge.
-ant_twin_screw_xz  = [[-48, 23], [48, 23], [-48, -8], [48, -8], [0, 10]];
-ant_twin_plug_d    = 9.3;   // an SMA plug's hex across its corners
+// the slots), one in the bar's top wall. Each insert hole has at least
+// 2.2mm of wall on every side, and each hole in the cover at least 2.1mm to
+// the cover's edge.
+function ant_twin_screw_xz(af) = [[ant_twin_screw_x(af[0]), 23], [-ant_twin_screw_x(af[1]), 23],
+                                  [ant_twin_screw_x(af[0]), -8], [-ant_twin_screw_x(af[1]), -8], [0, 10]];
 
 // One jack's frame: the counter-tilted antenna axis, moved out along X.
 module ant_twin_frame(s) {
@@ -1080,13 +1095,14 @@ module ant_twin_teardrop(d, h) {
     }
 }
 
-// The goalpost, in the axis frame's X (across) and Z (up the antenna axis).
-module ant_twin_outline2d() {
-    offset(r=ant_twin_edge_r) offset(delta=-ant_twin_edge_r) union() {
-        square([ant_twin_bar_x, ant_twin_bar_z], center=true);
-        for (s = [-1, 1])
-            translate([s*ant_twin_sep/2 - ant_twin_tower_w/2, -ant_twin_bar_z/2])
-                square([ant_twin_tower_w, ant_twin_bar_z/2 + ant_twin_top]);
+// The goalpost, in the axis frame's X (across) and Z (up the antenna axis):
+// the bar between the towers, a tower of its own width at each end.
+module ant_twin_outline2d(af) {
+    offset(r=ant_twin_corner_r) offset(delta=-ant_twin_corner_r) union() {
+        translate([-ant_twin_sep/2, -ant_twin_bar_z/2]) square([ant_twin_sep, ant_twin_bar_z]);
+        for (s = [-1, 1]) let (w = ant_twin_tower_w(ant_twin_side(af, s)))
+            translate([s*ant_twin_sep/2 - w/2, -ant_twin_bar_z/2])
+                square([w, ant_twin_bar_z/2 + ant_twin_top]);
     }
 }
 
@@ -1096,10 +1112,10 @@ module ant_twin_slab(y0, y1) {
 }
 
 // The cover's outline: the goalpost inset by the rim and the fit gap, and
-// stopped short of the panels.
-module ant_twin_cover2d() {
+// stopped short of the pockets.
+module ant_twin_cover2d(af) {
     intersection() {
-        offset(delta = -(ant_twin_rim + ant_twin_cover_gap)) ant_twin_outline2d();
+        offset(delta = -(ant_twin_rim + ant_twin_cover_gap)) ant_twin_outline2d(af);
         translate([-200, -200]) square([400, 200 + ant_twin_cover_top]);
     }
 }
@@ -1112,46 +1128,51 @@ module ant_twin_bore() {
         cylinder(d=ant_twin_bore, h=ant_stub_len + 30 + 1);
 }
 
-module antenna_mount_twin() {
+module antenna_mount_twin(af = ant_twin_jack_af) {
+    seat = ant_twin_seat(af);
+    bar_y = ant_twin_bar_y(af);
     difference() {
         union() {
             translate([0, ant_mount_y, -back_plate_t - ant_flange_t])
                 cylinder(d=ant_flange_d, h=ant_flange_t);
             translate([0, ant_mount_y, -back_plate_t - ant_stub_len])
                 cylinder(d=ant_stub_dia, h=ant_stub_len);
-            ant_axis_frame() ant_twin_slab(-ant_twin_bar_y/2, ant_twin_bar_y/2) ant_twin_outline2d();
+            // the goalpost, every edge rounded: the outline shrunk by the
+            // edge radius and the slab shortened by it, then grown back
+            // with a sphere
+            ant_axis_frame() minkowski() {
+                ant_twin_slab(-bar_y/2 + ant_twin_edge_r, bar_y/2 - ant_twin_edge_r)
+                    offset(delta=-ant_twin_edge_r) ant_twin_outline2d(af);
+                sphere(r=ant_twin_edge_r, $fn=16);
+            }
             // the thicker back behind the flare
-            ant_axis_frame() ant_twin_slab(-ant_twin_bar_y/2 - ant_twin_back_pad, -ant_twin_bar_y/2 + 0.01)
-                offset(r=ant_twin_edge_r) offset(delta=-ant_twin_edge_r)
+            ant_axis_frame() ant_twin_slab(-bar_y/2 - ant_twin_back_pad, -bar_y/2 + 0.01)
+                offset(r=ant_twin_corner_r) offset(delta=-ant_twin_corner_r)
                     square([ant_twin_back_pad_w, ant_twin_bar_z], center=true);
         }
         ant_axis_frame() {
             // the cover seat: the wall-side face inside the rim, down to the seat
-            ant_twin_slab(ant_twin_seat_y, ant_twin_bar_y/2 + 1)
-                intersection() {
-                    offset(delta=-ant_twin_rim) ant_twin_outline2d();
-                    translate([-200, -200]) square([400, 200 + ant_twin_cover_top + ant_twin_cover_gap]);
-                }
-            // the channel along the bar and the open slot under each tower, one
-            // floor, open to the seat
-            ant_twin_slab(ant_twin_floor_y, ant_twin_seat_y + 1) {
-                square([ant_twin_sep + ant_twin_slot_w, ant_twin_chan_z], center=true);
-                for (s = [-1, 1])
-                    translate([s*ant_twin_sep/2 - ant_twin_slot_w/2, -ant_twin_chan_z/2])
-                        square([ant_twin_slot_w, ant_twin_chan_z/2 + ant_twin_pocket_z]);
-            }
-            // the closed pocket above it, up to the panel: the hex body's size
-            ant_twin_slab(ant_twin_floor_y, ant_twin_pocket_y)
-                for (s = [-1, 1])
-                    translate([s*ant_twin_sep/2 - ant_twin_slot_w/2, ant_twin_pocket_z - 0.01])
-                        square([ant_twin_slot_w, ant_twin_top - ant_twin_panel_t - ant_twin_pocket_z + 0.01]);
-            // the jack's hole through each panel
-            for (s = [-1, 1])
+            ant_twin_slab(seat, bar_y/2 + 1)
+                offset(r=ant_twin_cover_gap) ant_twin_cover2d(af);
+            // the channel along the bar, open to the seat, one floor
+            ant_twin_slab(ant_twin_floor_y, seat + 1)
+                square([ant_twin_sep, ant_twin_chan_z], center=true);
+            for (s = [-1, 1]) let (a = ant_twin_side(af, s), sw = ant_twin_slot_w(a), i = s > 0 ? 0 : 1) {
+                // the open slot under the tower, its floor where the hex seats
+                ant_twin_slab(ant_twin_slot_y0(a), seat + 1)
+                    translate([s*ant_twin_sep/2 - sw/2, -ant_twin_chan_z/2])
+                        square([sw, ant_twin_chan_z/2 + ant_twin_pocket_z]);
+                // the closed pocket above it, up to the panel: the hex body's size
+                ant_twin_slab(ant_twin_slot_y0(a), ant_twin_pocket_y(a))
+                    translate([s*ant_twin_sep/2 - sw/2, ant_twin_pocket_z - 0.01])
+                        square([sw, ant_twin_top - ant_twin_panel_t - ant_twin_pocket_z + 0.01]);
+                // the jack's hole through the panel
                 translate([s*ant_twin_sep/2, 0, ant_twin_top - ant_twin_panel_t - 0.01])
-                    ant_twin_teardrop(ant_twin_hole, ant_twin_panel_t + 0.02);
+                    ant_twin_teardrop(ant_twin_hole[i], ant_twin_panel_t + 0.02);
+            }
             // the cover's inserts, from the seat into the body
-            for (p = ant_twin_screw_xz)
-                translate([p[0], ant_twin_seat_y - ant_twin_m2_depth, p[1]])
+            for (p = ant_twin_screw_xz(af))
+                translate([p[0], seat - ant_twin_m2_depth, p[1]])
                     rotate([-90, 0, 0]) cylinder(d=ant_twin_m2_hole, h=ant_twin_m2_depth + 1, $fn=24);
         }
         ant_twin_bore();
@@ -1166,7 +1187,7 @@ module antenna_mount_twin() {
         hull() {
             intersection() {
                 ant_twin_bore();
-                ant_axis_frame() ant_twin_slab(-ant_twin_bar_y/2 - 1, ant_twin_floor_y) square([60, 60], center=true);
+                ant_axis_frame() ant_twin_slab(-bar_y/2 - 1, ant_twin_floor_y) square([60, 60], center=true);
             }
             for (sx = [-1, 1]) ant_axis_frame()
                 translate([sx * (ant_twin_bore/2 + 5), ant_twin_floor_y, 0]) sphere(d=ant_twin_chan_z, $fn=48);
@@ -1179,24 +1200,36 @@ module antenna_mount_twin() {
 
 // The cover, laid out for printing: flat, outer face down, X across and Y up
 // the antenna axis. Five M2 clearance holes; a pad on the inner face at each
-// tower that reaches down over the jack's body.
-module antenna_mount_twin_cover() {
+// tower that reaches down over the jack's body (0.4mm clear of its corners);
+// each side's frequency engraved in the outer face under its tower, read
+// from behind the case, so it is mirrored here.
+module antenna_mount_twin_cover(af = ant_twin_jack_af) {
     difference() {
         union() {
-            linear_extrude(height = ant_twin_cover_t) ant_twin_cover2d();
-            for (s = [-1, 1])
-                translate([s*ant_twin_sep/2 - ant_twin_cpad_w/2, ant_twin_cpad_z0, ant_twin_cover_t - 0.01])
-                    cube([ant_twin_cpad_w, ant_twin_cpad_z1 - ant_twin_cpad_z0, ant_twin_cpad_t + 0.01]);
+            linear_extrude(height = ant_twin_cover_t) ant_twin_cover2d(af);
+            for (s = [-1, 1]) let (a = ant_twin_side(af, s), w = ant_twin_slot_w(a) - 0.4,
+                                   t = ant_twin_seat(af) - (ant_twin_corners(a)/2 + 0.4))
+                translate([s*ant_twin_sep/2 - w/2, 16, ant_twin_cover_t - 0.01])
+                    cube([w, ant_twin_cover_top - 0.3 - 16, t + 0.01]);
         }
-        for (p = ant_twin_screw_xz) translate([p[0], p[1], -1])
+        for (p = ant_twin_screw_xz(af)) translate([p[0], p[1], -1])
             cylinder(d=ant_twin_screw_hole, h=ant_twin_cover_t + 2, $fn=24);
+        if (ant_twin_label_on)
+            for (s = [-1, 1]) let (i = s > 0 ? 0 : 1) if (ant_twin_labels[i] != "")
+                translate([s * (ant_twin_sep/2 - 6), 0, -0.01]) mirror([1, 0, 0])
+                    linear_extrude(height = ant_twin_label_depth + 0.01) {
+                        translate([0, 2.5]) text(ant_twin_labels[i], size=ant_twin_label_size,
+                            font="Liberation Sans:style=Bold", halign="center", valign="center");
+                        translate([0, -5.5]) text("MHz", size=ant_twin_label_size * 0.55,
+                            font="Liberation Sans:style=Bold", halign="center", valign="center");
+                    }
     }
 }
 
 // The cover in its seat on the body, for the checks and the preview.
-module ant_twin_cover_placed() {
-    ant_axis_frame() translate([0, ant_twin_seat_y + ant_twin_cover_t, 0])
-        rotate([90, 0, 0]) antenna_mount_twin_cover();
+module ant_twin_cover_placed(af = ant_twin_jack_af) {
+    ant_axis_frame() translate([0, ant_twin_seat(af) + ant_twin_cover_t, 0])
+        rotate([90, 0, 0]) antenna_mount_twin_cover(af);
 }
 
 // ---- probes for the checks --------------------------------------------
@@ -1206,45 +1239,45 @@ module ant_twin_bore_probe() {
     translate([0, ant_mount_y, -back_plate_t - ant_stub_len - 20])
         cylinder(d=ant_twin_bore - 1, h=ant_stub_len + 20 - 0.5);
 }
-// The jack's hex body, 8 across flats, standing in each slot under the
-// panel with its corners along Y: must meet nothing.
-module ant_twin_jack_probe() {
-    for (s = [-1, 1]) ant_twin_frame(s)
-        translate([0, ant_twin_floor_y + ant_twin_jack_af/(2*cos(30)) + 0.1, 11])
+// Each jack's hex body, seated on its slot's floor with its corners along
+// Y, standing from the channel up into the pocket: must meet nothing.
+module ant_twin_jack_probe(af = ant_twin_jack_af) {
+    for (s = [-1, 1]) let (a = ant_twin_side(af, s)) ant_twin_frame(s)
+        translate([0, ant_twin_slot_y0(a) + ant_twin_corners(a)/2 + 0.1, 11])
             rotate([0, 0, 30])
-                cylinder(d=ant_twin_jack_af/cos(30) - 0.1, h=ant_twin_top - ant_twin_panel_t - 11 - 0.3, $fn=6);
+                cylinder(d=ant_twin_corners(a) - 0.1, h=ant_twin_top - ant_twin_panel_t - 11 - 0.3, $fn=6);
+}
+// Each jack's barrel, 6.35, standing through the panel with the hex seated:
+// must meet no panel.
+module ant_twin_barrel_probe(af = ant_twin_jack_af) {
+    for (s = [-1, 1]) let (a = ant_twin_side(af, s)) ant_twin_frame(s)
+        translate([0, ant_twin_slot_y0(a) + ant_twin_corners(a)/2, ant_twin_top - ant_twin_panel_t - 1])
+            cylinder(d=6.35, h=ant_twin_panel_t + 2, $fn=48);
 }
 // A rod lying along the channel, a little under its width: must be in air.
-module ant_twin_channel_probe() {
-    ant_axis_frame() translate([0, (ant_twin_floor_y + ant_twin_seat_y)/2, 0]) rotate([0, 90, 0])
-        cylinder(d=ant_twin_chan_z - 2, h=ant_twin_sep - ant_twin_slot_w - 4, center=true);
-}
-// The jack's barrel, 6.35, standing through the panel with the hex seated
-// on the floor: must meet no panel.
-module ant_twin_barrel_probe() {
-    for (s = [-1, 1]) ant_twin_frame(s)
-        translate([0, ant_twin_floor_y + ant_twin_jack_af/(2*cos(30)), ant_twin_top - ant_twin_panel_t - 1])
-            cylinder(d=6.35, h=ant_twin_panel_t + 2, $fn=48);
+module ant_twin_channel_probe(af = ant_twin_jack_af) {
+    ant_axis_frame() translate([0, (ant_twin_floor_y + ant_twin_seat(af))/2, 0]) rotate([0, 90, 0])
+        cylinder(d=ant_twin_chan_z - 2, h=ant_twin_sep - 14, center=true);
 }
 // Thin rods through the cover's holes into the body's insert holes, from the
 // cover's outer face down: open holes leave them whole.
-module ant_twin_screw_probes() {
-    ant_axis_frame() for (p = ant_twin_screw_xz)
-        translate([p[0], ant_twin_seat_y - ant_twin_m2_depth + 1, p[1]])
+module ant_twin_screw_probes(af = ant_twin_jack_af) {
+    ant_axis_frame() for (p = ant_twin_screw_xz(af))
+        translate([p[0], ant_twin_seat(af) - ant_twin_m2_depth + 1, p[1]])
             rotate([-90, 0, 0]) cylinder(d=2, h=ant_twin_m2_depth - 1 + ant_twin_cover_t, $fn=16);
 }
 // For the checks: the ring of panel round each jack hole, and a probe a
 // little under the hole, down its middle.
-module ant_twin_panel_ring() {
-    for (s = [-1, 1]) ant_twin_frame(s)
+module ant_twin_panel_ring(af = ant_twin_jack_af) {
+    for (s = [-1, 1]) let (i = s > 0 ? 0 : 1) ant_twin_frame(s)
         difference() {
-            translate([0, 0, ant_twin_top - ant_twin_panel_t]) cylinder(d=ant_twin_tower_w - 4, h=ant_twin_panel_t);
-            translate([0, 0, ant_twin_top - ant_twin_panel_t - 1]) cylinder(d=ant_twin_hole + 0.5, h=ant_twin_panel_t + 2);
+            translate([0, 0, ant_twin_top - ant_twin_panel_t]) cylinder(d=ant_twin_tower_w(ant_twin_side(af, s)) - 4, h=ant_twin_panel_t);
+            translate([0, 0, ant_twin_top - ant_twin_panel_t - 1]) cylinder(d=ant_twin_hole[i] + 0.5, h=ant_twin_panel_t + 2);
         }
 }
 module ant_twin_hole_probe() {
-    for (s = [-1, 1]) ant_twin_frame(s)
-        translate([0, 0, ant_twin_top - ant_twin_panel_t - 0.5]) cylinder(d=ant_twin_hole - 0.5, h=ant_twin_panel_t + 1);
+    for (s = [-1, 1]) let (i = s > 0 ? 0 : 1) ant_twin_frame(s)
+        translate([0, 0, ant_twin_top - ant_twin_panel_t - 0.5]) cylinder(d=ant_twin_hole[i] - 0.5, h=ant_twin_panel_t + 1);
 }
 
 // Each whip's swept envelope, straight up its axis from the top of its tower:
@@ -1858,9 +1891,14 @@ else if (part == "stand") stand();
 else if (part == "back_plate") back_plate();
 else if (part == "antenna_mount") antenna_mount();
 else if (part == "antenna_mount_sma") antenna_mount_sma();
-else if (part == "antenna_mount_twin") antenna_mount_twin();
+else if (part == "antenna_mount_twin") antenna_mount_twin();                 // the default style (ant_twin_jack_af)
+else if (part == "antenna_mount_twin_8") antenna_mount_twin([8, 8]);         // for jumpers with 8mm hex bodies
+else if (part == "antenna_mount_twin_11") antenna_mount_twin([11, 11]);      // for jumpers with 11mm hex bodies
 else if (part == "antenna_mount_twin_cover") antenna_mount_twin_cover();
+else if (part == "antenna_mount_twin_cover_8") antenna_mount_twin_cover([8, 8]);
+else if (part == "antenna_mount_twin_cover_11") antenna_mount_twin_cover([11, 11]);
 else if (part == "twin_assembled") { antenna_mount_twin(); ant_twin_cover_placed(); back_plate(); }  // for pictures
+else if (part == "twin_assembled_11") { antenna_mount_twin([11, 11]); ant_twin_cover_placed([11, 11]); back_plate(); }
 else if (part == "none") {}  // for a file that includes this one to draw its own views
 else if (part == "usbc_gauge") usbc_gauge();
 else if (part == "antenna_socket_gauge") antenna_socket_gauge();
