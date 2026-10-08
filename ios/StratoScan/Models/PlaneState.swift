@@ -20,6 +20,12 @@ final class PlaneState: Identifiable {
     var speed: Double?
     var lat: Double?
     var lon: Double?
+    /// Where the blip is drawn: eased toward the last report, so it glides
+    /// between reports instead of jumping (roadmap 2.23: positions are kept
+    /// as lat/lon, not as bearing and range from the radar, so a view panned
+    /// to another city draws its aircraft on the right streets).
+    var dispLat: Double?
+    var dispLon: Double?
     var airlineIcao: String?
     var airlineLabel: String = AirlineTable.privateLabel
     var badgeColor: Color = AirlineTable.privateColor
@@ -27,6 +33,9 @@ final class PlaneState: Identifiable {
     var lastSeen: Date = Date()
     /// Reported by a public network, not heard by this radar (roadmap 2.8).
     var isNetwork = false
+    /// From the network around the view's centre (roadmap 2.23), rather than
+    /// from the radar's own feed.
+    var fromView = false
     /// Route, registration and owner as the core feed has them, if it does.
     var feedRoute: FeedRoute?
     var reg: String?
@@ -34,12 +43,24 @@ final class PlaneState: Identifiable {
     /// True when the core feed labelled this aircraft, so the app needn't.
     var fromFeed = false
 
-    /// Where it has been: its reported positions over the last couple of
-    /// minutes, for Sky view's tracks across the sky (#40). Kept on the
-    /// phone, from the moment the app opened.
+    /// Where it has been: its reported positions, for the trail on the radar
+    /// (#58) and Sky view's tracks across the sky (#40). Kept on the phone,
+    /// from the moment the app opened. A point is a REPORTED position, never
+    /// where the blip was drawn, so a correction moves the blip and not the
+    /// trail (as on the kiosk since 2026-10-04).
     struct Fix { let lat: Double; let lon: Double; let altFt: Double; let at: Date }
     private(set) var history: [Fix] = []
-    static let historySeconds: TimeInterval = 120
+    static let historySeconds: TimeInterval = 15 * 60
+    static let historyPoints = 900
+
+    var coordinate: Coordinate? {
+        guard let lat, let lon else { return nil }
+        return Coordinate(lat: lat, lon: lon)
+    }
+    var displayCoordinate: Coordinate? {
+        guard let dispLat, let dispLon else { return coordinate }
+        return Coordinate(lat: dispLat, lon: dispLon)
+    }
 
     // Screen-space layout state, recomputed every frame by RadarView.
     var anchorX: CGFloat = 0
@@ -58,6 +79,8 @@ final class PlaneState: Identifiable {
         range = n.range
         targetBearing = n.bearing
         targetRange = n.range
+        dispLat = n.lat
+        dispLon = n.lon
     }
 
     func apply(_ n: NormalizedAircraft) {
@@ -69,6 +92,7 @@ final class PlaneState: Identifiable {
         speed = n.speed
         lat = n.lat
         lon = n.lon
+        if dispLat == nil { dispLat = n.lat; dispLon = n.lon }
         if let la = n.lat, let lo = n.lon {
             let now = Date()
             if history.last.map({ $0.lat != la || $0.lon != lo }) ?? true {
@@ -78,7 +102,7 @@ final class PlaneState: Identifiable {
             if let keep = history.firstIndex(where: { now.timeIntervalSince($0.at) <= Self.historySeconds }), keep > 0 {
                 history.removeFirst(keep)
             }
-            if history.count > 150 { history.removeFirst(history.count - 150) }
+            if history.count > Self.historyPoints { history.removeFirst(history.count - Self.historyPoints) }
         }
         airlineIcao = n.airlineIcao
         isNetwork = n.raw.isNetwork

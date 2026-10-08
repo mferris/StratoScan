@@ -1,29 +1,35 @@
 import SwiftUI
 
-/// The whole radar — rings, sweep, aircraft blips, and collision-avoiding
-/// labels with leader lines — drawn as one Canvas every frame. Unlike the
-/// web version (Canvas for blips/rings, separate DOM divs for labels,
-/// because HTML canvas can't measure DOM text), SwiftUI's GraphicsContext
-/// can both measure and draw text, so everything lives in a single Canvas
-/// here — simpler than the two-layer split the browser needed.
+/// The whole radar — rings, sweep, trails, aircraft blips, and collision-
+/// avoiding labels with leader lines — drawn as one Canvas every frame.
+/// Unlike the web version (Canvas for blips/rings, separate DOM divs for
+/// labels, because HTML canvas can't measure DOM text), SwiftUI's
+/// GraphicsContext can both measure and draw text, so everything lives in a
+/// single Canvas here — simpler than the two-layer split the browser needed.
+///
+/// The picture fills the screen (roadmap 2.22): the map is under all of it,
+/// the radar's 20 nm ring is a line on the map, and the view can be panned
+/// and zoomed anywhere (2.23). Positions are projected from each aircraft's
+/// latitude and longitude onto the view's own flat map (Geo.localOffset), so
+/// a view over another city is right there too.
 struct RadarView: View {
     @ObservedObject var viewModel: RadarViewModel
-    /// Diameter of the circular rings/sweep/map — smaller than the full
-    /// Canvas frame on purpose, so labels have real margin to roam into
-    /// (unclipped, unlike the circular map/rings) without being cramped.
-    let diameter: CGFloat
     /// Text and symbols, scaled up on an iPad's bigger screen (#39); 1 on a phone.
     var uiScale: CGFloat = 1
 
     private let rangeRings = 4
-    @State private var pinchStart: (range: Double, centre: (east: Double, north: Double), anchor: CGPoint)?
-    @State private var dragStart: (translation: CGSize, centre: (east: Double, north: Double))?
+    @State private var pinchStart: (range: Double, centre: Coordinate, anchor: CGPoint)?
+    @State private var dragStart: (translation: CGSize, centre: Coordinate)?
     private let sweepSpeed: Double = 0.008 * 60 // radians/sec (web version: 0.008/frame @ ~60fps)
     private let smoothTau = 0.35
     private let labelGap: CGFloat = 10
     private let labelMargin: CGFloat = 4
     private let labelSpringTau = 0.22
     private let labelSeparationPasses = 8
+    /// Trails (#58): older segments dim toward the floor rather than vanish,
+    /// as on the kiosk, so a long path stays visible end to end.
+    private let trailFade: TimeInterval = 5 * 60
+    private let trailFloor = 0.25
 
     // The chosen theme's colours (Palette), read as each frame is drawn.
     private var pal: Palette { Palette.current }
@@ -32,6 +38,10 @@ struct RadarView: View {
     private var colorSweep: Color { pal.sweep }
     private var colorTextDim: Color { pal.textDim }
     private var colorLow: Color { pal.low }
+
+    /// The view's radius in points: the range (`rangeNm`) reaches the nearer
+    /// edge of the screen, a little inside it.
+    static func radius(_ size: CGSize) -> CGFloat { min(size.width, size.height) / 2 - 12 }
 
     var body: some View {
         GeometryReader { geo in
@@ -43,9 +53,9 @@ struct RadarView: View {
             .drawingGroup()
             .contentShape(Rectangle())
             // Double-tap zooms in a step on the spot tapped; a single tap picks
-            // an aircraft; a pinch zooms from the full ring down to about a
+            // an aircraft; a pinch zooms from a continent down to about a
             // mile, keeping the spot under the fingers where it is; a drag
-            // moves the zoomed view (roadmap 2.9).
+            // moves the view anywhere (roadmap 2.9, 2.23).
             .gesture(SpatialTapGesture(count: 2).onEnded { tap in
                 viewModel.zoom(to: viewModel.rangeNm / 2, anchor: anchor(tap.location, geo.size),
                                from: (viewModel.rangeNm, viewModel.viewCentre))
@@ -65,34 +75,28 @@ struct RadarView: View {
                 .onChanged { value in
                     // A pinch moves both fingers; the pinch decides, and the
                     // drag starts again from wherever the pinch left the view.
-                    guard pinchStart == nil, viewModel.rangeNm < viewModel.ringNm - 0.01 else { dragStart = nil; return }
-                    if dragStart == nil {
-                        // Dragging a view that follows something lets go of it.
-                        let c = viewModel.viewCentre
-                        viewModel.followHex = nil
-                        viewModel.centreOnMe = false
-                        viewModel.setPan(c)
-                        dragStart = (value.translation, viewModel.pan)
-                    }
+                    guard pinchStart == nil else { dragStart = nil; return }
+                    if dragStart == nil { dragStart = (value.translation, viewModel.viewCentre) }
                     guard let s = dragStart else { return }
-                    let perPoint = viewModel.rangeNm / Double(diameter * 0.44)
-                    viewModel.setPan((s.centre.east - Double(value.translation.width - s.translation.width) * perPoint,
-                                      s.centre.north + Double(value.translation.height - s.translation.height) * perPoint))
+                    let perPoint = viewModel.rangeNm / Double(Self.radius(geo.size))
+                    viewModel.pan(to: Geo.moved(s.centre,
+                                                east: -Double(value.translation.width - s.translation.width) * perPoint,
+                                                north: Double(value.translation.height - s.translation.height) * perPoint))
                 }
                 .onEnded { _ in dragStart = nil })
         }
     }
 
-    /// A point on screen as a fraction of the radar's radius from its middle.
+    /// A point on screen as a fraction of the view's radius from its middle.
     private func anchor(_ p: CGPoint, _ size: CGSize) -> CGPoint {
-        let r = diameter * 0.44
+        let r = Self.radius(size)
         return CGPoint(x: (p.x - size.width / 2) / r, y: (p.y - size.height / 2) / r)
     }
 
     private func render(context: inout GraphicsContext, canvasSize: CGSize, now: Date) {
         let cx = canvasSize.width / 2
         let cy = canvasSize.height / 2
-        let r = diameter * 0.44
+        let r = Self.radius(canvasSize)
 
         let dt: Double
         if let last = viewModel.lastFrameTime {
@@ -104,22 +108,15 @@ struct RadarView: View {
 
         // Rings, crosshair and sweep belong to the ground, not the screen: they
         // centre on the radar and mark real distances from it, so zooming and
-        // panning carry them along with the map (they used to stay put while
-        // their labels changed, which said nothing about where you were).
+        // panning carry them along with the map.
         let k = r / CGFloat(viewModel.rangeNm)          // points per nm
-        let c = viewModel.viewCentre
-        let radar = CGPoint(x: cx - CGFloat(c.east) * k, y: cy + CGFloat(c.north) * k)
-        // clipped to the map's circle (the whole diameter), which runs a little
-        // past the 20 nm ring at full view
-        let edge = diameter / 2
-        let view = Path(ellipseIn: CGRect(x: cx - edge, y: cy - edge, width: edge * 2, height: edge * 2))
-        context.drawLayer { ctx in
-            ctx.clip(to: view)
-            drawRings(&ctx, radar: radar, k: k, cx: cx, cy: cy, r: edge)
-            drawSweep(&ctx, radar: radar, k: k)
+        if let ro = viewModel.radarOffset {
+            let radar = CGPoint(x: cx + CGFloat(ro.east) * k, y: cy - CGFloat(ro.north) * k)
+            drawRings(&context, radar: radar, k: k, canvasSize: canvasSize)
+            drawSweep(&context, radar: radar, k: k)
         }
-        drawCompass(&context, cx: cx, cy: cy, r: r)
-        drawPlanes(&context, cx: cx, cy: cy, r: r, canvasSize: canvasSize, dt: dt)
+        drawCompass(&context, canvasSize: canvasSize)
+        drawPlanes(&context, cx: cx, cy: cy, k: k, canvasSize: canvasSize, dt: dt, now: now)
 
         viewModel.sweepAngle += sweepSpeed * dt
         if viewModel.sweepAngle > .pi * 2 { viewModel.sweepAngle -= .pi * 2 }
@@ -127,7 +124,7 @@ struct RadarView: View {
 
     // MARK: - Rings
 
-    private func drawRings(_ context: inout GraphicsContext, radar: CGPoint, k: CGFloat, cx: CGFloat, cy: CGFloat, r: CGFloat) {
+    private func drawRings(_ context: inout GraphicsContext, radar: CGPoint, k: CGFloat, canvasSize: CGSize) {
         let ring = CGFloat(viewModel.ringNm)
         let step = ring / CGFloat(rangeRings)                 // 5 nm
         var rings: [(nm: CGFloat, major: Bool)] = (1...rangeRings).map { (step * CGFloat($0), true) }
@@ -136,32 +133,36 @@ struct RadarView: View {
         if viewModel.rangeNm <= 6 {
             rings += stride(from: 1, to: ring, by: 1).filter { $0.truncatingRemainder(dividingBy: step) != 0 }.map { (CGFloat($0), false) }
         }
+        let cx = canvasSize.width / 2, cy = canvasSize.height / 2
+        let reach = hypot(canvasSize.width, canvasSize.height) / 2     // the screen's corner
         // brighter than the rings: zoomed in they sit over busy streets
         let labelColor = pal.ringLabel
         for (nm, major) in rings {
             let ringR = nm * k
-            // skip rings wholly outside the view, or so big or small they're noise
+            // skip rings wholly off the screen, or so small they're noise
             let d = hypot(radar.x - cx, radar.y - cy)
-            if d - ringR > r || ringR - d > r * 1.02 || ringR < 6 { continue }
+            if d - ringR > reach || ringR - d > reach || ringR < 6 { continue }
             var path = Path()
             path.addEllipse(in: CGRect(x: radar.x - ringR, y: radar.y - ringR, width: ringR * 2, height: ringR * 2))
-            context.stroke(path, with: .color(nm == ring ? colorRingBright : colorRing.opacity(major ? 1 : 0.55)), lineWidth: 1)
+            context.stroke(path, with: .color(nm == ring ? colorRingBright : colorRing.opacity(major ? 1 : 0.55)),
+                           lineWidth: nm == ring ? 1.5 : 1)
             // The label sits where the ring crosses the line from the radar
             // toward the middle of the view, so it is on screen whenever the
             // ring is; straight north of the radar when they coincide.
             let toward = d > 1 ? CGPoint(x: (cx - radar.x) / d, y: (cy - radar.y) / d) : CGPoint(x: 0, y: -1)
             let at = CGPoint(x: radar.x + toward.x * ringR + 6, y: radar.y + toward.y * ringR + 4)
-            if hypot(at.x - cx, at.y - cy) < r - 14 {
+            // no label on a ring too small to read one against (zoomed far out)
+            if ringR >= 24 && at.x > 4 && at.x < canvasSize.width - 30 && at.y > 4 && at.y < canvasSize.height - 16 {
                 context.draw(Text("\(Int(nm))nm").font(.system(size: 10 * uiScale, weight: .medium, design: .monospaced)).foregroundColor(labelColor),
                              at: at, anchor: .topLeading)
             }
         }
 
-        // the crosshair: north-south and east-west through the radar
-        let reach = ring * k
+        // the crosshair: north-south and east-west through the radar, out to its ring
+        let arm = ring * k
         var cross = Path()
-        cross.move(to: CGPoint(x: radar.x, y: radar.y - reach)); cross.addLine(to: CGPoint(x: radar.x, y: radar.y + reach))
-        cross.move(to: CGPoint(x: radar.x - reach, y: radar.y)); cross.addLine(to: CGPoint(x: radar.x + reach, y: radar.y))
+        cross.move(to: CGPoint(x: radar.x, y: radar.y - arm)); cross.addLine(to: CGPoint(x: radar.x, y: radar.y + arm))
+        cross.move(to: CGPoint(x: radar.x - arm, y: radar.y)); cross.addLine(to: CGPoint(x: radar.x + arm, y: radar.y))
         context.stroke(cross, with: .color(pal.crosshair), lineWidth: 1)
 
         var dot = Path()
@@ -169,15 +170,16 @@ struct RadarView: View {
         context.fill(dot, with: .color(colorSweep))
     }
 
-    /// N, S, E, W stay at the edge of the view: they say which way is which,
-    /// not where anything is.
-    private func drawCompass(_ context: inout GraphicsContext, cx: CGFloat, cy: CGFloat, r: CGFloat) {
+    /// N, S, E, W stay at the edges of the screen: they say which way is
+    /// which, not where anything is.
+    private func drawCompass(_ context: inout GraphicsContext, canvasSize: CGSize) {
         let compassColor = pal.compass
         let compassFont = Font.system(size: 13 * uiScale, weight: .semibold)
-        context.draw(Text("N").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: cx, y: cy - r + 16), anchor: .center)
-        context.draw(Text("S").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: cx, y: cy + r - 10), anchor: .center)
-        context.draw(Text("E").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: cx + r - 12, y: cy + 5), anchor: .center)
-        context.draw(Text("W").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: cx - r + 12, y: cy + 5), anchor: .center)
+        let w = canvasSize.width, h = canvasSize.height
+        context.draw(Text("N").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: w / 2, y: 14), anchor: .center)
+        context.draw(Text("S").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: w / 2, y: h - 14), anchor: .center)
+        context.draw(Text("E").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: w - 12, y: h / 2), anchor: .center)
+        context.draw(Text("W").font(compassFont).foregroundColor(compassColor), at: CGPoint(x: 12, y: h / 2), anchor: .center)
     }
 
     // MARK: - Sweep
@@ -206,35 +208,46 @@ struct RadarView: View {
         }
     }
 
-    // MARK: - Planes, labels, leader lines
+    // MARK: - Planes, trails, labels, leader lines
 
-    private func drawPlanes(_ context: inout GraphicsContext, cx: CGFloat, cy: CGFloat, r: CGFloat, canvasSize: CGSize, dt: Double) {
+    /// A ground position on the screen, on the view's flat map.
+    private func point(_ c: Coordinate, cx: CGFloat, cy: CGFloat, k: CGFloat) -> CGPoint {
+        let o = Geo.localOffset(of: c, from: viewModel.viewCentre)
+        return CGPoint(x: cx + CGFloat(o.east) * k, y: cy - CGFloat(o.north) * k)
+    }
+
+    private func drawPlanes(_ context: inout GraphicsContext, cx: CGFloat, cy: CGFloat, k: CGFloat, canvasSize: CGSize, dt: Double, now: Date) {
         let alpha = 1 - exp(-dt / smoothTau)
         let springAlpha = 1 - exp(-dt / labelSpringTau)
-        let c = viewModel.viewCentre
-        let inRange = viewModel.planes.values.filter { viewModel.distanceFromCentre($0) <= viewModel.rangeNm * 1.05 }
+        let margin: CGFloat = 80
+        let onScreen = CGRect(x: -margin, y: -margin, width: canvasSize.width + 2 * margin, height: canvasSize.height + 2 * margin)
 
-        // pass 1: motion + blips
-        for p in inRange {
+        // pass 1: motion, then where each is on the screen
+        var inView: [PlaneState] = []
+        for p in viewModel.allPlanes {
             p.bearing += Geo.bearingDelta(from: p.bearing, to: p.targetBearing) * alpha
             p.range += (p.targetRange - p.range) * alpha
+            if let la = p.lat, let lo = p.lon {
+                p.dispLat = (p.dispLat ?? la) + (la - (p.dispLat ?? la)) * alpha
+                p.dispLon = (p.dispLon ?? lo) + (lo - (p.dispLon ?? lo)) * alpha
+            }
             p.color = PlaneState.altColor(p.alt)
-
-            // Placed relative to the view's centre -- the radar, or a followed
-            // aircraft -- at the view's zoom (roadmap 2.9).
-            let o = RadarViewModel.offset(p)
-            p.anchorX = cx + CGFloat((o.east - c.east) / viewModel.rangeNm) * r
-            p.anchorY = cy - CGFloat((o.north - c.north) / viewModel.rangeNm) * r
-
-            drawBlip(&context, p: p)
+            guard let c = p.displayCoordinate else { p.labelX = nil; p.labelY = nil; continue }
+            let at = point(c, cx: cx, cy: cy, k: k)
+            p.anchorX = at.x
+            p.anchorY = at.y
+            if onScreen.contains(at) { inView.append(p) } else { p.labelX = nil; p.labelY = nil }
         }
 
-        let inView = inRange.filter { viewModel.distanceFromCentre($0) <= viewModel.rangeNm }
+        // trails under everything else, then the blips
+        for p in inView { drawTrail(&context, p: p, cx: cx, cy: cy, k: k, now: now) }
+        for p in inView { drawBlip(&context, p: p) }
+
         // This phone, when the owner has asked to be shown.
         if let m = viewModel.meOffset {
-            let mx = cx + CGFloat((m.east - c.east) / viewModel.rangeNm) * r
-            let my = cy - CGFloat((m.north - c.north) / viewModel.rangeNm) * r
-            if hypot(mx - cx, my - cy) <= r {
+            let mx = cx + CGFloat(m.east) * k
+            let my = cy - CGFloat(m.north) * k
+            if onScreen.contains(CGPoint(x: mx, y: my)) {
                 let dot = Path(ellipseIn: CGRect(x: mx - 6, y: my - 6, width: 12, height: 12))
                 context.fill(dot, with: .color(Color(hex: "#3b82f6")))
                 context.stroke(dot, with: .color(.white), lineWidth: 2)
@@ -244,10 +257,10 @@ struct RadarView: View {
             }
         }
         // When the view is centred elsewhere, mark where the radar is.
-        if c.east != 0 || c.north != 0 {
-            let rx = cx - CGFloat(c.east / viewModel.rangeNm) * r
-            let ry = cy + CGFloat(c.north / viewModel.rangeNm) * r
-            if hypot(rx - cx, ry - cy) <= r {
+        if let ro = viewModel.radarOffset, ro.east != 0 || ro.north != 0 {
+            let rx = cx + CGFloat(ro.east) * k
+            let ry = cy - CGFloat(ro.north) * k
+            if onScreen.contains(CGPoint(x: rx, y: ry)) {
                 let mark = Path(ellipseIn: CGRect(x: rx - 5, y: ry - 5, width: 10, height: 10))
                 context.stroke(mark, with: .color(colorSweep), lineWidth: 1.5)
             }
@@ -256,9 +269,11 @@ struct RadarView: View {
         // Aircraft on the ground keep their blip but not a label, unless
         // tapped or followed: near a busy airport (Atlanta, in the app's
         // around-me mode) dozens of parked and taxiing aircraft piled their
-        // labels into a column over the airfield.
+        // labels into a column over the airfield. Zoomed far out, labels
+        // would cover the map: only the tapped one then.
         let keep: (PlaneState) -> Bool = { $0.hex == viewModel.selectedHex || $0.hex == viewModel.followHex }
-        let visible = viewModel.labelMode == .off
+        let crowded = viewModel.rangeNm > viewModel.ringNm * 4
+        let visible = (viewModel.labelMode == .off || crowded)
             ? inView.filter(keep)
             : inView.filter { $0.alt != .ground || keep($0) }
         for p in inView where !visible.contains(where: { $0 === p }) {
@@ -336,6 +351,34 @@ struct RadarView: View {
         }
     }
 
+    /// Where it has been (#58): a line through its reported positions,
+    /// dimming with age, and one live segment from the last report to the
+    /// blip, which is never stored. Dashed for the network's aircraft, as on
+    /// the kiosk.
+    private func drawTrail(_ context: inout GraphicsContext, p: PlaneState, cx: CGFloat, cy: CGFloat, k: CGFloat, now: Date) {
+        let fixes = p.history
+        guard let last = fixes.last else { return }
+        let style = StrokeStyle(lineWidth: p.isNetwork ? 1.6 : 2, lineCap: .round, lineJoin: .round,
+                                dash: p.isNetwork ? [5, 4] : [])
+        let base = p.isNetwork ? 0.75 : 0.9
+        if fixes.count >= 2 {
+            var from = point(Coordinate(lat: fixes[0].lat, lon: fixes[0].lon), cx: cx, cy: cy, k: k)
+            for f in fixes.dropFirst() {
+                let to = point(Coordinate(lat: f.lat, lon: f.lon), cx: cx, cy: cy, k: k)
+                let age = now.timeIntervalSince(f.at)
+                let a = max(trailFloor, 1 - age / trailFade) * base
+                var seg = Path()
+                seg.move(to: from); seg.addLine(to: to)
+                context.stroke(seg, with: .color(p.color.opacity(a)), style: style)
+                from = to
+            }
+        }
+        var live = Path()
+        live.move(to: point(Coordinate(lat: last.lat, lon: last.lon), cx: cx, cy: cy, k: k))
+        live.addLine(to: CGPoint(x: p.anchorX, y: p.anchorY))
+        context.stroke(live, with: .color(p.color.opacity(base)), style: style)
+    }
+
     private func drawBlip(_ context: inout GraphicsContext, p: PlaneState) {
         if p.hex == viewModel.selectedHex {
             let r = 16 * uiScale
@@ -349,15 +392,21 @@ struct RadarView: View {
         tri.addLine(to: CGPoint(x: -6, y: 7))
         tri.closeSubpath()
 
+        // Zoomed out past the ring, blips shrink (to half) so a region's
+        // traffic reads as dots rather than a pile of arrowheads.
+        let zoomScale = min(1, max(0.5, viewModel.ringNm * 3 / viewModel.rangeNm))
         context.drawLayer { ctx in
             ctx.translateBy(x: p.anchorX, y: p.anchorY)
             ctx.rotate(by: .radians(p.hdg * .pi / 180))
-            ctx.scaleBy(x: uiScale, y: uiScale)
+            ctx.scaleBy(x: uiScale * zoomScale, y: uiScale * zoomScale)
             if p.isNetwork {
-                // Reported by a public network, not heard by this radar: hollow
-                // and dimmed, as on the kiosk, so a glance always tells "my
-                // radar heard this" from "the network says it's there".
-                ctx.stroke(tri, with: .color(p.color.opacity(0.55)), lineWidth: 1.2)
+                // Reported by a public network, not heard by this radar: the
+                // same shape, half filled, with a solid outline and a glow, so
+                // it reads on a phone in daylight (#57) and still tells "the
+                // network says it's there" from "my radar heard this".
+                ctx.addFilter(.shadow(color: p.color.opacity(0.8), radius: 5))
+                ctx.fill(tri, with: .color(p.color.opacity(0.45)))
+                ctx.stroke(tri, with: .color(p.color), lineWidth: 1.8)
             } else {
                 ctx.addFilter(.shadow(color: p.color, radius: 6))
                 ctx.fill(tri, with: .color(p.color))
@@ -432,7 +481,7 @@ struct RadarView: View {
         let metrics = measure(content, context: context)
         let rect = CGRect(origin: origin, size: metrics.size)
 
-        var bg = Path(roundedRect: rect, cornerRadius: 3)
+        let bg = Path(roundedRect: rect, cornerRadius: 3)
         context.fill(bg, with: .color(pal.panel))
         context.stroke(bg, with: .color(pal.text.opacity(0.08)), lineWidth: 1)
 

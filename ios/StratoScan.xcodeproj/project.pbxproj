@@ -39,6 +39,7 @@
 		79DAF8AF86627ED0E3F72CE9 /* PairingScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16423ED1D400C0B2A45C2002 /* PairingScannerView.swift */; };
 		7A0AFB71E8F03D2A97F71761 /* PhoneLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C1C328F0DCD1520DDBD41B1 /* PhoneLocation.swift */; };
 		7A2CB4FEAA2BC9D2F9992AFA /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38770332E10714A40F125D1E /* DemoFeed.swift */; };
+		7AF06078206BCBE5A9C90481 /* NetworkFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = A576CEA30DD8149E5883D1B4 /* NetworkFeed.swift */; };
 		8163E5CF4DB902A926F17993 /* CompassView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DB756F4C0E00A8B80A67B26 /* CompassView.swift */; };
 		8290B2A5BA9ACC02396DF0FC /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6905BC6DA1BAE8FB5B82B7D3 /* Geo.swift */; };
 		8948A1447A82D1623E73DB0C /* ApproachActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF1D0E823BF135A626E31C8 /* ApproachActivity.swift */; };
@@ -73,6 +74,7 @@
 		D0419AF3AAF3B967830979F9 /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6905BC6DA1BAE8FB5B82B7D3 /* Geo.swift */; };
 		D257E4B524CEA75F7CE1B7A8 /* RadarSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A87888DC767A33BAAF2D5B9D /* RadarSetupView.swift */; };
 		D345098C577D7EA4D3147B31 /* ApproachReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65A687C4494E483CEDA48297 /* ApproachReporter.swift */; };
+		D679323A58232150307D4D11 /* NetworkFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = A576CEA30DD8149E5883D1B4 /* NetworkFeed.swift */; };
 		D9A2808D0FA7914B9A661B29 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C25B99A1198C2E5787B7C62D /* PrivacyInfo.xcprivacy */; };
 		E32113C4072A45050B7E1A9D /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A098FF92E33AB26325CE095F /* APIConfig.swift */; };
 		E991F05E5706064DAC15410A /* ApproachLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226B03BD18336D799EBAFA4C /* ApproachLiveActivity.swift */; };
@@ -187,6 +189,7 @@
 		A0964DFC845B4F543036F97B /* Sun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sun.swift; sourceTree = "<group>"; };
 		A098FF92E33AB26325CE095F /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
 		A553C39663C267646A4ED80A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A576CEA30DD8149E5883D1B4 /* NetworkFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkFeed.swift; sourceTree = "<group>"; };
 		A7A11D6B5D603001781251E7 /* RadarSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarSetup.swift; sourceTree = "<group>"; };
 		A8074B62F31F78059673C06A /* StratoScanWatchWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StratoScanWatchWidget.swift; sourceTree = "<group>"; };
 		A87888DC767A33BAAF2D5B9D /* RadarSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarSetupView.swift; sourceTree = "<group>"; };
@@ -312,6 +315,7 @@
 				38770332E10714A40F125D1E /* DemoFeed.swift */,
 				6905BC6DA1BAE8FB5B82B7D3 /* Geo.swift */,
 				BA2499CEE4298B39243830CF /* LocationBox.swift */,
+				A576CEA30DD8149E5883D1B4 /* NetworkFeed.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -607,6 +611,7 @@
 				63AC7D46EBF48380FE2450BB /* DemoFeed.swift in Sources */,
 				D0419AF3AAF3B967830979F9 /* Geo.swift in Sources */,
 				A865B45D14C1BC24C305ACE0 /* LocationBox.swift in Sources */,
+				D679323A58232150307D4D11 /* NetworkFeed.swift in Sources */,
 				1FF8E6AF970A64DBEEDDACDC /* StratoScanWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -648,6 +653,7 @@
 				9C38DCC3E87DA7DEE9B6FEE5 /* LocationBox.swift in Sources */,
 				9D8617F4429628CE7056BFCF /* LogbookView.swift in Sources */,
 				EEE12213C8DA5F899E964ADD /* MapBackgroundView.swift in Sources */,
+				7AF06078206BCBE5A9C90481 /* NetworkFeed.swift in Sources */,
 				51BC9F7EDC0A1405433EAD10 /* NormalizedAircraft.swift in Sources */,
 				6092AB4BC94415EAB9DEF3CF /* PairedRadarsSection.swift in Sources */,
 				79DAF8AF86627ED0E3F72CE9 /* PairingScannerView.swift in Sources */,

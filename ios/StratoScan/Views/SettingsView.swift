@@ -8,7 +8,6 @@ struct SettingsView: View {
     @State private var scanning = false
     @State private var baseURL: String = APIConfig.baseURL
     @State private var awayURL: String = APIConfig.awayURL ?? ""
-    @State private var showNetwork: Bool = AircraftFeedClient.showNetwork
 
     var body: some View {
         NavigationView {
@@ -42,22 +41,26 @@ struct SettingsView: View {
                 } header: {
                     Text("Radar view")
                 } footer: {
-                    Text("The app uses the home address on your WiFi and switches to the away address, the radar's public HTTPS page, when you leave. The away address is filled in automatically when the radar has one: turn on its public page in the radar's setup under Remote access. Alerts don't depend on either; they arrive wherever you are.")
+                    Text("The app reads your radar at its home address on your WiFi, and through its public HTTPS page (the away address) from anywhere else. The away address is filled in by itself when the radar has one: turn on its public page in the radar's setup under Remote access. Alerts don't depend on either; they arrive wherever you are.")
                 }
 
                 Section {
-                    Toggle("Show aircraft the radar didn't hear", isOn: $showNetwork)
-                } footer: {
-                    Text("Adds aircraft a public ADS-B network (adsb.lol) reports near the radar that its own antenna missed, drawn hollow, as on the radar's screen. The radar fetches them once for everyone; turning this off stops the app asking.")
-                }
-
-                Section {
-                    Toggle("Aircraft around me (no radar)", isOn: Binding(get: { viewModel.aroundMe }, set: { viewModel.setAroundMe($0) }))
-                    Toggle("Demo mode", isOn: Binding(get: { viewModel.isDemo }, set: { viewModel.setDemo($0) }))
+                    Toggle(isOn: $viewModel.networkOn) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Aircraft from the public network")
+                            Text("adsb.lol, the same network your radar feeds").font(.caption).foregroundColor(.secondary)
+                        }
+                    }
                 } header: {
-                    Text("Without a radar")
+                    Text("Public network")
                 } footer: {
-                    Text("Aircraft around me shows live traffic around your phone from the public adsb.lol network, centred on you; to ask for it the app sends adsb.lol your location rounded to about 5 km. Alerts and the logbook need a StratoScan radar. Demo mode plays a few minutes of traffic recorded near RDU airport.")
+                    Text("One switch for everything the network adds. At home it fills in the aircraft your radar didn't hear, drawn half-filled with an outline so you can tell them from the ones it heard. Away from your radar, beyond its 20 nm, or with no radar at all, the view centres on you and shows the aircraft around you; the centre button switches between that and your radar's view. Pan the map anywhere and it shows the network's aircraft there, within 250 nm of the middle. To ask for aircraft around a place the app sends adsb.lol that place rounded to about 5 km — when that place is you, that is the only thing about you that leaves the phone. Alerts and the logbook come from your radar only.")
+                }
+
+                Section {
+                    Toggle("Demo mode", isOn: Binding(get: { viewModel.isDemo }, set: { viewModel.setDemo($0) }))
+                } footer: {
+                    Text("Plays a few minutes of traffic recorded near RDU airport, with no radar and no network.")
                 }
 
                 Section {
@@ -66,9 +69,6 @@ struct SettingsView: View {
             }
             // Saved however the sheet closes, Done or a swipe down.
             .onDisappear { save() }
-            // Saved as it's switched: a didSet on @State doesn't fire for a
-            // binding write, so it would never have been stored.
-            .onChange(of: showNetwork) { _, on in AircraftFeedClient.showNetwork = on }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
