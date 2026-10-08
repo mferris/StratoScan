@@ -13,15 +13,21 @@
 		07FB259DD074F78D5709D652 /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B370E5F234924A16BBBDC64A /* AircraftFeedClient.swift */; };
 		082D9B8EE5A2DBD1AF83C302 /* Aircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3168F8ECFCB9B5FB84C6F1C /* Aircraft.swift */; };
 		0A00B4CC7833445AB4195D23 /* PairingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1090E20A438B07C7EEB72156 /* PairingStore.swift */; };
+		0A6C8C41AB4DF1DBEAD55557 /* AirlineTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AEF2FBD702F1FB6A9136E8E /* AirlineTable.swift */; };
 		0B4CA60C0DA28F8ADA2393D0 /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B370E5F234924A16BBBDC64A /* AircraftFeedClient.swift */; };
 		12ACD563BAEC7EDED74E198B /* RadarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABB3E03019CAE33D8C8A990F /* RadarViewModel.swift */; };
 		1485C468E4F8E97DD13A9225 /* RadarSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A11D6B5D603001781251E7 /* RadarSetup.swift */; };
 		1FF8E6AF970A64DBEEDDACDC /* StratoScanWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E12CD0D546205422368A65C2 /* StratoScanWidget.swift */; };
+		20C8D825AE7493A46474525E /* AirlineLogos.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD92F606AFE2E18D2B0D041D /* AirlineLogos.swift */; };
 		2474402DE9D6E2A16B4EAA8A /* CreditsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E132796E2082CED29DB7C80 /* CreditsView.swift */; };
 		254629EDA76970D90591B0F6 /* RelayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC414D1F7C9C0668085FEC8E /* RelayClient.swift */; };
 		269215079BA3DDE12C6390FD /* StratoScanWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 83ECDAD1503BA5D0F233B26F /* StratoScanWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2884F43464F114112C0E9493 /* StratoScanNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8DA0A8BFA722DACA5B307874 /* StratoScanNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2AC5C03DF6FFAA7D3D45F7F3 /* RadarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6255B3721DFF53AE0C8D17E0 /* RadarView.swift */; };
 		2BBE19EA046C6ED4E76A20E2 /* RunwayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BDF545DE5A8F64037D0FADF /* RunwayClient.swift */; };
+		332F9A16CC2FC68ED5987B5B /* AirlineLogos.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD92F606AFE2E18D2B0D041D /* AirlineLogos.swift */; };
+		3A992A4171A2BB6C8A4467EA /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6905BC6DA1BAE8FB5B82B7D3 /* Geo.swift */; };
+		4254C2DF93644335510D3F84 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109B2506F56C929129666781 /* BrandMark.swift */; };
 		4278F89C062ADF951F0EE9C9 /* WatchRadarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF585A4164DCE73E0A7A5475 /* WatchRadarView.swift */; };
 		44C9B21484D7E4D4A59127C9 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5A58D8D8AD0F833A42227072 /* PrivacyInfo.xcprivacy */; };
 		47FCACC5697D001C68FA372B /* StratoScanWatchWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8074B62F31F78059673C06A /* StratoScanWatchWidget.swift */; };
@@ -41,9 +47,11 @@
 		7A2CB4FEAA2BC9D2F9992AFA /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38770332E10714A40F125D1E /* DemoFeed.swift */; };
 		7AF06078206BCBE5A9C90481 /* NetworkFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = A576CEA30DD8149E5883D1B4 /* NetworkFeed.swift */; };
 		8163E5CF4DB902A926F17993 /* CompassView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DB756F4C0E00A8B80A67B26 /* CompassView.swift */; };
+		817AB2CF37034BB40C9D2CF7 /* AirlineTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AEF2FBD702F1FB6A9136E8E /* AirlineTable.swift */; };
 		8290B2A5BA9ACC02396DF0FC /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6905BC6DA1BAE8FB5B82B7D3 /* Geo.swift */; };
 		8948A1447A82D1623E73DB0C /* ApproachActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF1D0E823BF135A626E31C8 /* ApproachActivity.swift */; };
 		8B01D4AA265CB5CA77E45406 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109B2506F56C929129666781 /* BrandMark.swift */; };
+		8CAF6B2B7F106DB063A3F146 /* Aircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3168F8ECFCB9B5FB84C6F1C /* Aircraft.swift */; };
 		8DE093837B6BAFBD028C1A71 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 532F388099584CEEA9C0299C /* ContentView.swift */; };
 		8E980A9CB02E30870DC736B2 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A098FF92E33AB26325CE095F /* APIConfig.swift */; };
 		900841E56DF063DA67A32AD1 /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B370E5F234924A16BBBDC64A /* AircraftFeedClient.swift */; };
@@ -55,6 +63,7 @@
 		9C38DCC3E87DA7DEE9B6FEE5 /* LocationBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA2499CEE4298B39243830CF /* LocationBox.swift */; };
 		9D28618B790C89D689CDB833 /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38770332E10714A40F125D1E /* DemoFeed.swift */; };
 		9D8617F4429628CE7056BFCF /* LogbookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53FCE9789DB353F57B791A7D /* LogbookView.swift */; };
+		9EC8B9A9BC6A5CD9C49ECFE5 /* DemoFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38770332E10714A40F125D1E /* DemoFeed.swift */; };
 		A205F038BF4FEF76E68F41EC /* Aircraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3168F8ECFCB9B5FB84C6F1C /* Aircraft.swift */; };
 		A22853673B0998017B521C54 /* RelayIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E534C32F3ECBB21182EE4C9 /* RelayIdentity.swift */; };
 		A77D7956DFCBA6DF7ACA8167 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D90A7E250CDF5539119800EB /* SettingsView.swift */; };
@@ -66,26 +75,34 @@
 		AC7C947B6D6394C222DF245A /* AircraftTypeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60AF4100439FB20D72664EA /* AircraftTypeClient.swift */; };
 		ADF6ACF09F206C0FB2DA91D2 /* RouteLookupClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B58ED1F8B15582C0D6DADA1D /* RouteLookupClient.swift */; };
 		AE3FE7C128BDE20BBE7D56E9 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A098FF92E33AB26325CE095F /* APIConfig.swift */; };
-		B43AF3544195FC6FF4B0618A /* AirlineTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CA19781C6E4154AF1F3FC71 /* AirlineTable.swift */; };
 		BB4508356F7CF032D1549B89 /* demo-traffic.json in Resources */ = {isa = PBXBuildFile; fileRef = ADFE70925019421DA58CD9F3 /* demo-traffic.json */; };
 		BC2C37BC0301F0E59E658902 /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6905BC6DA1BAE8FB5B82B7D3 /* Geo.swift */; };
 		C21AC1382A485A5E79CCDDB3 /* WatchSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4000B97716592BC2F6C0F46E /* WatchSync.swift */; };
+		C9A41294E0070DF5F7DF4153 /* AirlineTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AEF2FBD702F1FB6A9136E8E /* AirlineTable.swift */; };
 		CFDA24419A4CB93DCDD32CB4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 808B86321C24DFDE215A7F10 /* Assets.xcassets */; };
 		D0419AF3AAF3B967830979F9 /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6905BC6DA1BAE8FB5B82B7D3 /* Geo.swift */; };
 		D257E4B524CEA75F7CE1B7A8 /* RadarSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A87888DC767A33BAAF2D5B9D /* RadarSetupView.swift */; };
 		D345098C577D7EA4D3147B31 /* ApproachReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65A687C4494E483CEDA48297 /* ApproachReporter.swift */; };
 		D679323A58232150307D4D11 /* NetworkFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = A576CEA30DD8149E5883D1B4 /* NetworkFeed.swift */; };
+		D7B12E42E96B13FE5E97E333 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27835EEC2F101125FFDA7EEA /* NotificationService.swift */; };
 		D9A2808D0FA7914B9A661B29 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C25B99A1198C2E5787B7C62D /* PrivacyInfo.xcprivacy */; };
+		E190B6C439D8CDE0C7DFB766 /* NetworkFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = A576CEA30DD8149E5883D1B4 /* NetworkFeed.swift */; };
 		E32113C4072A45050B7E1A9D /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A098FF92E33AB26325CE095F /* APIConfig.swift */; };
+		E4F424AAEDD0569C0495189A /* demo-traffic.json in Resources */ = {isa = PBXBuildFile; fileRef = ADFE70925019421DA58CD9F3 /* demo-traffic.json */; };
 		E991F05E5706064DAC15410A /* ApproachLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226B03BD18336D799EBAFA4C /* ApproachLiveActivity.swift */; };
 		EAA2B527983849ACFD037927 /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16A31ACA7FCC70909950AEF1 /* Palette.swift */; };
 		EB944A79D57325EBF257552D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 80C9E605F666B8E6F21F9B09 /* Assets.xcassets */; };
 		ECEC184F87581901614EA200 /* demo-traffic.json in Resources */ = {isa = PBXBuildFile; fileRef = ADFE70925019421DA58CD9F3 /* demo-traffic.json */; };
 		EEE12213C8DA5F899E964ADD /* MapBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA3876EBB75F3DB2B38D2A4 /* MapBackgroundView.swift */; };
+		EF30B2F476FFFFAE03E658F5 /* AirlineLogos.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD92F606AFE2E18D2B0D041D /* AirlineLogos.swift */; };
+		F14EEBD43626C281A4908B6A /* LocationBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA2499CEE4298B39243830CF /* LocationBox.swift */; };
 		F441AEAF7530A7F39A3B8594 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BDFEB58F51F452F250E97B40 /* PrivacyInfo.xcprivacy */; };
+		F845C36E53A8D89469F3DF09 /* ApproachActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF1D0E823BF135A626E31C8 /* ApproachActivity.swift */; };
 		FA1F6E8BABAE41C1024B2895 /* ApproachActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF1D0E823BF135A626E31C8 /* ApproachActivity.swift */; };
 		FB75EE609F71C89FEBC67D14 /* SkyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBB03F1CD7B7A71905FF5419 /* SkyView.swift */; };
+		FB7AB38C2AE6D7474636A7CD /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A098FF92E33AB26325CE095F /* APIConfig.swift */; };
 		FBFA73F23B10FB7172058A19 /* StratoScanApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F2836A599D89EADA657F2A /* StratoScanApp.swift */; };
+		FEB5C90D895AF061295872C1 /* AircraftFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B370E5F234924A16BBBDC64A /* AircraftFeedClient.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -102,6 +119,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = D4BC17E64D7441F3E91AE5D0;
 			remoteInfo = StratoScanWidget;
+		};
+		CEA2A483832B80C12BBDEA03 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 777A226CE838DD7247974369 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CD6188FBDC801374E61DEB37;
+			remoteInfo = StratoScanNotificationService;
 		};
 		F9A628B3175812089B0FB3BE /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -120,6 +144,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				9671EC4BCB5338D5496B6481 /* StratoScanWidget.appex in Embed Foundation Extensions */,
+				2884F43464F114112C0E9493 /* StratoScanNotificationService.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -160,9 +185,11 @@
 		1BDF545DE5A8F64037D0FADF /* RunwayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunwayClient.swift; sourceTree = "<group>"; };
 		226B03BD18336D799EBAFA4C /* ApproachLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproachLiveActivity.swift; sourceTree = "<group>"; };
 		2564060ACA6BAF4F0D878F8C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		27835EEC2F101125FFDA7EEA /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		28FCD46FE2608CE9258051EE /* AircraftDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftDetailView.swift; sourceTree = "<group>"; };
 		36C13ABC4222195B01CDA33F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		38770332E10714A40F125D1E /* DemoFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoFeed.swift; sourceTree = "<group>"; };
+		3AEF2FBD702F1FB6A9136E8E /* AirlineTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirlineTable.swift; sourceTree = "<group>"; };
 		3DB756F4C0E00A8B80A67B26 /* CompassView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassView.swift; sourceTree = "<group>"; };
 		3EF932BDCEE76DC5575404AD /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
 		4000B97716592BC2F6C0F46E /* WatchSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSync.swift; sourceTree = "<group>"; };
@@ -182,10 +209,10 @@
 		80C9E605F666B8E6F21F9B09 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		83ECDAD1503BA5D0F233B26F /* StratoScanWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StratoScanWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		89A5F15F73E851E0090FE784 /* NormalizedAircraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NormalizedAircraft.swift; sourceTree = "<group>"; };
+		8DA0A8BFA722DACA5B307874 /* StratoScanNotificationService.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StratoScanNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8E132796E2082CED29DB7C80 /* CreditsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditsView.swift; sourceTree = "<group>"; };
 		92DD6C3B28E22E020AB8AF6C /* StratoScanWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StratoScanWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9B707CA4D90694E35915217F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		9CA19781C6E4154AF1F3FC71 /* AirlineTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirlineTable.swift; sourceTree = "<group>"; };
 		A0964DFC845B4F543036F97B /* Sun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sun.swift; sourceTree = "<group>"; };
 		A098FF92E33AB26325CE095F /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
 		A553C39663C267646A4ED80A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -196,9 +223,11 @@
 		ABB3E03019CAE33D8C8A990F /* RadarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarViewModel.swift; sourceTree = "<group>"; };
 		ABF1D0E823BF135A626E31C8 /* ApproachActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApproachActivity.swift; sourceTree = "<group>"; };
 		ADFE70925019421DA58CD9F3 /* demo-traffic.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "demo-traffic.json"; sourceTree = "<group>"; };
+		B35541D42F9E00B1B1A39885 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B370E5F234924A16BBBDC64A /* AircraftFeedClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftFeedClient.swift; sourceTree = "<group>"; };
 		B58ED1F8B15582C0D6DADA1D /* RouteLookupClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteLookupClient.swift; sourceTree = "<group>"; };
 		BA2499CEE4298B39243830CF /* LocationBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationBox.swift; sourceTree = "<group>"; };
+		BD92F606AFE2E18D2B0D041D /* AirlineLogos.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirlineLogos.swift; sourceTree = "<group>"; };
 		BDFEB58F51F452F250E97B40 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BF585A4164DCE73E0A7A5475 /* WatchRadarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRadarView.swift; sourceTree = "<group>"; };
 		C25B99A1198C2E5787B7C62D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -225,6 +254,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0C0C3B3306B2ACD4CD460EF9 /* StratoScanNotificationService */ = {
+			isa = PBXGroup;
+			children = (
+				B35541D42F9E00B1B1A39885 /* Info.plist */,
+				27835EEC2F101125FFDA7EEA /* NotificationService.swift */,
+			);
+			path = StratoScanNotificationService;
+			sourceTree = "<group>";
+		};
 		26EC111CA7C65B0CBF2D670E /* Theme */ = {
 			isa = PBXGroup;
 			children = (
@@ -286,7 +324,6 @@
 		52E825E725DB690EA3473E75 /* Models */ = {
 			isa = PBXGroup;
 			children = (
-				9CA19781C6E4154AF1F3FC71 /* AirlineTable.swift */,
 				89A5F15F73E851E0090FE784 /* NormalizedAircraft.swift */,
 				0E82595BD051F46CC02FFB13 /* PlaneState.swift */,
 			);
@@ -308,6 +345,8 @@
 			children = (
 				D3168F8ECFCB9B5FB84C6F1C /* Aircraft.swift */,
 				B370E5F234924A16BBBDC64A /* AircraftFeedClient.swift */,
+				BD92F606AFE2E18D2B0D041D /* AirlineLogos.swift */,
+				3AEF2FBD702F1FB6A9136E8E /* AirlineTable.swift */,
 				A098FF92E33AB26325CE095F /* APIConfig.swift */,
 				ABF1D0E823BF135A626E31C8 /* ApproachActivity.swift */,
 				109B2506F56C929129666781 /* BrandMark.swift */,
@@ -337,6 +376,7 @@
 			children = (
 				79BA6A110519C3ED45ABAFF3 /* Shared */,
 				EE2FEA98A094363DBD07BA4A /* StratoScan */,
+				0C0C3B3306B2ACD4CD460EF9 /* StratoScanNotificationService */,
 				368A1CC318FD55732F2C4EFB /* StratoScanWatch */,
 				68FF1D92A8CFAD2FDC9B9E9E /* StratoScanWatchWidget */,
 				7B0C8EB89006556879913A8A /* StratoScanWidget */,
@@ -364,6 +404,7 @@
 			isa = PBXGroup;
 			children = (
 				6609CC85BB3894A9CAD1F7C1 /* StratoScan.app */,
+				8DA0A8BFA722DACA5B307874 /* StratoScanNotificationService.appex */,
 				83ECDAD1503BA5D0F233B26F /* StratoScanWatch.app */,
 				4478D23E879A260BD2F0E435 /* StratoScanWatchWidget.appex */,
 				92DD6C3B28E22E020AB8AF6C /* StratoScanWidget.appex */,
@@ -456,6 +497,7 @@
 			);
 			dependencies = (
 				41628D158F9506324E55B23C /* PBXTargetDependency */,
+				099FDDA10BC22D52367F42D4 /* PBXTargetDependency */,
 				DCC4E80EB84A303FA29621E7 /* PBXTargetDependency */,
 			);
 			name = StratoScan;
@@ -485,6 +527,24 @@
 			productName = StratoScanWatch;
 			productReference = 83ECDAD1503BA5D0F233B26F /* StratoScanWatch.app */;
 			productType = "com.apple.product-type.application";
+		};
+		CD6188FBDC801374E61DEB37 /* StratoScanNotificationService */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D51FCC10CC74F10EC065E57C /* Build configuration list for PBXNativeTarget "StratoScanNotificationService" */;
+			buildPhases = (
+				F578536162A01A147ADDFE07 /* Sources */,
+				E16E5875FBFD2B8C5479E49A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = StratoScanNotificationService;
+			packageProductDependencies = (
+			);
+			productName = StratoScanNotificationService;
+			productReference = 8DA0A8BFA722DACA5B307874 /* StratoScanNotificationService.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		D4BC17E64D7441F3E91AE5D0 /* StratoScanWidget */ = {
 			isa = PBXNativeTarget;
@@ -525,6 +585,10 @@
 						DevelopmentTeam = 76VUC2AMZH;
 						ProvisioningStyle = Automatic;
 					};
+					CD6188FBDC801374E61DEB37 = {
+						DevelopmentTeam = 76VUC2AMZH;
+						ProvisioningStyle = Automatic;
+					};
 					D4BC17E64D7441F3E91AE5D0 = {
 						DevelopmentTeam = 76VUC2AMZH;
 						ProvisioningStyle = Automatic;
@@ -550,6 +614,7 @@
 			targets = (
 				46DEACFAAD6836D23AAE66B1 /* StratoScan */,
 				D4BC17E64D7441F3E91AE5D0 /* StratoScanWidget */,
+				CD6188FBDC801374E61DEB37 /* StratoScanNotificationService */,
 				6102AAE5BD45DE0990EDCDC4 /* StratoScanWatch */,
 				437B5EB92413B6288EF916B0 /* StratoScanWatchWidget */,
 			);
@@ -586,6 +651,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E16E5875FBFD2B8C5479E49A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E4F424AAEDD0569C0495189A /* demo-traffic.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E650FFA69161755E192F37C3 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -605,6 +678,8 @@
 				8E980A9CB02E30870DC736B2 /* APIConfig.swift in Sources */,
 				082D9B8EE5A2DBD1AF83C302 /* Aircraft.swift in Sources */,
 				53EBD2558D2C5D02179BC7E5 /* AircraftFeedClient.swift in Sources */,
+				20C8D825AE7493A46474525E /* AirlineLogos.swift in Sources */,
+				817AB2CF37034BB40C9D2CF7 /* AirlineTable.swift in Sources */,
 				8948A1447A82D1623E73DB0C /* ApproachActivity.swift in Sources */,
 				E991F05E5706064DAC15410A /* ApproachLiveActivity.swift in Sources */,
 				07B97BDF9DE64C127292A078 /* BrandMark.swift in Sources */,
@@ -640,7 +715,8 @@
 				9A2C7EE6CB5A08A865F1F12E /* AircraftDetailView.swift in Sources */,
 				0B4CA60C0DA28F8ADA2393D0 /* AircraftFeedClient.swift in Sources */,
 				AC7C947B6D6394C222DF245A /* AircraftTypeClient.swift in Sources */,
-				B43AF3544195FC6FF4B0618A /* AirlineTable.swift in Sources */,
+				332F9A16CC2FC68ED5987B5B /* AirlineLogos.swift in Sources */,
+				C9A41294E0070DF5F7DF4153 /* AirlineTable.swift in Sources */,
 				054A9969C0E62E8D66CD934E /* AlertsSection.swift in Sources */,
 				FA1F6E8BABAE41C1024B2895 /* ApproachActivity.swift in Sources */,
 				D345098C577D7EA4D3147B31 /* ApproachReporter.swift in Sources */,
@@ -691,9 +767,33 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F578536162A01A147ADDFE07 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FB7AB38C2AE6D7474636A7CD /* APIConfig.swift in Sources */,
+				8CAF6B2B7F106DB063A3F146 /* Aircraft.swift in Sources */,
+				FEB5C90D895AF061295872C1 /* AircraftFeedClient.swift in Sources */,
+				EF30B2F476FFFFAE03E658F5 /* AirlineLogos.swift in Sources */,
+				0A6C8C41AB4DF1DBEAD55557 /* AirlineTable.swift in Sources */,
+				F845C36E53A8D89469F3DF09 /* ApproachActivity.swift in Sources */,
+				4254C2DF93644335510D3F84 /* BrandMark.swift in Sources */,
+				9EC8B9A9BC6A5CD9C49ECFE5 /* DemoFeed.swift in Sources */,
+				3A992A4171A2BB6C8A4467EA /* Geo.swift in Sources */,
+				F14EEBD43626C281A4908B6A /* LocationBox.swift in Sources */,
+				E190B6C439D8CDE0C7DFB766 /* NetworkFeed.swift in Sources */,
+				D7B12E42E96B13FE5E97E333 /* NotificationService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		099FDDA10BC22D52367F42D4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CD6188FBDC801374E61DEB37 /* StratoScanNotificationService */;
+			targetProxy = CEA2A483832B80C12BBDEA03 /* PBXContainerItemProxy */;
+		};
 		27059A68C1D102EFCCF3184E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 437B5EB92413B6288EF916B0 /* StratoScanWatchWidget */;
@@ -906,6 +1006,27 @@
 			};
 			name = Release;
 		};
+		ACBA2D593019C6B8A29288A5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 76VUC2AMZH;
+				INFOPLIST_FILE = StratoScanNotificationService/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.NelsonIndustries.radome.notifications;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.10;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		B04ADA6D1064132D0F1A70D5 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -960,6 +1081,27 @@
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
+		};
+		BC298545C4515B5E3DA22C8D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 76VUC2AMZH;
+				INFOPLIST_FILE = StratoScanNotificationService/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.NelsonIndustries.radome.notifications;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.10;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
 		};
 		F504A0943C3F5349D9A3899A /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -1027,6 +1169,15 @@
 			buildConfigurations = (
 				5FB373553B97978A426A49D8 /* Debug */,
 				F63775317B8586BB34B6FA60 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D51FCC10CC74F10EC065E57C /* Build configuration list for PBXNativeTarget "StratoScanNotificationService" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BC298545C4515B5E3DA22C8D /* Debug */,
+				ACBA2D593019C6B8A29288A5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

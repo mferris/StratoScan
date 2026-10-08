@@ -108,8 +108,11 @@ export function notificationFor(event, unit) {
         sound: event.kind === 'emergency' ? 'default' : undefined,
         'thread-id': unit,
         'interruption-level': event.kind === 'emergency' ? 'time-sensitive' : 'active',
+        // The app's notification service extension attaches the airline's
+        // logo (#60), fetched on the phone from the airline's own site.
+        'mutable-content': 1,
       },
-      stratoscan: { unit, kind: event.kind, hex: event.hex },
+      stratoscan: { unit, kind: event.kind, hex: event.hex, flight: event.flight, operator: event.operator },
     },
   };
 }

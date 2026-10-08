@@ -107,14 +107,16 @@ centred on your exact position on the phone only. Turning the switch off
 stops all of it: the view then shows your radar's aircraft, and nothing
 beyond its ring.
 
-**Sky view away from home** (off unless you turn it on). When the phone is
-more than 3 nm from your radar, Sky view offers to show the aircraft around
-you instead. If you say yes, the app asks adsb.lol, a public ADS-B network,
-for the aircraft within 25 nm of your location **rounded to about 5 km**
-(0.05° of latitude and longitude), every 5 seconds while Sky view is open.
-adsb.lol sees that rounded location and your IP address, like any web
-request. Nothing else is sent, and a button in Sky view turns it off again.
-The camera picture in Sky view is never recorded or sent.
+**Airline logos** (since 2026-10-08). To show an airline's mark beside its
+name, the app (and the small extension that dresses an alert before it is
+shown) fetches that airline's own site icon the first time the airline is
+seen, through Google's favicon service (`google.com/s2/favicons`) with
+DuckDuckGo's as the fallback, and keeps it on the phone. The request names
+the airline's web domain and nothing else; those services see your IP
+address, like any web request. Logos are the airlines' trademarks and none
+is shipped in the app or the repository.
+
+**Sky view away from home** (with the public network on). When the phone is more than 3 nm from the radar, Sky view shows the aircraft around the phone from adsb.lol, asked for the same way as above: your location rounded to about 5 km, every 5 seconds while Sky view is open.
 
 ### Setting up a radar from the app
 
