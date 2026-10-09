@@ -10,7 +10,11 @@
 set -eu
 DIR=/etc/stratoscan/tls
 [ -s "$DIR/unit.pem" ] && exit 0
-install -d -m 0750 -o root -g www-data "$DIR"
+# The directory is open (0755): the setup server, which runs as its own user
+# and builds the QR link, must read unit.crt, or the link names no
+# certificate and the app quietly falls back to plain http (security
+# review 2026-10-09). The key, unit.pem, is what stays private (0640).
+install -d -m 0755 -o root -g www-data "$DIR"
 TMP=$(mktemp -d)
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 7300 \
   -subj "/CN=StratoScan radar" -addext "subjectAltName=DNS:stratoscan.local,IP:10.42.0.1" \

@@ -192,6 +192,9 @@ done
 install -d -m 0755 /etc/systemd/system/lighttpd.service.d
 install -m 0644 deploy/lighttpd-stratoscan-tls.conf /etc/systemd/system/lighttpd.service.d/stratoscan-tls.conf
 if live; then sh deploy/tls-cert.sh; fi
+# A unit built before 2026-10-09 has the directory closed (0750), which kept
+# the setup server from reading the certificate: open it, the key stays 0640.
+if [ -d /etc/stratoscan/tls ]; then chmod 0755 /etc/stratoscan/tls; fi
 # The watchdog is a long-running service since 2026-10-08; a unit installed
 # before that still has the timer, which must go so the two don't both run.
 if [ -e /etc/systemd/system/stratoscan-netwatchdog.timer ]; then

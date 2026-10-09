@@ -167,6 +167,13 @@ final class RadarSetup: ObservableObject {
         guard first.claimed != true else {
             return fail("This radar is already set up. To get its alerts, pair from its screen: Settings › Phone & Watch.")
         }
+        // A radar with a certificate is spoken to over https or not at all:
+        // a link that failed to name it (as the first cut's permissions made
+        // every link do, 2026-10-09) must not quietly send the passwords in
+        // the clear.
+        if l.fingerprint == nil && first.tls == true {
+            return fail("This radar expects a secure setup, but the code didn't name its certificate. Scan the code on its screen again.")
+        }
         unit = first.unit
         hostname = first.hostname
 
@@ -326,6 +333,8 @@ final class RadarSetup: ObservableObject {
         let name: String?
         let unit: String?
         let hostname: String?
+        /// The radar has a certificate for the setup flow (2026-10-09).
+        let tls: Bool?
     }
 
     /// Accepts the radar's own certificate and nothing else when the link

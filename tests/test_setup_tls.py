@@ -29,6 +29,7 @@ check("set -eu" in sh and '[ -s "$DIR/unit.pem" ] && exit 0' in sh, "tls-cert.sh
 check("openssl req -x509 -newkey ec" in sh and "-nodes" in sh and "-days 7300" in sh, "an EC key, no passphrase, long-lived")
 check('install -m 0640 -o root -g www-data "$TMP/unit.pem"' in sh and 'install -m 0644 "$TMP/crt.pem" "$DIR/unit.crt"' in sh,
       "the key is readable by lighttpd only; the certificate by all")
+check('install -d -m 0755 -o root -g www-data "$DIR"' in sh, "the directory is open, so the setup server (its own user) can reach the certificate")
 svc = (D / "stratoscan-tls-cert.service").read_text()
 check("ConditionPathExists=!/etc/stratoscan/tls/unit.pem" in svc and "Before=lighttpd.service" in svc, "the service runs once, before lighttpd")
 drop = (D / "lighttpd-stratoscan-tls.conf").read_text()
@@ -41,6 +42,7 @@ for needle in ("lighttpd-mod-openssl", "tls-cert.sh", "stratoscan-tls-cert.servi
     check(needle in inst, "the installer carries %s" % needle)
 check(inst.index("if live; then sh deploy/tls-cert.sh; fi") < inst.index("lighttpd -tt -f /etc/lighttpd/lighttpd.conf"),
       "on a live unit the certificate exists before lighttpd is checked and reloaded")
+check("chmod 0755 /etc/stratoscan/tls" in inst, "the installer opens the directory on a unit built before")
 check('"tls-cert.sh",' in (D / "ota.py").read_text(), "an update may carry tls-cert.sh")
 swift = (root / "ios" / "StratoScan" / "Setup" / "RadarSetup.swift").read_text()
 check("fingerprint" in swift and "SecTrustCopyCertificateChain" in swift and "cancelAuthenticationChallenge" in swift,
@@ -56,6 +58,21 @@ ss = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ss)
 link = ss.setup_link("ABCD-1234", {"active": True, "ssid": "StratoScan-Setup", "psk": "secretsecret", "address": "10.42.0.1"})
 check(link and "&f=" not in link, "no certificate, no f= in the link (older units keep http)")
+# A certificate that exists but can't be read is not the same as none: it is said out loud.
+import io, contextlib, stat as _stat
+closed = os.path.join(tmp, "closed"); os.makedirs(closed); open(os.path.join(closed, "unit.crt"), "w").write("x")
+os.chmod(closed, 0)
+ss.TLS_CERT = os.path.join(closed, "unit.crt")
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf):
+    fp_unreadable = ss.tls_fingerprint()
+os.chmod(closed, 0o755)
+if os.getuid() == 0:
+    print("skip the unreadable-certificate check needs an unprivileged user")
+else:
+    check(fp_unreadable is None and "exists but can't be used" in buf.getvalue() and "PermissionError" in buf.getvalue(),
+          "an unreadable certificate is reported, not passed off as none")
+ss.TLS_CERT = crt
 made = subprocess.run(["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes",
                        "-days", "2", "-subj", "/CN=test", "-keyout", os.path.join(tmp, "k.pem"), "-out", crt],
                       capture_output=True).returncode == 0

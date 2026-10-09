@@ -335,6 +335,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "claimed": bool(st.get("claimed")),
                 "steps": st.get("steps", {}),
                 "hasScreen": claim_code() is not None,
+                # This radar has a certificate for the setup flow: the app
+                # then refuses to go on over plain http, whatever the link
+                # said (the link must name it; security review 2026-10-09).
+                "tls": tls_fingerprint() is not None,
                 # The public (Funnel) address, if one is live: the phone app
                 # uses it away from home. Already public by definition, and
                 # this route is refused on the Funnel itself.
@@ -816,12 +820,28 @@ def dress_offer(offer):
 TLS_CERT = os.environ.get("STRATOSCAN_TLS_CERT", "/etc/stratoscan/tls/unit.crt")
 
 
+_tls_complained = {"at": 0.0}
+
+
 def tls_fingerprint():
-    """SHA-256 (hex) of this radar's certificate, or None without one."""
+    """SHA-256 (hex) of this radar's certificate, or None without one.
+
+    None ONLY when there is no certificate. A certificate that exists but
+    can't be read or parsed is said out loud (once a minute): the first cut
+    of this (2026-10-08) kept the directory closed to this service, the link
+    quietly named no certificate, and the app fell back to plain http with
+    nobody the wiser (security review 2026-10-09)."""
     try:
         with open(TLS_CERT) as f:
             return hashlib.sha256(ssl.PEM_cert_to_DER_cert(f.read())).hexdigest()
-    except (OSError, ValueError):
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as e:
+        now = time.time()
+        if now - _tls_complained["at"] > 60:
+            _tls_complained["at"] = now
+            print(f"setup: the certificate {TLS_CERT} exists but can't be used ({type(e).__name__}: {e}); "
+                  "the setup link will not name it and the app will use plain http", flush=True)
         return None
 
 
