@@ -317,6 +317,21 @@ if [ "${MANAGED:-0}" = "1" ]; then
   fi
 fi
 
+# Which rollout ring this unit is in (scripts/release.sh, ota.py): 0 the
+# maintainer's own radar, 1 family, 2 early adopters, 3 everyone. RING= sets
+# it; a unit without the file is in ring 3; a managed unit starts in ring 1.
+# Re-running the installer never moves a unit that already has a ring.
+echo "== rollout ring =="
+[ -d /etc/stratoscan ] || install -d -m 0755 /etc/stratoscan
+if [ -n "${RING:-}" ]; then
+  case "$RING" in 0|1|2|3) ;; *) echo "  FAIL: RING must be 0, 1, 2 or 3 (got '$RING')"; exit 1 ;; esac
+  printf '%s\n' "$RING" > /etc/stratoscan/ring
+elif [ ! -f /etc/stratoscan/ring ]; then
+  case "${MANAGED:-0}" in 1) echo 1 ;; *) echo 3 ;; esac > /etc/stratoscan/ring
+fi
+chmod 0644 /etc/stratoscan/ring
+echo "  ring $(cat /etc/stratoscan/ring)"
+
 # Real-time clock battery. Without one the clock is lost at every power cut
 # and stays wrong until NTP answers. The Pi 5 can trickle-charge a
 # RECHARGEABLE cell (ML-2020), but charging must never be enabled for an

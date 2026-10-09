@@ -231,7 +231,10 @@ def collect():
         "version": installed.get("version"),
         "serial": installed.get("serial"),
         "uptime_s": int(uptime),
-        "ota": {"state": ota.get("state")},
+        "ota": {"state": ota.get("state"),
+                # Why the latest release is not on this unit yet, when the
+                # rollout policy is holding it back (ota.py point 4).
+                "held": (ota.get("rollout") or {}).get("held")},
         "receiver": {
             "age_s": _age("/run/readsb/aircraft.json"),
             "aircraft": stats.get("aircraft_with_pos") if isinstance(stats, dict) else None,
@@ -245,10 +248,39 @@ def collect():
         "rtc": rtc_health(),
         "thermal": {"temp_c": round(int(temp) / 1000, 1) if temp and temp.isdigit() else None,
                     "throttled": throttled},
+        # get_throttled's "under-voltage has occurred" bit is since boot and
+        # never clears, so it cannot say whether the supply is still dipping.
+        # The kernel logs each dip; a day's count can (RDU: ~260 a day on the
+        # display's USB-C passthrough, 2026-10-09, issue #53).
+        "power": {"undervoltage_24h": undervoltage_24h()},
+        "ring": unit_ring(),
         "memory_mb": mem,
         "last_watchdog_reboot_age_s": _age("/var/lib/stratoscan-setup/last-watchdog-reboot"),
         **fleet_extras(),
     }
+
+
+def undervoltage_24h():
+    """How many times the kernel saw the 5 V rail dip in the last day, or
+    None when the journal cannot be read."""
+    try:
+        out = subprocess.run(
+            ["journalctl", "-k", "--since", "-24h", "--no-pager", "-o", "cat"],
+            capture_output=True, text=True, timeout=30)
+    except Exception:
+        return None
+    if out.returncode != 0:
+        return None
+    return sum(1 for line in out.stdout.splitlines() if "Undervoltage detected" in line)
+
+
+def unit_ring():
+    """The unit's rollout ring (ota.py), None when it has no ring file."""
+    try:
+        with open("/etc/stratoscan/ring") as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        return None
 
 
 def _local_json(url):
