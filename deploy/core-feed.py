@@ -45,6 +45,10 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import labels  # noqa: E402
+try:
+    import heartbeat  # noqa: E402   the unit key and the relay's address
+except Exception:                   # an image without it, or a test
+    heartbeat = None
 
 LISTEN = ("127.0.0.1", int(os.environ.get("STRATOSCAN_CORE_PORT", "8088")))
 AIRCRAFT_JSON = os.environ.get("STRATOSCAN_AIRCRAFT_JSON", "/run/readsb/aircraft.json")
@@ -53,6 +57,17 @@ NETWORK_URL = os.environ.get("STRATOSCAN_NETWORK_URL", "http://127.0.0.1:8087/ne
 ROUTE_API = os.environ.get("STRATOSCAN_ROUTE_API", "https://adsb.im/api/0/routeset")
 OWNER_API = os.environ.get("STRATOSCAN_OWNER_API", "https://api.adsbdb.com/v0/aircraft/{hex}")
 LOOKUPS = os.environ.get("STRATOSCAN_CORE_LOOKUPS", "1") != "0"   # tests switch them off
+# Routes and owners come through the relay's shared cache when this radar
+# reports to the relay at all (heartbeat.py: the owner's health-reports
+# switch): a callsign's route and an aircraft's owner are the same for
+# every radar, so the relay asks adsb.im and adsbdb once for all of them
+# (performance audit 2026-10-09). The relay answers in their own shapes.
+# Anything but an answer -- unreachable, not serving this unit, the
+# service refusing the relay -- and the feed asks them itself, which costs
+# them one question from this address, as before.
+RELAY = os.environ.get("STRATOSCAN_NET_RELAY", "1") != "0"
+RELAY_ROUTES_PATH = "/v1/net/routes"
+RELAY_OWNER_PATH = "/v1/net/owner/{hex}"
 USER_AGENT = "StratoScan/1.0 (+https://github.com/mferris/StratoScan; core feed)"
 
 RING_NM = 20            # what the radar draws; counts use it, as the kiosk's do
@@ -72,6 +87,15 @@ FIELDS = {"flight": "flight", "lat": "lat", "lon": "lon", "gs": "gs", "track": "
 
 def _now():
     return time.time()
+
+
+def relay_on():
+    if not RELAY or heartbeat is None:
+        return False
+    try:
+        return bool(heartbeat.relay_on())
+    except Exception:
+        return False
 
 
 class Cache(dict):
@@ -122,13 +146,22 @@ class Lookups:
             return
         body = json.dumps({"planes": [{"callsign": cs, "lat": lat, "lng": lon}
                                       for cs, (lat, lon) in batch]}).encode()
-        req = urllib.request.Request(ROUTE_API, data=body, method="POST",
-                                     headers={"Content-Type": "application/json", "User-Agent": USER_AGENT})
-        try:
-            with urllib.request.urlopen(req, timeout=10) as r:
-                routes = json.load(r)
-        except (OSError, ValueError):
-            return   # a hiccup: cache nothing, retry later (as the page did)
+        routes = None
+        if relay_on():
+            try:
+                status, raw = heartbeat.relay_fetch("POST", RELAY_ROUTES_PATH, body, timeout=10, limit=1 << 20)
+                if status == 200:
+                    routes = json.loads(raw.decode("utf-8", "replace"))
+            except (OSError, ValueError):
+                pass         # anything but an answer: ask adsb.im ourselves
+        if routes is None:
+            req = urllib.request.Request(ROUTE_API, data=body, method="POST",
+                                         headers={"Content-Type": "application/json", "User-Agent": USER_AGENT})
+            try:
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    routes = json.load(r)
+            except (OSError, ValueError):
+                return   # a hiccup: cache nothing, retry later (as the page did)
         if not isinstance(routes, list):
             routes = []
         found = {}
@@ -144,28 +177,45 @@ class Lookups:
                 self.routes.put(cs, found.get(cs))
                 self.route_queue.pop(cs, None)
 
+    @staticmethod
+    def _owner_result(d):
+        a = ((d if isinstance(d, dict) else {}).get("response") or {}).get("aircraft") or {}
+        owner = a.get("registered_owner")
+        return "found", ({"name": owner, "country": a.get("registered_owner_country_name")} if owner else None)
+
+    def _owner(self, hex_):
+        """adsbdb's registered owner of one aircraft, through the relay when
+        this radar reports to it, else from adsbdb: (state, result), the
+        state 'found', 'absent' (not in the registry: remember that) or
+        'failed' (ask again later)."""
+        if relay_on():
+            try:
+                status, raw = heartbeat.relay_fetch("GET", RELAY_OWNER_PATH.format(hex=hex_), timeout=8, limit=65536)
+                if status == 200:
+                    return self._owner_result(json.loads(raw.decode("utf-8", "replace")))
+                if status == 404:
+                    return "absent", None
+            except (OSError, ValueError):
+                pass                       # anything but an answer: ask adsbdb ourselves
+        req = urllib.request.Request(OWNER_API.format(hex=hex_), headers={"User-Agent": USER_AGENT})
+        try:
+            with urllib.request.urlopen(req, timeout=8) as r:
+                return self._owner_result(json.load(r))
+        except urllib.error.HTTPError as e:
+            return ("absent", None) if e.code == 404 else ("failed", None)
+        except (OSError, ValueError):
+            return "failed", None
+
     def _flush_owners(self):
         with self.lock:
             batch = list(self.owner_queue)[:10]
             self.owner_queue.difference_update(batch)
         for hex_ in batch:
-            req = urllib.request.Request(OWNER_API.format(hex=hex_), headers={"User-Agent": USER_AGENT})
-            try:
-                with urllib.request.urlopen(req, timeout=8) as r:
-                    a = (json.load(r).get("response") or {}).get("aircraft") or {}
-                owner = a.get("registered_owner")
-                result = {"name": owner, "country": a.get("registered_owner_country_name")} if owner else None
-            except urllib.error.HTTPError as e:
-                if e.code != 404:
-                    with self.lock:
-                        self.owner_failed[hex_] = _now()
-                    continue
-                result = None          # 404: not in the registry; remember that
-            except (OSError, ValueError):
-                with self.lock:
-                    self.owner_failed[hex_] = _now()
-                continue
+            state, result = self._owner(hex_)
             with self.lock:
+                if state == "failed":
+                    self.owner_failed[hex_] = _now()
+                    continue
                 self.owners.put(hex_, result)
                 self.owner_failed.pop(hex_, None)
 

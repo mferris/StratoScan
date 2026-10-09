@@ -11,6 +11,7 @@ import sys
 import tempfile
 
 os.environ["STATE_DIRECTORY"] = tempfile.mkdtemp()
+os.environ["STRATOSCAN_NET_RELAY"] = "0"      # the cases below ask adsb.lol directly; the relay's are at the end
 root = pathlib.Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location("nc", root / "deploy" / "network-compare.py")
 nc = importlib.util.module_from_spec(spec)
@@ -134,5 +135,127 @@ for _ in range(200):
     _t.sleep(0.05)
 check(len(asked) == 9 and not nc._tiles["fetching"], "the first worker alone asked its nine, then stopped")
 nc.get_json = fake_get_json
+
+# ---- the lattice, through the relay (performance audit 2026-10-09) ----------
+import json as _json
+# The unit and the relay must agree on the lattice to four decimals, or the
+# relay refuses the disc: these are relay/src/netcache.js's answers.
+for (lat, lon), want in [((35.8261, -78.7863), (34.8387, -77.6471)), ((51.5, -0.1), (52.2581, -4.7368)),
+                         ((-33.9, 151.2), (-34.8387, 148.2353)), ((89.9, 10), (87.0968, 45.0)),
+                         ((0, 0), (0.0, 2.9032)), ((40, -74), (40.6452, -76.5957))]:
+    check(nc.lattice_centre(lat, lon) == want, "lattice centre for %s is %s (the relay's)" % ((lat, lon), want))
+worst = 0
+for lat10 in range(-899, 900, 37):
+    for lon10 in range(-1800, 1800, 43):
+        c = nc.lattice_centre(lat10 / 10, lon10 / 10)
+        worst = max(worst, nc.haversine(lat10 / 10, lon10 / 10, c[0], c[1])[0])
+check(worst < nc.LATTICE_R_NM, "no point on Earth is farther than %.0f nm from its nearest centre" % worst)
+
+def covers(lat, lon, discs, reach):
+    for k in range(36):
+        b = math.radians(k * 10)
+        plat = lat + reach * math.cos(b) / 60
+        plon = lon + reach * math.sin(b) / (60 * math.cos(math.radians(lat)))
+        if min(nc.haversine(plat, plon, d[0], d[1])[0] for d in discs) > nc.LATTICE_R_NM:
+            return False
+    return True
+
+import math
+c = nc.lattice_centre(35.8, -78.8)
+d, reach = nc.plan_discs(c[0], c[1], 100, lattice=True)
+check(d == [(c[0], c[1], 250)] and reach == 130, "a view at a lattice centre: that one disc, reaching 130")
+d, reach = nc.plan_discs(35.8261, -78.7863, 100, lattice=False)
+check(d == [(35.8261, -78.7863, 130)] and reach == 130, "without the relay, a disc round the view as before")
+ok_all, counts = True, []
+for lat10 in range(-600, 601, 73):
+    for lon10 in range(-1800, 1800, 97):
+        for half in (30, 100, 300, 900):
+            d, reach = nc.plan_discs(lat10 / 10, lon10 / 10, half, lattice=True)
+            counts.append(len(d))
+            if not (1 <= len(d) <= nc.LATTICE_MAX_DISCS and reach >= 25 and covers(lat10 / 10, lon10 / 10, d, reach)):
+                ok_all = False
+            if half <= 190 and reach != int(max(25, min(250, half * 1.3))):
+                ok_all = False
+check(ok_all, "every view's discs cover its reach, and a view that fits one disc reaches as far as before (max %d discs)" % max(counts))
+d, reach = nc.plan_discs(35.8261, -78.7863, 900, lattice=True)
+check(len(d) == nc.LATTICE_MAX_DISCS and reach >= 300, "a continent-wide view: %d discs reaching %d nm" % (len(d), reach))
+
+class FakeRelay:
+    """Stands in for heartbeat.py: whether the relay is on, and its answers."""
+    on = True
+    asked = []               # (method, path)
+    answer = None            # (status, bytes), an exception to raise, a list of them in turn, or None for the sample
+    shared = []              # discs handed up
+    @staticmethod
+    def relay_on():
+        return FakeRelay.on
+    @staticmethod
+    def relay_fetch(method, path, body=None, timeout=0, limit=0):
+        FakeRelay.asked.append((method, path))
+        if method == "PUT":
+            FakeRelay.shared.append(_json.loads(body))
+            return 204, b""
+        a = FakeRelay.answer
+        if isinstance(a, list):
+            a = a.pop(0) if a else None
+        if isinstance(a, Exception):
+            raise a
+        return a if a else (200, _json.dumps(sample).encode())
+
+def reset():
+    nc._tiles["cache"].clear(); nc._tiles["discs"].clear(); nc._tiles["calls"] = []; nc._tiles["busy"].clear()
+    nc._tiles["fetching"] = False
+    FakeRelay.asked.clear(); FakeRelay.shared.clear(); asked.clear()
+
+nc.heartbeat = FakeRelay
+nc.RELAY = True
+nc.TILE_IN_THREAD = True; nc.TILE_RETRY_S = 0
+check(nc.relay_on() is True, "with reports on, the discs come through the relay")
+reset()
+out = nc.tiles_payload(c[0], c[1], 100, now=6000.0)
+check(FakeRelay.asked == [("GET", "/v1/net/disc/%s/%s" % (c[0], c[1]))] and not asked, "the one disc is asked of the relay, not adsb.lol")
+check(out is not None and out["via"] == "relay" and out["answered"] == 1 and out["pending"] == 0 and out["covered"] == 130,
+      "a single lattice disc is fetched before answering, like a disc round the view was")
+check([a["hex"] for a in out["ac"]] == ["a1b2c3", "abcdef"], "both aircraft are within 130 nm of the view")
+near = nc.tiles_payload(c[0], c[1], 25, now=6001.0)
+check(near["ac"] == [] and near["answered"] == 1 and len(FakeRelay.asked) == 1,
+      "a closer view of the same disc: nothing asked again, and aircraft beyond its reach are left out")
+reset()
+nc.TILE_IN_THREAD = False
+wide = nc.tiles_payload(35.8261, -78.7863, 900, now=7000.0)
+check(wide is not None and wide["discs"] == 16 and wide["answered"] == 16 and len(FakeRelay.asked) == 16 and not asked,
+      "a continent-wide view: sixteen lattice discs from the relay")
+check(all(p.count("/") == 5 and p.startswith("/v1/net/disc/") for _, p in FakeRelay.asked), "disc paths carry the centre only; the relay fixes the radius")
+# Not cached yet, and this unit's turn to fetch: adsb.lol itself, then the disc is handed up for the others.
+reset()
+FakeRelay.answer = (404, b'{"error":"not cached","fetch":true}')
+out = nc.tiles_payload(c[0], c[1], 100, now=8000.0)
+check(out is not None and len(asked) == 1 and asked[0][0].endswith("/v2/point/%s/%s/250" % (c[0], c[1])),
+      "'not cached, you fetch': the same lattice disc from adsb.lol directly")
+check([m for m, _ in FakeRelay.asked] == ["GET", "PUT"] and FakeRelay.shared == [sample], "and handed up to the relay, as adsb.lol gave it")
+# Another radar is fetching it: wait, ask again, and it is there.
+reset()
+nc.RELAY_WAIT_S = 0
+FakeRelay.answer = [(404, b'{"error":"not cached","fetching":true,"retry_after":2}'), None]
+out = nc.tiles_payload(c[0], c[1], 100, now=8100.0)
+check(out is not None and not asked and [m for m, _ in FakeRelay.asked] == ["GET", "GET"] and len(out["ac"]) == 2,
+      "'another radar is fetching it': waited, asked again, served from the relay, adsb.lol left alone")
+reset()
+FakeRelay.answer = [(404, b'{"fetching":true}'), (404, b'{"fetching":true}'), (404, b'{"fetching":true}')]
+out = nc.tiles_payload(c[0], c[1], 100, now=8200.0)
+check(out is not None and len(asked) == 1 and not FakeRelay.shared, "a lease that never delivers: adsb.lol itself after two waits, nothing handed up")
+# The relay will not serve this unit (reports only just turned on): adsb.lol itself, for the same lattice disc.
+reset()
+FakeRelay.answer = (403, b'{"error":"turn health reports on first"}')
+out = nc.tiles_payload(c[0], c[1], 100, now=9000.0)
+check(out is not None and len(asked) == 1 and not FakeRelay.shared, "403 from the relay: adsb.lol directly, nothing handed up")
+reset()
+FakeRelay.answer = _ue.URLError("no route to host")
+out = nc.tiles_payload(c[0], c[1], 100, now=10000.0)
+check(out is not None and len(asked) == 1 and out["via"] == "relay", "the relay unreachable: adsb.lol directly, the picture unchanged")
+FakeRelay.answer = None
+nc.RELAY = False
+check(nc.relay_on() is False, "STRATOSCAN_NET_RELAY=0 keeps everything direct whatever heartbeat says")
+nc.TILE_IN_THREAD = True
 print("network around checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)

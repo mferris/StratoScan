@@ -380,6 +380,44 @@ def _call(method, path, payload=None):
         return 0, {"error": f"Couldn't reach the StratoScan service ({type(e).__name__})."}
 
 
+# ---- the shared network cache (performance audit 2026-10-09) ---------------
+# network-compare.py and core-feed.py ask the relay for the network's
+# aircraft, routes and owners -- one fetch there serves every radar that
+# wants the same thing -- when this radar reports to it at all. The owner's
+# switch is the health-reports one: nothing goes to the relay without it,
+# and with it off the services ask adsb.lol, adsb.im and adsbdb themselves.
+
+def relay_on():
+    """Whether this radar talks to the relay: reports on, and a key to sign with."""
+    return bool(RELAY_URL) and enabled() and os.path.exists(KEY_PATH)
+
+
+def relay_fetch(method, path, body=None, timeout=TIMEOUT_S, limit=4 << 20):
+    """A signed request to the relay for a service that shares its cache.
+
+    Returns (status, bytes); the bytes are at most limit + 1 long, so a
+    caller can tell an answer that was too big. Raises OSError (urllib's
+    URLError is one) when the relay cannot be reached, so the caller can
+    ask the public service itself instead.
+    """
+    key = load_key(create=False)
+    if key is None:
+        raise OSError("no unit key")
+    data = b"" if body is None else body
+    headers = {"User-Agent": "StratoScan-unit/1 (+https://github.com/mferris/StratoScan)",
+               "Accept": "application/json"}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    headers.update(sign_headers(key, method, path, data))
+    req = urllib.request.Request(RELAY_URL.rstrip("/") + path, data=None if body is None else data,
+                                 headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read(limit + 1)
+    except urllib.error.HTTPError as e:
+        return e.code, e.read(65536)
+
+
 def _write_fleet(d):
     os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
     tmp = FLEET + ".tmp"
