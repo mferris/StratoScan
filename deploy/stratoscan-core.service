@@ -12,6 +12,12 @@ RestartSec=5
 # so it needs AF_INET/AF_INET6 and nothing else. No state on disk: its caches
 # are in memory, which also keeps it off the SD card.
 DynamicUser=yes
+# May read the unit key (root:stratoscan-relay 0640, heartbeat.py), as the
+# events service does: routes and owners come through the relay's shared
+# cache, and the relay serves only requests the unit has signed (2026-10-09).
+# Without the group the service cannot see the key and quietly asks the
+# public services itself, which is the fallback, not a failure.
+SupplementaryGroups=stratoscan-relay
 NoNewPrivileges=yes
 RestrictAddressFamilies=AF_INET AF_INET6
 PrivateDevices=yes
