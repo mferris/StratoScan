@@ -277,6 +277,8 @@ def main():
     st = os.path.join(tmp, "r2")
     r = run(ctx, "stage", st, allowed, ring=0)
     ok(r.returncode == 0 and staged(st), "the maintainer's unit (ring 0) takes a ring-0 release")
+    ok("update available (rollout at ring 0, this unit in ring 0)" in r.stdout,
+       "the journal line says which rings decided it")
     st = os.path.join(tmp, "r3")
     r = run(ctx, "stage", st, allowed, ring=1)
     ok(r.returncode == 0 and not staged(st), "a ring-1 unit waits while the rollout is at ring 0")

@@ -435,9 +435,17 @@ def check():
                  serial=want, installed_serial=have,
                  update_available=newer and allowed, rollout=rollout)
     # ota-auto.sh acts on the words "update available"; a held release must
-    # not say them, or every unit would wake its screen for nothing.
-    outcome = ("update available" if newer and allowed
-               else f"held: {held}" if newer else "up to date")
+    # not say them, or every unit would wake its screen for nothing. The
+    # rings go in the line too: the journal is where "why did this unit take
+    # it" gets asked, long after status.json has moved on.
+    if newer and allowed:
+        outcome = "update available"
+        if "ring" in rollout:
+            outcome += f" (rollout at ring {rollout['ring']}, this unit in ring {ring})"
+    elif newer:
+        outcome = f"held: {held}"
+    else:
+        outcome = "up to date"
     log(f"{tag} serial {want}, installed {have} -> {outcome}")
     return manifest, assets, newer and allowed
 
