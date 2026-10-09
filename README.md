@@ -260,9 +260,10 @@ scanning a QR code on its screen:
 The **relay** ([`relay/`](relay/)) is the project's one server. Units send it
 signed events and opt-in health reports; it pairs phones with units and holds
 Apple's push key, so no unit ever carries a secret that can act for the whole
-fleet. The radar never depends on it: a unit that cannot reach the relay
-works exactly as before. What it stores, and for how long, is in
-[relay/README.md](relay/README.md).
+fleet; and it is the one cache through which reporting radars get the public
+network's aircraft, routes and owners (see *Data sources*). The radar never
+depends on it: a unit that cannot reach the relay works exactly as before.
+What it stores, and for how long, is in [relay/README.md](relay/README.md).
 
 `readsb` decodes raw ADS-B signals and writes `aircraft.json` to disk.
 `index.html` is a single self-contained page — plain HTML/CSS/JS, Canvas for
@@ -488,6 +489,18 @@ several of these choices, but no code is shared):
 - **[Open-Meteo](https://open-meteo.com/)** — current weather on the empty-sky screen (free for non-commercial use)
 - **[adsb.lol](https://adsb.lol/)** — community-run ADS-B aggregation, used only by the network comparison, which can be switched off. Queried at most once every 15s no matter how many people are viewing, with coordinates rounded to ~1.1km
 
+**One cache for every radar.** A radar that reports to the relay (health
+reports on) gets the network's aircraft round its view, flight routes and
+registered owners *through the relay* ([`relay/src/netcache.js`](relay/src/netcache.js)),
+which asks adsb.lol, adsb.im and adsbdb once and serves every radar that
+wants the same thing, so those volunteer-run services' load no longer grows
+with the fleet. The aircraft come as 250 nm discs on a fixed world lattice
+(two radars near each other ask for the same disc), kept ten seconds; routes
+six hours; owners a week. The relay passes adsb.lol's answers through
+untouched, paces its own questions, and passes a refusal on rather than
+retrying. A radar whose relay is unreachable, or that has reports off, asks
+the services itself as before.
+
 Every obligation these carry, and how each is met, is in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Please respect each
 service's own terms if you build on this; RainViewer in particular is not
@@ -570,10 +583,12 @@ before you do:
   the network, so it is safe to run remotely.
 - **The network comparison is on by default and sends only a rounded
   position.** It can be switched off in Settings, and switching it off stops
-  the device contacting adsb.lol at all. The device-side proxy makes
-  no request of its own — it only fetches when a page with the setting on
-  asks it to — and it queries with coordinates rounded to 2dp, the same
-  precision the public gateway already exposes. Asking a stranger "what is
+  the device contacting adsb.lol (or the relay's cache of it) at all. The
+  device-side proxy makes no request of its own — it only fetches when a
+  page with the setting on asks it to — and it queries with coordinates
+  rounded to 2dp, the same precision the public gateway already exposes
+  (the view beyond the ring, through the relay, asks for fixed world discs,
+  which say even less). Asking a stranger "what is
   near me" with survey-precision coordinates would undo the rounding the
   rest of this project does deliberately. `/network` is readable publicly
   but refuses writes, so nobody holding the URL can drive traffic at a

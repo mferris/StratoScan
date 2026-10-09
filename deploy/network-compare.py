@@ -21,6 +21,17 @@ requests the page makes, and the page only makes them when the
 "Network comparison" setting is on -- which is ON by default
 (DEFAULT_ALERT_SETTINGS in index.html). Turning it off stops all contact.
 
+The view beyond the ring (/network/around) comes through the relay's
+shared cache when this radar reports to the relay at all (heartbeat.py:
+the owner's health-reports switch): a disc is fetched from adsb.lol once
+and served to every radar and phone that asks for it (performance audit
+2026-10-09). For that to be the same disc, those discs are on a fixed
+world lattice, not round each radar's view. The relay itself cannot ask
+adsb.lol (it rate-limits Cloudflare's shared addresses), so the unit that
+finds a disc missing fetches it, with its own address as always, and hands
+it up for the others. The relay is never a single point of failure:
+unreachable, the unit asks adsb.lol itself, as before.
+
 GET /network      -> {"ac": [...], "stats": {...}, "source": ..., "fetched": age_s}
 GET /network/stats -> just the scorecard, no upstream call
 """
@@ -36,6 +47,13 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+try:
+    import heartbeat                       # the unit key and the relay's address
+except Exception:                          # an image without it, or a test
+    heartbeat = None
 
 LISTEN = ("127.0.0.1", 8087)
 STORE_PATH = os.path.join(os.environ.get("STATE_DIRECTORY", "."), "coverage.json")
@@ -86,6 +104,25 @@ TILE_DISC_FRESH_S = 45          # a disc is asked for again after this (nine tak
 TILE_KEEP_S = 120               # a disc's last answer is shown this long while a fresh one is fetched
 TILE_IN_THREAD = True           # the discs are fetched in the background (tests set False)
 _tiles = {"cache": {}, "discs": {}, "calls": [], "busy": set(), "fetching": False}
+# The relay's shared cache, and the lattice its discs are on (see the module
+# docstring). The lattice is rows of 250 nm discs every 180/LATTICE_ROWS
+# degrees of latitude (about 348 nm) with as many columns as fit
+# LATTICE_SPACING_NM apart at that latitude, so every point on Earth is
+# inside at least one disc and never more than ~248 nm from its nearest
+# centre. The relay computes the same lattice (relay/src/netcache.js) and
+# refuses a disc that is not on it, so the two formulas are kept identical.
+RELAY = os.environ.get("STRATOSCAN_NET_RELAY", "1") != "0"     # tests switch it off
+RELAY_DISC_PATH = "/v1/net/disc/{lat}/{lon}"
+RELAY_TIMEOUT = 9
+RELAY_PACE_S = 0.2              # between discs the relay already has
+RELAY_CALLS = 40                # per TILE_WINDOW_S: most are the relay's, not adsb.lol's
+RELAY_WAIT_S = 2.0              # while another radar is fetching the disc for everyone
+LATTICE_R_NM = AROUND_MAX_NM
+LATTICE_SPACING_NM = TILE_SPACING_NM
+LATTICE_ROWS = math.ceil(10800 / LATTICE_SPACING_NM)     # 31, pole to pole
+LATTICE_ROW_STEP = 180 / LATTICE_ROWS
+LATTICE_MAX_DISCS = 16          # a continent-wide view; 9 view-centred discs reach as far
+LATTICE_SLACK_NM = 2            # a view is "inside" a disc with this to spare, never on its rim
 
 # Altitude bands, in feet. Chosen to separate a horizon problem from a
 # sensitivity one: if the low bands are the weak ones the antenna is being
@@ -342,6 +379,82 @@ def ghost_entry(hexid, a):
     }
 
 
+def relay_on():
+    """Whether the discs come through the relay: its switch is health reports."""
+    if not RELAY or heartbeat is None:
+        return False
+    try:
+        return bool(heartbeat.relay_on())
+    except Exception:
+        return False
+
+
+def lattice_cols(lat):
+    return max(1, math.ceil(21600 * math.cos(math.radians(lat)) / LATTICE_SPACING_NM))
+
+
+def lattice_centre(lat, lon):
+    """The lattice centre whose cell holds (lat, lon): the nearest one."""
+    k = min(LATTICE_ROWS - 1, max(0, math.floor((lat + 90) / LATTICE_ROW_STEP)))
+    clat = -90 + (k + 0.5) * LATTICE_ROW_STEP
+    n = lattice_cols(clat)
+    dlon = 360 / n
+    j = math.floor((lon + 180) / dlon) % n
+    return round(clat, 4), round(-180 + (j + 0.5) * dlon, 4)
+
+
+def lattice_centres(lat, lon, within_nm):
+    """Lattice centres within `within_nm` of a point, nearest first:
+    [(distance, lat, lon)]."""
+    out, seen = [], set()
+    rows = int(within_nm / 60 / LATTICE_ROW_STEP) + 2
+    k0 = math.floor((lat + 90) / LATTICE_ROW_STEP)
+    for k in range(max(0, k0 - rows), min(LATTICE_ROWS, k0 + rows + 1)):
+        clat = -90 + (k + 0.5) * LATTICE_ROW_STEP
+        n = lattice_cols(clat)
+        dlon = 360 / n
+        span = int(within_nm / (60 * max(0.05, math.cos(math.radians(clat)))) / dlon) + 2
+        j0 = math.floor((lon + 180) / dlon)
+        for j in range(j0 - span, j0 + span + 1):
+            c = (round(clat, 4), round(-180 + ((j % n) + 0.5) * dlon, 4))
+            if c in seen:
+                continue
+            seen.add(c)
+            d, _ = haversine(lat, lon, c[0], c[1])
+            if d <= within_nm:
+                out.append((d, c[0], c[1]))
+    out.sort()
+    return out
+
+
+def plan_discs(lat, lon, half, lattice):
+    """Where to ask for a view `half` nm out from its middle, and how far
+    the answer reaches: [(lat, lon, radius)], reach.
+
+    Round the view (adsb.lol asked directly): one disc of the view's own
+    radius while it fits, else the n x n grid of view_discs(). On the
+    lattice (through the relay): the one disc that holds the whole view
+    when there is one, else the nearest discs that between them cover it,
+    at most LATTICE_MAX_DISCS; the reach is what they are sure to cover.
+    """
+    want = max(AROUND_MIN_NM, min(AROUND_MAX_NM, half * 1.3))
+    if not lattice:
+        if half <= TILE_SINGLE_UP_TO_NM:
+            return [(lat, lon, int(want))], int(want)
+        return view_discs(lat, lon, half)
+    if half > TILE_SINGLE_UP_TO_NM:
+        want = min(half * 1.3, TILE_MAX_N * TILE_SPACING_NM / 2)    # as far as the grid reached
+    cands = lattice_centres(lat, lon, want + LATTICE_R_NM)
+    if cands and cands[0][0] <= LATTICE_R_NM - LATTICE_SLACK_NM - want:
+        return [(cands[0][1], cands[0][2], LATTICE_R_NM)], int(want)
+    chosen = cands[:LATTICE_MAX_DISCS]
+    reach = want
+    if len(cands) > LATTICE_MAX_DISCS:
+        # every centre within reach + 250 is in, so the first left out bounds it
+        reach = min(want, cands[LATTICE_MAX_DISCS][0] - LATTICE_R_NM - LATTICE_SLACK_NM)
+    return [(c[1], c[2], LATTICE_R_NM) for c in chosen], int(max(AROUND_MIN_NM, reach))
+
+
 def view_discs(lat, lon, half):
     """Where to ask for a view `half` nm out from its middle: one disc round
     the middle while it fits, else an n x n grid of 250 nm discs (n <= 3)
@@ -360,14 +473,92 @@ def view_discs(lat, lon, half):
     return discs, int(n * TILE_SPACING_NM / 2)
 
 
-def _fetch_discs(need, now):
+def _direct_disc(d):
+    """adsb.lol itself: one more try after a refusal (420/429/503)."""
+    for attempt in (1, 2):
+        try:
+            return get_json(SOURCE_URL.format(lat=d[0], lon=d[1], radius=d[2]),
+                            timeout=UPSTREAM_TIMEOUT, limit=AROUND_MAX_BODY)
+        except urllib.error.HTTPError as e:
+            if attempt == 1 and e.code in (420, 429, 503):
+                time.sleep(TILE_RETRY_S)
+                continue
+            return None
+        except (urllib.error.URLError, OSError, ValueError):
+            return None
+    return None
+
+
+def _relay_disc(d):
+    """The relay's cache: the same disc every other radar gets. Not there
+    yet, the relay says who fetches it: this unit, which then hands it up
+    for the others, or another radar already on it, in which case wait a
+    moment and ask again. Anything else -- the relay unreachable, not
+    serving this unit, or saying to slow down -- adsb.lol itself, as
+    before: that costs adsb.lol one question from this address, which is
+    what it always got."""
+    path = RELAY_DISC_PATH.format(lat=d[0], lon=d[1])
+    for attempt in range(3):
+        try:
+            status, raw = heartbeat.relay_fetch("GET", path, timeout=RELAY_TIMEOUT, limit=AROUND_MAX_BODY)
+        except (OSError, ValueError):
+            break
+        if status == 200:
+            if len(raw) > AROUND_MAX_BODY:
+                break
+            try:
+                return json.loads(raw.decode("utf-8", "replace"))
+            except ValueError:
+                break
+        if status != 404:
+            break
+        try:
+            why = json.loads(raw.decode("utf-8", "replace") or "{}")
+        except ValueError:
+            why = {}
+        if why.get("fetching") and attempt < 2:
+            time.sleep(RELAY_WAIT_S)
+            continue
+        net = _direct_disc(d)
+        if why.get("fetch") and isinstance(net, dict):
+            _share_disc(path, net)
+        return net
+    return _direct_disc(d)
+
+
+def _share_disc(path, net):
+    """Hand a disc this unit fetched up to the relay for the others. Best
+    effort: a failure costs nothing but the sharing."""
+    try:
+        heartbeat.relay_fetch("PUT", path, json.dumps(net, separators=(",", ":")).encode(),
+                              timeout=RELAY_TIMEOUT, limit=4096)
+    except Exception:
+        pass
+
+
+def fetch_disc(d, lattice):
+    """One disc's aircraft as the page draws them, or None."""
+    net = _relay_disc(d) if lattice else _direct_disc(d)
+    if not isinstance(net, dict):
+        return None
+    entries = []
+    for a in net.get("ac", []):
+        if not isinstance(a, dict) or a.get("lat") is None or a.get("lon") is None:
+            continue
+        hexid = str(a.get("hex", "")).strip().lower()
+        if ICAO_HEX.fullmatch(hexid):
+            entries.append(ghost_entry(hexid, a))
+    return entries
+
+
+def _fetch_discs(need, now, lattice=False):
     """One question at a time, a pause between them, one more try after a
     refusal; a disc that still won't answer keeps its last answer or stays
     missing. Runs in the background: nine paced questions take about twenty
     seconds, longer than the gateway's patience, so the answer to the page
     never waits for them (tiles_payload)."""
     try:
-        _fetch_discs_inner(need, now)
+        _fetch_discs_inner(need, now, lattice)
     finally:
         with lock:
             for d in need:
@@ -375,27 +566,33 @@ def _fetch_discs(need, now):
             _tiles["fetching"] = False
 
 
-def tiles_payload(lat, lon, half, now=None):
-    """The network's aircraft over a view wider than one disc: every disc of
-    view_discs() the unit has an answer for, merged by hex, AT ONCE -- with
-    the discs it is still fetching counted as pending, so the page asks
-    again soon and the picture fills in. A disc's answer is kept
-    TILE_CACHE_S before it is fetched again, shown TILE_KEEP_S meanwhile.
-    Questions to adsb.lol stay within the window; when the window is used
-    up and nothing is known yet, None (429)."""
+def tiles_payload(lat, lon, half, now=None, lattice=None):
+    """The network's aircraft over a view: every disc of plan_discs() the
+    unit has an answer for, merged by hex, AT ONCE -- with the discs it is
+    still fetching counted as pending, so the page asks again soon and the
+    picture fills in. A disc's answer is kept TILE_DISC_FRESH_S before it is
+    fetched again (a single disc on the lattice, AROUND_CACHE_S: it is the
+    everyday zoomed-out view), shown TILE_KEEP_S meanwhile. Questions stay
+    within the window; when the window is used up and nothing is known yet,
+    None (429). On the lattice, the answer is what falls within the reach.
+    The one disc a lattice view needs is fetched before answering, like a
+    disc round the view used to be; several are fetched behind."""
     now = time.time() if now is None else now
-    discs, covered = view_discs(lat, lon, half)
-    key = ("view", round(round(lat * 20) / 20, 2), round(round(lon * 20) / 20, 2), len(discs))
+    lattice = relay_on() if lattice is None else lattice
+    discs, covered = plan_discs(lat, lon, half, lattice)
+    key = ("view", round(round(lat * 20) / 20, 2), round(round(lon * 20) / 20, 2), len(discs), covered, lattice)
+    fresh_s = AROUND_CACHE_S if lattice and len(discs) == 1 else TILE_DISC_FRESH_S
+    keep_s = AROUND_CACHE_S if lattice and len(discs) == 1 else TILE_CACHE_S
     with lock:
         hit = _tiles["cache"].get(key)
-        if hit and now - hit[0] < TILE_CACHE_S:
+        if hit and now - hit[0] < keep_s:
             out = dict(hit[1]); out["fetched"] = round(now - hit[0], 1)
             return out
         _tiles["calls"] = [t for t in _tiles["calls"] if now - t < TILE_WINDOW_S]
         need = [d for d in discs
-                if not (_tiles["discs"].get(d) and now - _tiles["discs"][d][0] < TILE_DISC_FRESH_S)
+                if not (_tiles["discs"].get(d) and now - _tiles["discs"][d][0] < fresh_s)
                 and d not in _tiles["busy"]]
-        room = TILE_CALLS - len(_tiles["calls"])
+        room = (RELAY_CALLS if lattice else TILE_CALLS) - len(_tiles["calls"])
         # One paced stream of questions at a time: a second worker beside
         # the first would be the burst adsb.lol refuses.
         if _tiles["fetching"] and TILE_IN_THREAD:
@@ -407,10 +604,10 @@ def tiles_payload(lat, lon, half, now=None):
             _tiles["fetching"] = True
         pending = [d for d in discs if d in _tiles["busy"]]
     if need:
-        if TILE_IN_THREAD:
-            threading.Thread(target=_fetch_discs, args=(need, now), daemon=True).start()
+        if TILE_IN_THREAD and not (lattice and len(need) == 1 and len(discs) == 1):
+            threading.Thread(target=_fetch_discs, args=(need, now, lattice), daemon=True).start()
         else:
-            _fetch_discs(need, now)
+            _fetch_discs(need, now, lattice)
             pending = []
     merged = {}
     answered = 0
@@ -423,9 +620,13 @@ def tiles_payload(lat, lon, half, now=None):
                     merged.setdefault(e["hex"], e)
     if not answered and not pending:
         return None
-    payload = {"ac": list(merged.values()), "centre": {"lat": key[1], "lon": key[2]},
+    ac = list(merged.values())
+    if lattice:
+        ac = [e for e in ac if haversine(lat, lon, e["lat"], e["lon"])[0] <= covered]
+    payload = {"ac": ac, "centre": {"lat": key[1], "lon": key[2]},
                "covered": covered, "discs": len(discs), "answered": answered, "pending": len(pending),
-               "partial": answered < len(discs), "source": SOURCE_NAME, "at": now}
+               "partial": answered < len(discs), "source": SOURCE_NAME,
+               "via": "relay" if lattice else "direct", "at": now}
     if answered == len(discs) and not pending:      # only a whole, settled view is worth keeping
         with lock:
             if len(_tiles["cache"]) >= AROUND_PLACES:
@@ -435,37 +636,16 @@ def tiles_payload(lat, lon, half, now=None):
     return out
 
 
-def _fetch_discs_inner(need, now):
-    failed = 0
+def _fetch_discs_inner(need, now, lattice=False):
     for i, d in enumerate(need):
         if i:
-            time.sleep(TILE_PACE_S)
-        entries = None
-        for attempt in (1, 2):
-            try:
-                net = get_json(SOURCE_URL.format(lat=d[0], lon=d[1], radius=d[2]),
-                               timeout=UPSTREAM_TIMEOUT, limit=AROUND_MAX_BODY)
-            except urllib.error.HTTPError as e:
-                if attempt == 1 and e.code in (420, 429, 503):
-                    time.sleep(TILE_RETRY_S)
-                    continue
-                break
-            except (urllib.error.URLError, OSError, ValueError):
-                break
-            entries = []
-            for a in net.get("ac", []):
-                if a.get("lat") is None or a.get("lon") is None:
-                    continue
-                hexid = str(a.get("hex", "")).strip().lower()
-                if ICAO_HEX.fullmatch(hexid):
-                    entries.append(ghost_entry(hexid, a))
-            break
+            time.sleep(RELAY_PACE_S if lattice else TILE_PACE_S)
+        entries = fetch_disc(d, lattice)
         with lock:
             _tiles["busy"].discard(d)        # pending counts only what is still to come
             if entries is None:
-                failed += 1
                 continue
-            if len(_tiles["discs"]) >= TILE_MAX_N * TILE_MAX_N * 2:
+            if len(_tiles["discs"]) >= max(TILE_MAX_N * TILE_MAX_N, LATTICE_MAX_DISCS) * 2:
                 _tiles["discs"].clear()
             # stamped when it lands (a fake clock in the tests): what "fresh" counts from
             _tiles["discs"][d] = (time.time() if TILE_IN_THREAD else now, entries)
@@ -534,7 +714,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass        # the page moved on before the answer arrived; not an error here
 
     def do_GET(self):
         path = self.path.split("?", 1)[0].rstrip("/")
@@ -553,8 +736,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not (-90 <= lat <= 90 and -180 <= lon <= 180 and radius == radius):
                 return self._json(400, {"error": "lat or lon out of range"})
             try:
-                if half is not None and half > TILE_SINGLE_UP_TO_NM:
-                    out = tiles_payload(lat, lon, min(half, 100000.0))
+                lattice = relay_on()
+                if lattice or (half is not None and half > TILE_SINGLE_UP_TO_NM):
+                    out = tiles_payload(lat, lon, min(half if half is not None else radius / 1.3, 100000.0),
+                                        lattice=lattice)
                 else:
                     out = around_payload(lat, lon, half * 1.3 if half is not None else radius)
             except (urllib.error.URLError, OSError, ValueError, KeyError) as e:

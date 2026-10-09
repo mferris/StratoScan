@@ -36,6 +36,7 @@ import {
 } from './limits.js';
 import * as apns from './apns.js';
 import { fleetRoutes } from './fleets.js';
+import { netRoutes } from './netcache.js';
 
 const nowS = () => Math.floor(Date.now() / 1000);
 
@@ -693,6 +694,7 @@ async function nameUnit(request, env) {
 }
 
 const fleets = fleetRoutes({ json, signedJson, nowS, maintainer, needAuth, assess, esc, ago });
+const net = netRoutes({ json, readBody, nowS });
 
 export default {
   async fetch(request, env, ctx) {
@@ -715,6 +717,7 @@ export default {
     if (pathname === '/v1/unit/locations' && m === 'GET') return unitLocations(request, env);
     if (pathname === '/v1/phone/boxkey' && m === 'POST') return phoneBoxKey(request, env);
     if (pathname === '/v1/phone/location' && m === 'POST') return phoneLocation(request, env);
+    if (pathname.startsWith('/v1/net/')) return (await net.route(request, env, ctx, pathname, m)) || json(404, { error: 'not found' });
     const fleetReply = await fleets.route(request, env, pathname, m);
     if (fleetReply) return fleetReply;
     if (pathname === '/fleet' || pathname === '/fleet.json' || pathname === '/fleet/name') {
