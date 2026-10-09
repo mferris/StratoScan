@@ -244,9 +244,12 @@
     <h2>Health reports</h2>
     <p class="note">Optional. Every few hours the device sends the maintainer a short
       health check (software version, whether the receiver is working, storage wear,
-      temperature) so a problem can be spotted and fixed without you having to notice it.
+      temperature, power dips) so a problem can be spotted and fixed without you having to notice it.
       It <b>never</b> includes your location, your network, or what flew overhead.
-      Turn it off any time.</p>
+      With it on, the device also gets the public network's aircraft, flight routes and
+      aircraft owners through the StratoScan service, which fetches each once for every
+      radar instead of every radar asking the volunteer-run sources itself; it keeps nothing
+      about which radar asked. Turn it off any time.</p>
     <label><input type="checkbox" id="healthOn"> Send health reports</label>
     <div class="note" id="healthNow"></div>
     <div class="msg" id="healthMsg"></div>

@@ -43,8 +43,15 @@ turn on:
   identifies a visitor, and the counts don't leave the radar unless it's in
   a fleet (roadmap 1.13).
 - **Health reports** (off unless you turn them on): software version,
-  receiver health, storage wear, temperature. No location, no network
-  details, nothing about what flew over.
+  receiver health, storage wear, temperature, how many times the power
+  dipped. No location, no network details, nothing about what flew over.
+  With them on, the radar also asks adsb.lol, adsb.im and adsbdb *through
+  the StratoScan relay*, which asks once for every radar that wants the
+  same thing (one 250 nm disc of the network's aircraft, a flight's route,
+  an aircraft's registered owner) and serves it to all of them. The relay
+  sees which disc, flight or aircraft was asked about and keeps none of it
+  against the radar: the discs are fixed areas of the world, not centred on
+  anyone's radar. With reports off, the radar asks those services itself.
 - **Network comparison** (on by default; off in the radar's Map overlays):
   the radar asks adsb.lol for the aircraft near it, sending its location
   rounded to about 1 km, whenever a screen that shows the network's aircraft
@@ -63,13 +70,15 @@ turn on:
   app, ask planespotters.net directly, so planespotters sees that browser's
   address, as with any site that shows their photos. Nothing else is sent.
 - **The radar's own screen, looked beyond its ring.** Zoom the panel out past
-  the ring, or pan it elsewhere, and the radar asks adsb.lol for the aircraft
-  round the middle of the view, rounded to about 5 km: a place on a map, not
-  anyone's location. The public page can do the same, so the radar answers
-  at most one such question every five seconds (a view wider than one of
-  adsb.lol's 250 nm discs is up to nine questions, a second apart, nine in
-  any twenty seconds in all), and nothing about these aircraft is recorded
-  or counted.
+  the ring, or pan it elsewhere, and the radar asks for the aircraft round
+  the middle of the view: with health reports on, for the fixed 250 nm
+  disc or discs of the world that cover the view, from the StratoScan
+  relay's shared cache (above); with them off, from adsb.lol, round the
+  middle of the view rounded to about 5 km, a place on a map, not anyone's
+  location. The public page can do the same, so the radar answers at most
+  one such question every five seconds (a view wider than one disc is up
+  to nine questions, a second apart, nine in any twenty seconds in all),
+  and nothing about these aircraft is recorded or counted.
 
 ## The iPhone app
 
