@@ -60,6 +60,17 @@ longitude field are rejected outright. No network addresses are stored either. A
 still says roughly where its unit is ("a helicopter passed within 2
 miles"), which is why events are opt-in and kept so briefly.
 
+For **the shared cache** (`src/netcache.js`, 2026-10-09): nothing per
+unit. The relay keeps, in Cloudflare's per-data-centre cache, the public
+network's aircraft in 250 nm discs on a fixed world lattice (10 seconds),
+flight routes from adsb.im by callsign (6 hours; "no route" for 1 hour)
+and registered owners from adsbdb by aircraft address (7 days). Entries
+are keyed by the thing asked for, never by who asked; a reporting unit or
+a paired phone may ask, and nothing else. A disc is fetched from adsb.lol
+by the unit that first finds it missing (adsb.lol rate-limits Cloudflare's
+shared addresses) and handed up for the others; routes and owners the
+relay fetches itself.
+
 ## Fleets
 
 A fleet is a group of radars with its own administrators (roadmap 1.13): for example, the radars one person has given to their family, or a club's radars.
