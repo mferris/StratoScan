@@ -25,13 +25,17 @@ unchanged so the caller has what it needs to comply.
 import html.parser
 import http.server
 import json
+import os
 import re
 import time
 import urllib.parse
 import urllib.request
 
 LISTEN = ("127.0.0.1", 8081)
-USER_AGENT = "StratoScan/1.0 (+https://github.com/mferris/StratoScan; personal ADS-B kiosk project)"
+# planespotters.net requires a descriptive User-Agent with a way to reach
+# whoever runs the device; a product sets STRATOSCAN_CONTACT to its own.
+CONTACT = os.environ.get("STRATOSCAN_CONTACT", "https://github.com/mferris/StratoScan")
+USER_AGENT = f"StratoScan/1.0 (+{CONTACT}; ADS-B radar display)"
 CACHE_TTL = 24 * 3600
 HEX_RE = re.compile(r"/photo/([0-9a-fA-F]{6})$")
 
@@ -129,6 +133,40 @@ def bounded_put(store, key, value):
     store[key] = value
 
 
+def qr_svg(text):
+    """A QR code as an SVG string, or None if python3-qrcode is missing."""
+    try:
+        import qrcode
+        import qrcode.image.svg
+    except ImportError:
+        return None
+    img = qrcode.make(text, image_factory=qrcode.image.svg.SvgPathFillImage,
+                      box_size=10, border=2, error_correction=qrcode.constants.ERROR_CORRECT_M)
+    return img.to_string(encoding="unicode")
+
+
+def shape_photo(data):
+    """planespotters' JSON, shaped for the page: the thumbnail URLs unchanged
+    (their terms: used as returned, loaded by the browser that shows them),
+    the photographer for the credit, the photo's page link, and a QR code of
+    that link for the kiosk, whose screen has no link to tap: their terms
+    accept a QR code the viewer can scan in one action, and not a URL
+    printed as text."""
+    photos = (data or {}).get("photos") or []
+    if not photos:
+        return {"found": False}
+    p = photos[0]
+    link = p.get("link")
+    return {
+        "found": True,
+        "thumb": (p.get("thumbnail") or {}).get("src"),
+        "thumbLarge": (p.get("thumbnail_large") or {}).get("src"),
+        "link": link,
+        "photographer": p.get("photographer"),
+        "qr": qr_svg(link) if isinstance(link, str) and link.startswith("https://") else None,
+    }
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     # A client that connects and then sends nothing (or reads nothing) held a
     # thread for good; now the socket gives up after this many seconds
@@ -186,6 +224,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _fetch(self, hexcode):
+        """planespotters' answer for a hex, shaped for the page (shape_photo)."""
         try:
             req = urllib.request.Request(
                 f"https://api.planespotters.net/pub/photos/hex/{hexcode}",
@@ -196,18 +235,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except Exception:
             return {"found": False}
 
-        photos = data.get("photos") or []
-        if not photos:
-            return {"found": False}
-
-        p = photos[0]
-        return {
-            "found": True,
-            "thumb": (p.get("thumbnail") or {}).get("src"),
-            "thumbLarge": (p.get("thumbnail_large") or {}).get("src"),
-            "link": p.get("link"),
-            "photographer": p.get("photographer"),
-        }
+        return shape_photo(data)
 
     def log_message(self, fmt, *args):
         pass  # this gets hit on every detail-panel open; keep the journal quiet

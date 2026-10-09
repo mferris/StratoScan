@@ -58,6 +58,10 @@ turn on:
 - **Map tiles, routes, photos and weather** are fetched from the public
   services credited on the radar and in the app. Like any web request,
   they see an IP address and the area or aircraft being looked up.
+- **Aircraft photos.** The radar's screen gets a photo through the radar,
+  which asks planespotters.net; a browser looking at the radar's page, and the
+  app, ask planespotters.net directly, so planespotters sees that browser's
+  address, as with any site that shows their photos. Nothing else is sent.
 - **The radar's own screen, looked beyond its ring.** Zoom the panel out past
   the ring, or pan it elsewhere, and the radar asks adsb.lol for the aircraft
   round the middle of the view, rounded to about 5 km: a place on a map, not
