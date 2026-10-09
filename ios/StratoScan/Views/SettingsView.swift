@@ -58,6 +58,12 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Airline marks", isOn: Binding(get: { AirlineLogos.enabled }, set: { AirlineLogos.enabled = $0 }))
+                } footer: {
+                    Text("Shows an airline's mark beside its name on labels, details and alerts. The marks are fetched from the airlines' own site icons through Google's and DuckDuckGo's icon services and kept on this phone; nothing about you is sent. An airline's mark is its trademark, used here only to say which airline it is. Off, the name alone is shown.")
+                }
+
+                Section {
                     Toggle("Demo mode", isOn: Binding(get: { viewModel.isDemo }, set: { viewModel.setDemo($0) }))
                 } footer: {
                     Text("Plays a few minutes of traffic recorded near RDU airport, with no radar and no network.")

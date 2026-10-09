@@ -154,10 +154,30 @@ struct AircraftDetailView: View {
         return points[Int(((bearing.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360) / 45).rounded()) % 8]
     }
 
-    /// The radar's own photo service (deploy/photo-proxy.py), which caches
-    /// planespotters.net lookups so every viewer shares one request.
+    /// planespotters.net's photo API, asked by the phone itself with the
+    /// descriptive User-Agent their terms require of a device (2026-10-09),
+    /// never through the radar: their terms forbid re-exposing their data
+    /// through another API. The image then loads from their CDN unchanged,
+    /// and the credit links to the photo's page. One answer per aircraft is
+    /// kept for a day, their stated maximum.
+    private static var cache: [String: (at: Date, photo: Photo)] = [:]
     private func loadPhoto() async {
-        guard let (data, _) = try? await URLSession.shared.data(from: APIConfig.url("/photo/\(hex)")) else { return }
-        photo = try? JSONDecoder().decode(Photo.self, from: data)
+        if let hit = Self.cache[hex], Date().timeIntervalSince(hit.at) < 24 * 3600 { photo = hit.photo; return }
+        guard let url = URL(string: "https://api.planespotters.net/pub/photos/hex/\(hex)") else { return }
+        var req = URLRequest(url: url, timeoutInterval: 8)
+        req.setValue("StratoScan/1.0 (iOS app; +https://github.com/mferris/StratoScan)", forHTTPHeaderField: "User-Agent")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let answer = try? JSONDecoder().decode(Answer.self, from: data) else { return }
+        let p = answer.photos?.first
+        let got = Photo(found: p != nil, thumb: p?.thumbnail?.src, thumbLarge: p?.thumbnail_large?.src,
+                        photographer: p?.photographer, link: p?.link)
+        Self.cache[hex] = (Date(), got)
+        photo = got
+    }
+    private struct Answer: Decodable {
+        struct Src: Decodable { let src: String? }
+        struct Item: Decodable { let thumbnail: Src?; let thumbnail_large: Src?; let link: String?; let photographer: String? }
+        let photos: [Item]?
     }
 }

@@ -69,7 +69,7 @@ COORD_PRECISION = 2  # decimal places -- ~0.7mi at this latitude
 # directly and are unaffected by this.
 # /tts is text-to-speech: CPU-heavy synthesis on the unit, which only the
 # house needs; a public caller could otherwise keep the Pi busy talking.
-LOCAL_ONLY_PATHS = ("/wake", "/setup", "/tts")
+LOCAL_ONLY_PATHS = ("/wake", "/setup", "/tts", "/photo")
 
 # Paths that may be READ publicly but must not be WRITTEN publicly.
 #
@@ -187,7 +187,8 @@ CSP_DIRECTIVES = (
     "img-src 'self' data: blob: https:",    # map tiles and sprites, overlay tiles, the aircraft photos
     "connect-src 'self' https://tiles.openfreemap.org https://api.open-meteo.com "
     "https://api.rainviewer.com https://tilecache.rainviewer.com https://*.rainviewer.com "
-    "https://realearth.ssec.wisc.edu https://overpass-api.de https://fonts.googleapis.com",
+    "https://realearth.ssec.wisc.edu https://overpass-api.de https://fonts.googleapis.com "
+    "https://api.planespotters.net",   # the public page asks planespotters itself (their terms)
     "media-src 'self' blob:",
     "manifest-src 'self'",
     "base-uri 'none'",

@@ -32,6 +32,12 @@ check(not re.search(r"https?://[a-z0-9.-]*adsbdb", code), "no adsbdb address in 
 # every control inside the stage that listens for its own pointerup (the gear,
 # the rewind button, the panels) stopped answering on the panel.
 check("setPointerCapture(" not in code, "the stage never captures the pointer (the gear's tap must reach the gear)")
+# planespotters.net's terms (2026-10-09): a browser asks their API itself; the kiosk,
+# through the unit, shows a QR code of the photo's page beside the credit.
+check("https://api.planespotters.net/pub/photos/hex/" in code, "a browser asks planespotters' API directly")
+check("dp-photo-qr" in code and "SCAN FOR THE PHOTO" in code, "the kiosk shows a QR code of the photo's page")
+check("if (!ON_DEVICE) return null;" in code, "the unit's Commons lookup is the kiosk's own")
+check("Mictronics aircraft database via tar1090-db, ODC-By 1.0" in page, "the aircraft database is credited with its licence")
 
 print("kiosk core-only checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)

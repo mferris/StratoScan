@@ -36,7 +36,7 @@ struct CreditsView: View {
                 credit("Photos from planespotters.net",
                        "Each photo is credited to its photographer where it is shown.", "https://www.planespotters.net/")
                 credit("Routes from the adsb.im route API", nil, "https://adsb.im/")
-                credit("Aircraft types from the tar1090 aircraft database, read from your radar",
+                credit("Aircraft types and registrations: Mictronics aircraft database via tar1090-db (ODC-By 1.0), read from your radar",
                        nil, "https://github.com/wiedehopf/tar1090-db")
                 credit("Aircraft your radar didn't hear: network data © ADSB.lol contributors",
                        "Available under the Open Database Licence.", "https://www.adsb.lol/")
