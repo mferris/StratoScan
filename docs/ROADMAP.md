@@ -81,6 +81,9 @@ phone ──(pairing, notification rules)──▶ relay
 | 1.15 | Before the first sale: the services whose free terms are personal or non-commercial move to paid or commercial terms, or out (#62) | Every service a sold unit touches is used within its terms |
 | 1.16 | Staged releases: a release reaches units in rings (the maintainer's own, family, early adopters, everyone), carries a signed rollout policy, can be paused, soaks a day on the canary before it widens; a release is built from a commit, never the working tree (#63) | A release held at ring 0 reaches RDU and no other unit; widening lets the next ring in |
 | 1.17 | One cache for every radar: the network's aircraft (adsb.lol, on fixed 250 nm world discs so radars near each other share one fetch), routes (adsb.im) and owners (adsbdb) through the relay, for units that report and paired phones; a radar falls back to asking the services itself (#64) | Two radars looking at the same sky cost adsb.lol one fetch; a route asked by one radar costs nothing when another asks |
+| 1.18 | Enrolment and quotas on the relay in place of the fixed unit cap: a radar joins only through an enrolment the maintainer controls, can be revoked, and has its share of events, pushes and the cache (#65) | The fixed cap gone; RDU enrolled without being touched |
+| 1.19 | The relay at hundreds of radars: D1 read replicas, release files on R2, self-hosted map tiles, each at its trigger (#66) | Each done at its trigger, or deferred with a note |
+| 1.20 | Fewer questions per radar: the ring comparison every 60 s or by feeding adsb.lol, the location poll only while a phone shares, a slower away poll in the app (#67) | Requests per day measured on RDU before and after |
 ## Phase 2: the pocket
 
 | # | Item | Done when |
@@ -113,6 +116,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 2.27 | Airline marks on labels and alerts: the airline's logo (fetched, never shipped) beside its name, so a commercial flight reads at a glance | In a label and a notification on a real iPhone |
 | 2.28 | An alert opens the app on that aircraft, on the phone and the Watch | Tap a real alert on a real iPhone and Watch |
 
+| 2.29 | The app through the relay's shared cache: the network's aircraft and routes (#68) | A view away from home loads from the cache on the owner's iPhone |
 ## Phase 3: the wrist
 
 | # | Item | Done when |
@@ -191,6 +195,16 @@ at risk for long.
 - 1.5's final image comes after 1.9.
 
 ## Status
+
+**Where we are (2026-10-09).** Phases 1, 2 and 4 are built apart from the
+items below; what keeps most issues open is a check on the owner's iPhone,
+iPad, Watch or car (label `needs-device-check`), a decision or action only
+the owner can take (`needs-owner`), or parts (`needs-parts`). The audits are
+tracked as issues: performance and scalability #69 (open), security #70 and
+legal #71 (fixes done; open work in #52 and #62). Audit findings are filed
+into their phase and scheduled, not built the day they are found, unless
+they are security fixes.
+
 
 | Item | State | Waiting on |
 |---|---|---|
