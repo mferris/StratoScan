@@ -154,6 +154,13 @@ L._flush_owners()
 check([h[1] for h in Stub.hits] == ["/v0/aircraft/c0ffee"], "reports off: adsbdb itself, the relay never asked")
 cf.RELAY = False; FakeRelay.on = True
 check(cf.relay_on() is False, "STRATOSCAN_NET_RELAY=0 keeps everything direct")
+# The services that ask the relay run as dynamic users: without the key's
+# group they cannot see the key and quietly fall back to asking the public
+# services themselves (found live on RDU, 2026-10-09).
+for name in ("stratoscan-network.service", "stratoscan-core.service"):
+    svc = open(root / "deploy" / name).read()
+    check("DynamicUser=yes" in svc and "SupplementaryGroups=stratoscan-relay" in svc,
+          f"{name} may read the unit key, so it can sign for the relay's cache")
 srv.shutdown()
 print("core lookups checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)
