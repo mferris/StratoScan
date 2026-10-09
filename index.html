@@ -647,6 +647,20 @@
     background: rgba(5, 8, 10, 0.7);
     padding: 3px 8px;
   }
+  /* On the kiosk, whose screen has no link to tap, a QR code of the photo's
+     page: planespotters.net's terms ask for a one-action way to reach the
+     photographer and accept a QR code (a URL as text is not enough). */
+  #detailPanel .dp-photo-qr {
+    position: absolute;
+    right: 8px;
+    bottom: 26px;
+    width: 120px;
+    height: 120px;
+    padding: 4px;
+    border-radius: 6px;
+    background: #fff;
+  }
+  #detailPanel .dp-photo-credit .dp-scan { margin-left: 8px; color: var(--mid); }
 
   /* Due west, right at the dial's edge -- deliberately placed past where
      the aircraft label ring sits (~87% of the way to the edge, see
@@ -6032,6 +6046,7 @@ function creditHtml(text, href) {
 }
 
 async function lookupStockPhoto(typeLabel) {
+  if (!ON_DEVICE) return null;    // the unit's lookup is the kiosk's own; a browser gets the silhouette
   if (stockPhotoCache.has(typeLabel)) return stockPhotoCache.get(typeLabel);
   if (stockPhotoPending.has(typeLabel)) return null;
   stockPhotoPending.add(typeLabel);
@@ -6082,18 +6097,49 @@ async function tryStockPhoto(hex, photoEl) {
   photoEl.style.display = 'block';
 }
 
+// planespotters.net's photo API, asked two ways to stay within their terms
+// (2026-10-09): the kiosk itself, a device, asks through the unit's photo
+// proxy, which sends the descriptive User-Agent they require and adds a QR
+// code of the photo's page, since this screen has no link to tap; a browser
+// -- the public page, or the LAN -- asks their API directly from this page
+// (it is CORS-enabled and the browser sends the Origin they want), so the
+// unit never re-exposes their data. Either way the image loads from their
+// CDN, unchanged, and the thumbnail and the credit lead to the photo's page.
+const PLANESPOTTERS_API = 'https://api.planespotters.net/pub/photos/hex/';
+const planespottersCache = new Map();   // hex -> { at, data }; their terms allow 24 h
+async function fetchPhoto(hex) {
+  if (ON_DEVICE) {
+    const res = await fetch(`/photo/${hex}`, { cache: 'no-store' });
+    return res.json();
+  }
+  const hit = planespottersCache.get(hex);
+  if (hit && Date.now() - hit.at < 24 * 3600 * 1000) return hit.data;
+  const res = await fetch(PLANESPOTTERS_API + encodeURIComponent(hex), { cache: 'no-store' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const p = ((await res.json()).photos || [])[0];
+  const data = p ? { found: true, thumb: p.thumbnail?.src, thumbLarge: p.thumbnail_large?.src,
+                     link: p.link, photographer: p.photographer } : { found: false };
+  planespottersCache.set(hex, { at: Date.now(), data });
+  return data;
+}
+
 async function loadDetailPhoto(hex) {
   const photoEl = detailPanelEl.querySelector('.dp-photo');
   if (!photoEl) return;
   try {
-    const res = await fetch(`/photo/${hex}`, { cache: 'no-store' });
-    const data = await res.json();
+    const data = await fetchPhoto(hex);
     if (detailPanelHex !== hex || !detailPanelEl.classList.contains('show')) return; // stale by the time this resolved
     if (!data.found) { await tryStockPhoto(hex, photoEl); return; }
-    photoEl.innerHTML = `
-      <img src="${esc(data.thumbLarge || data.thumb)}" alt="${esc(detailPanelEl.querySelector('.dp-cs')?.textContent || 'Aircraft')} photo">
-      <div class="dp-photo-credit">${creditHtml(`© ${data.photographer || 'Unknown'} · planespotters.net`, data.link)}</div>
-    `;
+    const alt = esc(detailPanelEl.querySelector('.dp-cs')?.textContent || 'Aircraft') + ' photo';
+    const img = `<img src="${esc(data.thumbLarge || data.thumb)}" alt="${alt}">`;
+    const credit = `© ${data.photographer || 'Unknown'} · planespotters.net`;
+    const linked = !IS_KIOSK && /^https:\/\//i.test(data.link || '');
+    photoEl.innerHTML = linked
+      ? `<a href="${esc(data.link)}" target="_blank" rel="noopener noreferrer">${img}</a>
+         <div class="dp-photo-credit">${creditHtml(credit, data.link)}</div>`
+      : `${img}
+         ${data.qr ? `<img class="dp-photo-qr" alt="Scan to open this photo on planespotters.net" src="data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(data.qr)))}">` : ''}
+         <div class="dp-photo-credit">${esc(credit)}${data.qr ? '<span class="dp-scan">SCAN FOR THE PHOTO</span>' : ''}</div>`;
     photoEl.style.display = 'block';
   } catch (e) {
     if (detailPanelHex !== hex || !detailPanelEl.classList.contains('show')) return;
@@ -6479,7 +6525,7 @@ function renderScorecard() {
     <div class="sp-section-title">By direction</div>
     <div class="sp-sub" style="padding:6px 0;line-height:1.7">${esc(dirTxt)}</div>
     <div class="sp-sub" style="padding:10px 0;line-height:1.7">${esc(verdict)}</div>
-    <div class="sp-sub" style="padding:6px 0;opacity:0.7">Network data © ADSB.lol contributors, ODbL 1.0</div>`;
+    <div class="sp-sub" style="padding:6px 0;opacity:0.7">Network data © ADSB.lol contributors, ODbL 1.0 · Aircraft types and registrations: Mictronics aircraft database via tar1090-db, ODC-By 1.0</div>`;
 }
 
 

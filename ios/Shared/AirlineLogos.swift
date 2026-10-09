@@ -9,6 +9,20 @@ import UIKit
 /// Nothing about the owner is sent: the request names the airline's domain
 /// and nothing else.
 enum AirlineLogos {
+    /// A setting, shared with the notification extension through the app
+    /// group: the marks come from icon services with no published terms
+    /// (Google's, DuckDuckGo's), and an airline's mark is its trademark,
+    /// used here only to say which airline it is. A build meant for sale
+    /// ships with `defaultOn` false until marks with clear rights exist;
+    /// off, labels and alerts show the airline's name alone.
+    static let defaultOn = true
+    static let settingKey = "stratoscan.airlineMarks"
+    static var defaults: UserDefaults { UserDefaults(suiteName: "group.com.NelsonIndustries.radome") ?? .standard }
+    static var enabled: Bool {
+        get { defaults.object(forKey: settingKey) as? Bool ?? defaultOn }
+        set { defaults.set(newValue, forKey: settingKey) }
+    }
+
     /// Where the mark for a domain can be fetched, in order of preference.
     static func urls(for domain: String) -> [URL] {
         [URL(string: "https://www.google.com/s2/favicons?domain=\(domain)&sz=128"),
@@ -24,6 +38,7 @@ enum AirlineLogos {
 
     /// Downloads a mark, trying each source; nil when none has one.
     static func fetch(domain: String) async -> UIImage? {
+        guard enabled else { return nil }
         let dir = cacheDir
         let file = dir.appendingPathComponent(domain + ".png")
         if let data = try? Data(contentsOf: file), let img = UIImage(data: data) { return img }

@@ -1132,3 +1132,21 @@ never runs the first-run flow and no managed unit exists yet.
 tests/test_setup_tls.py now checks the directory mode and the loud
 failure. Lesson: a security control that falls back quietly is one that
 can fail quietly; make the downgrade a visible error.
+
+## Photos, credits and airline marks after the legal audit (2026-10-09)
+planespotters.net's photo API terms (re-read 2026-10-09) changed how photos
+reach each screen: the kiosk, a device, asks through `deploy/photo-proxy.py`
+(descriptive User-Agent with a contact from `STRATOSCAN_CONTACT`; JSON
+cached 24 h, their maximum), and the panel shows a QR code of the photo's
+page beside the credit (`shape_photo()` adds `qr`; the terms accept a QR
+code on a kiosk and reject a URL as text). A browser -- the public page,
+the LAN -- and the iPhone app ask their API directly (`fetchPhoto()` in the
+page, `loadPhoto()` in AircraftDetailView), so the unit never re-exposes
+their data; `/photo` is in the gateway's LOCAL_ONLY_PATHS and
+`api.planespotters.net` in the policy's connect-src. The Commons
+"representative photo" is the kiosk's own; browsers get the silhouette.
+The Mictronics aircraft database is credited as ODC-By 1.0 (kiosk
+statistics, app Credits, THIRD_PARTY_NOTICES). Airline marks are behind a
+Settings switch read by the app and the notification extension
+(`AirlineLogos.enabled`, app-group defaults); `AirlineLogos.defaultOn` is
+the one line a build meant for sale flips.

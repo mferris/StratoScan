@@ -22,6 +22,9 @@ is_local_only = fg.Handler._is_local_only
 is_rounded_receiver_json = fg.Handler._is_rounded_receiver_json
 
 MUST_BLOCK = [
+    # The photo proxy relays planespotters.net's API for the kiosk only: re-exposing
+    # it to the public is against their terms (2026-10-09); a visitor's browser asks them itself.
+    "/photo/a1b2c3", "/photo/type?q=Cessna", "/PHOTO/a1b2c3", "/x/../photo/a1b2c3",
     "/wake", "/wake/", "//wake", "///wake", "/./wake", "/.//wake",
     "/x/../wake", "/a/b/../../wake", "/%77ake", "/%2577ake",
     "/WAKE", "/Wake", "/wake?x=1", "/wake#frag", "/wake/now",

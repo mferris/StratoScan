@@ -88,3 +88,19 @@ print(f"{checks - len(failures)}/{checks} photo proxy checks passed")
 for f in failures:
     print("  FAILED:", f)
 sys.exit(1 if failures else 0)
+
+
+# planespotters' answer, shaped for the page: URLs unchanged, the credit, the
+# link, and a QR code of the link for the kiosk (their terms, 2026-10-09).
+shaped = pp.shape_photo({"photos": [{"thumbnail": {"src": "https://cdn.planespotters.net/t.jpg"},
+                                     "thumbnail_large": {"src": "https://cdn.planespotters.net/l.jpg"},
+                                     "link": "https://www.planespotters.net/photo/1/x", "photographer": "Pat"}]})
+check("the thumbnails are passed on unchanged", shaped["thumb"] == "https://cdn.planespotters.net/t.jpg" and shaped["thumbLarge"] == "https://cdn.planespotters.net/l.jpg")
+check("the photographer and the link come with them", shaped["photographer"] == "Pat" and shaped["link"] == "https://www.planespotters.net/photo/1/x")
+qr = shaped.get("qr")
+check("a QR code of the link is included for the kiosk (or None without python3-qrcode here)",
+      qr is None or ("<svg" in qr and "path" in qr))
+if qr is None:
+    print("note: python3-qrcode is not installed on this machine; the unit has it")
+check("no photo, no QR", pp.shape_photo({"photos": []}) == {"found": False})
+check("the User-Agent names a contact", "+https://" in pp.USER_AGENT)
