@@ -239,9 +239,16 @@ struct RadarView: View {
             if onScreen.contains(at) { inView.append(p) } else { p.labelX = nil; p.labelY = nil }
         }
 
+        // Thousands on the screen (a wide view tiled from the network): the
+        // network's aircraft become plain dots, no trail, no glow. Each glow
+        // is its own layer with a blur; a few thousand of them a frame made
+        // a command buffer the simulator's Metal driver could not even hand
+        // over (it crashed, 2026-10-08), and a phone would not thank us
+        // either. The radar's own aircraft, a few dozen at most, keep theirs.
+        let dense = inView.count > Self.denseFrom
         // trails under everything else, then the blips
-        for p in inView { drawTrail(&context, p: p, cx: cx, cy: cy, k: k, now: now) }
-        for p in inView { drawBlip(&context, p: p) }
+        for p in inView where !(dense && p.isNetwork) { drawTrail(&context, p: p, cx: cx, cy: cy, k: k, now: now) }
+        for p in inView { drawBlip(&context, p: p, dense: dense) }
 
         // This phone, when the owner has asked to be shown.
         if let m = viewModel.meOffset {
@@ -379,7 +386,16 @@ struct RadarView: View {
         context.stroke(live, with: .color(p.color.opacity(base)), style: style)
     }
 
-    private func drawBlip(_ context: inout GraphicsContext, p: PlaneState) {
+    /// Past this many aircraft on the screen, the network's are dots.
+    static let denseFrom = 500
+
+    private func drawBlip(_ context: inout GraphicsContext, p: PlaneState, dense: Bool = false) {
+        if dense && p.isNetwork && p.hex != viewModel.selectedHex && p.hex != viewModel.followHex {
+            let r = 2.5 * uiScale
+            context.fill(Path(ellipseIn: CGRect(x: p.anchorX - r, y: p.anchorY - r, width: r * 2, height: r * 2)),
+                         with: .color(p.color.opacity(0.85)))
+            return
+        }
         if p.hex == viewModel.selectedHex {
             let r = 16 * uiScale
             let ring = Path(ellipseIn: CGRect(x: p.anchorX - r, y: p.anchorY - r, width: r * 2, height: r * 2))
