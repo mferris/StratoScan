@@ -726,10 +726,30 @@ kiosk user silently lost the ability to write it, and a perfectly good release
 was reverted because nothing could record that the screen was painting. It now
 lives in the kiosk user's own runtime directory.
 
-To cut a release: `sh scripts/release.sh <version>`. It builds the bundle,
-writes a manifest of per-file hashes, signs it, **verifies its own output with
-the public key the devices carry**, and only then publishes to GitHub
-Releases.
+To cut a release: `sh scripts/release.sh <version>`. It builds the bundle
+from the commit's tree (never the working tree: a hotfix once shipped with
+three unrelated changes that happened to be sitting in it), writes a manifest
+of per-file hashes, signs it, **verifies its own output with the public key
+the devices carry**, and only then publishes to GitHub Releases. It refuses a
+dirty tree, a commit that is not on GitHub, and a serial that is not above
+the last release's. `--commit <ref>` builds an older commit, which is how a
+fix goes out without whatever else has landed since.
+
+**A release reaches units in rings.** Each release carries a signed
+`rollout.json` saying how far it may go: ring 0 is the maintainer's own
+radar, 1 family, 2 early adopters, 3 everyone. A unit's ring is in
+`/etc/stratoscan/ring` (the installer's `RING=`; a managed unit starts in
+ring 1, a unit with no file is in ring 3), and the updater installs a newer
+release only when the policy names it, is not paused, and covers the unit's
+ring — otherwise the settings screen says the release is rolling out in
+stages and has not reached this device yet. A new release starts at ring 0;
+after a day on the canary, `sh scripts/release.sh rollout <version> --ring 1`
+lets the next ring in (the script refuses to widen sooner unless told
+`--force`), `--pause` stops the spread, and a unit that already has the
+release keeps it: there is no downgrade, a fix is the next release. The
+policy is signed in its own namespace, so a manifest can never pass as a
+policy or a policy as a manifest, and a release with no policy reaches no
+unit — a hand-made release cannot go everywhere by accident.
 
 **Changed services are restarted.** A long-running service keeps its old code
 until it restarts, and the updater originally restarted only the kiosk — so a
@@ -740,7 +760,8 @@ them again on a rollback). Like any change to `ota.py`, that behaviour starts
 with the release *after* the one that installs it.
 
 The serial is the commit count, so two releases cut from the same commit carry
-the same serial and the second is refused as "not newer" — commit first.
+the same serial and the second is refused as "not newer" — the script now
+checks this against the last release before it builds anything.
 
 ## Built to run for ten years
 

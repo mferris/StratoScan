@@ -237,7 +237,7 @@ export function fleetRoutes({ json, signedJson, nowS, maintainer, needAuth, asse
       views7 += v7; visitors7 += u7;
       const name = typeof p.name === 'string' && p.name ? p.name.slice(0, 32) : (u.name || '(unnamed)');
       return `<tr><td><b>${esc(name)}</b><br><code>${esc(u.id.slice(0, 10))}…</code></td>
-        <td>${esc(u.version || '—')}</td><td>${esc(ago(now - u.last_seen))}</td>
+        <td>${esc(u.version || '—')}${Number.isInteger(p.ring) ? `<br><small>ring ${p.ring}</small>` : ''}</td><td>${esc(ago(now - u.last_seen))}</td>
         <td class="${flags.length ? 'warn' : 'ok'}">${flags.length ? esc(flags.join(', ')) : 'healthy'}</td>
         <td>${days.length ? `${v7} views${u7 ? `, ${u7} visitors` : ''}` : '—'}</td>
         <td><form method="post" action="/f/remove"><input type="hidden" name="unit" value="${esc(u.id)}"><button>Remove</button></form></td></tr>`;

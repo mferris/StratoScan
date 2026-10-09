@@ -58,8 +58,14 @@ class Server(http.server.BaseHTTPRequestHandler):
 
 
 def build_release(tmp, key, serial=2, version="9.9.9", payload=b"<html>new</html>",
-                  member="index.html", sigs=("new", "old"), old_key=None):
-    """Produce a signed release exactly as scripts/release.sh does."""
+                  member="index.html", sigs=("new", "old"), old_key=None,
+                  rollout=True, rollout_key=None, rollout_ns="stratoscan-rollout"):
+    """Produce a signed release exactly as scripts/release.sh does.
+
+    `rollout`: True for the policy release.sh writes when nothing is said
+    (ring 3, everyone), a dict to override its fields, None for a release
+    carrying no policy at all.
+    """
     src = os.path.join(tmp, "src")
     os.makedirs(src, exist_ok=True)
     p = os.path.join(src, os.path.basename(member))
@@ -104,20 +110,50 @@ def build_release(tmp, key, serial=2, version="9.9.9", payload=b"<html>new</html
     if "old" in sigs:
         subprocess.run(["ssh-keygen", "-Y", "sign", "-f", old_key or key, "-n", "flightradar",
                         mpath], check=True, capture_output=True)
+    # The rollout policy, signed in its own namespace like release.sh does.
+    rpath = os.path.join(tmp, "rollout.json")
+    for f in (rpath, rpath + ".sig"):
+        if os.path.exists(f):
+            os.unlink(f)
+    if rollout is not None:
+        policy = {"kind": "rollout", "version": version, "serial": serial, "ring": 3,
+                  "paused": False, "released_at": "2026-10-09T00:00:00Z",
+                  "at": "2026-10-09T00:00:00Z", "note": "test"}
+        if isinstance(rollout, dict):
+            policy.update(rollout)
+        with open(rpath, "w") as f:
+            json.dump(policy, f, indent=1, sort_keys=True)
+        subprocess.run(["ssh-keygen", "-Y", "sign", "-f", rollout_key or key, "-n", rollout_ns,
+                        rpath], check=True, capture_output=True)
     return manifest
 
 
-def run(tmp, cmd, state, allowed, env_extra=None):
+def run(tmp, cmd, state, allowed, env_extra=None, ring=None, flags=()):
     env = dict(os.environ)
     env.update({
         "STRATOSCAN_OTA_API": f"http://127.0.0.1:{tmp['port']}",
         "STRATOSCAN_OTA_REPO": "t/t",
         "STRATOSCAN_ALLOWED_SIGNERS": allowed,
         "STRATOSCAN_OTA_STATE": state,
+        # A ring file that does not exist, unless the case puts the unit in
+        # one: the default is what a unit nobody placed gets.
+        "STRATOSCAN_RING_FILE": os.path.join(state, "ring"),
     })
     env.update(env_extra or {})
-    return subprocess.run([sys.executable, OTA, cmd], env=env,
+    if ring is not None:
+        os.makedirs(state, exist_ok=True)
+        with open(os.path.join(state, "ring"), "w") as f:
+            f.write(f"{ring}\n")
+    return subprocess.run([sys.executable, OTA, cmd, *flags], env=env,
                           capture_output=True, text=True, timeout=90)
+
+
+def status_of(state):
+    try:
+        with open(os.path.join(state, "status.json")) as f:
+            return json.load(f)
+    except OSError:
+        return {}
 
 
 def main():
@@ -151,7 +187,8 @@ def main():
         for f in os.listdir(rel):
             os.unlink(os.path.join(rel, f))
         m = build_release(tmp, kw.pop("key", good), **kw)
-        names = [n for n in ("manifest.json", "manifest.stratoscan.sig", "manifest.json.sig", "b.tar.gz")
+        names = [n for n in ("manifest.json", "manifest.stratoscan.sig", "manifest.json.sig", "b.tar.gz",
+                             "rollout.json", "rollout.json.sig")
                  if os.path.exists(os.path.join(tmp, n))]
         for n in names:
             shutil.copy(os.path.join(tmp, n), os.path.join(rel, n))
@@ -182,7 +219,7 @@ def main():
     publish(serial=5, sigs=("new", "old"), key=evil)   # new sig by the wrong key, old by the right one
     r = run(ctx, "stage", os.path.join(tmp, "sr4"), allowed)
     ok(r.returncode != 0, "both signatures by the wrong key must be refused")
-    publish(serial=5, sigs=("new", "old"), key=evil, old_key=good)
+    publish(serial=5, sigs=("new", "old"), key=evil, old_key=good, rollout_key=good)
     r = run(ctx, "stage", os.path.join(tmp, "sr5"), allowed)
     ok(r.returncode == 0, "a bad new signature falls back to a valid old one (same trusted key signed it)")
 
@@ -221,6 +258,85 @@ def main():
     ok("up to date" in (r.stdout + r.stderr).lower(),
        "a downgrade must be reported as up to date, not as an error")
 
+    # --- staged rollout (performance audit 2026-10-09) ----------------------
+    # The policy on the release says how far it may go; the unit's ring file
+    # says where the unit stands. Everything unexpected holds.
+    def staged(state):
+        return os.path.isfile(os.path.join(state, "staging", "index.html"))
+
+    publish(serial=20, rollout={"ring": 0})
+    st = os.path.join(tmp, "r1")
+    r = run(ctx, "apply", st, allowed)                      # no ring file: ring 3
+    ok(r.returncode == 0 and not staged(st), "a ring-0 release must not reach a unit in ring 3")
+    ok("held" in r.stdout and "update available" not in r.stdout,
+       "a held release must say so and never say 'update available' (ota-auto.sh acts on those words)")
+    s1 = status_of(st)
+    ok(s1.get("update_available") is False and s1.get("rollout", {}).get("unit_ring") == 3
+       and s1["rollout"].get("ring") == 0 and "ring 0" in (s1["rollout"].get("held") or ""),
+       "status must carry the rings and why the release is held")
+    st = os.path.join(tmp, "r2")
+    r = run(ctx, "stage", st, allowed, ring=0)
+    ok(r.returncode == 0 and staged(st), "the maintainer's unit (ring 0) takes a ring-0 release")
+    st = os.path.join(tmp, "r3")
+    r = run(ctx, "stage", st, allowed, ring=1)
+    ok(r.returncode == 0 and not staged(st), "a ring-1 unit waits while the rollout is at ring 0")
+    publish(serial=20, rollout={"ring": 1})
+    st = os.path.join(tmp, "r4")
+    r = run(ctx, "stage", st, allowed, ring=1)
+    ok(r.returncode == 0 and staged(st), "widening the policy to ring 1 lets a ring-1 unit in")
+    st = os.path.join(tmp, "r5")
+    r = run(ctx, "stage", st, allowed, ring=2)
+    ok(not staged(st), "ring 2 still waits at ring 1")
+    publish(serial=20, rollout={"ring": 3})
+    st = os.path.join(tmp, "r6")
+    r = run(ctx, "stage", st, allowed)
+    ok(r.returncode == 0 and staged(st), "ring 3 (everyone) reaches a unit with no ring file")
+    publish(serial=20, rollout={"ring": 3, "paused": True})
+    st = os.path.join(tmp, "r7")
+    r = run(ctx, "stage", st, allowed, ring=0)
+    ok(r.returncode == 0 and not staged(st) and "paused" in r.stdout,
+       "a paused rollout holds even the maintainer's unit")
+    publish(serial=20, rollout=None)
+    st = os.path.join(tmp, "r8")
+    r = run(ctx, "stage", st, allowed, ring=0)
+    ok(r.returncode == 0 and not staged(st) and "no rollout policy" in r.stdout,
+       "a release with no policy goes nowhere (a hand-made release cannot reach everyone by accident)")
+    publish(serial=20, rollout={"serial": 19, "ring": 3})
+    st = os.path.join(tmp, "r9")
+    r = run(ctx, "stage", st, allowed, ring=0)
+    ok(not staged(st) and "serial 19" in r.stdout, "a policy left over from another release does not apply")
+    publish(serial=20, rollout={"ring": 3}, rollout_key=evil)
+    st = os.path.join(tmp, "r10")
+    r = run(ctx, "stage", st, allowed, ring=0)
+    ok(r.returncode != 0 and "signature" in (r.stdout + r.stderr).lower(),
+       "a policy signed by the wrong key is a refusal, not 'no policy'")
+    publish(serial=20, rollout={"ring": 3}, rollout_ns="stratoscan")
+    st = os.path.join(tmp, "r11")
+    r = run(ctx, "stage", st, allowed, ring=0)
+    ok(r.returncode != 0, "a signature made for a manifest must not vouch for a policy (namespaces)")
+    publish(serial=20, rollout={"ring": 0})
+    st = os.path.join(tmp, "r12")
+    r = run(ctx, "stage", st, allowed, ring=3, flags=("--ignore-rollout",))
+    ok(r.returncode == 0 and staged(st) and status_of(st).get("rollout", {}).get("held") is None,
+       "--ignore-rollout takes a held release on request")
+    st = os.path.join(tmp, "r13")
+    r = run(ctx, "stage", st, allowed, ring=3, flags=("--no-such-flag",))
+    ok(r.returncode == 2 and not staged(st), "an unknown option is refused, not ignored")
+    # A unit whose ring file holds nonsense is the general public, not ring 0.
+    st = os.path.join(tmp, "r14")
+    r = run(ctx, "stage", st, allowed, ring="zero")
+    ok(not staged(st), "an unreadable ring file means ring 3")
+    # Up to date is up to date whatever the policy says: nothing is gated
+    # that would not have installed anyway, and no policy is fetched.
+    st = os.path.join(tmp, "r15")
+    os.makedirs(st, exist_ok=True)
+    with open(os.path.join(st, "installed.json"), "w") as f:
+        json.dump({"serial": 20, "version": "9.9.9"}, f)
+    publish(serial=20, rollout=None)
+    r = run(ctx, "check", st, allowed, ring=0)
+    ok(r.returncode == 0 and "up to date" in r.stdout and status_of(st).get("rollout", {}).get("unit_ring") == 0,
+       "a unit already on the release reports up to date, and its ring")
+
     # --- path traversal in the archive -------------------------------------
     publish(serial=11, member="../../../../etc/evil.conf")
     r = run(ctx, "stage", os.path.join(tmp, "s6"), allowed)
@@ -234,6 +350,14 @@ def main():
     ota = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ota)
     ok(ota.dest_for("index.html") is not None, "index.html must be installable")
+    ok(ota.rollout_decision({"kind": "rollout", "serial": 7, "ring": 2}, 7, 2) == (True, None),
+       "a unit on the policy's ring is in")
+    ok(ota.rollout_decision({"kind": "rollout", "serial": 7, "ring": "2"}, 7, 3)[0] is False,
+       "a unit past the policy's ring is out")
+    ok(ota.rollout_decision({"kind": "rollout", "serial": 7, "ring": "two"}, 7, 0)[0] is False,
+       "a malformed ring holds rather than admits")
+    ok(ota.rollout_decision({"kind": "rollout", "serial": 7, "ring": 3, "paused": 1}, 7, 0)[0] is False,
+       "any true-ish pause pauses")
     ok(ota.dest_for("deploy/ota.py") is not None, "deploy/ota.py must be installable")
     ok(ota.dest_for("deploy/allowed_signers") is None,
        "an update must NOT be able to replace the key that vouches for it")

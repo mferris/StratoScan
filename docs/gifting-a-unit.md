@@ -214,6 +214,12 @@ What that changes, and only that:
   network takes its sighting and approach records only from its own LAN,
   its setup hotspot or the tailnet.
 - **The fleet's key** goes into the user's `authorized_keys`, once.
+- **Rollout ring 1.** Releases reach units in rings (README, "A release
+  reaches units in rings"): a managed unit starts in ring 1, so it takes a
+  release the day after the maintainer's own radar has run it, not at the
+  same time. `RING=2` or `RING=3` on the install command puts it later in
+  the order; the file is `/etc/stratoscan/ring`.
 
 Nothing here runs on RDU or on a unit its owner administers: without
-`MANAGED=1` the installer skips the whole block.
+`MANAGED=1` the installer skips the whole block (the ring file is written
+for every unit; without `MANAGED=1` or `RING=` it says 3, everyone).

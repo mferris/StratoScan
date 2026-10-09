@@ -646,7 +646,7 @@ async function fleetPage(env, fleetsHtml = '') {
     const uptimeD = p.uptime_s ? (p.uptime_s / 86400).toFixed(1) + 'd' : '—';
     return `<tr class="${flags.length ? 'warn' : 'ok'}">
       <td><b>${esc(u.name || '(unnamed)')}</b><br><code>${esc(u.id.slice(0, 10))}…</code></td>
-      <td>${esc(u.version || '—')}</td>
+      <td>${esc(u.version || '—')}${Number.isInteger(p.ring) ? `<br><small>ring ${p.ring}${p.ota && p.ota.held ? ', update waiting' : ''}</small>` : ''}</td>
       <td>${esc(ago(now - u.last_seen))}</td>
       <td>${esc(uptimeD)}</td>
       <td>${flags.length ? esc(flags.join(', ')) : 'healthy'}</td>

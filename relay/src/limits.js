@@ -78,7 +78,18 @@ export function assess(unit, now) {
   let p = {};
   try { p = JSON.parse(unit.payload || '{}'); } catch { /* shown as-is */ }
   if (p.receiver && typeof p.receiver.age_s === 'number' && p.receiver.age_s > 300) flags.push('receiver stale');
-  if (p.thermal && p.thermal.throttled && p.thermal.throttled !== '0x0') flags.push('throttled');
+  // get_throttled: the low bits are now, bit 16 (under-voltage) and bit 18
+  // (throttling) are "has happened since boot" and never clear. A unit that
+  // counts its brown-outs (power.undervoltage_24h, 2026-10-09) is judged on
+  // the day's count instead of the sticky bit, which on a unit up for weeks
+  // says nothing about today.
+  const thr = p.thermal && typeof p.thermal.throttled === 'string' ? parseInt(p.thermal.throttled, 16) || 0 : 0;
+  if (thr & 0xf) flags.push('throttled now');
+  if (p.power && typeof p.power.undervoltage_24h === 'number') {
+    if (p.power.undervoltage_24h > 10) flags.push(`power dips (${p.power.undervoltage_24h}/day)`);
+  } else if (thr & 0x50000) {
+    flags.push('throttled');
+  }
   if (p.thermal && p.thermal.temp_c > 80) flags.push('hot');
   if (p.storage && p.storage.gb_per_day > 5) flags.push('heavy writes');
   if (p.storage && p.storage.free_pct < 10) flags.push('disk full');
