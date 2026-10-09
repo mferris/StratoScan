@@ -7158,7 +7158,12 @@ function otaRow() {
     case 'checked':
       sub = st.update_available
         ? `${running} — version ${esc(st.version || '')} is available, tap to install`
-        : `${running} — up to date`;
+        : (st.rollout && st.rollout.held)
+          // Newer, but the rollout has not reached this unit (ota.py point 4):
+          // say so, or "up to date" beside a newer version on GitHub reads as
+          // a broken updater.
+          ? `${running} — version ${esc(st.version || '')} is rolling out in stages and has not reached this device yet (${esc(st.rollout.held)})`
+          : `${running} — up to date`;
       break;
     default:         sub = `${running} — tap to check for an update`;
   }

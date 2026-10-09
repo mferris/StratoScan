@@ -761,6 +761,10 @@ function otaRender(st) {
       if (st.update_available) {
         now.textContent = `${running}. Version ${st.version || ''} is available.`;
         apply.classList.remove('hide');
+      } else if (st.rollout && st.rollout.held) {
+        // Newer, but the staged rollout has not reached this device yet.
+        now.textContent = `${running}. Version ${st.version || ''} is rolling out in `
+                        + `stages and has not reached this device yet (${st.rollout.held}).`;
       } else {
         now.textContent = `${running}. Up to date.`;
         $('tickOta').classList.remove('hide');

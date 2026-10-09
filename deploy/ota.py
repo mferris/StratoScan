@@ -20,10 +20,23 @@ not the download. It is three things that happen around it:
      screen is caught by the thing already watching the screen, with nobody
      in the room.
 
+  4. A RELEASE REACHES UNITS IN RINGS (performance audit, 2026-10-09). The
+     release carries a signed rollout policy saying how far it may go -- ring
+     0 is the maintainer's own radar, 1 family, 2 early adopters, 3 everyone
+     -- and a unit installs it only when its own ring (RING_FILE) is within
+     that. The maintainer widens the policy after the canary has run it;
+     pausing it stops the spread. A unit that already has it keeps it: there
+     is no downgrade (point 2), a fix is the next release. Without a policy
+     a release goes nowhere, so a hand-made one cannot reach every unit at
+     once by accident.
+
 Usage:  ota.py check         look for a newer release, verify it, stage nothing
         ota.py stage         download and verify into the staging directory
         ota.py apply         install what is staged, verify paint, roll back
         ota.py status        print what is installed and what is available
+        --ignore-rollout     (check/stage/apply) take a release the rollout
+                             policy holds back from this unit; for a hand on
+                             the unit, never for the timer
 """
 import filecmp
 import hashlib
@@ -59,6 +72,15 @@ SIGNATURES = (                           # (release asset, namespace), preferred
     ("manifest.json.sig", "flightradar"),
 )
 SIGNER_IDS = ("stratoscan-release", "flightradar-release")
+# The rollout policy (point 4 above) is signed by the same key in its own
+# namespace, so a manifest can never pass as a policy or a policy as a
+# manifest: ssh-keygen refuses a signature made for another purpose.
+ROLLOUT_NAMESPACE = "stratoscan-rollout"
+ROLLOUT_ASSETS = ("rollout.json", "rollout.json.sig")
+RING_FILE = os.environ.get("STRATOSCAN_RING_FILE", "/etc/stratoscan/ring")
+RINGS = (0, 1, 2, 3)
+DEFAULT_RING = 3          # a unit nobody placed in a ring is the general public
+IGNORE_ROLLOUT = False    # set by --ignore-rollout
 STATE_DIR = os.environ.get("STRATOSCAN_OTA_STATE", "/var/lib/stratoscan-ota")
 INSTALLED = os.path.join(STATE_DIR, "installed.json")
 STATUS = os.path.join(STATE_DIR, "status.json")
@@ -338,16 +360,86 @@ def verified_manifest(assets):
     raise Fail("; ".join(errors) or "no signature")
 
 
+def unit_ring():
+    """Which rollout ring this unit is in: the integer in RING_FILE, or
+    DEFAULT_RING when there is no file or it does not hold one."""
+    try:
+        with open(RING_FILE) as f:
+            ring = int(f.read().strip())
+    except (OSError, ValueError):
+        return DEFAULT_RING
+    return ring if ring in RINGS else DEFAULT_RING
+
+
+def rollout_policy(assets):
+    """The release's signed rollout policy, or None when it carries none.
+
+    A policy that is there but does not verify is a refusal (Fail), not
+    "none": a release whose policy has been tampered with is not one to
+    install on any reading of it.
+    """
+    if not all(name in assets for name in ROLLOUT_ASSETS):
+        return None
+    raw = fetch(assets["rollout.json"], 1 << 16)
+    policy = verify_manifest(raw, fetch(assets["rollout.json.sig"], 1 << 16),
+                             ROLLOUT_NAMESPACE)
+    if not isinstance(policy, dict) or policy.get("kind") != "rollout":
+        raise Fail("rollout.json is not a rollout policy")
+    return policy
+
+
+def rollout_decision(policy, serial, ring):
+    """Whether a unit in `ring` may take the release with `serial`.
+
+    Returns (allowed, reason): the reason, when held, is for the status file
+    and the settings screen. Everything unexpected holds: no policy, one for
+    another release, a pause, a ring this unit is outside.
+    """
+    if policy is None:
+        return False, "the release has no rollout policy"
+    try:
+        for_serial, up_to = int(policy["serial"]), int(policy["ring"])
+    except (KeyError, TypeError, ValueError):
+        return False, "the rollout policy is malformed"
+    if for_serial != serial:
+        return False, f"the rollout policy is for serial {for_serial}, not {serial}"
+    if policy.get("paused"):
+        return False, "the rollout is paused"
+    if ring > up_to:
+        return False, f"the rollout is at ring {up_to}; this unit is in ring {ring}"
+    return True, None
+
+
 def check():
     tag, assets = latest_release()
     manifest = verified_manifest(assets)
     have, want = installed_serial(), int(manifest["serial"])
     newer = want > have
+    ring = unit_ring()
+    rollout = {"unit_ring": ring}
+    allowed, held = True, None
+    if newer:
+        # Only a newer release is ever gated, so a unit that is up to date
+        # makes one request fewer and the policy's state is reported only
+        # when it decides something.
+        policy = rollout_policy(assets)
+        if policy is not None:
+            rollout["ring"] = policy.get("ring")
+            rollout["paused"] = bool(policy.get("paused"))
+        allowed, held = rollout_decision(policy, want, ring)
+        if held and IGNORE_ROLLOUT:
+            log(f"rollout policy set aside on request ({held})")
+            allowed, held = True, None
+        rollout["held"] = held
     write_status(state="checked", tag=tag, version=manifest["version"],
-                 serial=want, installed_serial=have, update_available=newer)
-    log(f"{tag} serial {want}, installed {have} -> "
-        + ("update available" if newer else "up to date"))
-    return manifest, assets, newer
+                 serial=want, installed_serial=have,
+                 update_available=newer and allowed, rollout=rollout)
+    # ota-auto.sh acts on the words "update available"; a held release must
+    # not say them, or every unit would wake its screen for nothing.
+    outcome = ("update available" if newer and allowed
+               else f"held: {held}" if newer else "up to date")
+    log(f"{tag} serial {want}, installed {have} -> {outcome}")
+    return manifest, assets, newer and allowed
 
 
 def stage():
@@ -650,7 +742,16 @@ def apply():
 
 
 def main():
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
+    global IGNORE_ROLLOUT
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    flags = [a for a in sys.argv[1:] if a.startswith("--")]
+    cmd = args[0] if args else "status"
+    for flag in flags:
+        if flag == "--ignore-rollout":
+            IGNORE_ROLLOUT = True
+        else:
+            log(f"unknown option {flag}")
+            return 2
     os.makedirs(STATE_DIR, exist_ok=True)
     try:
         if cmd == "status":
@@ -668,7 +769,7 @@ def main():
             stage(); return 0
         if cmd == "apply":
             if stage() is None:
-                log("already up to date"); return 0
+                log("nothing to install"); return 0   # check() said why
             return 0 if apply() else 1
         log(f"unknown command {cmd}")
         return 2

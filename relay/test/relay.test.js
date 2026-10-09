@@ -155,6 +155,14 @@ test('assess flags what needs attention', () => {
   assert.ok(assess(unit({ storage: { gb_per_day: 9 } }), now).flags.includes('heavy writes'));
   assert.ok(assess(unit({ ota: { state: 'rolled_back' } }), now).flags.includes('update rolled back'));
   assert.ok(assess(unit({ ota: { state: 'error' } }), now).flags.includes('update error'));
+  // Power (2026-10-09): a unit that counts its brown-outs is judged on the
+  // day's count; one that does not, on get_throttled's sticky bits as before.
+  assert.ok(assess(unit({ power: { undervoltage_24h: 260 }, thermal: { throttled: '0x50000' } }), now).flags.includes('power dips (260/day)'));
+  assert.deepEqual(assess(unit({ power: { undervoltage_24h: 3 }, thermal: { throttled: '0x50000' } }), now).flags, [],
+    'a few dips a day with nothing throttled now is not a warning');
+  assert.ok(assess(unit({ thermal: { throttled: '0x50000' } }), now).flags.includes('throttled'), 'no count: the sticky bit still counts');
+  assert.ok(assess(unit({ thermal: { throttled: '0x50005' } }), now).flags.includes('throttled now'));
+  assert.deepEqual(assess(unit({ thermal: { throttled: '0x0' } }), now).flags, []);
   // the nightly check's normal result, and an update in progress, are not problems
   for (const state of ['checked', 'staged', 'applying', 'ok']) {
     assert.ok(!assess(unit({ ota: { state } }), now).flags.some(f => f.startsWith('update')), `${state} is not flagged`);
