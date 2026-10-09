@@ -1117,3 +1117,18 @@ more are drawn as 4 px squares in one path. The app (`NetworkFeed.discs`,
 `fetchView`) does the same from the phone, 1.2 s apart with one retry,
 every 30 s for a wide view: up to nine answers of ~600 KB each, so a
 continent costs a few MB a minute on cellular. `tests/test_network_around.py`.
+
+## The setup-flow certificate was unreadable by the setup server (found 2026-10-09)
+The security review of the 2026-10-08 work found item 9 inert: tls-cert.sh
+made /etc/stratoscan/tls 0750 root:www-data, the setup server runs as
+scsetup, so `tls_fingerprint()` hit EACCES, swallowed it as "no
+certificate", the QR link carried no `f=` and the app went over plain
+http, silently. Fixed: the directory is 0755 (the key stays 0640), the
+installer opens it on an older unit, `tls_fingerprint()` returns None only
+for a missing file and says so in the journal otherwise, `/setup/api/hello`
+reports `tls: true` when a certificate exists, and the app refuses to go on
+over http when it does ("Scan the code again"). Nobody was exposed: RDU
+never runs the first-run flow and no managed unit exists yet.
+tests/test_setup_tls.py now checks the directory mode and the loud
+failure. Lesson: a security control that falls back quietly is one that
+can fail quietly; make the downgrade a visible error.
