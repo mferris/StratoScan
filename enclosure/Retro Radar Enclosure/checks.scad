@@ -195,6 +195,15 @@ else if (check=="twin_cover_seats") {
     ant_axis_frame() translate([0, ant_twin_seat([8, 8]) + ant_twin_cover_t - 2, 0]) rotate([90, 0, 0]) antenna_mount_twin_cover();
   }
 }
+// Each M2 cap head (3.8mm) sits 1.5mm down in its counterbore, on both
+// covers: a head-sized probe that deep meets no cover.
+else if (check=="twin_cover_heads_seat" || check=="twin_cover_heads_seat_11") {
+  af = check=="twin_cover_heads_seat" ? [8, 8] : [11, 11];
+  intersection() {
+    antenna_mount_twin_cover(af);
+    for (q = ant_twin_screw_xz(af)) translate([q[0], q[1], -1]) cylinder(d=3.8, h=1 + 1.5, $fn=24);
+  }
+}
 else if (check=="twin_cover_screws_open") {
   difference() { ant_twin_screw_probes(); union() { antenna_mount_twin(); ant_twin_cover_placed(); } }
 }
