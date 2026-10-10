@@ -1,0 +1,15 @@
+[Unit]
+Description=StratoScan radios: which is 1090 and which is 978, by name (deploy/radio-select.py)
+DefaultDependencies=no
+After=local-fs.target systemd-udev-settle.service
+Before=readsb.service stratoscan-uat.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+RuntimeDirectory=stratoscan-radio
+RuntimeDirectoryPreserve=yes
+ExecStart=/usr/bin/python3 /opt/stratoscan/radio-select.py
+
+[Install]
+WantedBy=multi-user.target

@@ -166,6 +166,9 @@ DEPLOY_ALLOWED = {
     "tls-cert.sh",
     # Builds the on-device fallback map; run by setupd and net-watchdog.
     "offline-map.py",
+    # Picks the 1090 and 978 radios by name before readsb and the 978 decoder
+    # start (their units run it each time, so no restart mapping is needed).
+    "radio-select.py",
     # Opt-in health reports to the relay; run by net-watchdog.
     "heartbeat.py",
     # Weekly notable-aircraft list (plane-alert-db); run by net-watchdog.
