@@ -3714,11 +3714,13 @@ function applyNightDim() {
 // power the panel back on if the screensaver has blanked it (see
 // deploy/wake-listener.py). The fetch is best-effort: on a laptop, or with
 // the service absent, it just fails quietly and the undim still happens.
-function wakeScreenForAlert() {
+function wakeScreenForAlert(why = 'alert') {
   if (!alertSettings.alertWake) return;
   nightWakeUntil = Date.now() + NIGHT_WAKE_MS;
   applyNightDim();
-  fetch('/wake', { method: 'POST' }).catch(() => {});
+  // The reason goes in the journal (wake-listener.py): the panel was found
+  // never to blank, and nothing said which alert kept waking it (2026-10-10).
+  fetch('/wake?why=' + encodeURIComponent(why), { method: 'POST' }).catch(() => {});
 }
 
 // ---- Nearby-aircraft alert ---------------------------------------------
@@ -4246,7 +4248,7 @@ function checkNearbyAlert(pl, range) {
       // concern (see the settings panel below).
       recordSightingOnce(pl.hex, 'nearby');
       if (alertSettings.nearby) {
-        wakeScreenForAlert();
+        wakeScreenForAlert('nearby');
         showDetailPanel(pl, true);
         playAlertSound();
         speak(announcementFor(pl));
@@ -4849,7 +4851,7 @@ function checkRareAircraft(pl) {
   if (performance.now() - lastRareAlertAt < RARE_ALERT_COOLDOWN_MS) return;
   lastRareAlertAt = performance.now();
 
-  wakeScreenForAlert();
+  wakeScreenForAlert('rare:' + why.kind);
   showDetailPanel(pl, true, why.label.toUpperCase(), '\u2726');
   playRareSound();
   speak(announcementFor(pl, why.label));
@@ -4887,7 +4889,7 @@ function checkEmergencySquawk(pl) {
   if (label) {
     if (!pl.emergencyAlerted && alertSettings.emergency) {
       pl.emergencyAlerted = true;
-      wakeScreenForAlert();
+      wakeScreenForAlert('emergency');
       playEmergencySound();
       showDetailPanel(pl, true, label);
       // "Emergency squawk 7700", in words a person reads aloud, not the banner's.
