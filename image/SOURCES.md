@@ -13,6 +13,9 @@ project commit named in `MANIFEST.txt`.
   in `MANIFEST.txt`.
 - `src/tar1090-source.tar.gz`: tar1090 (GPL-2.0-or-later), at the commit in
   `MANIFEST.txt`.
+- `src/dump978-source.tar.gz`: dump978 (GPL-2.0-or-later), the 978 MHz
+  decoder, at the tag in `MANIFEST.txt`. Upstream is
+  https://github.com/flightaware/dump978.
 - `src/piper_tts-*.tar.gz`: Piper TTS (GPL-3.0-or-later), the source release
   of the version in `MANIFEST.txt`. Upstream is
   https://github.com/OHF-voice/piper1-gpl.

@@ -7,7 +7,7 @@
 #   MANIFEST.txt                               pinned versions + every package
 #   SOURCES.md                                 GPL source offer
 #   src/*.tar.gz                               Corresponding Source for readsb,
-#                                              tar1090 and Piper as built
+#                                              tar1090, dump978 and Piper as built
 . "$(dirname "$0")/lib.sh"
 REPO=$(cd "$HERE/.." && pwd)
 VERSION=${VERSION:-$(date -u +%Y.%m.%d)}
@@ -25,6 +25,9 @@ rm -rf "$MNT/opt/stratoscan-src"
 mkdir -p "$MNT/opt/stratoscan-src"
 git -C "$REPO" archive HEAD | tar -x -C "$MNT/opt/stratoscan-src"
 COMMIT=$(git -C "$REPO" rev-parse --short HEAD)
+# The 978 MHz decoder's version, as the installer pins it (GPL: its source
+# goes with the image, below).
+DUMP978_TAG=$(sed -n 's/^DUMP978_TAG=\([^ ]*\).*/\1/p' "$REPO/deploy/install-setup-server.sh")
 
 chroot_prepare
 # Keep the image's own resolv.conf (a NetworkManager symlink) to put back.
@@ -73,6 +76,7 @@ TAR_GIT=$MNT/usr/local/share/tar1090/git
   echo "Base: $(basename "$BASE_URL")  sha256 $BASE_SHA256"
   echo "readsb: $(git -C "$READSB_GIT" describe --tags --always 2>/dev/null || echo '?') ($(git -C "$READSB_GIT" rev-parse HEAD 2>/dev/null || echo '?'))"
   echo "tar1090: $(cat "$TAR_GIT/.stratoscan-commit")"
+  echo "dump978: $DUMP978_TAG"
   echo "piper-tts: $(chroot "$MNT" /opt/stratoscan/tts/venv/bin/pip show piper-tts | awk '/^Version/{print $2}')"
   echo
   echo "Installed packages:"
@@ -85,6 +89,7 @@ PIPER_V=$(chroot "$MNT" /opt/stratoscan/tts/venv/bin/pip show piper-tts | awk '/
 PIPER_SDIST=$(curl -fsSL "https://pypi.org/pypi/piper-tts/$PIPER_V/json" \
   | python3 -c "import json,sys; print(next(u['url'] for u in json.load(sys.stdin)['urls'] if u['packagetype']=='sdist'))")
 curl -fsSL -o "$OUT/src/$(basename "$PIPER_SDIST")" "$PIPER_SDIST"
+curl -fsSL -o "$OUT/src/dump978-source.tar.gz" "https://github.com/flightaware/dump978/archive/refs/tags/$DUMP978_TAG.tar.gz"
 cp "$HERE/SOURCES.md" "$OUT/SOURCES.md"
 
 echo "== restore and seal"
