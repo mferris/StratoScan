@@ -419,6 +419,36 @@ def main():
     ok(restarted == ["stratoscan-setup.service"],
        "an installed service is restarted and a not-yet-installed one is skipped")
 
+    # --- an update wakes the panel before its paint check (2026-10-10) -------
+    # A dark panel paints nothing, so an update applied to one was rolled back.
+    stamp = os.path.join(tmp, "painted")
+    open(stamp, "w").close()
+    os.utime(stamp, (1, 1))
+    woke = []
+
+    class Wake(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            woke.append(self.path)
+            os.utime(stamp, None)          # the page paints once the panel is lit
+            self.send_response(204); self.end_headers()
+        def log_message(self, *a):
+            pass
+    wsrv = http.server.HTTPServer(("127.0.0.1", 0), Wake)
+    threading.Thread(target=wsrv.serve_forever, daemon=True).start()
+    real = (ota.WAKE_URL, ota.HEARTBEAT)
+    ota.WAKE_URL = f"http://127.0.0.1:{wsrv.server_address[1]}/wake?why=update"
+    ota.HEARTBEAT = stamp
+    try:
+        ok(ota.wake_display() is True and woke == ["/wake?why=update"],
+           "apply asks for the panel to wake (as a non-alert wake) and waits for a fresh frame")
+        ota.WAKE_URL = "http://127.0.0.1:9/wake"
+        ota.WAKE_WAIT_S = 1
+        ok(ota.wake_display() is False, "no wake endpoint: it says so and goes ahead")
+    finally:
+        ota.WAKE_URL, ota.HEARTBEAT = real
+        wsrv.shutdown()
+    ok("    wake_display()\n    before = paint_stamp()" in open(OTA).read(), "apply wakes the panel before the paint check")
+
     # --- the kiosk user is found, never assumed ------------------------------
     d = tempfile.mkdtemp()
     conf = os.path.join(d, "lightdm.conf")

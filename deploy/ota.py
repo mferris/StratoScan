@@ -513,6 +513,36 @@ def stage():
     return manifest
 
 
+WAKE_URL = os.environ.get("STRATOSCAN_WAKE_URL", "http://127.0.0.1/wake?why=update")
+WAKE_WAIT_S = 60
+
+
+def wake_display():
+    """Light the panel and wait until the page has painted on it.
+
+    The paint check below needs a lit panel: a dark one paints nothing, and
+    a perfectly good update is rolled back. Once the screensaver really did
+    blank the panel (2026-10-10, after alert wakes stopped buying it twenty
+    minutes each), an update started from the setup page or by hand found it
+    dark and was undone. ota-auto.sh always woke it first; now every apply
+    does. A wake that is not an alert gets the full idle time. Best effort:
+    the paint check still decides."""
+    before = paint_stamp()
+    try:
+        req = urllib.request.Request(WAKE_URL, data=b"", method="POST")
+        urllib.request.urlopen(req, timeout=10).close()
+    except Exception as e:
+        log(f"could not ask for the panel to wake ({type(e).__name__})")
+        return False
+    deadline = time.time() + WAKE_WAIT_S
+    while time.time() < deadline:
+        if paint_stamp() > before:
+            return True
+        time.sleep(2)
+    log("the panel was woken but the page has not painted yet; going ahead")
+    return False
+
+
 def paint_stamp():
     try:
         return os.stat(HEARTBEAT).st_mtime
@@ -659,6 +689,7 @@ def apply():
     with open(os.path.join(ROLLBACK, "prev.json"), "w") as f:
         json.dump({"serial": installed_serial(), "files": saved}, f)
 
+    wake_display()
     before = paint_stamp()
     if before == 0.0:
         # No stamp at all means the paint check cannot answer, and a check that
