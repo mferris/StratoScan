@@ -77,6 +77,13 @@ glass_overlap     = 4;
 retention_opening = panel_diameter - 2*glass_overlap;
 front_trim_h  = 4;
 retainer_h    = 4;
+// Radial clearance between the retainer and the shell's bore. It was zero
+// (the ring drawn at exactly the bore's diameter), and the first print, a
+// PETG ring in an ASA shell, had to be forced in (2026-10-09): ASA shrinks a
+// little more than PETG, so the bore came out smaller than the ring. 0.4mm a
+// side leaves a slip fit across both materials; the screws, not the bore,
+// centre the ring.
+retainer_clear = 0.4;
 lip_height    = 6;
 shelf_h       = lip_height - retainer_h;
 rabbet_depth  = glass_thickness;
@@ -778,14 +785,28 @@ module front_trim() {
 // ============================================================
 module retainer() {
     relief_r0 = retention_opening/2 - 1;
-    relief_w  = panel_diameter/2 - retention_opening/2 + 2;
+    relief_w  = panel_diameter/2 - retention_opening/2 + 2; // covers the glass-overlap band, +1mm margin each side
+    od = outer_dia - 2*wall - 2*retainer_clear;
     difference() {
-        cylinder(d=outer_dia - 2*wall, h=retainer_h);
-        translate([0,0,-1]) cylinder(d=retention_opening, h=retainer_h+2);
-        screw_ring_holes(screw_clear_dia, retainer_h);
+        cylinder(d=od, h=retainer_h);
+        translate([0,0,-1])
+            cylinder(d=retention_opening, h=retainer_h+2);
+        // The screws pass at screw_r, set by the inserts already in printed
+        // shells, which leaves less than a hole's width of ring outside them.
+        // Closed holes left a 0.3mm sliver that printed as nicks, not holes;
+        // so each is an open notch, a 3.4mm slot from the hole out through
+        // the rim. The screw still passes clear, and the notches stop the
+        // ring turning.
+        for (i = [0:n_screws-1])
+            rotate([0, 0, i * 360/n_screws])
+                translate([0, 0, -1]) hull() {
+                    translate([screw_r, 0, 0]) cylinder(d=screw_clear_dia, h=retainer_h+2);
+                    translate([od/2 + 2, 0, 0]) cylinder(d=screw_clear_dia, h=retainer_h+2);
+                }
         rotate([0,0, relief_center_deg - relief_arc_deg/2])
             rotate_extrude(angle = relief_arc_deg)
-                translate([relief_r0, -1]) square([relief_w, retainer_h+2]);
+                translate([relief_r0, -1])
+                    square([relief_w, retainer_h+2]);
     }
 }
 
@@ -1049,9 +1070,17 @@ ant_twin_pocket_z  = 26;    // above this the open slot becomes a closed pocket 
 ant_twin_cover_top = 25.8;  // the cover's tabs stop under the pocket
 ant_twin_m2_hole   = 3.0;   // M2 heat-set insert, 3.2mm across the knurl (3.2 if the kit's are the 3.5mm kind). MEASURE the kit's.
 ant_twin_m2_depth  = 6;
-ant_twin_screw_hole = 2.4;  // M2 clearance through the cover. No counterbore: a 3mm cover printed
-                            // face-down cannot roof one, so the cap heads stand 2mm proud of a
-                            // face nothing touches
+ant_twin_screw_hole = 2.4;  // M2 clearance through the cover
+// Counterbored so the M2 cap heads sit mostly below the face (the owner's
+// ask, 2026-10-10): 3.8mm heads, 2mm tall, in 4.4mm bores 1.5mm deep, so
+// they stand 0.5mm proud and 1.5mm of cover stays under them. The cover
+// prints outer face down, so each bore opens on the plate and its roof is a
+// 1mm-wide ring round the screw hole: a bridge any slicer spans, which the
+// "no counterbore" note here used to rule out too cautiously. The M2 x 6
+// screws still fit: the cover is 1.5mm thinner under the head, so they reach
+// 1.5mm deeper, 4.5 of the 6mm insert hole.
+ant_twin_cbore_d = 4.4;
+ant_twin_cbore_h = 1.5;
 ant_twin_back_pad  = 4;     // the bar is thicker on its case side behind the flare under the bore's mouth
 ant_twin_back_pad_w = 40;
 ant_twin_label_size = 6;
@@ -1212,18 +1241,28 @@ module antenna_mount_twin_cover(af = ant_twin_jack_af) {
                 translate([s*ant_twin_sep/2 - w/2, 16, ant_twin_cover_t - 0.01])
                     cube([w, ant_twin_cover_top - 0.3 - 16, t + 0.01]);
         }
-        for (p = ant_twin_screw_xz(af)) translate([p[0], p[1], -1])
+        for (p = ant_twin_screw_xz(af)) translate([p[0], p[1], -1]) {
             cylinder(d=ant_twin_screw_hole, h=ant_twin_cover_t + 2, $fn=24);
+            cylinder(d=ant_twin_cbore_d, h=ant_twin_cbore_h + 1, $fn=32);   // the head's seat, in the outer face (z=0)
+        }
         if (ant_twin_label_on)
-            for (s = [-1, 1]) let (i = s > 0 ? 0 : 1) if (ant_twin_labels[i] != "")
-                translate([s * (ant_twin_sep/2 - 6), 0, -0.01]) mirror([1, 0, 0])
-                    linear_extrude(height = ant_twin_label_depth + 0.01) {
-                        translate([0, 2.5]) text(ant_twin_labels[i], size=ant_twin_label_size,
-                            font="Liberation Sans:style=Bold", halign="center", valign="center");
-                        translate([0, -5.5]) text("MHz", size=ant_twin_label_size * 0.55,
-                            font="Liberation Sans:style=Bold", halign="center", valign="center");
-                    }
+            translate([0, 0, -0.01]) ant_twin_label_solid(af, ant_twin_label_depth + 0.01);
     }
+}
+
+// Each side's frequency, as a solid `h` deep from the outer face (z=0) in:
+// cut from the cover above, and printed on its own as the lettering that
+// fills the engraving in a second colour (antenna_mount_twin_cover_text_*,
+// 2026-10-10). Mirrored, since the face is read from behind the case.
+module ant_twin_label_solid(af = ant_twin_jack_af, h = ant_twin_label_depth) {
+    for (s = [-1, 1]) let (i = s > 0 ? 0 : 1) if (ant_twin_labels[i] != "")
+        translate([s * (ant_twin_sep/2 - 6), 0, 0]) mirror([1, 0, 0])
+            linear_extrude(height = h) {
+                translate([0, 2.5]) text(ant_twin_labels[i], size=ant_twin_label_size,
+                    font="Liberation Sans:style=Bold", halign="center", valign="center");
+                translate([0, -5.5]) text("MHz", size=ant_twin_label_size * 0.55,
+                    font="Liberation Sans:style=Bold", halign="center", valign="center");
+            }
 }
 
 // The cover in its seat on the body, for the checks and the preview.
@@ -1897,6 +1936,8 @@ else if (part == "antenna_mount_twin_11") antenna_mount_twin([11, 11]);      // 
 else if (part == "antenna_mount_twin_cover") antenna_mount_twin_cover();
 else if (part == "antenna_mount_twin_cover_8") antenna_mount_twin_cover([8, 8]);
 else if (part == "antenna_mount_twin_cover_11") antenna_mount_twin_cover([11, 11]);
+else if (part == "antenna_mount_twin_cover_text_8") ant_twin_label_solid([8, 8]);     // the lettering, for a second colour
+else if (part == "antenna_mount_twin_cover_text_11") ant_twin_label_solid([11, 11]);
 else if (part == "twin_assembled") { antenna_mount_twin(); ant_twin_cover_placed(); back_plate(); }  // for pictures
 else if (part == "twin_assembled_11") { antenna_mount_twin([11, 11]); ant_twin_cover_placed([11, 11]); back_plate(); }
 else if (part == "none") {}  // for a file that includes this one to draw its own views

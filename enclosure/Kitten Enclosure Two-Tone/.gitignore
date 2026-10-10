@@ -6,3 +6,5 @@
 # They are still generated, not authored. If you change the .scad, re-export
 # and commit both together, or the mesh silently stops matching the source.
 !*.stl
+# The two-colour cover projects are committed like the meshes (make-cover-3mf.py).
+!antenna_mount_twin_cover_*_twotone.3mf
