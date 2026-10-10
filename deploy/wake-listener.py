@@ -169,6 +169,9 @@ def _wake(alert=False):
             os.unlink(ALERT_FLAG)
         except OSError:
             pass
+    if _panel_state() != "on":
+        subprocess.run(["logger", "-t", "stratoscan-screen", "on-alert" if alert else "on-wake"],
+                       timeout=5, check=False)
     subprocess.run(["wlopm", "--on", "*"], timeout=5, check=False)
     subprocess.run(
         ["systemctl", "--user", "restart", SCREENSAVER_UNIT], timeout=10, check=False
