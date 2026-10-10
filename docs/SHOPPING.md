@@ -89,7 +89,7 @@ They share the back plate and antenna mount.
 | Front: the trim and the retainer, into the shell's front posts | 8 (the kitten uses 7) | M3 × 5 | M3 × 14 socket head | Press from the front, flush with the shelf |
 | Back plate, into the shell's back posts | 8 | M3 × 6 | M3 × 8 | Press from the back face |
 | Antenna mount (any of the three), into its flange | 3 | M3 × 5 | M3 × 8 | The screws come from inside the case, through the plate |
-| USB-C panel connector, to the back plate | 2 | none | M3 × 6 with nuts, or the connector's own | Holes 16.5 mm apart |
+| USB-C panel connector, to the back plate | 2 | none | M3 × 6 with nuts, or the connector's own | Holes 16.5 mm apart; the heads sit in the 2 mm pocket round the connector (plates printed from 2026-10-10 on) |
 | Speakers, to their brackets | 4 each, 8 | optional M2 × 3 | M2 × 6, or M2 self-tapping | 2.6 mm pilots for the self-tappers; drill to 3.0 for inserts |
 | Pi, to the display's back | 4 | none | M2.5 × 6 and standoffs, in the display's box | |
 | FlyCatcher, onto the Pi | 4 | none | M2.5 standoffs, ~16–20 mm, and screws | tall enough to clear the cooler |

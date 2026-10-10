@@ -194,6 +194,17 @@ usbc_cut_r       = 1.2;
 usbc_screw_pitch = 16.5;   // centre-to-centre of the two mounting screws
 usbc_screw_dia   = screw_clear_dia;   // M3 clearance (3.4), same as every other M3 hole
 usbc_cut_pos     = [60, -14];
+// The connector's body is a rectangular boss, 22.25 x 11 (measured
+// 2026-10-10), mounted from inside against the plate; through a 3 mm plate
+// its socket sat 3 mm below the outer face and a plug would not seat. A
+// pocket in the OUTER face, the boss's size with a little clearance and
+// usbc_recess_d deep, leaves a 1 mm web the two screws clamp through and
+// puts the socket 1 mm below the pocket floor. The screw heads sit in the
+// pocket; M3 x 6 still reach (2 mm further into the connector).
+usbc_boss_w      = 22.25;
+usbc_boss_h      = 11.0;
+usbc_boss_clear  = 0.3;    // a side
+usbc_recess_d    = 2.0;    // of back_plate_t: the web is what is left
 
 // ---- Antenna-mount inserts (inside face) -----------------------------
 // Bosses on the INNER face taking M3 heat-set inserts, so the mount screws
@@ -1587,6 +1598,10 @@ module usbc_cutout() {
         for (sx = [-1, 1])
             translate([sx * usbc_screw_pitch/2, 0, 0])
                 cylinder(d = usbc_screw_dia, h = back_plate_t + 2);
+        // the pocket for the connector's boss, in the outer face (z = -back_plate_t)
+        linear_extrude(height = usbc_recess_d + 1)
+            offset(r = usbc_cut_r) offset(delta = -usbc_cut_r)
+                square([usbc_boss_w + 2*usbc_boss_clear, usbc_boss_h + 2*usbc_boss_clear], center = true);
     }
 }
 
