@@ -125,6 +125,21 @@ listing publishes no cutout size, so for a different connector print
 `usbc_gauge` — the cutout plus four neighbours at ±0.5 and ±1.0mm — and fit
 it before committing a back plate. A coupon is minutes; a plate is hours.
 
+### The front: trim, glass, retainer
+
+Eight M3 × 14 screws go through the front trim's M3 clearance holes (3.4mm),
+past the retainer, and into the M3 inserts in the shell's front posts.
+
+**The retainer slips into the shell with 0.4mm to spare all round**
+(`retainer_clear`). It was drawn at exactly the bore's diameter, and the
+first print, PETG in an ASA shell, had to be forced in (2026-10-09). ASA
+shrinks a little more than PETG, which made the zero clearance worse, but the
+missing clearance was the cause. Its screw holes are **open notches** at the
+rim: the screws sit where the shell's inserts are, which leaves less than a
+hole's width of ring outside them, and closed holes printed as a 0.3mm
+sliver. The notches also stop the ring turning. Checks: `retainer_clears_bore`,
+`retainer_screws_pass`, `trim_screws_pass`.
+
 ### The plate fits one way only
 
 The plate's locating rib is eight identical arcs between eight evenly
