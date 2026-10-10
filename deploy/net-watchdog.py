@@ -387,10 +387,91 @@ def check_kiosk():
             return
 
 
+# ---- the 978 MHz decoder against a weak power supply (2026-10-10) --------
+# The 978 radio running full-time pushed a unit whose 5 V was already
+# marginal (issue #53) over the edge: the supply dipped every couple of
+# minutes, faster and faster, and the unit browned out and stopped. So the
+# watchdog sheds that load itself when the dips speed up, and gives it back
+# once they have calmed. It pauses the decoder (systemctl stop), never
+# disables it: a reboot starts it again, and an owner who turned it off
+# (disabled) is left alone. Each pause waits twice as long as the last
+# before resuming (30 minutes, then an hour, ... at most six hours), so a
+# unit that cannot carry the load spends most of its time without 978
+# rather than flapping; the count resets at boot.
+UAT_UNIT = "stratoscan-uat.service"
+UAT_PAUSED = "/run/stratoscan-net/uat-paused"      # "<paused at> <pauses so far>"
+UAT_PAUSE_DIPS = 4               # dips in UAT_PAUSE_WINDOW_S that pause it
+UAT_PAUSE_WINDOW_S = 10 * 60     # the morning ran ~0.6 in ten minutes; the half hour before
+                                 # the brown-out ran 3.7, speeding up
+UAT_RESUME_QUIET_S = 30 * 60     # resume only after this long with at most one dip
+UAT_RESUME_MAX_DIPS = 1
+UAT_COOLDOWN_S = 30 * 60         # the first pause's minimum; doubles each time
+UAT_COOLDOWN_MAX_S = 6 * 3600
+
+
+def undervoltage_dips(window_s):
+    """How many times the kernel saw the 5 V rail dip in the last window_s."""
+    out = run(["journalctl", "-k", "--since", f"-{int(window_s)}s", "--no-pager", "-o", "cat"],
+              timeout=30)
+    if out.returncode != 0:
+        return None
+    return sum(1 for line in out.stdout.decode("utf-8", "replace").splitlines()
+               if "Undervoltage detected" in line)
+
+
+def _uat_paused():
+    try:
+        with open(UAT_PAUSED) as f:
+            at, n = f.read().split()
+            return float(at), int(n)
+    except (OSError, ValueError):
+        return None
+
+
+def check_uat_power(now=None):
+    now = time.time() if now is None else now
+    enabled = run(["systemctl", "is-enabled", UAT_UNIT], timeout=15)
+    if enabled.stdout.decode().strip() != "enabled":
+        return                       # no 978 decoder here, or its owner turned it off
+    paused = _uat_paused()
+    if paused is None:
+        dips = undervoltage_dips(UAT_PAUSE_WINDOW_S)
+        if dips is None or dips < UAT_PAUSE_DIPS:
+            return
+        active = run(["systemctl", "is-active", UAT_UNIT], timeout=15).stdout.decode().strip()
+        if active != "active":
+            return                   # it is not running (a unit with no 978 radio): nothing to shed
+        n = (_read_int(UAT_PAUSED + ".count") or 0) + 1
+        run(["systemctl", "stop", UAT_UNIT], timeout=60)
+        os.makedirs(os.path.dirname(UAT_PAUSED), exist_ok=True)
+        with open(UAT_PAUSED, "w") as f:
+            f.write(f"{now} {n}")
+        _write_int(UAT_PAUSED + ".count", n)
+        wait = min(UAT_COOLDOWN_MAX_S, UAT_COOLDOWN_S * 2 ** (n - 1))
+        print(f"power: {dips} under-voltage dips in {UAT_PAUSE_WINDOW_S // 60} min; pausing the 978 MHz "
+              f"decoder to shed load (pause {n}; back in {wait // 60} min at the earliest, once the supply "
+              f"is quiet)", flush=True)
+        return
+    at, n = paused
+    wait = min(UAT_COOLDOWN_MAX_S, UAT_COOLDOWN_S * 2 ** (n - 1))
+    if now - at < wait:
+        return
+    dips = undervoltage_dips(UAT_RESUME_QUIET_S)
+    if dips is None or dips > UAT_RESUME_MAX_DIPS:
+        return
+    run(["systemctl", "start", UAT_UNIT], timeout=60)
+    try:
+        os.unlink(UAT_PAUSED)
+    except OSError:
+        pass
+    print(f"power: the supply has been quiet ({dips} dips in {UAT_RESUME_QUIET_S // 60} min); "
+          f"the 978 MHz decoder is running again", flush=True)
+
+
 def check_health():
     # Independent of each other and of the networking below: a bug or an
     # odd state in one must never stop the unit staying reachable.
-    for check in (check_receiver, check_kiosk):
+    for check in (check_receiver, check_kiosk, check_uat_power):
         try:
             check()
         except Exception as e:
