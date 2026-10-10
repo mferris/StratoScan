@@ -626,24 +626,28 @@
     max-height: 220px;
     object-fit: cover;
   }
+  /* Over the photo, so its colours are fixed rather than the theme's: the
+     daylight themes' dark text on this always-dark box was unreadable.
+     Lower right, above the credit strip, out of the aircraft's way (a
+     representative photo never carries the QR code that sits there). */
   #detailPanel .dp-photo-badge {
     position: absolute;
-    top: 8px;
-    left: 8px;
+    right: 8px;
+    bottom: 26px;
     font-size: 0.58rem;
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
-    color: var(--text);
-    background: rgba(5, 8, 10, 0.8);
-    border: 1px solid rgba(255,255,255,0.15);
+    color: #f2f5f6;
+    background: rgba(5, 8, 10, 0.78);
+    border: 1px solid rgba(255,255,255,0.25);
     padding: 3px 7px;
     border-radius: 3px;
   }
   #detailPanel .dp-photo-credit {
     font-size: 0.55rem;
     letter-spacing: 0.04em;
-    color: var(--text-dim);
+    color: #c9d3d6;              /* fixed, like the badge: the strip is always dark */
     background: rgba(5, 8, 10, 0.7);
     padding: 3px 8px;
   }
@@ -669,7 +673,8 @@
     z-index: 2;
   }
   #detailPanel .dp-photo img.dp-photo-qr.big { width: 160px; height: 160px; }
-  #detailPanel .dp-photo-credit .dp-scan { margin-left: 8px; color: var(--mid); }
+  #detailPanel .dp-photo-credit a { color: inherit; text-decoration: underline; }   /* the public page's link, readable on the strip */
+  #detailPanel .dp-photo-credit .dp-scan { margin-left: 8px; color: #4fd6c8; }   /* fixed: dark teal vanished on the strip in daylight themes */
 
   /* Due west, right at the dial's edge -- deliberately placed past where
      the aircraft label ring sits (~87% of the way to the edge, see
