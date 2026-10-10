@@ -4851,7 +4851,9 @@ function checkRareAircraft(pl) {
   if (performance.now() - lastRareAlertAt < RARE_ALERT_COOLDOWN_MS) return;
   lastRareAlertAt = performance.now();
 
-  wakeScreenForAlert('rare:' + why.kind);
+  // "Never seen here before" is the commonest rare alert, every new tail:
+  // it shows, but no longer turns a dark panel on (2026-10-10).
+  if (why.kind !== 'first') wakeScreenForAlert('rare:' + why.kind);
   showDetailPanel(pl, true, why.label.toUpperCase(), '\u2726');
   playRareSound();
   speak(announcementFor(pl, why.label));
@@ -6221,7 +6223,7 @@ function alertSettingsMeta() { return [
   { group: 'display', key: 'nightDim', label: 'Dim at night', sub: 'Darkens the display between sunset and sunrise at the receiver' },
   { group: 'display', key: 'emptySky', label: 'Clock & weather when quiet', sub: 'Shows the time, the weather and today’s count when nothing is in range' },
   { group: 'alerts', key: 'voice', label: 'Spoken announcements', sub: 'Says what it is after the chime: “Delta 1 4 0, Boeing 767, 3,000 feet, 2 miles north-east”' },
-  { group: 'alerts', key: 'alertWake', label: 'Alerts wake the screen', sub: 'Nearby + emergency alerts undim, and wake the display if the screensaver blanked it' },
+  { group: 'alerts', key: 'alertWake', label: 'Alerts wake the screen', sub: 'Nearby, emergency and notable alerts undim, and light a dark screen for two minutes (a touch keeps it on)' },
 ]; }
 
 function renderSettingsPanel() {

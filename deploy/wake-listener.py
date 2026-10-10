@@ -152,7 +152,23 @@ def _panel_state():
         return "?"
 
 
-def _wake():
+# Wakes the page asks for on an alert. The screensaver keeps a panel lit by
+# one of these for ALERT_HOLD_S (stratoscan-screensaver.service) unless
+# someone touches it; any other wake (an update about to check its paint)
+# gets the full idle time.
+ALERT_WAKES = ("nearby", "rare", "emergency")
+ALERT_FLAG = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "stratoscan-alert-wake")
+
+
+def _wake(alert=False):
+    if alert:
+        with open(ALERT_FLAG, "w"):
+            pass
+    else:
+        try:
+            os.unlink(ALERT_FLAG)
+        except OSError:
+            pass
     subprocess.run(["wlopm", "--on", "*"], timeout=5, check=False)
     subprocess.run(
         ["systemctl", "--user", "restart", SCREENSAVER_UNIT], timeout=10, check=False
@@ -263,8 +279,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if now - _last_wake >= MIN_INTERVAL_S:
             _last_wake = now
             try:
-                print(f"wake: {why} (panel was {_panel_state()})", flush=True)
-                _wake()
+                state = _panel_state()
+                alert = why.startswith(ALERT_WAKES)
+                if alert and state == "on":
+                    # Already lit: an alert does not buy the panel more time
+                    # (the owner's ask, 2026-10-10), or a busy sky keeps it on.
+                    print(f"wake: {why} (panel already on; nothing to do)", flush=True)
+                else:
+                    print(f"wake: {why} (panel was {state}"
+                          f"{'; lit for the alert hold' if alert else ''})", flush=True)
+                    _wake(alert)
             except Exception:
                 pass  # a failed wake must never take the listener down
         self.send_response(204)
