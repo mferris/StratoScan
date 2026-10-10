@@ -1253,9 +1253,17 @@ ant_twin_pocket_z  = 26;    // above this the open slot becomes a closed pocket 
 ant_twin_cover_top = 25.8;  // the cover's tabs stop under the pocket
 ant_twin_m2_hole   = 3.0;   // M2 heat-set insert, 3.2mm across the knurl (3.2 if the kit's are the 3.5mm kind). MEASURE the kit's.
 ant_twin_m2_depth  = 6;
-ant_twin_screw_hole = 2.4;  // M2 clearance through the cover. No counterbore: a 3mm cover printed
-                            // face-down cannot roof one, so the cap heads stand 2mm proud of a
-                            // face nothing touches
+ant_twin_screw_hole = 2.4;  // M2 clearance through the cover
+// Counterbored so the M2 cap heads sit mostly below the face (the owner's
+// ask, 2026-10-10): 3.8mm heads, 2mm tall, in 4.4mm bores 1.5mm deep, so
+// they stand 0.5mm proud and 1.5mm of cover stays under them. The cover
+// prints outer face down, so each bore opens on the plate and its roof is a
+// 1mm-wide ring round the screw hole: a bridge any slicer spans, which the
+// "no counterbore" note here used to rule out too cautiously. The M2 x 6
+// screws still fit: the cover is 1.5mm thinner under the head, so they reach
+// 1.5mm deeper, 4.5 of the 6mm insert hole.
+ant_twin_cbore_d = 4.4;
+ant_twin_cbore_h = 1.5;
 ant_twin_back_pad  = 4;     // the bar is thicker on its case side behind the flare under the bore's mouth
 ant_twin_back_pad_w = 40;
 ant_twin_label_size = 6;
@@ -1416,8 +1424,10 @@ module antenna_mount_twin_cover(af = ant_twin_jack_af) {
                 translate([s*ant_twin_sep/2 - w/2, 16, ant_twin_cover_t - 0.01])
                     cube([w, ant_twin_cover_top - 0.3 - 16, t + 0.01]);
         }
-        for (p = ant_twin_screw_xz(af)) translate([p[0], p[1], -1])
+        for (p = ant_twin_screw_xz(af)) translate([p[0], p[1], -1]) {
             cylinder(d=ant_twin_screw_hole, h=ant_twin_cover_t + 2, $fn=24);
+            cylinder(d=ant_twin_cbore_d, h=ant_twin_cbore_h + 1, $fn=32);   // the head's seat, in the outer face (z=0)
+        }
         if (ant_twin_label_on)
             for (s = [-1, 1]) let (i = s > 0 ? 0 : 1) if (ant_twin_labels[i] != "")
                 translate([s * (ant_twin_sep/2 - 6), 0, -0.01]) mirror([1, 0, 0])
