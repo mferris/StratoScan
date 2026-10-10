@@ -65,7 +65,9 @@ none of their content; each is used within its published terms.
 
 ## Software the device image depends on (installed, not shipped here)
 
-`readsb` (GPL-3.0-or-later) and `tar1090` (GPL-2.0-or-later), Raspberry
+`readsb` (GPL-3.0-or-later), `tar1090` (GPL-2.0-or-later), `dump978`
+(GPL-2.0-or-later, the 978 MHz decoder, built from
+[flightaware/dump978](https://github.com/flightaware/dump978)), Raspberry
 Pi OS / Debian packages, Chromium, Tailscale, and lighttpd are installed on the
 device from their own distributions. This repository contains no code from
 them. **A pre-built device image would redistribute these**, and must then

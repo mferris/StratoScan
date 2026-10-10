@@ -26,7 +26,9 @@ ProtectSystem=strict
 ProtectHome=yes
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# AF_NETLINK as well: libusb enumerates USB devices through a netlink
+# socket, and without it rtl_sdr finds no radio at all (seen on RDU).
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 LockPersonality=yes
 
 [Install]

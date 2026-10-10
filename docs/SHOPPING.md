@@ -134,4 +134,4 @@ starts before buying:** the exact part may change.
 | [Adafruit VEML7700 lux sensor (#4162)](https://www.adafruit.com/product/4162) and [STEMMA QT cable (#4397)](https://www.adafruit.com/product/4397) | [5.5 light sensor](https://github.com/mferris/StratoScan/issues/27) | $6 |
 | Rotary encoder | [5.1 rotating bezel](https://github.com/mferris/StratoScan/issues/22) | ~$5 |
 | Presence sensor: LD2410 mmWave, or a PIR | [5.2 presence wake](https://github.com/mferris/StratoScan/issues/23) | ~$10 |
-| 978 MHz SDR, for example FlightAware's 978 MHz Pro Stick Plus (the antenna is already in the bundle above) | [5.3 UAT receiver, US only](https://github.com/mferris/StratoScan/issues/24) | ~$25–40 |
+| 978 MHz receiver: nothing to buy. The FlyCatcher's second radio is the 978 MHz one, and the Discovery bundle above has the 978 whip; decoded since 2026-10-10 | [5.3 UAT receiver, US only](https://github.com/mferris/StratoScan/issues/24) | $0 |

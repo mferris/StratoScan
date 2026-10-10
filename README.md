@@ -244,6 +244,7 @@ scanning a QR code on its screen:
 
 ```
 [Antenna] → [RTL-SDR dongle] → [readsb] → aircraft.json (local)
+[978 MHz antenna] → [second radio] → [dump978] ─┘  (US units; UAT aircraft join the same list)
                                                  │
                                                  ▼
                                    [StratoScan: fetch + render]
@@ -474,6 +475,7 @@ StratoScan leans entirely on free, no-key-required public data, same as
 several of these choices, but no code is shared):
 
 - **[readsb](https://github.com/wiedehopf/readsb)** — ADS-B decoding
+- **[dump978](https://github.com/flightaware/dump978)** — 978 MHz (UAT) decoding, for the FlyCatcher's second radio; its aircraft are merged into readsb's
 - **[MapLibre GL JS](https://maplibre.org/)** (BSD-3-Clause, vendored under [`vendor/`](vendor/) — self-hosted, no CDN dependency) + **[OpenFreeMap](https://openfreemap.org/)** — background map tiles/style
 - **[OpenStreetMap](https://www.openstreetmap.org/) via Overpass** — real runway/taxiway geometry
 - **[adsb.im](https://adsb.im/)** — route (city-pair) lookups
