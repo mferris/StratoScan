@@ -21,7 +21,7 @@ speaker_angles=[0,180]; back_plate_t=3;
 // A stale value here checks geometry the design no longer has, and passes.
 back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9; post_od=9;
 back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40; ant_mount_y=81;
-ant_bolt_d=3.4; usbc_cut_pos=[60,-14]; usbc_screw_pitch=16.5; usbc_screw_dia=3.4; usbc_cut_w=11.0; usbc_cut_h=6.5;
+ant_bolt_d=3.4; usbc_cut_pos=[0,-41]; usbc_screw_pitch=16.5; usbc_screw_dia=3.4; usbc_cut_w=11.0; usbc_cut_h=6.5;
 usbc_boss_w=22.25; usbc_boss_h=11.0; usbc_boss_clear=0.3; usbc_recess_d=2.0; usbc_cut_r=1.2;
 mount_hole_x=58; mount_hole_y=49; stand_angle=18;
 base_w=outer_dia*0.86; base_d=150; plinth_rib_h=4; plinth_rib_w=3; plinth_rib_z=[3.5, 9.5];
@@ -134,6 +134,24 @@ else if (check=="usbc_recess_web") {
     back_plate();
     translate([usbc_cut_pos[0] - 10, usbc_cut_pos[1] + usbc_cut_h/2 + 0.3, -back_plate_t + usbc_recess_d + 0.1])
       cube([20, 2.0, back_plate_t - usbc_recess_d - 0.2]);
+  }
+}
+// A plug in the USB-C socket (14 x 9, 35 mm out of the plate with its strain
+// relief) clears the stand with the case leaning back in it (the socket is
+// at the bottom of the plate since 2026-10-10)...
+else if (check=="usbc_plug_clears_stand") {
+  intersection() {
+    stand();
+    translate([0,0,base_h + cradle_od/2 - 3]) rotate([90-stand_angle,0,0]) translate([0,0,-shell_depth/2])
+      translate([usbc_cut_pos[0] - 7, usbc_cut_pos[1] - 4.5, -back_plate_t - 35]) cube([14, 9, 35]);
+  }
+}
+// ...and the same probe, run on into the plate, does meet it (the probe is
+// where the socket is).
+else if (check=="usbc_plug_probe_works") {
+  intersection() {
+    back_plate();
+    translate([usbc_cut_pos[0] - 7, usbc_cut_pos[1] - 4.5, -back_plate_t - 35]) cube([14, 9, 35 + back_plate_t + 1]);
   }
 }
 // sanity: this MUST produce geometry, or nothing above means anything.
