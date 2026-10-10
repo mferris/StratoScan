@@ -40,7 +40,7 @@ check('$SERVER["socket"] == ":443"' in conf and 'ssl.pemfile = "/etc/stratoscan/
 inst = (D / "install-setup-server.sh").read_text()
 for needle in ("lighttpd-mod-openssl", "tls-cert.sh", "stratoscan-tls-cert.service", "lighttpd-stratoscan-tls.conf", "85-stratoscan-tls.conf"):
     check(needle in inst, "the installer carries %s" % needle)
-check(inst.index("if live; then sh deploy/tls-cert.sh; fi") < inst.index("lighttpd -tt -f /etc/lighttpd/lighttpd.conf"),
+check(inst.index("if live; then sh deploy/tls-cert.sh; fi") < inst.index("\nlighttpd_test\n"),
       "on a live unit the certificate exists before lighttpd is checked and reloaded")
 check("chmod 0755 /etc/stratoscan/tls" in inst, "the installer opens the directory on a unit built before")
 check('"tls-cert.sh",' in (D / "ota.py").read_text(), "an update may carry tls-cert.sh")
