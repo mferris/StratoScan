@@ -1,0 +1,33 @@
+[Unit]
+Description=StratoScan 978 MHz (UAT) decoder: rtl_sdr into dump978-fa, fed to readsb (roadmap 5.3)
+After=network.target stratoscan-radio.service
+Wants=stratoscan-radio.service
+Before=readsb.service
+
+[Service]
+# The 978 radio is opened by index, resolved by name just before the start
+# (radio-select.py), because dump978-fa's own SoapySDR selection goes by
+# serial and the FlyCatcher's two halves share one. rtl_sdr pipes raw 8-bit
+# samples at 2.083334 MS/s, the UAT rate, into the decoder, which serves raw
+# messages on 30978 (readsb connects to that) and decoded JSON on 30979,
+# loopback only. Without a 978 radio the unit exits cleanly and stays
+# stopped: that is a 1090-only radar, not a fault.
+ExecStartPre=+/usr/bin/python3 /opt/stratoscan/radio-select.py
+EnvironmentFile=-/run/stratoscan-radio/uat.env
+Environment=UAT_GAIN=49.6
+ExecStart=/bin/sh -c 'if [ -z "$UAT_INDEX" ]; then echo "uat: no 978 MHz radio on this unit"; exit 0; fi; echo "uat: radio #$UAT_INDEX, gain $UAT_GAIN dB"; rtl_sdr -d "$UAT_INDEX" -f 978000000 -s 2083334 -g "$UAT_GAIN" - | dump978-fa --stdin --format CU8 --raw-port 127.0.0.1:30978 --json-port 127.0.0.1:30979'
+Restart=on-failure
+RestartSec=15
+User=readsb
+SupplementaryGroups=plugdev
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target
