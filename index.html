@@ -650,18 +650,25 @@
   /* On the kiosk, whose screen has no link to tap, a QR code of the photo's
      page: planespotters.net's terms ask for a one-action way to reach the
      photographer and accept a QR code (a URL as text is not enough). */
+  /* Small enough to leave the photo alone (80 px, about 11 mm on the 7"
+     panel, the least a phone reads reliably at 45 modules); a tap makes it
+     twice the size for scanning, another tap puts it back. */
   #detailPanel .dp-photo img.dp-photo-qr {   /* outranks the photo's own img rule */
     position: absolute;
-    right: 8px;
-    bottom: 26px;
-    width: 120px;
-    height: 120px;
+    right: 6px;
+    bottom: 24px;
+    width: 80px;
+    height: 80px;
     margin: 0;
-    padding: 4px;
-    border-radius: 6px;
+    padding: 2px;
+    border-radius: 4px;
     background: #fff;
     object-fit: contain;
+    cursor: pointer;
+    transition: width 0.15s, height 0.15s;
+    z-index: 2;
   }
+  #detailPanel .dp-photo img.dp-photo-qr.big { width: 160px; height: 160px; }
   #detailPanel .dp-photo-credit .dp-scan { margin-left: 8px; color: var(--mid); }
 
   /* Due west, right at the dial's edge -- deliberately placed past where
@@ -7817,6 +7824,13 @@ detailPanelEl.addEventListener('pointerup', (e) => {
   detailPointerStart = null;
   if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > PANEL_DRAG_SLOP_PX) {
     e.stopPropagation(); // that was a scroll -- leave the panel open
+    return;
+  }
+  // The photo's QR code: a tap makes it bigger to scan, or smaller again,
+  // and leaves the panel open (a tap elsewhere still closes it).
+  if (e.target instanceof Element && e.target.closest('.dp-photo-qr')) {
+    e.stopPropagation();
+    e.target.closest('.dp-photo-qr').classList.toggle('big');
     return;
   }
   if (e.target instanceof Element && e.target.closest('.dp-follow') && detailPanelHex) {
