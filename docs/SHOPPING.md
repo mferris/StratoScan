@@ -7,7 +7,7 @@ features in progress.
 Claude keeps this current. A part is added when the design or an issue first
 needs one, and moved along as it is ordered and fitted.
 
-*Last updated 2026-09-30. Prices are approximate, in US dollars.*
+*Last updated 2026-10-10. Prices are approximate, in US dollars.*
 
 ## Build one StratoScan
 
@@ -21,7 +21,7 @@ browser, before any display or case.
 | [Raspberry Pi 5, 4 GB](https://www.raspberrypi.com/products/raspberry-pi-5/) (or 8 GB) | 1 | $85 (8 GB: $130) | Measured on a radar after a day running everything (2026-10-04): 2.3 GB used, no swap. 4 GB leaves 1.6 GB spare; 8 GB leaves 5.7 GB nothing uses. 2 GB is too small. Prices rose sharply in 2026 |
 | [Raspberry Pi Active Cooler](https://www.raspberrypi.com/products/active-cooler/) | 1 | $5 | Needed: it drives the radar full-time, and the case holds heat in. The FlyCatcher sits above it on tall standoffs |
 | [Raspberry Pi RTC battery](https://www.raspberrypi.com/products/rtc-battery/) (ML-2020, rechargeable) | 1 | $5 | Keeps the clock through power cuts. Plugs into the Pi 5's BAT socket; the installer enables charging with `RTC_RECHARGEABLE=1`. **Never enable charging for a CR2032** |
-| [Raspberry Pi 27 W USB-C power supply](https://www.raspberrypi.com/products/27w-power-supply/) | 1 | $12 | A weaker supply causes under-voltage and USB drop-outs |
+| [Raspberry Pi 27 W USB-C power supply](https://www.raspberrypi.com/products/27w-power-supply/) | 1 | $12 | **Use this one, not a generic USB-C supply.** A weaker supply causes under-voltage and USB drop-outs. A generic 5 V supply tried on RDU (2026-10-10) held its voltage but put radio noise on it: with the FlyCatcher's amplifier on, the noise floor rose 9 dB and the radar heard 2 of 8 nearby aircraft instead of 7 of 10. The occasional under-voltage dips on this supply are the display drawing through the Pi ([#53](https://github.com/mferris/StratoScan/issues/53)), not the supply |
 | High-endurance microSD card, 64–128 GB | 1 | $15–25 | For example SanDisk High Endurance or Samsung PRO Endurance. Writes measure about 2.25 GB/day, fine for about 10 years on an endurance card |
 | ADS-B receiver: **[Nooelec FlyCatcher](https://www.nooelec.com/store/flycatcher.html)** | 1 | $110 | What RDU uses, and the choice for every unit (2026-10-04): it mounts on the Pi as a HAT, which the cases and the twin antenna mount are built around, and it has a 978 MHz input for later. The [FlightAware Pro Stick Plus](https://flightaware.store/products/pro-stick-plus) ($45) hears the same from a USB port, for anyone building a kit on a budget |
 | M2.5 standoffs and screws for the FlyCatcher, tall enough to clear the Active Cooler (~16–20 mm) | 4 | $0–4 | Check the FlyCatcher's box first; most HATs include a set, but not always tall enough for the cooler |
