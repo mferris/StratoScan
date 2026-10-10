@@ -10,11 +10,22 @@ PartOf=graphical-session.target
 # in the page leaves the backlight lit. Touching the panel is ordinary
 # input, so `resume` fires and the display comes straight back.
 #
-# IDLE_MINUTES is the one knob worth changing; edit it and
+# IDLE_MINUTES: how long the panel stays lit after the last touch.
+# ALERT_HOLD_S: how long it stays lit when an ALERT turned it on and nobody
+# has touched it since (2026-10-10). Every alert used to give a fresh 20
+# minutes, and the radar alerts every few minutes in the day, so the panel
+# never went dark (168 wakes in one day). wake-listener.py marks an alert
+# wake with the flag file below; the ALERT_HOLD_S timeout turns the panel
+# off only while the flag is there; any input clears it (resume runs after
+# the 1-second timeout, i.e. on the first touch after a pause), so a touch
+# gets the ordinary IDLE_MINUTES. Wakes that are not alerts (an update
+# waiting to verify its paint) set no flag and keep the full time.
+# Edit either and
 #   systemctl --user restart stratoscan-screensaver.service
 Environment=IDLE_MINUTES=20
+Environment=ALERT_HOLD_S=120
 ExecStartPre=/bin/sh -c 'i=0; while [ $i -lt 60 ]; do ls "$XDG_RUNTIME_DIR"/wayland-*[0-9] >/dev/null 2>&1 && exit 0; sleep 1; i=$((i+1)); done; exit 1'
-ExecStart=/bin/sh -c 'exec swayidle -w timeout $((IDLE_MINUTES * 60)) "wlopm --off \\*" resume "wlopm --on \\*"'
+ExecStart=/bin/sh -c 'F="$XDG_RUNTIME_DIR/stratoscan-alert-wake"; exec swayidle -w timeout 1 true timeout "$ALERT_HOLD_S" "[ -e $$F ] && wlopm --off \\*" timeout $((IDLE_MINUTES * 60)) "wlopm --off \\*" resume "rm -f $$F; wlopm --on \\*"'
 Restart=always
 RestartSec=5
 
