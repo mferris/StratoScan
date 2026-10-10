@@ -18,6 +18,7 @@ the rest follows.
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
 | `antenna_mount_twin_8`, `antenna_mount_twin_11` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight. Two styles, for jumpers whose bulkhead body is an 8 mm hex or an 11 mm hex; two parts each, this body and the cover below (`antenna_mount_twin` is whichever `ant_twin_jack_af` names) |
 | `antenna_mount_twin_cover_8`, `antenna_mount_twin_cover_11` | the 3 mm cover that closes the twin body's cable channel, on five M2 screws, with each side's frequency engraved in it (`twin_assembled` and `twin_assembled_11` show both parts on the plate, for pictures only) |
+| `antenna_mount_twin_cover_8_twotone.3mf`, `antenna_mount_twin_cover_11_twotone.3mf` | the same covers with the frequencies in a second colour: one object, the cover on filament 1 and the lettering (`antenna_mount_twin_cover_text_8` / `_11`) on filament 2. Built by `make-cover-3mf.py` from binary STL exports |
 | `usbc_gauge` | test coupon: five candidate USB-C cutouts, to fit the connector before printing a whole plate |
 
 Two extra targets, `test_antenna` and `test_speaker`, clip the real shell
@@ -267,6 +268,8 @@ The FlyCatcher has two antenna inputs, 1090 and 978 MHz, and the Nooelec bundle 
 3. Push the jack up with a fingertip through the open channel: the top of the slot is a closed pocket the hex's size, and the barrel comes through the panel when the body is in it. Washer and nut on from the top, finger tight, then a quarter turn with an 8 mm (5/16") spanner — the pocket holds the jack, so nothing inside has to be held. Don't crank it; the panel is 2 mm of ASA. Check the nuts again after a week; ASA relaxes a little.
    Set each whip so its hinge folds towards or away from the wall, not towards the other whip: that's the direction the mount is weakest, so the hinge gives before the panel does, and a folded whip then clears the other tower.
 4. Tidy the cables into the channel and fit the cover: five M2 × 6 into the M2 inserts.
+
+**Lettering in a second colour.** Open the cover's `_twotone.3mf` rather than its STL. The lettering is many separate letters, and a slicer splits a multi-lump STL into one part per letter, so picking a colour for "the text" would colour one letter; the project file already has the cover on filament 1 and every letter on filament 2. Change either in the slicer. The cover prints outer face down, so the lettering is its first 0.6 mm, three 0.2 mm layers: three filament changes, nothing after. The plain STL still prints the engraved, one-colour cover.
 5. Pass both plugs through the plate's 13 mm hole, bolt the flange on from inside the plate with the three M3 × 8, plug 1090 and 978 into the FlyCatcher, and screw the whips on (the 1090 whip is the shorter one). For an outdoor antenna, screw its coax onto the same barrel instead, and give the coax its own strain relief within a few centimetres of the tower.
 
 To replace a cable: back plate off, cover off, nut off, slide the jack out of its slot, pull the plug back up through the bore. The mount stays bolted to the plate.
