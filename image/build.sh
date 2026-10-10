@@ -49,7 +49,13 @@ for f in /usr/bin/readsb /usr/local/share/tar1090/git/.stratoscan-commit /var/ww
 for f in /var/lib/stratoscan-relay/unit.key /var/lib/stratoscan-setup/setup.json \
          /var/lib/stratoscan-setup/hotspot-psk /var/lib/tailscale/tailscaled.state \
          /var/lib/stratoscan-relay/events.json /var/lib/stratoscan-relay/heartbeat.json \
-         /etc/xdg/autostart/piwiz.desktop /etc/sudoers.d/010_wiz-nopasswd; do mustnot "$f"; done
+         /etc/xdg/autostart/piwiz.desktop /etc/sudoers.d/010_wiz-nopasswd \
+         /etc/stratoscan/tls/unit.pem; do mustnot "$f"; done
+# The setup certificate is made per unit on first boot (tls-cert.sh), never in
+# the image: one baked in would be every unit's, and its key public.
+# Every new unit is in rollout ring 3, everyone, until its owner's install
+# says otherwise (RING=, MANAGED=1 for a gift unit's ring 1).
+[ "$(cat "$MNT/etc/stratoscan/ring" 2>/dev/null)" = "3" ] || { echo "  ring file missing or not 3"; fail=1; }
 grep -rq "^autologin-user=stratoscan" "$MNT/etc/lightdm/" || { echo "  autologin is not the kiosk user"; fail=1; }
 [ "$fail" = 0 ] || { echo "IMAGE CHECKS FAILED"; exit 1; }
 echo "  all checks passed"
