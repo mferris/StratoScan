@@ -75,6 +75,31 @@ e = env("readsb.env")
 check(e["RECEIVER_OPTIONS"] == '"--device 0 --device-type rtlsdr --gain 40"', "--device is added when readsb's options lack it")
 check(e["NET_OPTIONS"].count("uat_in") == 1, "the 978 feed is not added twice")
 
+# The owner's switches (settings screen, 2026-10-10): both on by default.
+sw = os.path.join(tmp, "radios.json")
+rs.RADIOS_FILE = sw
+check(rs.switches() == {"1090": True, "978": True}, "no switches file: both radios on")
+with open(sw, "w") as f:
+    f.write('{"978": false}')
+rs.radios = lambda: [(0, "Nooelec", "FlyCatcher_ADS_B", "00000001"), (1, "Nooelec", "FlyCatcher_UAT", "00000001")]
+rs.main()
+e = env("readsb.env")
+with open(os.environ["STRATOSCAN_READSB_DEFAULT"], "w") as f:
+    f.write('RECEIVER_OPTIONS="--device 0 --device-type rtlsdr --gain auto --ppm 0"\nNET_OPTIONS="--net --net-bind-address 127.0.0.1"\n')
+rs.main()
+e = env("readsb.env")
+check(env("uat.env") is None and "uat_in" not in e["NET_OPTIONS"], "978 switched off: no 978 decoder and no feed, though the radio is there")
+check(e["RECEIVER_OPTIONS"].startswith('"--device 0 '), "and 1090 carries on as before")
+with open(sw, "w") as f:
+    f.write('{"1090": false, "978": true}')
+rs.main()
+e = env("readsb.env")
+check(e["RECEIVER_OPTIONS"] == '"--device-type none"', "1090 switched off: readsb runs with no radio")
+check("uat_in" in e["NET_OPTIONS"] and env("uat.env") == {"UAT_INDEX": '"1"'}, "and still takes the 978 feed")
+with open(sw, "w") as f:
+    f.write('not json')
+check(rs.switches() == {"1090": True, "978": True}, "an unreadable switches file means both on, not both off")
+
 # The installer, the updater and the image carry it.
 inst = (root / "deploy" / "install-setup-server.sh").read_text()
 ota = (root / "deploy" / "ota.py").read_text()

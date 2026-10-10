@@ -925,6 +925,87 @@ def set_health_report(enabled):
     return health_status()
 
 
+# ---- The receivers' switches (2026-10-10) ----------------------------------
+# The owner can turn the 1090 MHz and 978 MHz radios on and off from the
+# radar's own settings screen. The switches are a file radio-select.py reads
+# before readsb and the 978 decoder start; changing one restarts the two so
+# it takes effect at once. Both are on unless switched off. The power
+# safeguard (net-watchdog.py) may pause the 978 decoder on its own; that is
+# reported, and switching 978 on again clears the pause.
+RADIOS_FILE = "/etc/stratoscan/radios.json"
+UAT_UNIT = "stratoscan-uat.service"
+UAT_PAUSED = "/run/stratoscan-net/uat-paused"
+RADIO_SELECT = "/opt/stratoscan/radio-select.py"
+
+
+def _radio_switches():
+    out = {"1090": True, "978": True}
+    try:
+        with open(RADIOS_FILE) as f:
+            d = json.load(f)
+        for k in out:
+            if isinstance(d.get(k), bool):
+                out[k] = d[k]
+    except (OSError, ValueError, AttributeError):
+        pass
+    return out
+
+
+def _unit_word(verb, unit):
+    try:
+        return run([SYSTEMCTL, verb, unit], timeout=15).stdout.decode().strip()
+    except Exception:
+        return "unknown"
+
+
+def radios_status():
+    """What each switch says and what is actually running."""
+    on = _radio_switches()
+    products = []
+    try:
+        import ctypes
+        lib = ctypes.CDLL("librtlsdr.so.0")
+        for i in range(lib.rtlsdr_get_device_count()):
+            bufs = [ctypes.create_string_buffer(256) for _ in range(3)]
+            if lib.rtlsdr_get_device_usb_strings(i, *bufs) == 0:
+                products.append(bufs[1].value.decode("utf-8", "replace"))
+    except Exception:
+        pass
+    uat_present = any("uat" in p.lower() or "978" in p for p in products)
+    return {
+        "1090": {"on": on["1090"], "running": _unit_word("is-active", "readsb") == "active"},
+        "978": {"on": on["978"], "present": uat_present,
+                "installed": _unit_word("is-enabled", UAT_UNIT) in ("enabled", "disabled"),
+                "running": _unit_word("is-active", UAT_UNIT) == "active",
+                "paused": on["978"] and os.path.exists(UAT_PAUSED)},
+    }
+
+
+def set_radios(params):
+    """Switch the 1090 and/or 978 radio on or off: {"1090": bool, "978": bool}."""
+    on = _radio_switches()
+    changed = False
+    for k in ("1090", "978"):
+        if k in params:
+            if not isinstance(params[k], bool):
+                raise Err("bad_switch", f"{k} must be true or false")
+            changed |= on[k] != params[k]
+            on[k] = params[k]
+    if not changed:
+        return radios_status()
+    os.makedirs(os.path.dirname(RADIOS_FILE), exist_ok=True)
+    atomic_write(RADIOS_FILE, json.dumps(on) + "\n", mode=0o644)
+    if on["978"]:
+        try:
+            os.unlink(UAT_PAUSED)    # switching it on again clears the safeguard's pause
+        except OSError:
+            pass
+    # The 978 decoder first, so readsb's restart finds its feed as it should be.
+    run([SYSTEMCTL, "restart" if on["978"] else "stop", UAT_UNIT], timeout=60)
+    run([SYSTEMCTL, "restart", "readsb"], timeout=60)
+    return radios_status()
+
+
 # ---- Phone pairing (roadmap 2.3) ------------------------------------------
 # pairing.py does the work, signing with the unit key; setupd exposes it to
 # the radar's own screen (setup-server's loopback-only onboarding listener)
@@ -1439,6 +1520,8 @@ VERBS = {
     "pair_remove": lambda p: pair_remove(p.get("phone")),
     "feeding_status": lambda p: feeding_status(),
     "set_feeding": lambda p: set_feeding(p.get("flightaware")),
+    "radios_status": lambda p: radios_status(),
+    "set_radios": lambda p: set_radios(p),
 }
 # Shutdown is deliberately absent: a remote caller must never be able to
 # power off an appliance that then needs a physical visit to turn back on.
@@ -1453,7 +1536,7 @@ MUTATING = {"wifi_connect", "wifi_confirm", "wifi_rollback", "hotspot_start",
             "tailscale_funnel", "reboot", "reset_settings", "reset_full",
             "tailscale_login_start", "set_health_report", "set_feeding",
             "pair_start", "pair_cancel", "pair_remove", "pair_offer_hash",
-            "fleet_join", "fleet_leave"}
+            "fleet_join", "fleet_leave", "set_radios"}
 
 
 class Handler(socketserver.StreamRequestHandler):

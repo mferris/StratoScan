@@ -7391,6 +7391,7 @@ function renderDeviceSetup() {
       <div class="sp-sub">${esc(locNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="airport"><div><div class="sp-label">Home airport</div>
       <div class="sp-sub">${esc(airNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
+    ${radiosRows()}
     <div class="sp-menu-row" data-dev="remote"><div><div class="sp-label">Remote access</div>
       <div class="sp-sub">${esc(remNow)}</div></div><div class="sp-chevron">&#8250;</div></div>
     ${fleetState && fleetState.available !== false ? `
@@ -7411,11 +7412,45 @@ function renderDeviceSetup() {
 
 let fleetState = null;   // /onboard/fleet: { available, fleet: { name } | null }
 
+// ---- The receivers' switches (2026-10-10) --------------------------------
+// The 1090 MHz radio (ADS-B, every aircraft) and the 978 MHz one (UAT, some
+// US light aircraft), each switched on and off here; both on unless the
+// owner switches one off. Off is remembered across restarts. The 978 row
+// also says when the power safeguard has paused it (deploy/net-watchdog.py).
+let radiosState = null;  // /onboard/radios: { "1090": { on, running }, "978": { on, present, installed, running, paused } }
+
+function radiosRows() {
+  const r = radiosState;
+  if (!r || r.available === false || !r['1090']) return '';
+  const a = r['1090'], u = r['978'] || {};
+  const aNow = a.on
+    ? (a.running ? 'On — hearing aircraft on 1090 MHz' : 'On — starting')
+    : 'Off — this radar shows only the network\'s aircraft (and 978 MHz, if on)';
+  const row = (act, label, sub) => `
+    <div class="sp-menu-row" data-act="${act}"><div><div class="sp-label">${label}</div>
+      <div class="sp-sub">${esc(sub)}</div></div><div class="sp-chevron">${sub.startsWith('On') ? 'ON' : 'OFF'}</div></div>`;
+  let out = row('radio-1090', '1090 MHz receiver', aNow);
+  if (u.installed) {
+    const uNow = !u.on ? 'Off — tap to listen for 978 MHz (UAT) aircraft'
+      : !u.present ? 'On — but this radar has no 978 MHz radio'
+      : u.paused ? 'On — paused by the power safeguard until the supply is quiet'
+      : u.running ? 'On — listening for 978 MHz (UAT) aircraft'
+      : 'On — starting';
+    out += row('radio-978', '978 MHz receiver (US)', uNow);
+  }
+  return out;
+}
+
+async function loadRadios() {
+  try { radiosState = await deviceApi('/onboard/radios'); } catch (e) { radiosState = null; }
+}
+
 async function loadDeviceStatus() {
   try { deviceStatus = await deviceApi('/onboard'); }
   catch (e) { deviceStatus = null; }
   try { fleetState = await deviceApi('/onboard/fleet'); }
   catch (e) { fleetState = null; }
+  await loadRadios();
 }
 
 async function handleDeviceTap(row) {
@@ -7627,6 +7662,18 @@ async function handleDeviceTap(row) {
       deviceMsg = `Home airport set to ${airport}.`;
       airportRows = [];
     } catch (e) { deviceMsg = e.message; }
+    deviceBusy = false; return renderSettingsPanel();
+  }
+
+  if (act === 'radio-1090' || act === 'radio-978') {
+    const band = act === 'radio-1090' ? '1090' : '978';
+    const was = ((radiosState || {})[band] || {}).on !== false;
+    deviceBusy = true; deviceMsg = ''; renderSettingsPanel();
+    try {
+      radiosState = (await deviceApi('/onboard/radios', { method: 'POST',
+        body: JSON.stringify({ [band]: !was }) })).result;
+      deviceMsg = `${band} MHz receiver ${was ? 'off' : 'on'}. The radar's receiver restarts, so aircraft disappear for a few seconds.`;
+    } catch (e) { deviceMsg = e.message; await loadRadios(); }
     deviceBusy = false; return renderSettingsPanel();
   }
 

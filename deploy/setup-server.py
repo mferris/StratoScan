@@ -1020,6 +1020,12 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             return self._verb(verb, timeout=180)
         if path == "/onboard/pair":
             return self._relay(pair_verb(body.get("action"), body.get("phone")))
+        if path == "/onboard/radios":
+            # The receivers' switches: {"1090": bool, "978": bool}; either may be left out.
+            params = {k: body[k] for k in ("1090", "978") if k in body}
+            if not params:
+                return self._json(400, {"error": {"message": "Say which radio: 1090 or 978."}})
+            return self._verb("set_radios", params, timeout=90)
         if path == "/onboard/locale":
             # Same locale step as the phone page, for a recipient who only
             # ever uses the touchscreen. Both surfaces must be able to finish
@@ -1167,6 +1173,9 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             return self._json(200, visits_summary())
         if p == "/onboard/pair":
             return self._relay(pair_verb("status"))
+        if p == "/onboard/radios":
+            r = call_setupd("radios_status", {}, timeout=20)
+            return self._json(200, r.get("result") if r.get("ok") else {"available": False})
         if p == "/onboard/airports":
             try:
                 with open(AIRPORTS_JSON) as f:
