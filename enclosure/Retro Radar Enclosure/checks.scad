@@ -204,6 +204,19 @@ else if (check=="twin_cover_heads_seat" || check=="twin_cover_heads_seat_11") {
     for (q = ant_twin_screw_xz(af)) translate([q[0], q[1], -1]) cylinder(d=3.8, h=1 + 1.5, $fn=24);
   }
 }
+// The lettering fills its engraving: it never overlaps the cover...
+else if (check=="twin_cover_text_vs_cover" || check=="twin_cover_text_vs_cover_11") {
+  af = check=="twin_cover_text_vs_cover" ? [8, 8] : [11, 11];
+  intersection() { antenna_mount_twin_cover(af); ant_twin_label_solid(af); }
+}
+// ...and lies inside the cover's outline. With text_vs_cover empty, that
+// puts every letter in the engraving: within the cover, but not in its
+// material.
+else if (check=="twin_cover_text_inside" || check=="twin_cover_text_inside_11") {
+  af = check=="twin_cover_text_inside" ? [8, 8] : [11, 11];
+  difference() { ant_twin_label_solid(af); translate([0, 0, -1]) linear_extrude(height=3) ant_twin_cover2d(af); }
+}
+else if (check=="twin_cover_text_present") ant_twin_label_solid([11, 11]);   // positive control: must have volume
 else if (check=="twin_cover_screws_open") {
   difference() { ant_twin_screw_probes(); union() { antenna_mount_twin(); ant_twin_cover_placed(); } }
 }
