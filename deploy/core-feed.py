@@ -37,6 +37,7 @@ import math
 import os
 import sys
 import threading
+import socket
 import time
 import urllib.error
 import urllib.parse
@@ -71,6 +72,16 @@ RELAY_OWNER_PATH = "/v1/net/owner/{hex}"
 USER_AGENT = "StratoScan/1.0 (+https://github.com/mferris/StratoScan; core feed)"
 
 RING_NM = 20            # what the radar draws; counts use it, as the kiosk's do
+# Which band each aircraft was heard on (2026-10-10). readsb turns 978 MHz
+# (UAT) messages into 1090-style ones before merging them, so its own list
+# cannot say which came from where; the 978 decoder's JSON output can, so
+# this listens to it and remembers each address it decoded for UAT_KEEP_S.
+# An aircraft readsb tags ADS-R ("adsr_icao") is a 978 aircraft too, re-sent
+# on 1090 by a ground station. Nothing listening on the port (no 978 radio,
+# or it is switched off) is normal: every aircraft is then 1090.
+UAT_JSON = ("127.0.0.1", int(os.environ.get("STRATOSCAN_UAT_JSON_PORT", "30979")))
+UAT_KEEP_S = 90
+UAT_RETRY_S = 30
 STALE_S = 60            # readsb keeps an aircraft this long after its last message
 AIRCRAFT_CACHE_S = 1.0  # one read of aircraft.json per second, however many clients
 NETWORK_CACHE_S = 15.0  # network-compare caches upstream for 15 s itself
@@ -235,11 +246,70 @@ def _nm(lat1, lon1, lat2, lon2):
     return 3440.065 * 2 * math.asin(min(1.0, math.sqrt(h)))
 
 
+class UatHeard:
+    """Addresses the 978 MHz decoder has decoded lately, from its JSON port."""
+
+    def __init__(self, start=True):
+        self.seen = {}
+        self.lock = threading.Lock()
+        if start and LOOKUPS:
+            threading.Thread(target=self._loop, daemon=True).start()
+
+    def _loop(self):
+        while True:
+            try:
+                with socket.create_connection(UAT_JSON, timeout=10) as s:
+                    s.settimeout(120)
+                    buf = b""
+                    while True:
+                        d = s.recv(65536)
+                        if not d:
+                            break
+                        buf += d
+                        while b"\n" in buf:
+                            line, buf = buf.split(b"\n", 1)
+                            self.note(line)
+            except OSError:
+                pass                       # no decoder running: every aircraft is 1090
+            time.sleep(UAT_RETRY_S)
+
+    def note(self, line):
+        try:
+            m = json.loads(line)
+        except ValueError:
+            return
+        a = m.get("address") if isinstance(m, dict) else None
+        if isinstance(a, str) and len(a) == 6:
+            with self.lock:
+                self.seen[a.lower()] = _now()
+
+    def heard(self, hex_):
+        with self.lock:
+            t = self.seen.get(hex_)
+            if t is None:
+                return False
+            if _now() - t > UAT_KEEP_S:
+                self.seen.pop(hex_, None)
+                return False
+            return True
+
+
+def band_of(a, hex_, uat):
+    """'978' (decoded by this radar's 978 radio), '978 via 1090' (a 978
+    aircraft re-sent on 1090 by a ground station, ADS-R), or '1090'."""
+    if uat is not None and uat.heard(hex_):
+        return "978"
+    if str(a.get("type") or "").startswith("adsr"):
+        return "978 via 1090"
+    return "1090"
+
+
 class Feed:
-    def __init__(self, lookups=None):
+    def __init__(self, lookups=None, uat=None):
         self.types = labels.TypeDb()
         self.notable = labels.NotableDb()
         self.lookups = lookups or Lookups()
+        self.uat = uat if uat is not None else UatHeard()
         self._antenna = (0.0, [])
         self._network = (0.0, [])
         self.lock = threading.Lock()
@@ -280,6 +350,8 @@ class Feed:
         info = self.types.lookup(hex_)
         flight = (a.get("flight") or "").strip() or None
         out = {"hex": hex_, "source": source}
+        if source == "antenna":
+            out["band"] = band_of(a, hex_, self.uat)
         for k, name in FIELDS.items():
             if a.get(k) is not None:
                 out[name] = a[k].strip() if k == "flight" else a[k]
@@ -324,7 +396,8 @@ class Feed:
 
         return {"now": round(_now(), 1),
                 "counts": {"heard": sum(1 for x in aircraft if x["source"] == "antenna" and in_ring(x)),
-                           "notHeard": sum(1 for x in network if in_ring(x)) if with_network else None},
+                           "notHeard": sum(1 for x in network if in_ring(x)) if with_network else None,
+                           "on978": sum(1 for x in aircraft if x.get("band", "").startswith("978") and in_ring(x))},
                 "aircraft": aircraft}
 
 
