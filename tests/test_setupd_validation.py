@@ -380,10 +380,60 @@ def check_feeding_verbs(fails):
         d.run, d.os.path.exists = real_run, real_exists
 
 
+def check_radio_verbs(fails):
+    """The receivers' switches: real booleans only, written to the switches
+    file, and both services restarted so the change takes effect."""
+    import tempfile
+    calls = []
+    real_run, real_file, real_paused = d.run, d.RADIOS_FILE, d.UAT_PAUSED
+    tmp = tempfile.mkdtemp()
+
+    class P:
+        returncode = 0
+        stdout = b"active"
+        stderr = b""
+
+    d.run = lambda argv, **k: (calls.append(argv), P())[1]
+    d.RADIOS_FILE = os.path.join(tmp, "radios.json")
+    d.UAT_PAUSED = os.path.join(tmp, "uat-paused")
+    try:
+        if d._radio_switches() != {"1090": True, "978": True}:
+            fails.append("with no switches file both radios must be on")
+        for bad in ({"978": "off"}, {"1090": 0}, {"978": None}):
+            try:
+                d.set_radios(bad)
+                fails.append(f"set_radios accepted {bad!r}")
+            except d.Err:
+                pass
+        if calls:
+            fails.append("a rejected switch still ran a command")
+        open(d.UAT_PAUSED, "w").close()
+        d.set_radios({"978": False})
+        if d._radio_switches() != {"1090": True, "978": False}:
+            fails.append("978 off was not saved")
+        if not any(c[1:3] == ["stop", d.UAT_UNIT] for c in calls) or not any(c[1:3] == ["restart", "readsb"] for c in calls):
+            fails.append("978 off must stop the decoder and restart readsb")
+        calls.clear()
+        d.set_radios({"978": True})
+        if os.path.exists(d.UAT_PAUSED):
+            fails.append("switching 978 on must clear the safeguard's pause")
+        if not any(c[1:3] == ["restart", d.UAT_UNIT] for c in calls):
+            fails.append("978 on must start the decoder")
+        calls.clear()
+        d.set_radios({"978": True})
+        if any(c[1:2] in (["restart"], ["stop"]) for c in calls):
+            fails.append("a switch already in that position must not restart anything")
+        if "set_radios" not in d.MUTATING or "radios_status" in d.MUTATING:
+            fails.append("set_radios takes the state lock; radios_status does not")
+    finally:
+        d.run, d.RADIOS_FILE, d.UAT_PAUSED = real_run, real_file, real_paused
+
+
 def main():
     fails = []
     check_health_verbs(fails)
     check_feeding_verbs(fails)
+    check_radio_verbs(fails)
     check_pairing_verbs(fails)
     check_validation(fails)
     check_readsb(fails)

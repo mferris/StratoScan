@@ -93,6 +93,19 @@ u.enabled, u.active, u.dips = "enabled", "inactive", {W: 9}
 m.check_uat_power(T + 6 * 3600)
 check(not os.path.exists(m.UAT_PAUSED), "enabled but not running (no 978 radio on this unit): nothing to pause")
 
+# Switched off on the settings screen: the safeguard never starts it.
+m.RADIOS_FILE = os.path.join(tmp, "radios.json")
+with open(m.RADIOS_FILE, "w") as f:
+    f.write('{"978": false}')
+u.enabled, u.active, u.dips = "enabled", "inactive", {W: 0, Q: 0}
+with open(m.UAT_PAUSED, "w") as f:
+    f.write(f"{T} 1")
+before = len(u.calls)
+m.check_uat_power(T + 10 * 3600)
+check(u.active == "inactive" and not any(c[:2] == ["systemctl", "start"] for c in u.calls[before:]),
+      "978 switched off on the settings screen: never restarted, even after a pause")
+os.unlink(m.RADIOS_FILE)
+
 check("check_uat_power" in (root / "deploy" / "net-watchdog.py").read_text().split("def check_health")[1][:400],
       "the safeguard runs with the watchdog's other health checks")
 print("uat power guard checks passed" if not fails else "%d FAILED" % fails)
