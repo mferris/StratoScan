@@ -8,3 +8,5 @@
 !*.stl
 *.3mf
 *.bak*
+# The two-colour cover projects are committed like the meshes (make-cover-3mf.py).
+!antenna_mount_twin_cover_*_twotone.3mf

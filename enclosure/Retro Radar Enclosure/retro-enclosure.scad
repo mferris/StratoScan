@@ -1429,15 +1429,23 @@ module antenna_mount_twin_cover(af = ant_twin_jack_af) {
             cylinder(d=ant_twin_cbore_d, h=ant_twin_cbore_h + 1, $fn=32);   // the head's seat, in the outer face (z=0)
         }
         if (ant_twin_label_on)
-            for (s = [-1, 1]) let (i = s > 0 ? 0 : 1) if (ant_twin_labels[i] != "")
-                translate([s * (ant_twin_sep/2 - 6), 0, -0.01]) mirror([1, 0, 0])
-                    linear_extrude(height = ant_twin_label_depth + 0.01) {
-                        translate([0, 2.5]) text(ant_twin_labels[i], size=ant_twin_label_size,
-                            font="Liberation Sans:style=Bold", halign="center", valign="center");
-                        translate([0, -5.5]) text("MHz", size=ant_twin_label_size * 0.55,
-                            font="Liberation Sans:style=Bold", halign="center", valign="center");
-                    }
+            translate([0, 0, -0.01]) ant_twin_label_solid(af, ant_twin_label_depth + 0.01);
     }
+}
+
+// Each side's frequency, as a solid `h` deep from the outer face (z=0) in:
+// cut from the cover above, and printed on its own as the lettering that
+// fills the engraving in a second colour (antenna_mount_twin_cover_text_*,
+// 2026-10-10). Mirrored, since the face is read from behind the case.
+module ant_twin_label_solid(af = ant_twin_jack_af, h = ant_twin_label_depth) {
+    for (s = [-1, 1]) let (i = s > 0 ? 0 : 1) if (ant_twin_labels[i] != "")
+        translate([s * (ant_twin_sep/2 - 6), 0, 0]) mirror([1, 0, 0])
+            linear_extrude(height = h) {
+                translate([0, 2.5]) text(ant_twin_labels[i], size=ant_twin_label_size,
+                    font="Liberation Sans:style=Bold", halign="center", valign="center");
+                translate([0, -5.5]) text("MHz", size=ant_twin_label_size * 0.55,
+                    font="Liberation Sans:style=Bold", halign="center", valign="center");
+            }
 }
 
 // The cover in its seat on the body, for the checks and the preview.
@@ -1800,6 +1808,8 @@ else if (part == "antenna_mount_twin_11") antenna_mount_twin([11, 11]);      // 
 else if (part == "antenna_mount_twin_cover") antenna_mount_twin_cover();
 else if (part == "antenna_mount_twin_cover_8") antenna_mount_twin_cover([8, 8]);
 else if (part == "antenna_mount_twin_cover_11") antenna_mount_twin_cover([11, 11]);
+else if (part == "antenna_mount_twin_cover_text_8") ant_twin_label_solid([8, 8]);     // the lettering, for a second colour
+else if (part == "antenna_mount_twin_cover_text_11") ant_twin_label_solid([11, 11]);
 else if (part == "twin_assembled") { antenna_mount_twin(); ant_twin_cover_placed(); back_plate(); }  // for pictures
 else if (part == "twin_assembled_11") { antenna_mount_twin([11, 11]); ant_twin_cover_placed([11, 11]); back_plate(); }
 else if (part == "none") {}  // for a file that includes this one to draw its own views
