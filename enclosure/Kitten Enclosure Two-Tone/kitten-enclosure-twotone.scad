@@ -313,7 +313,11 @@ usbc_cut_h       = 6.5;    // window height (through the connector body)
 usbc_cut_r       = 1.2;    // corner radius
 usbc_screw_pitch = 16.5;   // centre-to-centre of the two mounting screws
 usbc_screw_dia   = screw_clear_dia;   // M3 clearance (3.4), same as every other M3 hole
-usbc_cut_pos     = [60, -14];
+// Bottom centre, in the band between the intake grille (ends 27 mm below
+// centre) and the fan grille (starts 55 mm below): the owner's ask,
+// 2026-10-10. It was at [60, -14], beside the Pi's USB ports, where the
+// power jumper had to bend hard against them.
+usbc_cut_pos     = [0, -41];
 // The connector's body is a rectangular boss, 22.25 x 11 (measured
 // 2026-10-10), mounted from inside against the plate; through a 3 mm plate
 // its socket sat 3 mm below the outer face and a plug would not seat. A
