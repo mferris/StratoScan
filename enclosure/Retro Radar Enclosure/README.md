@@ -141,6 +141,8 @@ hole's width of ring outside them, and closed holes printed as a 0.3mm
 sliver. The notches also stop the ring turning. Checks: `retainer_clears_bore`,
 `retainer_screws_pass`, `trim_screws_pass`.
 
+**The connector is at the bottom centre of the plate** (2026-10-10), in the band between the two vent grilles, so the power jumper runs straight up inside the case instead of bending against the Pi's USB ports as it did at the old spot beside them; a check proves a plug there clears the stand with the case leaning back.
+
 **The connector sits in a pocket** (2026-10-10). Its body is a 22.25 × 11 mm
 boss mounted from inside; through the full 3 mm plate the socket sat 3 mm
 below the outer face and a plug would not seat. The outer face now has a
