@@ -22,6 +22,7 @@ speaker_angles=[0,180]; back_plate_t=3;
 back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9; post_od=9;
 back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40; ant_mount_y=81;
 ant_bolt_d=3.4; usbc_cut_pos=[60,-14]; usbc_screw_pitch=16.5; usbc_screw_dia=3.4; usbc_cut_w=11.0; usbc_cut_h=6.5;
+usbc_boss_w=22.25; usbc_boss_h=11.0; usbc_boss_clear=0.3; usbc_recess_d=2.0; usbc_cut_r=1.2;
 mount_hole_x=58; mount_hole_y=49; stand_angle=18;
 base_w=outer_dia*0.86; base_d=150; plinth_rib_h=4; plinth_rib_w=3; plinth_rib_z=[3.5, 9.5];
 ant_stub_len=30; ant_barrel_len=14; ant_socket_dia=33; ant_socket_depth=8;
@@ -113,6 +114,26 @@ else if (check=="trim_screws_pass") {
     front_trim();
     for (i=[0:n_screws-1]) { a=i*360/n_screws;
       translate([screw_r*cos(a), screw_r*sin(a), -10]) cylinder(d=3.2, h=30); }
+  }
+}
+// The USB-C connector's pocket (2026-10-10): open to usbc_recess_d from the
+// outer face over the boss's whole footprint (a probe there meets no plate)...
+else if (check=="usbc_recess_open") {
+  intersection() {
+    back_plate();
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 0.5])
+      linear_extrude(height = usbc_recess_d + 0.45)
+        offset(r = usbc_cut_r) offset(delta = -usbc_cut_r)
+          square([usbc_boss_w + 2*usbc_boss_clear - 0.2, usbc_boss_h + 2*usbc_boss_clear - 0.2], center = true);
+  }
+}
+// ...and the web under it is still there (a probe in it, beside the window,
+// finds plate): the pocket must never break through.
+else if (check=="usbc_recess_web") {
+  intersection() {
+    back_plate();
+    translate([usbc_cut_pos[0] - 10, usbc_cut_pos[1] + usbc_cut_h/2 + 0.3, -back_plate_t + usbc_recess_d + 0.1])
+      cube([20, 2.0, back_plate_t - usbc_recess_d - 0.2]);
   }
 }
 // sanity: this MUST produce geometry, or nothing above means anything.
