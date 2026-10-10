@@ -5262,6 +5262,7 @@ function applyUpdate(list) {
     if (raw._core) {
       const c = raw._core, pl = planes.get(n.hex);
       if (c.route && n.hasCallsign) routeCache.set(n.cs, c.route);
+      if (pl) pl.band = c.band || '1090';
       if (c.owner && pl) {
         pl.owner = c.owner.name;
         pl.ownerCountry = c.owner.country || null;
@@ -5800,7 +5801,10 @@ function drawPlanes(dt) {
   if (viewFeedOn) for (const g of ghosts) if (g.fromView) fromView++;
   const missed = alertSettings.networkCompare ? ghosts.length - fromView : 0;
   emptySkyTick(inRange.length);
+  // How many of them came in on 978 MHz (UAT), when any did (2026-10-10).
+  const on978 = inRange.filter(pl => pl.band && pl.band.startsWith('978')).length;
   setText(countEl, countEl, inRange.length + ' AIRCRAFT'
+    + (on978 ? ` · ${on978} ON 978` : '')
     + (missed ? ` · ${missed} NOT HEARD` : '')
     + (fromView ? ` · ${fromView} FROM ADSB.LOL` + (viewFeedCovered && viewFeedCovered < RANGE_NM / view.scale ? ` WITHIN ${viewFeedCovered}NM` : '') : ''));
 }
@@ -5967,6 +5971,7 @@ function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES', aler
       <div class="dp-field"><div class="dp-label">Vert. rate</div><div class="dp-value">${vrateLabel(p.vrate)}</div></div>
       <div class="dp-field"><div class="dp-label">Squawk</div><div class="dp-value">${esc(p.squawk ?? '—')}</div></div>
       <div class="dp-field"><div class="dp-label">Range / Brg</div><div class="dp-value">${rangeTxt}</div></div>
+      ${p.band ? `<div class="dp-field"><div class="dp-label">Heard on</div><div class="dp-value">${esc(p.band === '1090' ? '1090 MHz' : p.band === '978' ? '978 MHz (UAT)' : '978 MHz, re-sent on 1090')}</div></div>` : ''}
       ${!p.rareReason ? '' : `<div class="dp-field dp-rare"><div class="dp-label">Notable</div><div class="dp-value">${esc(p.rareReason.label)}${p.rareReason.operator ? ' · ' + esc(p.rareReason.operator) : ''}</div></div>`}
       <div class="dp-field"><div class="dp-label">Sightings</div><div class="dp-value">${counts.total}</div></div>
       <div class="dp-field"><div class="dp-label">Within 2mi</div><div class="dp-value">${counts.nearby}</div></div>
