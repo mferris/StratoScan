@@ -28,9 +28,11 @@ expect.
 """
 import http.server
 import os
+import re
 import subprocess
 import threading
 import time
+import urllib.parse
 
 LISTEN = ("127.0.0.1", 8084)
 SCREENSAVER_UNIT = "stratoscan-screensaver.service"
@@ -141,6 +143,15 @@ def _watchdog():
             print(f"watchdog: cycle failed ({type(e).__name__})", flush=True)
 
 
+def _panel_state():
+    """'on', 'off', or '?': what wlopm says the output is doing."""
+    try:
+        out = subprocess.run(["wlopm"], capture_output=True, text=True, timeout=5).stdout
+        return out.split()[1] if len(out.split()) >= 2 else "?"
+    except Exception:
+        return "?"
+
+
 def _wake():
     subprocess.run(["wlopm", "--on", "*"], timeout=5, check=False)
     subprocess.run(
@@ -245,9 +256,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(404)
             return
         now = time.monotonic()
+        # Why it was asked, for the journal: the page names the alert. Only
+        # a short word of known characters is kept; anything else is "?".
+        why = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "").get("why", ["?"])[0]
+        why = why if re.fullmatch(r"[a-z:_-]{1,24}", why) else "?"
         if now - _last_wake >= MIN_INTERVAL_S:
             _last_wake = now
             try:
+                print(f"wake: {why} (panel was {_panel_state()})", flush=True)
                 _wake()
             except Exception:
                 pass  # a failed wake must never take the listener down
