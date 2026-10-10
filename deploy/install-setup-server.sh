@@ -24,6 +24,22 @@ enable_unit() {
   if live; then systemctl enable --now "$1" >/dev/null; else systemctl enable "$1" >/dev/null 2>&1 || true; fi
 }
 restart_unit() { if live; then systemctl restart "$1"; fi; }
+# lighttpd's config test loads the setup certificate (85-stratoscan-tls.conf),
+# which a unit makes for itself on first boot and an image must never carry.
+# Building an image (chroot), there is none yet: test against a throwaway one,
+# then remove it, so the test still proves the config while nothing ships.
+# (The factory image build failed here on 2026-10-10.)
+lighttpd_test() {
+  T=/etc/stratoscan/tls/unit.pem
+  if live || [ -s "$T" ]; then lighttpd -tt -f /etc/lighttpd/lighttpd.conf; return; fi
+  install -d -m 0755 /etc/stratoscan/tls
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1 \
+    -subj "/CN=config-test" -keyout "$T.k" -out "$T.c" >/dev/null 2>&1
+  cat "$T.k" "$T.c" > "$T"; rm -f "$T.k" "$T.c"
+  rc=0; lighttpd -tt -f /etc/lighttpd/lighttpd.conf || rc=$?
+  rm -f "$T"
+  return $rc
+}
 lighttpd_conf() {
   install -m 0644 "deploy/$1" /etc/lighttpd/conf-available/
   ln -sf "/etc/lighttpd/conf-available/$1" "/etc/lighttpd/conf-enabled/$1"
@@ -209,7 +225,7 @@ done
 # Captive portal DNS for the setup hotspot (so phones stop using cellular).
 install -d -m 0755 /etc/NetworkManager/dnsmasq-shared.d
 install -m 0644 deploy/stratoscan-captive-dns.conf /etc/NetworkManager/dnsmasq-shared.d/stratoscan-captive.conf
-lighttpd -tt -f /etc/lighttpd/lighttpd.conf
+lighttpd_test
 
 echo "== remote access: Tailscale (used only if the owner signs in from setup) =="
 if ! command -v tailscale >/dev/null 2>&1; then
@@ -287,7 +303,7 @@ if [ "${MANAGED:-0}" = "1" ]; then
   fi
   # The shared stores take writes only from private addresses.
   lighttpd_conf 92-stratoscan-managed-writes.conf
-  lighttpd -tt -f /etc/lighttpd/lighttpd.conf
+  lighttpd_test
   if live; then systemctl reload lighttpd; fi
   # The maintainer's login: a narrow sudo rule in place of NOPASSWD: ALL,
   # and the fleet's own SSH key (one key pair per fleet, MAINTAINER_PUBKEY).
