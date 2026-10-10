@@ -67,6 +67,13 @@ retention_opening = panel_diameter - 2*glass_overlap; // 195.34mm — what's lef
 
 front_trim_h  = 4;            // front trim thickness
 retainer_h    = 4;            // retainer ring thickness
+// Radial clearance between the retainer and the shell's bore. It was zero
+// (the ring drawn at exactly the bore's diameter), and the first print, a
+// PETG ring in an ASA shell, had to be forced in (2026-10-09): ASA shrinks a
+// little more than PETG, so the bore came out smaller than the ring. 0.4mm a
+// side leaves a slip fit across both materials; the screws, not the bore,
+// centre the ring.
+retainer_clear = 0.4;
 lip_height    = 6;            // shell's front lip (glass + retainer seat here)
 
 screw_r = panel_diameter/2 + rim/2;   // screw ring sits centered in the rim band
@@ -469,11 +476,23 @@ module front_trim() {
 module retainer() {
     relief_r0 = retention_opening/2 - 1;
     relief_w  = panel_diameter/2 - retention_opening/2 + 2; // covers the glass-overlap band, +1mm margin each side
+    od = outer_dia - 2*wall - 2*retainer_clear;
     difference() {
-        cylinder(d=outer_dia - 2*wall, h=retainer_h);
+        cylinder(d=od, h=retainer_h);
         translate([0,0,-1])
             cylinder(d=retention_opening, h=retainer_h+2);
-        screw_ring_holes(screw_clear_dia, retainer_h);
+        // The screws pass at screw_r, set by the inserts already in printed
+        // shells, which leaves less than a hole's width of ring outside them.
+        // Closed holes left a 0.3mm sliver that printed as nicks, not holes;
+        // so each is an open notch, a 3.4mm slot from the hole out through
+        // the rim. The screw still passes clear, and the notches stop the
+        // ring turning.
+        for (i = [0:n_screws-1])
+            rotate([0, 0, i * 360/n_screws])
+                translate([0, 0, -1]) hull() {
+                    translate([screw_r, 0, 0]) cylinder(d=screw_clear_dia, h=retainer_h+2);
+                    translate([od/2 + 2, 0, 0]) cylinder(d=screw_clear_dia, h=retainer_h+2);
+                }
         rotate([0,0, relief_center_deg - relief_arc_deg/2])
             rotate_extrude(angle = relief_arc_deg)
                 translate([relief_r0, -1])

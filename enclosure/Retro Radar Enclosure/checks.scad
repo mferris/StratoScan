@@ -89,6 +89,32 @@ else if (check=="back_inserts_open") {
     shell();
   }
 }
+// The retainer must slip into the shell's bore with retainer_clear to spare
+// (it was drawn at exactly the bore, and the first print had to be forced):
+// a ring 0.3mm inside the bore must not touch it.
+else if (check=="retainer_clears_bore") {
+  intersection() {
+    retainer();
+    difference() { cylinder(d=outer_dia + 2, h=10, center=true); cylinder(d=outer_dia - 2*wall - 0.6, h=12, center=true); }
+  }
+}
+// Every screw must pass the retainer freely: an M3 clearance shank (3.2mm)
+// at each screw position meets no ring.
+else if (check=="retainer_screws_pass") {
+  intersection() {
+    retainer();
+    for (i=[0:n_screws-1]) { a=i*360/n_screws;
+      translate([screw_r*cos(a), screw_r*sin(a), -5]) cylinder(d=3.2, h=20); }
+  }
+}
+// And the trim must have a clear M3 hole at each screw too.
+else if (check=="trim_screws_pass") {
+  intersection() {
+    front_trim();
+    for (i=[0:n_screws-1]) { a=i*360/n_screws;
+      translate([screw_r*cos(a), screw_r*sin(a), -10]) cylinder(d=3.2, h=30); }
+  }
+}
 // sanity: this MUST produce geometry, or nothing above means anything.
 // ---- back-plate key (roadmap 5.6) --------------------------------------
 // The plate must seat exactly one way. key_fits: correctly oriented, the key
