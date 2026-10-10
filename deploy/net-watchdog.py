@@ -428,8 +428,22 @@ def _uat_paused():
         return None
 
 
+RADIOS_FILE = "/etc/stratoscan/radios.json"     # the owner's switches (radio-select.py)
+
+
+def uat_switched_on():
+    """False only when the owner switched the 978 radio off on the settings screen."""
+    try:
+        with open(RADIOS_FILE) as f:
+            return json.load(f).get("978", True) is not False
+    except (OSError, ValueError, AttributeError):
+        return True
+
+
 def check_uat_power(now=None):
     now = time.time() if now is None else now
+    if not uat_switched_on():
+        return                       # its owner switched it off: not the watchdog's to start
     enabled = run(["systemctl", "is-enabled", UAT_UNIT], timeout=15)
     if enabled.stdout.decode().strip() != "enabled":
         return                       # no 978 decoder here, or its owner turned it off

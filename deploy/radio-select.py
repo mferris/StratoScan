@@ -24,6 +24,13 @@ A unit with one plain dongle gets index 0 and no 978 feed, as before. No
 radio at all writes nothing, and readsb fails as it always did, for the
 watchdog to recover. Nothing here can keep readsb from starting: every
 failure is logged and leaves readsb its own defaults.
+
+The owner can switch either radio off on the radar's settings screen
+(2026-10-10). The switches live in RADIOS_FILE, {"1090": bool, "978": bool},
+both on when it is absent. 1090 off runs readsb with no radio at all
+(--device-type none), so it still collects the 978 decoder's and the
+network's aircraft for the screens; 978 off is the same as having no 978
+radio: no uat.env, no feed.
 """
 import ctypes
 import os
@@ -37,6 +44,22 @@ READSB_DEFAULT = os.environ.get("STRATOSCAN_READSB_DEFAULT", "/etc/default/reads
 ADSB_HINTS = ("FlyCatcher_ADS_B", "ADS-B", "ADSB", "1090")
 UAT_HINTS = ("FlyCatcher_UAT", "UAT", "978")
 UAT_FEED = "--net-connector 127.0.0.1,30978,uat_in"    # readsb reads dump978's raw output
+RADIOS_FILE = os.environ.get("STRATOSCAN_RADIOS_FILE", "/etc/stratoscan/radios.json")
+
+
+def switches():
+    """The owner's switches: {"1090": bool, "978": bool}, both on by default."""
+    out = {"1090": True, "978": True}
+    try:
+        import json
+        with open(RADIOS_FILE) as f:
+            d = json.load(f)
+        for k in out:
+            if isinstance(d.get(k), bool):
+                out[k] = d[k]
+    except (OSError, ValueError, AttributeError):
+        pass
+    return out
 
 
 def radios():
@@ -79,11 +102,15 @@ def _options(text):
             re.finditer(r'^\s*([A-Z_]+)=(["\'])(.*)\2\s*$', text, re.M)}
 
 
-def readsb_env(options, adsb, uat):
+def readsb_env(options, adsb, uat, adsb_on=True):
     """The overrides for readsb, from its own options: --device set to the
-    1090 radio, and the 978 feed added when there is a 978 radio."""
+    1090 radio, and the 978 feed added when there is a 978 radio. With the
+    1090 radio switched off, no radio at all: readsb keeps running for the
+    978 feed and the screens."""
     toks = shlex.split(options.get("RECEIVER_OPTIONS", ""))
-    if adsb is not None:
+    if not adsb_on:
+        toks = ["--device-type", "none"]
+    elif adsb is not None:
         if "--device" in toks:
             toks[toks.index("--device") + 1] = str(adsb[0])
         else:
@@ -105,6 +132,9 @@ def write_env(path, values):
 def main():
     found = radios()
     adsb, uat = choose(found)
+    on = switches()
+    if not on["978"]:
+        uat = None                   # switched off: as if there were no 978 radio
     os.makedirs(RUN, exist_ok=True)
     uat_env = os.path.join(RUN, "uat.env")
     if not found:
@@ -121,7 +151,7 @@ def main():
         print(f"radio: cannot read {READSB_DEFAULT} ({e}); readsb keeps its own options", flush=True)
         options = None
     if options is not None:
-        write_env(os.path.join(RUN, "readsb.env"), readsb_env(options, adsb, uat))
+        write_env(os.path.join(RUN, "readsb.env"), readsb_env(options, adsb, uat, on["1090"]))
     if uat is not None:
         write_env(uat_env, {"UAT_INDEX": str(uat[0])})
     else:
@@ -130,7 +160,8 @@ def main():
         except OSError:
             pass
     desc = lambda r: f"#{r[0]} {r[2] or 'unnamed'}" if r else "none"
-    print(f"radio: 1090 {desc(adsb)}, 978 {desc(uat)}", flush=True)
+    print(f"radio: 1090 {desc(adsb) if on['1090'] else 'switched off'}, "
+          f"978 {desc(uat) if on['978'] else 'switched off'}", flush=True)
     return 0
 
 
