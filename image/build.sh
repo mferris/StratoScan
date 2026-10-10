@@ -42,6 +42,10 @@ must()    { [ -e "$MNT$1" ] || [ -L "$MNT$1" ] || { echo "  MISSING $1"; fail=1;
 mustnot() { [ ! -e "$MNT$1" ] || { echo "  MUST NOT SHIP $1"; fail=1; }; }
 for f in /usr/bin/readsb /usr/local/share/tar1090/git/.stratoscan-commit /var/www/html/index.html \
          /opt/stratoscan/ota.py /opt/stratoscan/allowed_signers /opt/stratoscan/tts/venv/bin/python \
+         /usr/local/bin/dump978-fa /usr/bin/rtl_sdr /opt/stratoscan/radio-select.py \
+         /etc/systemd/system/readsb.service.d/stratoscan-radio.conf \
+         /etc/systemd/system/multi-user.target.wants/stratoscan-uat.service \
+         /etc/systemd/system/multi-user.target.wants/stratoscan-radio.service \
          /etc/systemd/system/multi-user.target.wants/stratoscan-firstboot.service \
          /etc/systemd/system/multi-user.target.wants/stratoscan-events.service \
          /home/stratoscan/.config/systemd/user/default.target.wants/stratoscan-kiosk.service \

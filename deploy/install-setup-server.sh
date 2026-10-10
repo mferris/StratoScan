@@ -54,6 +54,7 @@ KIOSK_USER="$KIOSK_USER" sh deploy/migrate-names.sh
 # Pinned third-party installs. Changing a version is a deliberate edit here.
 READSB_INSTALLER_COMMIT=f933123935631da855a7f8a16c0cb7ad4eedca48   # wiedehopf/adsb-scripts (MIT)
 READSB_TAG=v3.16.17                                                 # wiedehopf/readsb (GPL-3.0-or-later)
+DUMP978_TAG=v11.1                                                   # flightaware/dump978 (GPL-2.0-or-later), the 978 MHz decoder
 TAR1090_COMMIT=383a9cb085860277c6c1972a4aca5be7e56bcc66             # wiedehopf/tar1090 (GPL-2.0-or-later)
 PIPER_VERSION=1.8.0                                                 # piper-tts (GPL-3.0-or-later)
 VOICE=en_US-ljspeech-medium                                         # public-domain dataset
@@ -61,7 +62,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 echo "== packages =="
 apt-get install -y -q lighttpd lighttpd-mod-openssl git curl ca-certificates python3-venv python3-cryptography \
-  python3-qrcode uhubctl unattended-upgrades javascript-common >/dev/null
+  python3-qrcode uhubctl unattended-upgrades javascript-common rtl-sdr >/dev/null
 echo "  ok"
 
 echo "== receiver: readsb $READSB_TAG =="
@@ -74,6 +75,25 @@ if ! command -v readsb >/dev/null 2>&1; then
   echo "  installed"
 else
   echo "  already installed: $(readsb --version 2>&1 | head -1)"
+fi
+
+# The 978 MHz (UAT) decoder, for the FlyCatcher's second radio (roadmap 5.3,
+# 2026-10-10). Built from source: Debian carries no package. Every unit gets
+# the decoder; its service exits quietly on a unit without a 978 radio, so
+# this costs a unit outside the US nothing but a minute of build time.
+echo "== 978 MHz receiver: dump978 $DUMP978_TAG =="
+if ! command -v dump978-fa >/dev/null 2>&1; then
+  apt-get install -y -q build-essential libboost-system-dev libboost-program-options-dev \
+    libboost-regex-dev libboost-filesystem-dev libsoapysdr-dev >/dev/null
+  rm -rf /tmp/dump978
+  git clone -q --depth 1 --branch "$DUMP978_TAG" https://github.com/flightaware/dump978 /tmp/dump978
+  make -C /tmp/dump978 -j"$(nproc)" dump978-fa >/tmp/dump978-build.log 2>&1 \
+    || { tail -30 /tmp/dump978-build.log; exit 1; }
+  install -m 0755 /tmp/dump978/dump978-fa /usr/local/bin/dump978-fa
+  rm -rf /tmp/dump978
+  echo "  installed"
+else
+  echo "  already installed"
 fi
 # Options: raw feeds bound to this machine only (nothing on the LAN or the
 # internet can connect to them), MLAT results accepted back on 30104, JSON
@@ -172,7 +192,7 @@ install -d -m 0755 /opt/stratoscan
 for f in setupd.py setup-server.py funnel-gateway.py offline-map.py heartbeat.py notable-db.py \
          events.py pairing.py feeding.py ota.py ota-auto.sh net-watchdog.py tls-cert.sh sighting-store.py approach-store.py \
          network-compare.py photo-proxy.py tts-service.py shm-guard.sh wake-listener.py \
-         core-feed.py labels.py; do
+         core-feed.py labels.py radio-select.py; do
   install -m 0755 "deploy/$f" "/opt/stratoscan/$f"
 done
 install -m 0644 deploy/setup-ui.html deploy/airports.json deploy/airlines.json /opt/stratoscan/
@@ -200,9 +220,14 @@ for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-ga
          stratoscan-events.service stratoscan-core.service \
          stratoscan-ota-check.service stratoscan-ota-check.timer \
          stratoscan-ota-auto.service stratoscan-ota-auto.timer \
-         stratoscan-netwatchdog.service stratoscan-tls-cert.service; do
+         stratoscan-netwatchdog.service stratoscan-tls-cert.service \
+         stratoscan-radio.service stratoscan-uat.service; do
   install -m 0644 "deploy/$u" /etc/systemd/system/
 done
+# readsb picks its radio by name, not position, and takes the 978 feed when
+# there is one (deploy/radio-select.py): a drop-in on wiedehopf's unit.
+install -d -m 0755 /etc/systemd/system/readsb.service.d
+install -m 0644 deploy/readsb-stratoscan-radio.conf /etc/systemd/system/readsb.service.d/stratoscan-radio.conf
 # This radar's own certificate for the app's setup flow (security review
 # 2026-10-04, item 9): made on first boot before lighttpd starts, or now.
 install -d -m 0755 /etc/systemd/system/lighttpd.service.d
@@ -493,7 +518,8 @@ for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-ga
          stratoscan-network.service stratoscan-photo-proxy.service stratoscan-tts.service \
          stratoscan-events.service stratoscan-core.service \
          stratoscan-ota-check.timer stratoscan-ota-auto.timer stratoscan-netwatchdog.service \
-         stratoscan-tls-cert.service lighttpd.service readsb.service; do
+         stratoscan-tls-cert.service stratoscan-radio.service stratoscan-uat.service \
+         lighttpd.service readsb.service; do
   enable_unit "$u"
 done
 if ! live; then
