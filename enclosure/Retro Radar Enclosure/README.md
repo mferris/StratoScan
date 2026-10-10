@@ -141,6 +141,14 @@ hole's width of ring outside them, and closed holes printed as a 0.3mm
 sliver. The notches also stop the ring turning. Checks: `retainer_clears_bore`,
 `retainer_screws_pass`, `trim_screws_pass`.
 
+**The connector sits in a pocket** (2026-10-10). Its body is a 22.25 × 11 mm
+boss mounted from inside; through the full 3 mm plate the socket sat 3 mm
+below the outer face and a plug would not seat. The outer face now has a
+2 mm pocket the boss's size (0.3 mm clearance a side), so a 1 mm web is all
+that stands in front of the connector; the two screw heads sit in the pocket,
+and the same M3 × 6 screws reach 2 mm further into the connector. Checks:
+`usbc_recess_open`, `usbc_recess_web`.
+
 ### The plate fits one way only
 
 The plate's locating rib is eight identical arcs between eight evenly
