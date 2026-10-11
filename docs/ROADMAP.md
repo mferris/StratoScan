@@ -84,6 +84,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 1.18 | Enrolment and quotas on the relay in place of the fixed unit cap: a radar joins only through an enrolment the maintainer controls, can be revoked, and has its share of events, pushes and the cache (#65) | The fixed cap gone; RDU enrolled without being touched |
 | 1.19 | The relay at hundreds of radars: D1 read replicas, release files on R2, self-hosted map tiles, each at its trigger (#66) | Each done at its trigger, or deferred with a note |
 | 1.20 | Fewer questions per radar: the ring comparison every 60 s or by feeding adsb.lol, the location poll only while a phone shares, a slower away poll in the app (#67) | Requests per day measured on RDU before and after |
+| 1.21 | Boot straight to StratoScan: the StratoScan picture from power-on to the radar, with no Raspberry Pi splash, kernel text or desktop (#72) | A power-on on RDU shows only the StratoScan picture, then the radar |
 ## Phase 2: the pocket
 
 | # | Item | Done when |

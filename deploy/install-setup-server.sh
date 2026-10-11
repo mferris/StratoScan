@@ -438,6 +438,11 @@ if ! (cd "$TTS/voices" && sha256sum -c --quiet "$VOICE_SUMS"); then
 fi
 chmod -R a+rX "$TTS"
 
+echo "== start-up picture =="
+# From power-on to the radar: the StratoScan picture, never the Raspberry Pi
+# splash or the desktop (2026-10-11). See deploy/quiet-boot.sh.
+sh deploy/quiet-boot.sh
+
 echo "== the kiosk (desktop user: ${KIOSK_USER:-none}) =="
 # These run under the desktop user's systemd, because they need its Wayland
 # session. Enabled by linking into the user's .wants directories, which works
