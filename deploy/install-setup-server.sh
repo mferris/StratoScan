@@ -192,7 +192,7 @@ install -d -m 0755 /opt/stratoscan
 for f in setupd.py setup-server.py funnel-gateway.py offline-map.py heartbeat.py notable-db.py \
          events.py pairing.py feeding.py ota.py ota-auto.sh net-watchdog.py tls-cert.sh sighting-store.py approach-store.py \
          network-compare.py photo-proxy.py tts-service.py shm-guard.sh wake-listener.py \
-         core-feed.py labels.py radio-select.py boot-cover.py; do
+         core-feed.py labels.py radio-select.py boot-cover.py controls.py; do
   install -m 0755 "deploy/$f" "/opt/stratoscan/$f"
 done
 install -m 0644 deploy/setup-ui.html deploy/airports.json deploy/airlines.json /opt/stratoscan/
@@ -221,9 +221,17 @@ for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-ga
          stratoscan-ota-check.service stratoscan-ota-check.timer \
          stratoscan-ota-auto.service stratoscan-ota-auto.timer \
          stratoscan-netwatchdog.service stratoscan-tls-cert.service \
-         stratoscan-radio.service stratoscan-uat.service; do
+         stratoscan-radio.service stratoscan-uat.service stratoscan-controls.service; do
   install -m 0644 "deploy/$u" /etc/systemd/system/
 done
+# The control arc (Retro with Dials, roadmap 5.1): its service runs only once
+# /etc/stratoscan/controls.json exists. CONTROLS=1 says the arc is fitted.
+apt-get install -y -q python3-gpiozero python3-lgpio python3-evdev >/dev/null
+if [ "${CONTROLS:-0}" = "1" ] && [ ! -f /etc/stratoscan/controls.json ]; then
+  install -d -m 0755 /etc/stratoscan
+  printf '{"enabled": true}\n' > /etc/stratoscan/controls.json
+  echo "  control arc: on (dial, SCREEN button, STATUS lamp)"
+fi
 # readsb picks its radio by name, not position, and takes the 978 feed when
 # there is one (deploy/radio-select.py): a drop-in on wiedehopf's unit.
 install -d -m 0755 /etc/systemd/system/readsb.service.d
@@ -524,7 +532,7 @@ for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-ga
          stratoscan-events.service stratoscan-core.service \
          stratoscan-ota-check.timer stratoscan-ota-auto.timer stratoscan-netwatchdog.service \
          stratoscan-tls-cert.service stratoscan-radio.service stratoscan-uat.service \
-         lighttpd.service readsb.service; do
+         stratoscan-controls.service lighttpd.service readsb.service; do
   enable_unit "$u"
 done
 if ! live; then

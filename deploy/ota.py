@@ -172,6 +172,8 @@ DEPLOY_ALLOWED = {
     # Covers the screen with the StratoScan picture at login until the page
     # paints (run from the session's autostart, so no restart mapping).
     "boot-cover.py",
+    # The control arc's dial, button and lamp (Retro with Dials, 5.1).
+    "controls.py",
     # Opt-in health reports to the relay; run by net-watchdog.
     "heartbeat.py",
     # Weekly notable-aircraft list (plane-alert-db); run by net-watchdog.
@@ -605,6 +607,7 @@ SERVICE_FOR = {
     "setup-ui.html":      ("system", "stratoscan-setup.service"),
     "setupd.py":          ("system", "stratoscan-setupd.service"),
     "wake-listener.py":   ("user",   "stratoscan-wake.service"),
+    "controls.py":        ("system", "stratoscan-controls.service"),
     "tts-service.py":     ("system", "stratoscan-tts.service"),
     "events.py":          ("system", "stratoscan-events.service"),
     "core-feed.py":       ("system", "stratoscan-core.service"),

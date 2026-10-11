@@ -27,6 +27,7 @@ blanks again IDLE_MINUTES after the alert, which is the behaviour you'd
 expect.
 """
 import http.server
+import json
 import os
 import re
 import subprocess
@@ -267,6 +268,27 @@ def _wake(alert=False):
     )
 
 
+def screen_button():
+    """The control arc's SCREEN button (deploy/controls.py): the panel off if it
+    is on, on if it is off. Returns the panel's new state."""
+    global _hold_until
+    _hold_until = 0.0
+    try:
+        os.unlink(ALERT_FLAG)
+    except OSError:
+        pass
+    if _panel_state() == "on":
+        subprocess.run(["wlopm", "--off", "*"], timeout=5, check=False)
+        subprocess.run(["logger", "-t", "stratoscan-screen", "off-button"], timeout=5, check=False)
+        return "off"
+    subprocess.run(["logger", "-t", "stratoscan-screen", "on-button"], timeout=5, check=False)
+    subprocess.run(["wlopm", "--on", "*"], timeout=5, check=False)
+    if _mode != "on":
+        # a fresh idle time from now, as a touch would give
+        subprocess.run(["systemctl", "--user", "restart", SCREENSAVER_UNIT], timeout=10, check=False)
+    return "on"
+
+
 # The shm guard asks for a page reload by creating this file. A reload frees
 # roughly half the shared memory Chromium accumulates per document (measured:
 # 151MB -> 72MB) without restarting the browser, so it is the cheap first move
@@ -395,8 +417,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 os.unlink(ALERT_FLAG)   # the screensaver's own alert rule gives way too
             except OSError:
                 pass
+            # In "always on" no screensaver runs to wake the panel on a touch,
+            # so a panel switched off by the SCREEN button is woken here.
+            if _mode == "on" and _panel_state() == "off":
+                subprocess.run(["logger", "-t", "stratoscan-screen", "on-touch"], timeout=5, check=False)
+                subprocess.run(["wlopm", "--on", "*"], timeout=5, check=False)
             self.send_response(204)
             self.end_headers()
+            return
+        if path in ("/wake/button", "/wake/state"):
+            # The control arc: its button, and what the status lamp dims by.
+            panel = screen_button() if path == "/wake/button" else _panel_state()
+            body = json.dumps({"panel": panel, "mode": _mode}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
         if path != "/wake":
             self.send_error(404)
