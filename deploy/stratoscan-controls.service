@@ -7,6 +7,11 @@ After=readsb.service
 
 [Service]
 ExecStart=/usr/bin/python3 /opt/stratoscan/controls.py
+# lgpio (gpiozero's pin library on the Pi 5) makes its notification pipes in
+# the working directory; with the file system read-only that must be here,
+# or every pin library fails ("Unable to load any default pin factory").
+RuntimeDirectory=stratoscan-controls
+WorkingDirectory=/run/stratoscan-controls
 Restart=on-failure
 RestartSec=5
 # Root, for three devices and the kernel log: the GPIO chip (dial, button,
