@@ -195,6 +195,53 @@ def _hold_loop():
             pass               # a failed check must never take the listener down
 
 
+# The screen's mode (2026-10-11), set by the radar page from the owner's
+# settings and re-sent every few minutes, so a restart of either side
+# settles within one. The page works out quiet hours; this only acts:
+#   sleep   the screensaver runs: dark after 20 minutes untouched, alerts
+#           light it for ALERT_HOLD_S (the default, as before)
+#   on      always on: the screensaver is stopped and the panel kept lit
+#   alerts  quiet hours, alerts light it: dark from the moment quiet hours
+#           begin, then as `sleep`
+#   dark    quiet hours, dark and silent: dark from the start of quiet
+#           hours; the page sends no alert wakes; a touch still wakes it and
+#           the 20-minute idle puts it out again
+SCREEN_MODES = ("sleep", "on", "alerts", "dark")
+_mode = "sleep"
+
+
+def set_mode(mode):
+    """Apply a screen mode. Returns what changed, for the journal."""
+    global _mode, _hold_until
+    if mode not in SCREEN_MODES:
+        raise ValueError(mode)
+    before, _mode = _mode, mode
+    if mode == "on":
+        _hold_until = 0.0
+        subprocess.run(["systemctl", "--user", "stop", SCREENSAVER_UNIT], timeout=10, check=False)
+        if _panel_state() != "on":
+            subprocess.run(["logger", "-t", "stratoscan-screen", "on-always"], timeout=5, check=False)
+        subprocess.run(["wlopm", "--on", "*"], timeout=5, check=False)
+        return f"{before} -> on" if before != mode else ""
+    # every other mode runs the screensaver
+    if _unit_state(SCREENSAVER_UNIT) != "active":
+        subprocess.run(["systemctl", "--user", "start", SCREENSAVER_UNIT], timeout=10, check=False)
+    if mode in ("alerts", "dark") and before != mode:
+        _hold_until = 0.0
+        if _panel_state() == "on":
+            subprocess.run(["wlopm", "--off", "*"], timeout=5, check=False)
+            subprocess.run(["logger", "-t", "stratoscan-screen", "off-quiet"], timeout=5, check=False)
+    return f"{before} -> {mode}" if before != mode else ""
+
+
+def _unit_state(unit):
+    try:
+        return subprocess.run(["systemctl", "--user", "is-active", unit], capture_output=True,
+                              text=True, timeout=10).stdout.strip()
+    except Exception:
+        return "unknown"
+
+
 def _wake(alert=False):
     if alert:
         with open(ALERT_FLAG, "w"):
@@ -209,6 +256,9 @@ def _wake(alert=False):
                        timeout=5, check=False)
     subprocess.run(["wlopm", "--on", "*"], timeout=5, check=False)
     global _hold_until
+    if _mode == "on":
+        _hold_until = 0.0        # always on: nothing to hold, and no screensaver to restart
+        return
     _hold_until = time.monotonic() + ALERT_HOLD_S if alert else 0.0
     subprocess.run(
         ["systemctl", "--user", "restart", SCREENSAVER_UNIT], timeout=10, check=False
@@ -305,6 +355,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(body)
                 return
+            self.send_response(204)
+            self.end_headers()
+            return
+        if path == "/wake/mode":
+            q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+            mode = q.get("m", [""])[0]
+            if mode not in SCREEN_MODES:
+                self.send_error(400)
+                return
+            try:
+                changed = set_mode(mode)
+                if changed:
+                    print(f"screen mode: {changed}", flush=True)
+            except Exception:
+                pass
             self.send_response(204)
             self.end_headers()
             return
