@@ -82,7 +82,7 @@ fi
 
 [ "$(id -u)" = "0" ] || { echo "run as root: sudo sh deploy/quiet-boot.sh"; exit 1; }
 
-command -v swaybg >/dev/null 2>&1 || apt-get install -y -q swaybg >/dev/null
+command -v swaybg >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y -q swaybg >/dev/null 2>&1
 install -D -m 0644 "$SPLASH_SRC" "$SPLASH"
 
 # plymouth: our picture in place of Raspberry Pi's
