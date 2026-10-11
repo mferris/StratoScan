@@ -378,6 +378,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # ordinary idle time.
             global _hold_until
             _hold_until = 0.0
+            try:
+                os.unlink(ALERT_FLAG)   # the screensaver's own alert rule gives way too
+            except OSError:
+                pass
             self.send_response(204)
             self.end_headers()
             return
