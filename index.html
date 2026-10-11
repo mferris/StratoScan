@@ -3995,6 +3995,17 @@ function quietStatusText() {
 // re-decided every minute, not only when a setting changes.
 setInterval(applyVolume, 60 * 1000);
 stage.addEventListener('pointerdown', () => { getAudioCtx().resume().catch(() => {}); }, { once: true });
+// Touches are reported to the radar's wake listener, so an alert's two-minute
+// screen hold gives way to the ordinary idle time once someone is using the
+// screen (deploy/wake-listener.py, 2026-10-11). At most every few seconds.
+let lastTouchReport = 0;
+document.addEventListener('pointerdown', () => {
+  if (!ON_DEVICE) return;
+  const now = performance.now();
+  if (now - lastTouchReport < 5000) return;
+  lastTouchReport = now;
+  fetch('/wake/touch', { method: 'POST' }).catch(() => {});
+}, { capture: true, passive: true });
 
 // Shared tone-sequence player -- each note is [freq, startOffset, dur, peakGain].
 // Factored out of what used to be playAlertSound's own body so the emergency
