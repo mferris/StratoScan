@@ -143,7 +143,7 @@ phone ──(pairing, notification rules)──▶ relay
 
 | # | Item | Done when |
 |---|---|---|
-| 5.1 | Rotating bezel (rotary encoder) for range and paging: enclosure redesign plus input handling | Turning the bezel changes range on the kiosk |
+| 5.1 | Control arc on the retro case ("Retro with Dials"), replacing the rotating bezel: a RANGE dial (turn to zoom, push for home), a SCREEN button (press on/off, hold for always on) and a STATUS jewel lamp (green, amber, red); design in `enclosure/Retro Radar with Dials/`, software in `deploy/controls.py` | The three controls work on a printed, wired unit |
 | 5.2 | Presence wake (LD2410 mmWave over UART, or PIR) replacing the 20-min idle timer | The screen wakes on approach and sleeps when the room is empty |
 | 5.3 | 978 MHz UAT receiver for US units (dump978 into readsb) | UAT-only GA aircraft appear on the radar |
 | 5.4 | Retro stand: ridges all the way round the plinth, standing out ~4 mm so the slicer supports them (as the case ribs were fixed) | Printed, with clean ridges on all four sides |

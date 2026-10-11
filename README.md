@@ -430,7 +430,9 @@ guaranteed to cover a long, busy day on its own.
 
 **The enclosure**: [`enclosure/`](enclosure/) has two printable cases for the
 same hardware — the original ship's-instrument look, and one shaped like a
-sitting cat with the round display as its face, printed in two colours. Both are parametric OpenSCAD,
+sitting cat with the round display as its face, printed in two colours. The
+instrument case also comes [with dials](enclosure/Retro%20Radar%20with%20Dials/):
+a control arc carrying a RANGE dial, a SCREEN button and a STATUS lamp. Both are parametric OpenSCAD,
 everything deriving from the measured values at the top of each file. Each
 folder's README covers how to export the parts, the interference checks, and
 the dimensional mistakes that are easy to repeat.
