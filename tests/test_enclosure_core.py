@@ -24,6 +24,27 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent / "enclosure"
 RETRO = ROOT / "Retro Radar Enclosure" / "retro-enclosure.scad"
 KITTEN = ROOT / "Kitten Enclosure Two-Tone" / "kitten-enclosure-twotone.scad"
 
+# Every folder under enclosure/ is one of these. A new case folder fails this
+# test until it is added to one or the other -- so a third (or fourth) case
+# cannot quietly grow its own copy of the back, the mounts or the shell.
+FULL = {"Retro Radar Enclosure": RETRO, "Kitten Enclosure Two-Tone": KITTEN}
+# Built by INCLUDING a full design and adding to it: (its .scad, the design it
+# includes, its print files and the part that makes each).
+VARIANTS = {
+    "Retro Radar with Dials": ("retro-dials.scad", RETRO, {
+        "shell_dials.stl": "shell_dials", "control_arc.stl": "pod_print",
+        "control_arc_text.stl": "pod_text_print", "control_arc_cover.stl": "pod_cover_print",
+        "knob.stl": "knob", "jewel_lens.stl": "jewel_print"}),
+}
+# Print files for the parts every case shares. Each full design's folder ships
+# them, and they must be the same shape in every folder (compared by volume
+# and extent: two exports of one model differ in triangulation, not shape).
+SHARED_PRINTS = ["back_plate", "retainer", "usbc_gauge", "antenna_socket_gauge",
+                 "antenna_mount", "antenna_mount_sma", "antenna_mount_twin_8", "antenna_mount_twin_11",
+                 "antenna_mount_twin_cover_8", "antenna_mount_twin_cover_11",
+                 "antenna_mount_twin_cover_text_8", "antenna_mount_twin_cover_text_11"]
+OPENSCAD = "/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD"
+
 # Everything the hardware touches: the shell's internal furniture, the back,
 # and the antenna mount. These must be character-for-character the same.
 CORE = {
@@ -127,6 +148,124 @@ def params(path):
     return out
 
 
+def geometry(path):
+    """(volume mm3, min corner, max corner) of an STL, ASCII or binary."""
+    import struct
+    d = pathlib.Path(path).read_bytes()
+    tris = []
+    if d[:5] == b"solid" and b"facet" in d[:400]:
+        v = []
+        for line in d.decode(errors="ignore").splitlines():
+            line = line.strip()
+            if line.startswith("vertex"):
+                v.append(tuple(float(x) for x in line.split()[1:4]))
+                if len(v) == 3:
+                    tris.append(v); v = []
+    else:
+        n = struct.unpack("<I", d[80:84])[0]
+        for i in range(n):
+            f = struct.unpack("<12f", d[84 + 50 * i:84 + 50 * i + 48])
+            tris.append((f[3:6], f[6:9], f[9:12]))
+    vol, lo, hi = 0.0, [1e9] * 3, [-1e9] * 3
+    for a, b, c in tris:
+        vol += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
+                + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6
+        for pt in (a, b, c):
+            for k in range(3):
+                lo[k], hi[k] = min(lo[k], pt[k]), max(hi[k], pt[k])
+    return abs(vol), lo, hi
+
+
+def same_shape(g1, g2):
+    return (abs(g1[0] - g2[0]) <= max(0.5, g1[0] * 1e-5)
+            and all(abs(x - y) <= 0.02 for x, y in zip(g1[1] + g1[2], g2[1] + g2[2])))
+
+
+def export(scad, var, part, out):
+    import subprocess
+    subprocess.run([OPENSCAD, "--backend=manifold", "--export-format", "binstl",
+                    "-D", f'{var}="{part}"', "-o", str(out), str(scad)],
+                   capture_output=True, timeout=600)
+    return out.exists() and out.stat().st_size > 84
+
+
+def folders_and_prints():
+    """Checks 5-8: every case folder registered; variants include, never copy;
+    shared print files the same shape everywhere; print files not stale."""
+    import os
+    import tempfile
+    failures, checks = [], 0
+
+    # 5. every folder is registered
+    for d in sorted(p for p in ROOT.iterdir() if p.is_dir()):
+        checks += 1
+        if d.name not in FULL and d.name not in VARIANTS:
+            failures.append(f"enclosure/{d.name} is a new case: register it in FULL (a design of its own, "
+                            f"compared module by module) or VARIANTS (one that includes another)")
+
+    # 6. a variant includes its base and redefines none of the shared parts
+    for name, (scad, base, prints) in VARIANTS.items():
+        f = ROOT / name / scad
+        checks += 1
+        src = f.read_text() if f.exists() else ""
+        inc = f"include <../{base.parent.name}/{base.name}>"
+        if inc not in src:
+            failures.append(f"{name}/{scad} must `{inc}` -- a copy of the base design would drift")
+        mine = set(modules(f)) if f.exists() else set()
+        checks += 1
+        clash = sorted(mine & (CORE | set(COSMETIC) | set(modules(base))))
+        if clash:
+            failures.append(f"{name}/{scad} redefines {', '.join(clash)} from {base.name}; "
+                            f"change the base design instead, so every case gets it")
+        checks += 1
+        copies = sorted(p.name for p in (ROOT / name).glob("*.stl") if p.stem in SHARED_PRINTS)
+        if copies:
+            failures.append(f"{name} ships its own {', '.join(copies)}; the base design's folder holds those")
+
+    # 7. shared print files: present in every full design's folder, same shape
+    for part in SHARED_PRINTS:
+        shapes = {}
+        for fname in FULL:
+            checks += 1
+            p = ROOT / fname / f"{part}.stl"
+            if not p.exists():
+                failures.append(f"{fname} is missing {part}.stl")
+                continue
+            shapes[fname] = geometry(p)
+        if len(shapes) > 1:
+            checks += 1
+            first = next(iter(shapes.values()))
+            if not all(same_shape(first, g) for g in shapes.values()):
+                failures.append(f"{part}.stl is not the same shape in every case folder: "
+                                f"re-export it from each design (and check the designs agree)")
+
+    # 8. print files match their design today (needs OpenSCAD; skipped without it)
+    if os.path.exists(OPENSCAD) and os.environ.get("ENCLOSURE_QUICK") != "1":
+        with tempfile.TemporaryDirectory() as t:
+            t = pathlib.Path(t)
+            jobs = [(RETRO, "part", part, ROOT / fname / f"{part}.stl")
+                    for part in SHARED_PRINTS for fname in FULL]
+            for name, (scad, base, prints) in VARIANTS.items():
+                jobs += [(ROOT / name / scad, "dpart", part, ROOT / name / fn) for fn, part in prints.items()]
+            made = {}
+            for scad, var, part, committed in jobs:
+                checks += 1
+                key = (str(scad), part)
+                if key not in made:
+                    out = t / f"{len(made)}.stl"
+                    made[key] = geometry(out) if export(scad, var, part, out) else None
+                if made[key] is None:
+                    failures.append(f"could not export {part} from {scad.name}")
+                elif not committed.exists():
+                    failures.append(f"{committed.relative_to(ROOT)} is missing")
+                elif not same_shape(made[key], geometry(committed)):
+                    failures.append(f"{committed.relative_to(ROOT)} is stale: the design has changed since it "
+                                    f"was exported. Re-export it (and the same part in every other case folder)")
+    else:
+        print("note: OpenSCAD not found (or ENCLOSURE_QUICK=1): print files not compared with their designs")
+    return failures, checks
+
+
 def main():
     failures, checks = [], 0
 
@@ -171,6 +310,10 @@ def main():
         if name in ra and name in ka and ra[name] == ka[name]:
             failures.append(f"{name} is listed as cosmetic but is now identical; "
                             f"remove it from COSMETIC")
+
+    more, n = folders_and_prints()
+    failures += more
+    checks += n
 
     for f in failures:
         print("FAIL:", f)
