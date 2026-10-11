@@ -25,3 +25,12 @@ relay/node_modules/
 relay/.wrangler/
 relay/.dev.vars
 data/
+
+# The relay's real deployment config is the maintainer's; start from relay/wrangler.example.toml
+relay/wrangler.toml
+
+# The maintainer's Apple team ID (see ios/Config/Signing.xcconfig)
+ios/Config/Team.xcconfig
+
+# The local radar dev-server.py proxies to (one line, e.g. http://raspberrypi.local)
+.dev-pi

@@ -44,14 +44,14 @@ def fake_get_json(url, timeout=6, limit=0):
 
 nc.get_json = fake_get_json
 out = nc.around_payload(35.8776, -78.7875, 300, now=1000.0)
-check(asked and asked[-1][0].endswith("/v2/point/35.85/-78.8/250"), "the point is rounded to 0.05 degrees and the radius clamped to 250: %s" % (asked and asked[-1][0]))
+check(asked and asked[-1][0].endswith("/v2/point/35.9/-78.8/250"), "the point is rounded to 0.05 degrees and the radius clamped to 250: %s" % (asked and asked[-1][0]))
 check(asked[-1][1] == nc.AROUND_MAX_BODY, "a busy disc may be a few MB")
 check([a["hex"] for a in out["ac"]] == ["a1b2c3", "abcdef"], "real 24-bit addresses only, lower case")
 a = out["ac"][0]
 check(a["flight"] == "UAL123" and a["type"] == "B738" and a["reg"] == "N123UA" and a["vrate"] == -500 and a["alt"] == 35000,
       "the fields the page draws survive")
 check(out["ac"][1]["vrate"] == 200, "geom_rate is the fallback vertical rate")
-check(out["centre"] == {"lat": 35.85, "lon": -78.8} and out["radius"] == 250 and out["fetched"] == 0.0, "the answer says where and how far")
+check(out["centre"] == {"lat": 35.9, "lon": -78.8} and out["radius"] == 250 and out["fetched"] == 0.0, "the answer says where and how far")
 
 n = len(asked)
 again = nc.around_payload(35.88, -78.79, 250, now=1004.0)

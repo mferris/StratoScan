@@ -53,7 +53,9 @@ elif [ "$(head -1 "$OUT")" != "$HEADER" ]; then
     echo "$HEADER" > "$OUT"
 fi
 
-main_pid=$(systemctl --user -M <user>@ show stratoscan-kiosk.service -p ExecMainPID --value 2>/dev/null || echo 0)
+# The kiosk runs as the first login user (uid 1000) unless KIOSK_USER says otherwise.
+KIOSK_USER="${KIOSK_USER:-$(getent passwd 1000 | cut -d: -f1)}"
+main_pid=$(systemctl --user -M "${KIOSK_USER}@" show stratoscan-kiosk.service -p ExecMainPID --value 2>/dev/null || echo 0)
 [ -n "$main_pid" ] || main_pid=0
 
 uptime_s=0

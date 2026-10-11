@@ -47,9 +47,9 @@ check("it carries the claim code and the setup network",
       q.get("c") == ["ABC-123"] and q.get("w") == ["StratoScan-Setup"] and q.get("a") == ["10.42.0.1"])
 check("the network password survives & = and spaces as one value", q.get("k") == ["pw&k=x 1"])
 check("on the setup network it gives no LAN address", "h" not in q)
-ss.lan_addresses = lambda: ["100.98.1.2", "<radar>"]
+ss.lan_addresses = lambda: ["100.98.1.2", "192.168.1.23"]
 q = parse_qs(urlparse(ss.setup_link("ABC-123", {"active": False})).query)
-check("already on a network, it gives the home address (not Tailscale's)", q.get("h") == ["<radar>"] and "w" not in q)
+check("already on a network, it gives the home address (not Tailscale's)", q.get("h") == ["192.168.1.23"] and "w" not in q)
 ss.lan_addresses = lambda: []
 check("with neither, there is no link to show", ss.setup_link("ABC-123", {"active": False}) is None)
 check("with no claim code (already claimed), no link", ss.setup_link(None, HS) is None)

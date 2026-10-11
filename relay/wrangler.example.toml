@@ -1,0 +1,27 @@
+# Copy to wrangler.toml (ignored by git) and fill in your own values.
+# The maintainer's real file is kept outside this repo.
+name = "stratoscan-relay"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+# Serve the relay on your own domain. Cloudflare creates the DNS record and
+# certificate on deploy. Leave workers_dev on to keep the workers.dev address.
+routes = [ { pattern = "relay.example.com", custom_domain = true } ]
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "stratoscan-relay"
+# From: npx wrangler d1 create stratoscan-relay
+database_id = "00000000-0000-0000-0000-000000000000"
+
+# Push (roadmap 2.1). Not secret, but they are your Apple account's:
+# the push key's ID, your team ID, and your app's bundle ID.
+[vars]
+APNS_KEY_ID = "XXXXXXXXXX"
+APNS_TEAM_ID = "XXXXXXXXXX"
+APNS_TOPIC = "com.example.stratoscan"
+
+# Secrets are never stored here. Set them with:
+#   npx wrangler secret put FLEET_TOKEN
+#   npx wrangler secret put APNS_KEY < AuthKey_<KEY ID>.p8    (the APNs auth key)

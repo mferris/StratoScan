@@ -8,9 +8,9 @@
 # runs scripts/perf-probe.py over SSH. Afterwards the switches file is removed
 # and the page reloaded, leaving the unit exactly as it was.
 #
-# Usage: sh scripts/perf-experiments.sh [host] [minutes-per-experiment]
+# Usage: sh scripts/perf-experiments.sh user@host [minutes-per-experiment]
 set -u
-HOST="${1:-<user>@<radar>}"
+HOST="${1:?usage: sh scripts/perf-experiments.sh user@host [minutes]}"
 MIN="${2:-5}"
 SETTLE=75
 HERE=$(cd "$(dirname "$0")" && pwd)

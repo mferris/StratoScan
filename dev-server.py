@@ -7,9 +7,21 @@ itself (same-origin there, no proxy needed). Not part of the deployed app.
 """
 import http.server
 import urllib.request
+import os
 import sys
 
-PI_HOST = "http://<radar>"
+# Your radar's address: STRATOSCAN_PI, or the first line of .dev-pi beside this
+# file (git ignores it), or raspberrypi.local.
+def _pi_host():
+    if os.environ.get("STRATOSCAN_PI"):
+        return os.environ["STRATOSCAN_PI"].rstrip("/")
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".dev-pi")) as f:
+            return f.readline().strip().rstrip("/")
+    except OSError:
+        return "http://raspberrypi.local"
+
+PI_HOST = _pi_host()
 PORT = 8000
 
 class Handler(http.server.SimpleHTTPRequestHandler):

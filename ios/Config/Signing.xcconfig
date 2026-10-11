@@ -1,0 +1,5 @@
+// Signing for every target. Your Apple team ID goes in Team.xcconfig beside
+// this file, which git ignores:
+//   DEVELOPMENT_TEAM = ABCDE12345
+// Without it, choose a team in Xcode › Signing & Capabilities.
+#include? "Team.xcconfig"
