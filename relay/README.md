@@ -115,7 +115,7 @@ It never shows a location (health reports carry none), phones or alerts. An admi
 cd relay
 npm install
 npx wrangler login                                  # opens a browser
-npx wrangler d1 create stratoscan-relay             # copy the id into wrangler.toml
+npx wrangler d1 create stratoscan-relay             # copy the id into wrangler.toml (start from wrangler.example.toml)
 npm run db:init                                     # applies schema.sql
 npx wrangler secret put FLEET_TOKEN                 # choose a long random password
 npx wrangler secret put APNS_KEY < AuthKey_XXXX.p8  # the APNs auth key from developer.apple.com

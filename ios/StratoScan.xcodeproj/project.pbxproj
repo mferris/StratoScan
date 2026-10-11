@@ -213,6 +213,7 @@
 		8E132796E2082CED29DB7C80 /* CreditsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreditsView.swift; sourceTree = "<group>"; };
 		92DD6C3B28E22E020AB8AF6C /* StratoScanWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StratoScanWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9B707CA4D90694E35915217F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		9F93FEC707156ADC2927DCA2 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		A0964DFC845B4F543036F97B /* Sun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sun.swift; sourceTree = "<group>"; };
 		A098FF92E33AB26325CE095F /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
 		A553C39663C267646A4ED80A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -261,6 +262,14 @@
 				27835EEC2F101125FFDA7EEA /* NotificationService.swift */,
 			);
 			path = StratoScanNotificationService;
+			sourceTree = "<group>";
+		};
+		22378AA526F6537B8F379974 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				9F93FEC707156ADC2927DCA2 /* Signing.xcconfig */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 		26EC111CA7C65B0CBF2D670E /* Theme */ = {
@@ -374,6 +383,7 @@
 		878856C25271650224D00838 = {
 			isa = PBXGroup;
 			children = (
+				22378AA526F6537B8F379974 /* Config */,
 				79BA6A110519C3ED45ABAFF3 /* Shared */,
 				EE2FEA98A094363DBD07BA4A /* StratoScan */,
 				0C0C3B3306B2ACD4CD460EF9 /* StratoScanNotificationService */,
@@ -574,23 +584,18 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					437B5EB92413B6288EF916B0 = {
-						DevelopmentTeam = XXXXXXXXXX;
 						ProvisioningStyle = Automatic;
 					};
 					46DEACFAAD6836D23AAE66B1 = {
-						DevelopmentTeam = XXXXXXXXXX;
 						ProvisioningStyle = Automatic;
 					};
 					6102AAE5BD45DE0990EDCDC4 = {
-						DevelopmentTeam = XXXXXXXXXX;
 						ProvisioningStyle = Automatic;
 					};
 					CD6188FBDC801374E61DEB37 = {
-						DevelopmentTeam = XXXXXXXXXX;
 						ProvisioningStyle = Automatic;
 					};
 					D4BC17E64D7441F3E91AE5D0 = {
-						DevelopmentTeam = XXXXXXXXXX;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -817,7 +822,6 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XXXXXXXXXX;
 				INFOPLIST_FILE = StratoScanWatchWidget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -840,7 +844,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XXXXXXXXXX;
 				INFOPLIST_FILE = StratoScanWatch/Info.plist;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.NelsonIndustries.radome.watchkitapp;
@@ -857,7 +860,6 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XXXXXXXXXX;
 				INFOPLIST_FILE = StratoScanWatchWidget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -876,6 +878,7 @@
 		};
 		59D3C260931AE3B2BDC3CBE7 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9F93FEC707156ADC2927DCA2 /* Signing.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -942,7 +945,6 @@
 				CODE_SIGN_ENTITLEMENTS = StratoScanWidget/StratoScanWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XXXXXXXXXX;
 				INFOPLIST_FILE = StratoScanWidget/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -966,7 +968,6 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XXXXXXXXXX;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = StratoScan/App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
@@ -990,7 +991,6 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XXXXXXXXXX;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = StratoScan/App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
@@ -1011,7 +1011,6 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XXXXXXXXXX;
 				INFOPLIST_FILE = StratoScanNotificationService/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1029,6 +1028,7 @@
 		};
 		B04ADA6D1064132D0F1A70D5 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9F93FEC707156ADC2927DCA2 /* Signing.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -1087,7 +1087,6 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XXXXXXXXXX;
 				INFOPLIST_FILE = StratoScanNotificationService/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1109,7 +1108,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XXXXXXXXXX;
 				INFOPLIST_FILE = StratoScanWatch/Info.plist;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.NelsonIndustries.radome.watchkitapp;
@@ -1127,7 +1125,6 @@
 				CODE_SIGN_ENTITLEMENTS = StratoScanWidget/StratoScanWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XXXXXXXXXX;
 				INFOPLIST_FILE = StratoScanWidget/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				LD_RUNPATH_SEARCH_PATHS = (

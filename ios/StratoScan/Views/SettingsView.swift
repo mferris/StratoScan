@@ -25,7 +25,7 @@ struct SettingsView: View {
 
                 Section {
                     LabeledContent("At home") {
-                        TextField("http://<radar>", text: $baseURL)
+                        TextField("http://raspberrypi.local", text: $baseURL)
                             .multilineTextAlignment(.trailing)
                             .keyboardType(.URL).autocapitalization(.none).disableAutocorrection(true)
                     }

@@ -603,7 +603,7 @@ rarely, but it's a real latent bug. Fixed by wrapping `p.bearing` the same
 way `p.labelAngle` already was two lines below it.
 
 **Testing note**: this sandbox's browser preview can reach the public
-internet but not the Pi's private LAN address (<radar>) — `dev-server.py`'s
+internet but not the Pi's private LAN address (its 192.168.x.x address) — `dev-server.py`'s
 proxy got `No route to host` even though direct `curl`/`ssh` from a shell
 in the same session worked fine. Verified instead with a small mock server
 (`/tar1090/data/*` stubbed with synthetic aircraft spanning every category)

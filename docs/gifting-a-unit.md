@@ -186,14 +186,14 @@ managed one (security review 2026-10-04, items 6 and 8). Make one SSH key
 pair per fleet first, so a key found on one unit opens nothing else:
 
 ```
-ssh-keygen -t ed25519 -f ~/.ssh/stratoscan-fleet-family -C "stratoscan fleet: family"
+ssh-keygen -t ed25519 -f ~/.ssh/stratoscan-fleet-<fleet> -C "stratoscan fleet: <fleet>"
 ```
 
 Then, on the unit, from the checkout:
 
 ```
 MANAGED=1 MAINTAINER_USER=<the unit's login user> \
-MAINTAINER_PUBKEY="$(cat ~/.ssh/stratoscan-fleet-family.pub)" \
+MAINTAINER_PUBKEY="$(cat ~/.ssh/stratoscan-fleet-<fleet>.pub)" \
 sudo sh deploy/install-setup-server.sh
 ```
 

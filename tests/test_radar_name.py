@@ -37,7 +37,7 @@ ss.AIRPORTS_JSON = os.path.join(HERE, "..", "deploy", "airports.json")
 airport = {"code": None}
 ss.actual_airport = lambda: {"code": airport["code"]} if airport["code"] else None
 ss.public_url = lambda: None
-ss.lan_addresses = lambda: ["<radar>"]
+ss.lan_addresses = lambda: ["192.168.1.23"]
 ss.qr_svg = lambda text: None
 
 # ---- what a name may be ---------------------------------------------------------------
