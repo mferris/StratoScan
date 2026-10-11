@@ -26,6 +26,7 @@ stay on indefinitely after an alert -- there is no further input to trigger
 blanks again IDLE_MINUTES after the alert, which is the behaviour you'd
 expect.
 """
+import glob
 import http.server
 import json
 import os
@@ -99,6 +100,7 @@ def _display_is_on():
     -- counts as "not on", so an uncertain watchdog stays its hand rather
     than restarting the kiosk on a bad reading.
     """
+    _ensure_wayland()
     try:
         out = subprocess.run(["wlopm"], capture_output=True, text=True,
                              timeout=5).stdout
@@ -144,8 +146,23 @@ def _watchdog():
             print(f"watchdog: cycle failed ({type(e).__name__})", flush=True)
 
 
+def _ensure_wayland():
+    """Point wlopm at the compositor even when the session had not published
+    WAYLAND_DISPLAY when this service started. After a fresh boot the listener
+    can start first, and then every wlopm call failed ("WAYLAND_DISPLAY is not
+    set"): alerts could not light the panel, and the SCREEN button could not
+    turn it on (seen on RDU 2026-10-11, after a day of restarts)."""
+    if os.environ.get("WAYLAND_DISPLAY"):
+        return
+    rd = os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid()
+    socks = sorted(p for p in glob.glob(os.path.join(rd, "wayland-[0-9]*")) if not p.endswith(".lock"))
+    if socks:
+        os.environ["WAYLAND_DISPLAY"] = os.path.basename(socks[0])
+
+
 def _panel_state():
     """'on', 'off', or '?': what wlopm says the output is doing."""
+    _ensure_wayland()
     try:
         out = subprocess.run(["wlopm"], capture_output=True, text=True, timeout=5).stdout
         return out.split()[1] if len(out.split()) >= 2 else "?"
@@ -178,6 +195,7 @@ _hold_until = 0.0          # monotonic; 0 = no alert hold in force
 def _hold_tick(now=None):
     """Put the panel out if an alert hold has run its course. True if it did."""
     global _hold_until
+    _ensure_wayland()
     now = time.monotonic() if now is None else now
     if not _hold_until or now < _hold_until:
         return False
@@ -355,6 +373,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         global _last_wake, _last_beat, _unrecovered_restarts
+        _ensure_wayland()
         path = self.path.split("?", 1)[0].rstrip("/")
         if path == "/wake/alive":
             if not _last_beat:
