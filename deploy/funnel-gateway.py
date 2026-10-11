@@ -71,7 +71,8 @@ COORD_PRECISION = 2  # decimal places -- ~0.7mi at this latitude
 # house needs; a public caller could otherwise keep the Pi busy talking.
 # /data/notable-people.json names well-known people's aircraft (notable-db.py):
 # shown on the owner's own screens, never on the public page.
-LOCAL_ONLY_PATHS = ("/wake", "/setup", "/tts", "/photo", "/data/notable-people")
+# /data/power.json is the unit's own power health: nobody else's business.
+LOCAL_ONLY_PATHS = ("/wake", "/setup", "/tts", "/photo", "/data/notable-people", "/data/power")
 
 # Paths that may be READ publicly but must not be WRITTEN publicly.
 #

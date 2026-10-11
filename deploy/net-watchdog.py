@@ -482,10 +482,46 @@ def check_uat_power(now=None):
           f"the 978 MHz decoder is running again", flush=True)
 
 
+# Alert sounds and the 5 V supply (#53, 2026-10-11). On RDU most under-voltage
+# warnings came one or two seconds after a nearby-aircraft chime: the speakers
+# run off the display's board, so off the Pi's 5 V, and a loud chime is a burst
+# of current. While the supply has dipped LIMIT_DIPS times in LIMIT_WINDOW_S,
+# the page caps its volume (POWER_JSON: {"limited": true}). Once a supply with
+# margin is fitted the dips stop, and the cap lifts on its own within the window.
+POWER_JSON = os.environ.get("STRATOSCAN_POWER_JSON", "/var/www/html/data/power.json")
+LIMIT_DIPS = 3
+LIMIT_WINDOW_S = 6 * 3600
+
+
+def power_limited(dips):
+    return dips is not None and dips >= LIMIT_DIPS
+
+
+def check_power_status(now=None):
+    now = time.time() if now is None else now
+    dips = undervoltage_dips(LIMIT_WINDOW_S)
+    doc = {"limited": power_limited(dips), "dips": dips, "window_h": LIMIT_WINDOW_S // 3600,
+           "at": int(now)}
+    try:
+        with open(POWER_JSON) as f:
+            before = json.load(f)
+    except (OSError, ValueError):
+        before = {}
+    if before.get("limited") != doc["limited"]:
+        print(f"power: {dips} under-voltage dips in {LIMIT_WINDOW_S // 3600} h; alert volume "
+              f"{'capped' if doc['limited'] else 'no longer capped'}", flush=True)
+    os.makedirs(os.path.dirname(POWER_JSON), exist_ok=True)
+    tmp = POWER_JSON + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(doc, f)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, POWER_JSON)
+
+
 def check_health():
     # Independent of each other and of the networking below: a bug or an
     # odd state in one must never stop the unit staying reachable.
-    for check in (check_receiver, check_kiosk, check_uat_power):
+    for check in (check_receiver, check_kiosk, check_uat_power, check_power_status):
         try:
             check()
         except Exception as e:
