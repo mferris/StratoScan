@@ -160,6 +160,41 @@ ALERT_WAKES = ("nearby", "rare", "emergency")
 ALERT_FLAG = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "stratoscan-alert-wake")
 
 
+# The alert hold (2026-10-11). An alert lights a dark panel for ALERT_HOLD_S
+# and this listener puts it out again itself, unless someone touches the
+# screen first (the page reports touches on /wake/touch). The screensaver's
+# own flag-based 120 s timeout was meant to do this, and did in every test,
+# but on real alerts overnight the panel always stayed lit the full 20
+# minutes; so the hold no longer depends on it. Its 20-minute idle and its
+# touch-to-wake are unchanged.
+ALERT_HOLD_S = 120
+HOLD_CHECK_S = 5
+_hold_until = 0.0          # monotonic; 0 = no alert hold in force
+
+
+def _hold_tick(now=None):
+    """Put the panel out if an alert hold has run its course. True if it did."""
+    global _hold_until
+    now = time.monotonic() if now is None else now
+    if not _hold_until or now < _hold_until:
+        return False
+    _hold_until = 0.0
+    if _panel_state() != "on":
+        return False
+    subprocess.run(["wlopm", "--off", "*"], timeout=5, check=False)
+    subprocess.run(["logger", "-t", "stratoscan-screen", "off-after-alert"], timeout=5, check=False)
+    return True
+
+
+def _hold_loop():
+    while True:
+        time.sleep(HOLD_CHECK_S)
+        try:
+            _hold_tick()
+        except Exception:
+            pass               # a failed check must never take the listener down
+
+
 def _wake(alert=False):
     if alert:
         with open(ALERT_FLAG, "w"):
@@ -173,6 +208,8 @@ def _wake(alert=False):
         subprocess.run(["logger", "-t", "stratoscan-screen", "on-alert" if alert else "on-wake"],
                        timeout=5, check=False)
     subprocess.run(["wlopm", "--on", "*"], timeout=5, check=False)
+    global _hold_until
+    _hold_until = time.monotonic() + ALERT_HOLD_S if alert else 0.0
     subprocess.run(
         ["systemctl", "--user", "restart", SCREENSAVER_UNIT], timeout=10, check=False
     )
@@ -271,6 +308,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(204)
             self.end_headers()
             return
+        if path == "/wake/touch":
+            # Someone touched the screen: an alert hold gives way to the
+            # ordinary idle time.
+            global _hold_until
+            _hold_until = 0.0
+            self.send_response(204)
+            self.end_headers()
+            return
         if path != "/wake":
             self.send_error(404)
             return
@@ -308,4 +353,5 @@ if __name__ == "__main__":
     # -- and net-watchdog would eventually reboot a healthy unit over it.
     _record_stuck(0)
     threading.Thread(target=_watchdog, daemon=True).start()
+    threading.Thread(target=_hold_loop, daemon=True).start()
     http.server.ThreadingHTTPServer(LISTEN, Handler).serve_forever()
