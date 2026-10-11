@@ -3954,9 +3954,30 @@ function getMasterGain() {
 // since nothing is audible in between, but it meant the node and the setting
 // disagreed for arbitrarily long, and anything that later read the node would
 // have read a lie. Called on every change instead.
+// While the unit's 5 V supply is dipping, alert sounds are capped: a loud
+// chime is a burst of current from the same supply, and on RDU it was what
+// tipped the supply under (#53, 2026-10-11). The unit decides
+// (net-watchdog.py writes /data/power.json) and lifts the cap once the supply
+// has been steady for hours; the owner's own volume setting is never changed.
+const POWER_VOLUME_CAP = 0.3;
+let powerLimited = false;
+async function checkPowerLimit() {
+  if (!ON_DEVICE) return;
+  try {
+    const r = await fetch('/data/power.json', { cache: 'no-store' });
+    if (r.ok) {
+      const was = powerLimited;
+      powerLimited = (await r.json()).limited === true;
+      if (was !== powerLimited) applyVolume();
+    }
+  } catch (e) { /* no file yet: no cap */ }
+}
+function effectiveVolume() {
+  return powerLimited ? Math.min(alertSettings.volume, POWER_VOLUME_CAP) : alertSettings.volume;
+}
 function applyVolume() {
   if (!masterGain) return;
-  masterGain.gain.value = soundAllowedNow() ? alertSettings.volume : 0;
+  masterGain.gain.value = soundAllowedNow() ? effectiveVolume() : 0;
 }
 
 // ---- Quiet hours (roadmap 4.7) --------------------------------------------
@@ -4054,7 +4075,8 @@ function quietStatusText() {
 
 // The window has to open and close on time without a reload, so the gain is
 // re-decided every minute, not only when a setting changes.
-setInterval(() => { applyVolume(); applyScreenPolicy(); }, 60 * 1000);
+setInterval(() => { checkPowerLimit(); applyVolume(); applyScreenPolicy(); }, 60 * 1000);
+setTimeout(checkPowerLimit, 2000);
 setTimeout(applyScreenPolicy, 3000);
 stage.addEventListener('pointerdown', () => { getAudioCtx().resume().catch(() => {}); }, { once: true });
 // Touches are reported to the radar's wake listener, so an alert's two-minute
@@ -6378,8 +6400,9 @@ function renderSettingsPanel() {
       </div>
       <input type="range" id="volumeSlider" min="0" max="${VOLUME_MAX}" step="0.02"
              value="${alertSettings.volume}" ${alertSettings.muted ? 'disabled' : ''}>
-      <div class="sp-sub">100% is where the sounds were mastered; past that is
-        amplified and gently limited so it gets louder, not distorted.</div>
+      <div class="sp-sub">${powerLimited && alertSettings.volume > POWER_VOLUME_CAP
+        ? `Playing at ${Math.round(POWER_VOLUME_CAP * 100)}% for now: the power supply has been dipping, and loud alerts make it worse. This lifts by itself once the supply is steady.`
+        : '100% is where the sounds were mastered; past that is amplified and gently limited so it gets louder, not distorted.'}</div>
     </div>
     <div class="sp-section-title">Screen</div>
     ${choiceRow('screenMode', 'sleep', 'Sleeps when idle', 'Dark after 20 minutes untouched; an alert lights it for 2 minutes')}
