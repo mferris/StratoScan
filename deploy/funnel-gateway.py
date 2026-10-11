@@ -69,7 +69,9 @@ COORD_PRECISION = 2  # decimal places -- ~0.7mi at this latitude
 # directly and are unaffected by this.
 # /tts is text-to-speech: CPU-heavy synthesis on the unit, which only the
 # house needs; a public caller could otherwise keep the Pi busy talking.
-LOCAL_ONLY_PATHS = ("/wake", "/setup", "/tts", "/photo")
+# /data/notable-people.json names well-known people's aircraft (notable-db.py):
+# shown on the owner's own screens, never on the public page.
+LOCAL_ONLY_PATHS = ("/wake", "/setup", "/tts", "/photo", "/data/notable-people")
 
 # Paths that may be READ publicly but must not be WRITTEN publicly.
 #
@@ -84,7 +86,8 @@ READ_ONLY_PUBLIC_PATHS = ("/sightings", "/approaches", "/network", "/api")
 
 # A future edit that empties or mistypes this list would silently expose the
 # device's privileged endpoints to the public internet. Fail loudly instead.
-assert "/wake" in LOCAL_ONLY_PATHS and "/setup" in LOCAL_ONLY_PATHS, \
+assert "/wake" in LOCAL_ONLY_PATHS and "/setup" in LOCAL_ONLY_PATHS \
+    and "/data/notable-people" in LOCAL_ONLY_PATHS, \
     "LOCAL_ONLY_PATHS must keep /wake and /setup off the public tunnel"
 
 # How a listed path is matched. This MUST mirror how lighttpd decides which
