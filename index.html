@@ -3716,6 +3716,7 @@ function applyNightDim() {
 // the service absent, it just fails quietly and the undim still happens.
 function wakeScreenForAlert(why = 'alert') {
   if (!alertSettings.alertWake) return;
+  if (screenModeNow() === 'dark') return;     // quiet hours, dark and silent
   nightWakeUntil = Date.now() + NIGHT_WAKE_MS;
   applyNightDim();
   // The reason goes in the journal (wake-listener.py): the panel was found
@@ -3748,7 +3749,7 @@ const ALERT_SETTINGS_KEY = 'stratoscan_alert_settings_v1';
 // volume is a plain 0..1 multiplier on the master gain; muted is kept separate
 // rather than being volume 0, so silencing it for an evening does not throw
 // away the level someone settled on. soundTheme picks the voice alerts speak in.
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, voice: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic', quietHours: false, quietFrom: 1320, quietTo: 420, quietSunset: false, quietLetEmergencies: true };
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, voice: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic', quietHours: false, quietFrom: 1320, quietTo: 420, quietSunset: false, quietLetEmergencies: true , screenMode: 'sleep', quietScreen: 'same', quietSounds: false};
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -3952,6 +3953,16 @@ function applyVolume() {
 let quietEmergencyUntil = 0;     // Date.now() until which an emergency may sound
 const QUIET_EMERGENCY_WINDOW_MS = 20 * 1000;   // chime + a generated spoken line
 
+// A one-of-several setting row: tap the circle to choose it.
+function choiceRow(key, value, label, sub) {
+  const on = alertSettings[key] === value;
+  return `
+    <div class="sp-row" data-choice="${key}=${value}">
+      <div><div class="sp-label">${esc(label)}</div><div class="sp-sub">${esc(sub)}</div></div>
+      <div class="sp-radio${on ? ' on' : ''}"></div>
+    </div>`;
+}
+
 function minutesToClock(m) {
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
@@ -3968,7 +3979,33 @@ function inQuietHours(now = new Date()) {
 function soundAllowedNow() {
   if (alertSettings.muted) return false;
   if (!inQuietHours()) return true;
+  // "Dark and silent" means silent: no sound at all, emergencies included
+  // (the owner's choice, 2026-10-11). Otherwise sounds may be left on for
+  // quiet hours, or silenced with emergencies let through as before.
+  if (alertSettings.quietScreen === 'dark') return false;
+  if (alertSettings.quietSounds) return true;
   return Date.now() < quietEmergencyUntil;
+}
+
+// ---- The screen: sleeps when idle, or always on; and in quiet hours ------
+// (2026-10-11) Three choices, as phones and smart displays split them:
+// what the screen does all day (screenMode), what it does in quiet hours
+// (quietScreen), and whether quiet hours are silent (quietSounds). The
+// defaults are the behaviour before: sleeps when idle, quiet hours change
+// only the sound. The page works the mode out; the radar's wake listener
+// (deploy/wake-listener.py) acts on it.
+function screenModeNow() {
+  if (inQuietHours() && alertSettings.quietScreen !== 'same') return alertSettings.quietScreen;  // 'alerts' | 'dark'
+  return alertSettings.screenMode === 'on' ? 'on' : 'sleep';
+}
+let screenModeSent = { mode: '', at: 0 };
+function applyScreenPolicy() {
+  if (!ON_DEVICE) return;
+  const mode = screenModeNow();
+  const now = Date.now();
+  if (mode === screenModeSent.mode && now - screenModeSent.at < 5 * 60 * 1000) return;
+  screenModeSent = { mode, at: now };
+  fetch('/wake/mode?m=' + encodeURIComponent(mode), { method: 'POST' }).catch(() => {});
 }
 
 // Opens a short window in which quiet hours step aside, then closes it on its
@@ -3993,7 +4030,8 @@ function quietStatusText() {
 
 // The window has to open and close on time without a reload, so the gain is
 // re-decided every minute, not only when a setting changes.
-setInterval(applyVolume, 60 * 1000);
+setInterval(() => { applyVolume(); applyScreenPolicy(); }, 60 * 1000);
+setTimeout(applyScreenPolicy, 3000);
 stage.addEventListener('pointerdown', () => { getAudioCtx().resume().catch(() => {}); }, { once: true });
 // Touches are reported to the radar's wake listener, so an alert's two-minute
 // screen hold gives way to the ordinary idle time once someone is using the
@@ -6304,6 +6342,9 @@ function renderSettingsPanel() {
       <div class="sp-sub">100% is where the sounds were mastered; past that is
         amplified and gently limited so it gets louder, not distorted.</div>
     </div>
+    <div class="sp-section-title">Screen</div>
+    ${choiceRow('screenMode', 'sleep', 'Sleeps when idle', 'Dark after 20 minutes untouched; an alert lights it for 2 minutes')}
+    ${choiceRow('screenMode', 'on', 'Always on', 'Never goes dark (it ages the backlight fastest)')}
     <div class="sp-section-title">Quiet hours</div>
     <div class="sp-row" data-quiet="quietHours">
       <div>
@@ -6329,13 +6370,26 @@ function renderSettingsPanel() {
         <button class="sp-step" data-quiet-step="${k}" data-dir="1" aria-label="${label} 30 minutes later">+</button>
       </div>
     </div>`).join('')}
+    <div class="sp-sub" style="padding:10px 0 2px">Screen during quiet hours</div>
+    ${choiceRow('quietScreen', 'same', 'As the rest of the day', alertSettings.screenMode === 'on' ? 'Stays on' : 'Sleeps when idle; alerts light it for 2 minutes')}
+    ${choiceRow('quietScreen', 'alerts', 'Dark — alerts light it', 'Goes dark when quiet hours begin; an alert lights it for 2 minutes')}
+    ${choiceRow('quietScreen', 'dark', 'Dark and silent', 'Alerts neither light the screen nor make a sound. A touch still wakes it')}
+    ${alertSettings.quietScreen === 'dark' ? '' : `
+    <div class="sp-row" data-quiet="quietSounds">
+      <div>
+        <div class="sp-label">Sounds during quiet hours</div>
+        <div class="sp-sub">${alertSettings.quietSounds ? 'Alerts sound as usual' : 'Silent; alerts still show'}</div>
+      </div>
+      <div class="sp-switch${alertSettings.quietSounds ? ' on' : ''}"></div>
+    </div>
+    ${alertSettings.quietSounds ? '' : `
     <div class="sp-row" data-quiet="quietLetEmergencies">
       <div>
         <div class="sp-label">Let emergencies through</div>
         <div class="sp-sub">A 7500, 7600 or 7700 squawk still sounds during quiet hours</div>
       </div>
       <div class="sp-switch${alertSettings.quietLetEmergencies ? ' on' : ''}"></div>
-    </div>`}
+    </div>`}`}`}
     <div class="sp-section-title">Alert sounds</div>` + Object.entries(SOUND_THEMES).map(([k, t]) => `
       <div class="sp-theme-row${alertSettings.soundTheme === k ? ' selected' : ''}" data-sound-theme="${k}">
         <div class="sp-theme-label">
@@ -8132,6 +8186,17 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     renderSettingsPanel();
     return;
   }
+  const choice = e.target.closest('[data-choice]');
+  if (choice) {
+    if (!e.target.closest('.sp-radio')) return;   // row body is for scrolling
+    const [k, v] = choice.dataset.choice.split('=');
+    alertSettings[k] = v;
+    saveAlertSettings();
+    applyVolume();
+    applyScreenPolicy();
+    renderSettingsPanel();
+    return;
+  }
   const quietRow = e.target.closest('[data-quiet]');
   if (quietRow) {
     if (!e.target.closest('.sp-switch')) return; // row body is for scrolling
@@ -8139,6 +8204,7 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     alertSettings[k] = !alertSettings[k];
     saveAlertSettings();
     applyVolume();
+    applyScreenPolicy();
     renderSettingsPanel();
     return;
   }
