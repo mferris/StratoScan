@@ -23,6 +23,7 @@ import re
 HERE = os.path.dirname(os.path.abspath(__file__))
 TAR1090_DB_GLOB = os.environ.get("STRATOSCAN_TAR1090_DB", "/usr/local/share/tar1090/html/db-*")
 NOTABLE_JSON = os.environ.get("STRATOSCAN_NOTABLE_JSON", "/var/www/html/data/notable.json")
+NOTABLE_PEOPLE_JSON = os.environ.get("STRATOSCAN_NOTABLE_PEOPLE_JSON", "/var/www/html/data/notable-people.json")
 AIRLINES_JSON = os.environ.get("STRATOSCAN_AIRLINES_JSON", os.path.join(HERE, "airlines.json"))
 
 # ---- tables: tests/test_labels.py keeps them identical to index.html's ----
@@ -195,6 +196,30 @@ class NotableDb:
                 self.ac = {}
             self.mtime = m
         return self.ac.get(hex_)
+
+
+class NotablePeople:
+    """hex -> the well-known person's name (notable-db.py's PEOPLE_OUT).
+
+    Kept apart from NotableDb on purpose: the core feed uses NotableDb and is
+    public, so names must never reach it. Only the phone alerts read this."""
+
+    def __init__(self, path=NOTABLE_PEOPLE_JSON):
+        self.path, self.mtime, self.names = path, None, {}
+
+    def get(self, hex_):
+        try:
+            m = os.path.getmtime(self.path)
+        except OSError:
+            return None
+        if m != self.mtime:
+            try:
+                with open(self.path) as f:
+                    self.names = json.load(f).get("names") or {}
+            except (OSError, ValueError):
+                self.names = {}
+            self.mtime = m
+        return self.names.get(hex_)
 
 
 # ---- who is flying it ------------------------------------------------------------

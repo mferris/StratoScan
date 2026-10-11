@@ -3765,7 +3765,7 @@ const ALERT_SETTINGS_KEY = 'stratoscan_alert_settings_v1';
 // volume is a plain 0..1 multiplier on the master gain; muted is kept separate
 // rather than being volume 0, so silencing it for an evening does not throw
 // away the level someone settled on. soundTheme picks the voice alerts speak in.
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, voice: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic', quietHours: false, quietFrom: 1320, quietTo: 420, quietSunset: false, quietLetEmergencies: true , screenMode: 'sleep', quietScreen: 'same', quietSounds: false, quietDarkEmergencies: false};
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, voice: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic', quietHours: false, quietFrom: 1320, quietTo: 420, quietSunset: false, quietLetEmergencies: true , screenMode: 'sleep', quietScreen: 'same', quietSounds: false, quietDarkEmergencies: false, notableNames: true};
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -4873,16 +4873,26 @@ const NOTABLE_LABELS = {
   'You came here in that thing?': 'Microlight or very small aircraft', 'Zoomies': 'Fast jet',
 };
 let notableDb = null;   // hex -> [category, kind, operator, type]
+// Who a well-known person's aircraft belongs to (notable-db.py writes it apart
+// from notable.json). The radar's public tunnel refuses this file, so the names
+// reach only the owner's own screens -- the panel and browsers on the home
+// network -- and the public page never shows them.
+let notablePeople = null;   // hex -> name
 async function loadNotableDb() {
   try {
     const res = await fetch('/data/notable.json');
     if (res.ok) notableDb = (await res.json()).ac || null;
   } catch (e) { /* absent until the unit's first weekly fetch; the rest still works */ }
+  try {
+    const res = await fetch('/data/notable-people.json');
+    if (res.ok) notablePeople = (await res.json()).names || null;
+  } catch (e) { /* refused on the public page, by design */ }
 }
 function notableFor(hex) {
   const e = notableDb && notableDb[hex];
   if (!e) return null;
-  return { label: NOTABLE_LABELS[e[0]] || 'Notable aircraft', operator: e[2] || null };
+  const person = alertSettings.notableNames && notablePeople ? notablePeople[hex] || null : null;
+  return { label: NOTABLE_LABELS[e[0]] || 'Notable aircraft', operator: e[2] || person };
 }
 
 // Returns {kind, label} for the strongest reason this aircraft is unusual,
@@ -4930,8 +4940,12 @@ function checkRareAircraft(pl) {
   if (why.kind !== 'first') wakeScreenForAlert('rare:' + why.kind);
   showDetailPanel(pl, true, why.label.toUpperCase(), '\u2726');
   playRareSound();
-  speak(announcementFor(pl, why.label));
-  showToast(`\u2726 ${why.label.toUpperCase()} \u00b7 ${pl.cs}`, 8000);
+  // A named operator (a well-known person, a military unit) is said and shown:
+  // "Aircraft of a well-known person, <name>, ..." rather than leaving the
+  // listener to guess who.
+  const who = why.operator ? `${why.label}, ${why.operator}` : why.label;
+  speak(announcementFor(pl, who));
+  showToast(`\u2726 ${why.label.toUpperCase()}${why.operator ? ' \u00b7 ' + why.operator : ''} \u00b7 ${pl.cs}`, 8000);
 }
 
 // A rising three-note arpeggio -- the only ascending triad among the alert
@@ -6301,6 +6315,7 @@ function alertSettingsMeta() { return [
   { group: 'alerts', key: 'lightningAlert', label: 'Lightning proximity alert', sub: `Chime + banner when a strike is detected within ${LIGHTNING_ALERT_RADIUS_NM}nm` },
   { group: 'display', key: 'nightDim', label: 'Dim at night', sub: 'Darkens the display between sunset and sunrise at the receiver' },
   { group: 'display', key: 'emptySky', label: 'Clock & weather when quiet', sub: 'Shows the time, the weather and today’s count when nothing is in range' },
+  { group: 'alerts', key: 'notableNames', label: 'Name well-known people', sub: 'When a well-known person’s aircraft is listed, say and show whose it is. Never on the public page' },
   { group: 'alerts', key: 'voice', label: 'Spoken announcements', sub: 'Says what it is after the chime: “Delta 1 4 0, Boeing 767, 3,000 feet, 2 miles north-east”' },
   { group: 'alerts', key: 'alertWake', label: 'Alerts wake the screen', sub: 'Nearby, emergency and notable alerts undim, and light a dark screen for two minutes (a touch keeps it on)' },
 ]; }

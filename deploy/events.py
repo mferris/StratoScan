@@ -45,7 +45,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from labels import (MILITARY_HEX_RANGES, NOTABLE_TYPES, NOTABLE_LABELS,  # noqa: E402
-                    military_operator, humanize_type, TypeDb, NotableDb)
+                    military_operator, humanize_type, TypeDb, NotableDb, NotablePeople)
 AIRCRAFT_JSON = os.environ.get("STRATOSCAN_AIRCRAFT_JSON", "/run/readsb/aircraft.json")
 # The core feed (core-feed.py) knows each flight's route, looked up once there
 # (adsb.im); an alert leads with the type and where it is going (#59). Asked
@@ -140,11 +140,16 @@ def is_rotorcraft(a, info):
     return a.get("category") == "A7"
 
 
-def notable_reason(a, info, notable):
-    """(label, operator) for the strongest reason this aircraft is notable, or None."""
+def notable_reason(a, info, notable, people=None):
+    """(label, operator) for the strongest reason this aircraft is notable, or None.
+    A well-known person's aircraft carries the person's name (NotablePeople),
+    so the phone says who it is."""
     e = notable.get(a["hex"])
     if e:
-        return NOTABLE_LABELS.get(e[0], "Notable aircraft"), (e[2] or None) if len(e) > 2 else None
+        operator = (e[2] or None) if len(e) > 2 else None
+        if not operator and people is not None:
+            operator = people.get(a["hex"])
+        return NOTABLE_LABELS.get(e[0], "Notable aircraft"), operator
     mil = military_operator(a["hex"])
     if mil:
         return mil, None
@@ -325,9 +330,10 @@ def closest_approach_to(a, lat0, lon0):
 
 
 class Detector:
-    def __init__(self, types=None, notable=None):
+    def __init__(self, types=None, notable=None, people=None):
         self.types = types or TypeDb()
         self.notable = notable or NotableDb()
+        self.people = people if people is not None else NotablePeople()
         self.fired = {}                        # (hex, kind[, detail]) -> ts
         self.approaching = {}                  # hex -> expected time of the pass
         self.points = {}                       # phone id -> (lat, lon, ts): where opted-in phones are
@@ -384,7 +390,7 @@ class Detector:
         t, miss = cpa
         if not (APPROACH_MIN_S <= t <= APPROACH_WARN_S and miss <= APPROACH_CPA_NM):
             return
-        why = notable_reason(a, info, self.notable)
+        why = notable_reason(a, info, self.notable, self.people)
         if why:
             reason = why[0]
         elif is_rotorcraft(a, info):
@@ -403,7 +409,7 @@ class Detector:
             self.approaching[hex_] = now + t
 
     def _approach_reason(self, a, info, alt):
-        why = notable_reason(a, info, self.notable)
+        why = notable_reason(a, info, self.notable, self.people)
         if why:
             return why[0]
         if is_rotorcraft(a, info):
@@ -473,7 +479,7 @@ class Detector:
 
             key = (hex_, "notable", phone)
             if self._due(key, "notable", now):
-                why = notable_reason(a, info, self.notable)
+                why = notable_reason(a, info, self.notable, self.people)
                 if why:
                     self._emit(out, key, "notable", event(why[0], why[1]), now)
             if d <= HELI_RADIUS_NM and is_rotorcraft(a, info):
@@ -522,7 +528,7 @@ class Detector:
             info = self.types.lookup(hex_) if dist <= NOTABLE_RADIUS_NM else {}
 
             if dist <= NOTABLE_RADIUS_NM and self._due((hex_, "notable"), "notable", now):
-                why = notable_reason(a, info, self.notable)
+                why = notable_reason(a, info, self.notable, self.people)
                 if why:
                     ev = describe(a, info, now)
                     ev["label"] = why[0][:60]

@@ -36,6 +36,12 @@ import urllib.request
 SOURCE_URL = "https://raw.githubusercontent.com/sdr-enthusiasts/plane-alert-db/main/plane-alert-db.csv"
 WEB_ROOT = os.environ.get("STRATOSCAN_WEB_ROOT", "/var/www/html")
 OUT = os.path.join(WEB_ROOT, "data", "notable.json")
+# Names of well-known people's aircraft, kept apart from OUT: the core feed and
+# the public page read OUT, and must never carry a private person's name. This
+# file is read only by the panel and LAN screens (the page) and by the phone
+# alerts (events.py); funnel-gateway.py refuses it to the public tunnel.
+PEOPLE_OUT = os.path.join(WEB_ROOT, "data", "notable-people.json")
+PEOPLE_CATEGORIES = {"Don't you know who I am?"}
 STATE_DIR = os.environ.get("STRATOSCAN_NOTABLE_STATE", "/var/lib/stratoscan-notable")
 FAILED_STAMP = os.path.join(STATE_DIR, "last-failure")
 REFRESH_EVERY_S = 7 * 86400
@@ -56,6 +62,29 @@ HEX_RE = re.compile(r"^[0-9a-fA-F]{6}$")
 
 def log(msg):
     print(f"notable-db: {msg}", flush=True)
+
+
+def people(text):
+    """CSV text -> {hex: name} for well-known people's aircraft (PEOPLE_OUT)."""
+    out = {}
+    for row in csv.DictReader(io.StringIO(text)):
+        hexcode = (row.get("$ICAO") or "").strip()
+        if HEX_RE.match(hexcode) and (row.get("Category") or "").strip() in PEOPLE_CATEGORIES:
+            name = (row.get("$Operator") or "").strip()
+            if name:
+                out[hexcode.lower()] = name[:60]
+    return out
+
+
+def write_json(path, doc):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(doc, f, separators=(",", ":"))
+        f.flush()
+        os.fsync(f.fileno())
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
 
 
 def convert(text):
@@ -93,14 +122,10 @@ def build():
     if len(doc["ac"]) < 1000:
         # A truncated or reshaped upstream file must not replace a good list.
         raise ValueError(f"only {len(doc['ac'])} entries; keeping the previous list")
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    tmp = OUT + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(doc, f, separators=(",", ":"))
-        f.flush()
-        os.fsync(f.fileno())
-    os.chmod(tmp, 0o644)
-    os.replace(tmp, OUT)
+    write_json(OUT, doc)
+    text = raw.decode("utf-8", "replace")
+    write_json(PEOPLE_OUT, {"v": 1, "source": "plane-alert-db", "license": "ODbL-1.0",
+                            "built": doc["built"], "names": people(text)})
     try:
         os.unlink(FAILED_STAMP)
     except OSError:
