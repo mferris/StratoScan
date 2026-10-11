@@ -169,6 +169,9 @@ DEPLOY_ALLOWED = {
     # Picks the 1090 and 978 radios by name before readsb and the 978 decoder
     # start (their units run it each time, so no restart mapping is needed).
     "radio-select.py",
+    # Covers the screen with the StratoScan picture at login until the page
+    # paints (run from the session's autostart, so no restart mapping).
+    "boot-cover.py",
     # Opt-in health reports to the relay; run by net-watchdog.
     "heartbeat.py",
     # Weekly notable-aircraft list (plane-alert-db); run by net-watchdog.

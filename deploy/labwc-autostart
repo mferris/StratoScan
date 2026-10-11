@@ -5,5 +5,8 @@
 # original is kept beside it as autostart.stratoscan-orig. Copy that back
 # to get the Raspberry Pi desktop again.
 /usr/bin/lwrespawn /usr/bin/swaybg -c '#0a0d0f' -i /usr/share/stratoscan/splash.png -m center &
+# The same picture above everything, until the page has painted its own copy:
+# it hides Chromium's empty white window while the page loads.
+/usr/bin/python3 /opt/stratoscan/boot-cover.py &
 /usr/bin/kanshi &
 /usr/bin/lxsession-xdg-autostart
