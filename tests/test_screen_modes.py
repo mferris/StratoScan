@@ -90,5 +90,37 @@ check("fetch('/wake/mode?m='" in page and "applyScreenPolicy(); }, 60 * 1000)" i
       "the page sends the mode to the listener, and re-checks it every minute")
 for label in ("Sleeps when idle", "Always on", "As the rest of the day", "Dark — alerts light it", "Dark and silent", "Sounds during quiet hours"):
     check(label in page, f"the settings offer '{label}'")
+
+# ---- found on RDU 2026-10-11: the screen would not wake ------------------------
+# 1. After a fresh boot the listener started before the session published
+#    WAYLAND_DISPLAY, so every wlopm call failed. It now finds the socket.
+import os
+import tempfile as _tf
+_rd = _tf.mkdtemp()
+open(os.path.join(_rd, "wayland-0"), "w").close()
+open(os.path.join(_rd, "wayland-0.lock"), "w").close()
+_saved = {k: os.environ.get(k) for k in ("WAYLAND_DISPLAY", "XDG_RUNTIME_DIR")}
+os.environ.pop("WAYLAND_DISPLAY", None)
+os.environ["XDG_RUNTIME_DIR"] = _rd
+wl._ensure_wayland()
+check(os.environ.get("WAYLAND_DISPLAY") == "wayland-0", "with no WAYLAND_DISPLAY, the listener finds the compositor's socket (not its lock)")
+os.environ["WAYLAND_DISPLAY"] = "wayland-7"
+wl._ensure_wayland()
+check(os.environ["WAYLAND_DISPLAY"] == "wayland-7", "and leaves one that is set alone")
+for k, v in _saved.items():
+    if v is None:
+        os.environ.pop(k, None)
+    else:
+        os.environ[k] = v
+_src = (root / "deploy" / "wake-listener.py").read_text()
+check(_src.count("_ensure_wayland()") >= 4, "every path that runs wlopm looks first (requests, panel state, hold, watchdog)")
+# 2. swayidle ties a resume to the timeout just before it. The wake-on-touch
+#    followed the 20-minute idle timeout, so a panel put out by the alert hold
+#    or quiet hours did not wake on a touch. It must follow `timeout 1 true`.
+_unit = (root / "deploy" / "stratoscan-screensaver.service").read_text()
+_exec = [l for l in _unit.splitlines() if l.startswith("ExecStart=")][0]
+check("timeout 1 true resume " in _exec, "the wake-on-touch follows the 1-second timeout, so any touch after a pause wakes the panel")
+check(_exec.count(" resume ") == 1, "and there is only one")
+
 print("screen mode checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)
