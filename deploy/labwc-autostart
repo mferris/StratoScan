@@ -1,0 +1,9 @@
+# StratoScan: the kiosk's session starts with the StratoScan picture and
+# nothing else -- no file-manager desktop and no taskbar -- so the screen
+# goes from the boot splash to the radar without showing a desktop.
+# Installed over /etc/xdg/labwc/autostart by deploy/quiet-boot.sh; the
+# original is kept beside it as autostart.stratoscan-orig. Copy that back
+# to get the Raspberry Pi desktop again.
+/usr/bin/lwrespawn /usr/bin/swaybg -c '#0a0d0f' -i /usr/share/stratoscan/splash.png -m center &
+/usr/bin/kanshi &
+/usr/bin/lxsession-xdg-autostart

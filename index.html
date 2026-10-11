@@ -349,6 +349,13 @@
     pointer-events: none;
   }
   #splash .ss-logo { width: 62%; height: auto; }
+  /* The same picture the unit shows from power-on (deploy/boot-splash/
+     splash.png: the logo-on-dark artwork on the dark theme's background),
+     whatever theme is chosen, so the boot splash hands over to the page
+     without a change of colour. */
+  #splash { background: #0a0d0f; }
+  #splash .ss-logo .ss-strato { fill: #ffffff; }
+  #splash .ss-logo .ss-scan { fill: #5ee7ff; }
   #splash.done { opacity: 0; }
   #emptySky .es-time { font-size: 4.2rem; font-weight: 500; letter-spacing: 0.02em; line-height: 1; }
   #emptySky .es-date { font-size: 0.95rem; color: var(--text-dim); letter-spacing: 0.12em; text-transform: uppercase; margin-top: 8px; }
