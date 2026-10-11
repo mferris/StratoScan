@@ -136,6 +136,9 @@ h.send_response = lambda c, *a: got.append(c); h.end_headers = lambda: None; h.s
 h.do_POST()
 check(got == [204] and flag.exists(), "POST /wake/painted answers 204 and writes the flag")
 check(bc.should_close(100.0, 101.0), "and then the cover closes")
+bsrc = (D / "boot-cover.py").read_text()
+check(bc.UNCOVERED_PX >= 1 and "set_margin(win, GtkLayerShell.Edge.RIGHT, UNCOVERED_PX)" in bsrc,
+      "the cover leaves a sliver uncovered, so Chromium keeps drawing and the page can report")
 check("/usr/bin/python3 /opt/stratoscan/boot-cover.py &" in (D / "labwc-autostart").read_text(), "the session starts the cover")
 check("boot-cover.py" in inst and '"boot-cover.py"' in (D / "ota.py").read_text(), "the installer installs it and updates may replace it")
 check("gir1.2-gtklayershell-0.1" in q, "quiet-boot.sh installs the layer-shell binding the cover needs")

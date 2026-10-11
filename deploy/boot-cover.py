@@ -22,9 +22,10 @@ import sys
 import time
 
 PICTURE = "/usr/share/stratoscan/splash.png"
-BACKGROUND = b"window { background-color: #0a0d0f; }"   # the picture's own background
+BACKGROUND = "#0a0d0f"   # the picture's own background
 MAX_S = 60
 POLL_MS = 100
+UNCOVERED_PX = 1
 FLAG = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "stratoscan-page-painted")
 
 
@@ -43,7 +44,8 @@ def main():
     import gi
     gi.require_version("Gtk", "3.0")
     gi.require_version("GtkLayerShell", "0.1")
-    from gi.repository import GLib, Gtk, GtkLayerShell
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf, GLib, Gtk, GtkLayerShell
 
     win = Gtk.Window()
     GtkLayerShell.init_for_window(win)
@@ -53,10 +55,27 @@ def main():
                  GtkLayerShell.Edge.LEFT, GtkLayerShell.Edge.RIGHT):
         GtkLayerShell.set_anchor(win, edge, True)
     GtkLayerShell.set_exclusive_zone(win, -1)
+    # One column of pixels at the right edge is left uncovered -- on the round
+    # panel it is outside the circle. A window that is completely hidden gets
+    # no frame callbacks from the compositor, so Chromium stops drawing and
+    # the page's requestAnimationFrame never runs: covered whole, the page
+    # could not report that it had painted until MAX_S ran out (seen on RDU,
+    # 2026-10-11: the cover stayed 60 s). With one column showing, the page
+    # draws behind the cover and reports at once.
+    GtkLayerShell.set_margin(win, GtkLayerShell.Edge.RIGHT, UNCOVERED_PX)
+    # The picture is the window's background, placed where the page and
+    # swaybg place it: centred on the whole screen, in whole pixels. As a
+    # child widget it would hold the window at its own 1080 px width and
+    # undo the uncovered column above.
+    _, iw, ih = GdkPixbuf.Pixbuf.get_file_info(PICTURE)
+    geo = win.get_display().get_monitor(0).get_geometry()
+    x, y = (geo.width - iw) // 2, (geo.height - ih) // 2
     css = Gtk.CssProvider()
-    css.load_from_data(BACKGROUND)
+    css.load_from_data((
+        "window { background-color: %s; background-image: url('file://%s');"
+        " background-repeat: no-repeat; background-position: %dpx %dpx; }"
+        % (BACKGROUND, PICTURE, x, y)).encode())
     Gtk.StyleContext.add_provider_for_screen(win.get_screen(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-    win.add(Gtk.Image.new_from_file(PICTURE))   # centred, at its own size
     win.show_all()
 
     started = time.monotonic()
