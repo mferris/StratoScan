@@ -608,7 +608,7 @@
   }
   /* The top bleed makes the photo sit flush with the panel's top edge, which
      only works when nothing is above it. A tag line -- the nearby-aircraft
-     alert, or a ghost's "NOT HEARD HERE" -- renders first, and the negative
+     alert, or a ghost's "DATA FROM THE INTERNET" -- renders first, and the negative
      margin then pulls the photo up over that text instead of past it.
      .dp-close is absolutely positioned and always first, so the photo is the
      second child exactly when no tag precedes it: that is the condition, and
@@ -4585,7 +4585,7 @@ function showGhostPanel(g) {
   const rare = rarityOf({ hex: g.hex, typeCode: g.typeCode || g.type, priorTotal: counts.total });
   detailPanelEl.innerHTML = `
     <div class="dp-close">&times;</div>
-    <div class="dp-ghost-tag">\u25cc NOT HEARD HERE</div>
+    <div class="dp-ghost-tag">\u25cc DATA FROM THE INTERNET \u00b7 ${esc(String(src).toUpperCase())}</div>
     <div class="dp-photo" style="display:none"></div>
     <div class="dp-cs" style="color:${COLORS.ghost}">${esc(title)}</div>
     <div class="dp-badge" style="background:${badgeColor}">${esc(airlineLabel)}</div>
@@ -4600,6 +4600,7 @@ function showGhostPanel(g) {
       <div class="dp-field"><div class="dp-label">Vert. rate</div><div class="dp-value">${esc(vrateLabel(g.vrate ?? null))}</div></div>
       <div class="dp-field"><div class="dp-label">Squawk</div><div class="dp-value">${esc(g.squawk ?? '—')}</div></div>
       <div class="dp-field"><div class="dp-label">Range / Brg</div><div class="dp-value">${g.range.toFixed(1)} nm · ${Math.round(g.bearing)}°</div></div>
+      <div class="dp-field"><div class="dp-label">Heard on</div><div class="dp-value">The internet (${esc(src)})</div></div>
       ${!rare ? '' : `<div class="dp-field dp-rare"><div class="dp-label">Notable</div><div class="dp-value">${esc(rare.label)}</div></div>`}
       <div class="dp-field"><div class="dp-label">Sightings</div><div class="dp-value">${counts.total}</div></div>
       <div class="dp-field"><div class="dp-label">Within 2mi</div><div class="dp-value">${counts.nearby}</div></div>
