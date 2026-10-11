@@ -144,6 +144,8 @@ unit = (D / "stratoscan-controls.service").read_text()
 check("ConditionPathExists=/etc/stratoscan/controls.json" in unit, "the service runs only where the arc is fitted")
 check("DevicePolicy=closed" in unit and "DeviceAllow=char-gpiochip rw" in unit and "DeviceAllow=/dev/uinput rw" in unit,
       "it reaches the GPIO chip and uinput and no other device but vcio")
+check("RuntimeDirectory=stratoscan-controls" in unit and "WorkingDirectory=/run/stratoscan-controls" in unit,
+      "it starts in a writable runtime directory, where lgpio makes its pipes")
 check("IPAddressAllow=localhost" in unit and "IPAddressDeny=any" in unit, "and nothing on the network but the wake listener")
 inst = (D / "install-setup-server.sh").read_text()
 check("controls.py" in inst and "stratoscan-controls.service" in inst and 'CONTROLS:-0' in inst,
