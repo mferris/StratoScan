@@ -1,0 +1,36 @@
+[Unit]
+Description=StratoScan control arc: RANGE dial, SCREEN button, STATUS lamp (roadmap 5.1)
+# Only on a unit with the arc fitted: the installer writes this with CONTROLS=1,
+# or write {"enabled": true} there by hand. Without it the pins are left alone.
+ConditionPathExists=/etc/stratoscan/controls.json
+After=readsb.service
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/stratoscan/controls.py
+Restart=on-failure
+RestartSec=5
+# Root, for three devices and the kernel log: the GPIO chip (dial, button,
+# lamp), /dev/uinput (the virtual keyboard the dial types on), /dev/vcio
+# (vcgencmd, under-voltage now). Everything else is closed.
+DevicePolicy=closed
+DeviceAllow=char-gpiochip rw
+DeviceAllow=/dev/uinput rw
+DeviceAllow=/dev/vcio rw
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+# 127.0.0.1 only: the wake listener, for the button and the panel's state.
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=multi-user.target

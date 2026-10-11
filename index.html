@@ -8365,6 +8365,30 @@ for (const [id, fn] of [['zoomInBtn', () => zoomViewAbout(VIEW_STEP, CX, CY)],
                         ['lockBtn', () => setLocked(!viewLocked)]]) {
   document.getElementById(id).addEventListener('pointerup', (e) => { e.stopPropagation(); fn(); });
 }
+// The control arc on the "Retro with Dials" case (deploy/controls.py, roadmap
+// 5.1): the RANGE dial and the SCREEN button's hold arrive as F13-F16 from a
+// virtual keyboard. Matched by code, which no keyboard layout changes.
+// Clockwise is range up -- zoom out -- as on a radar's RANGE knob.
+const CONTROL_KEYS = {
+  F13: () => zoomViewAbout(1 / VIEW_STEP, CX, CY),   // range up
+  F14: () => zoomViewAbout(VIEW_STEP, CX, CY),       // range down
+  F15: goHome,                                      // the dial pushed
+  F16: toggleScreenAlwaysOn,                        // SCREEN held
+};
+function toggleScreenAlwaysOn() {
+  alertSettings.screenMode = alertSettings.screenMode === 'on' ? 'sleep' : 'on';
+  saveAlertSettings();
+  screenModeSent = { mode: null, at: 0 };
+  applyScreenPolicy();
+  showToast(alertSettings.screenMode === 'on' ? 'Screen: always on' : 'Screen: sleeps when idle', 2200);
+}
+document.addEventListener('keydown', (e) => {
+  const fn = CONTROL_KEYS[e.code];
+  if (!fn) return;
+  e.preventDefault();
+  if (ON_DEVICE) fetch('/wake/touch', { method: 'POST' }).catch(() => {});   // using the dials counts as using the screen
+  fn();
+}, { capture: true });
 document.addEventListener('keydown', (e) => {   // a laptop: + and - zoom, 0 goes home, l holds
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.metaKey || e.ctrlKey) return;
   if (e.key === '+' || e.key === '=') zoomViewAbout(VIEW_STEP, CX, CY);
