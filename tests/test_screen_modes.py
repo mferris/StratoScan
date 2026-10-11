@@ -78,9 +78,14 @@ page = (root / "index.html").read_text()
 defaults = re.search(r"const DEFAULT_ALERT_SETTINGS = \{(.*?)\};", page).group(1)
 check("screenMode: 'sleep'" in defaults and "quietScreen: 'same'" in defaults and "quietSounds: false" in defaults,
       "the defaults are the behaviour before: sleeps when idle, quiet hours change only the sound")
-check("if (alertSettings.quietScreen === 'dark') return false;" in page, "dark and silent is silent, emergencies included")
+check("if (alertSettings.quietScreen === 'dark') return Date.now() < quietEmergencyUntil;" in page
+      and "if (alertSettings.quietScreen === 'dark') return !!alertSettings.quietDarkEmergencies;" in page,
+      "dark and silent is silent unless emergencies are let through")
+check("quietDarkEmergencies: false" in defaults, "by default even emergencies stay dark and silent")
+check("!(why === 'emergency' && alertSettings.quietDarkEmergencies)" in page, "a let-through emergency lights a dark-and-silent screen")
+check("if (emergencyThroughQuiet()) allowThroughQuiet" in page, "and sounds")
 check("if (alertSettings.quietSounds) return true;" in page, "sounds can be left on for quiet hours")
-check("if (screenModeNow() === 'dark') return;" in page, "a dark-and-silent screen is not woken by alerts")
+check("if (screenModeNow() === 'dark' &&" in page, "a dark-and-silent screen is not woken by ordinary alerts")
 check("fetch('/wake/mode?m='" in page and "applyScreenPolicy(); }, 60 * 1000)" in page,
       "the page sends the mode to the listener, and re-checks it every minute")
 for label in ("Sleeps when idle", "Always on", "As the rest of the day", "Dark — alerts light it", "Dark and silent", "Sounds during quiet hours"):

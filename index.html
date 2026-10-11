@@ -3716,7 +3716,9 @@ function applyNightDim() {
 // the service absent, it just fails quietly and the undim still happens.
 function wakeScreenForAlert(why = 'alert') {
   if (!alertSettings.alertWake) return;
-  if (screenModeNow() === 'dark') return;     // quiet hours, dark and silent
+  // Quiet hours, dark and silent: nothing lights it, except an emergency
+  // when the owner has let emergencies through.
+  if (screenModeNow() === 'dark' && !(why === 'emergency' && alertSettings.quietDarkEmergencies)) return;
   nightWakeUntil = Date.now() + NIGHT_WAKE_MS;
   applyNightDim();
   // The reason goes in the journal (wake-listener.py): the panel was found
@@ -3749,7 +3751,7 @@ const ALERT_SETTINGS_KEY = 'stratoscan_alert_settings_v1';
 // volume is a plain 0..1 multiplier on the master gain; muted is kept separate
 // rather than being volume 0, so silencing it for an evening does not throw
 // away the level someone settled on. soundTheme picks the voice alerts speak in.
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, voice: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic', quietHours: false, quietFrom: 1320, quietTo: 420, quietSunset: false, quietLetEmergencies: true , screenMode: 'sleep', quietScreen: 'same', quietSounds: false};
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, voice: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic', quietHours: false, quietFrom: 1320, quietTo: 420, quietSunset: false, quietLetEmergencies: true , screenMode: 'sleep', quietScreen: 'same', quietSounds: false, quietDarkEmergencies: false};
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -3979,12 +3981,20 @@ function inQuietHours(now = new Date()) {
 function soundAllowedNow() {
   if (alertSettings.muted) return false;
   if (!inQuietHours()) return true;
-  // "Dark and silent" means silent: no sound at all, emergencies included
-  // (the owner's choice, 2026-10-11). Otherwise sounds may be left on for
-  // quiet hours, or silenced with emergencies let through as before.
-  if (alertSettings.quietScreen === 'dark') return false;
+  // "Dark and silent" means silent: no sound at all, unless the owner lets
+  // emergencies through it (off by default, 2026-10-11). Otherwise sounds
+  // may be left on for quiet hours, or silenced with emergencies let through
+  // as before. Either way an emergency opens quietEmergencyUntil only when
+  // emergencyThroughQuiet() says it may.
+  if (alertSettings.quietScreen === 'dark') return Date.now() < quietEmergencyUntil;
   if (alertSettings.quietSounds) return true;
   return Date.now() < quietEmergencyUntil;
+}
+
+// Whether a 7500/7600/7700 squawk may break through quiet hours.
+function emergencyThroughQuiet() {
+  if (alertSettings.quietScreen === 'dark') return !!alertSettings.quietDarkEmergencies;
+  return !!alertSettings.quietLetEmergencies;
 }
 
 // ---- The screen: sleeps when idle, or always on; and in quiet hours ------
@@ -4270,7 +4280,7 @@ function playAlertSound() {
 // nearby-aircraft chime -- deliberately reads as more urgent, since this
 // fires for actual emergency squawks (7500/7600/7700), not routine traffic.
 function playEmergencySound() {
-  if (alertSettings.quietLetEmergencies) allowThroughQuiet(QUIET_EMERGENCY_WINDOW_MS);
+  if (emergencyThroughQuiet()) allowThroughQuiet(QUIET_EMERGENCY_WINDOW_MS);
   soundTheme().emergency();
 }
 
@@ -6374,6 +6384,16 @@ function renderSettingsPanel() {
     ${choiceRow('quietScreen', 'same', 'As the rest of the day', alertSettings.screenMode === 'on' ? 'Stays on' : 'Sleeps when idle; alerts light it for 2 minutes')}
     ${choiceRow('quietScreen', 'alerts', 'Dark — alerts light it', 'Goes dark when quiet hours begin; an alert lights it for 2 minutes')}
     ${choiceRow('quietScreen', 'dark', 'Dark and silent', 'Alerts neither light the screen nor make a sound. A touch still wakes it')}
+    ${alertSettings.quietScreen !== 'dark' ? '' : `
+    <div class="sp-row" data-quiet="quietDarkEmergencies">
+      <div>
+        <div class="sp-label">Let emergencies through</div>
+        <div class="sp-sub">${alertSettings.quietDarkEmergencies
+          ? 'A 7500, 7600 or 7700 squawk lights the screen for 2 minutes and sounds'
+          : 'Off: even an emergency squawk stays dark and silent'}</div>
+      </div>
+      <div class="sp-switch${alertSettings.quietDarkEmergencies ? ' on' : ''}"></div>
+    </div>`}
     ${alertSettings.quietScreen === 'dark' ? '' : `
     <div class="sp-row" data-quiet="quietSounds">
       <div>
