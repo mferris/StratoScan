@@ -192,7 +192,7 @@ install -d -m 0755 /opt/stratoscan
 for f in setupd.py setup-server.py funnel-gateway.py offline-map.py heartbeat.py notable-db.py \
          events.py pairing.py feeding.py ota.py ota-auto.sh net-watchdog.py tls-cert.sh sighting-store.py approach-store.py \
          network-compare.py photo-proxy.py tts-service.py shm-guard.sh wake-listener.py \
-         core-feed.py labels.py radio-select.py; do
+         core-feed.py labels.py radio-select.py boot-cover.py; do
   install -m 0755 "deploy/$f" "/opt/stratoscan/$f"
 done
 install -m 0644 deploy/setup-ui.html deploy/airports.json deploy/airlines.json /opt/stratoscan/

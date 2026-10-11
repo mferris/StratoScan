@@ -158,6 +158,8 @@ def _panel_state():
 # gets the full idle time.
 ALERT_WAKES = ("nearby", "rare", "emergency")
 ALERT_FLAG = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "stratoscan-alert-wake")
+# Written when the page reports its splash painted; boot-cover.py watches it.
+PAGE_PAINTED_FLAG = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "stratoscan-page-painted")
 
 
 # The alert hold (2026-10-11). An alert lights a dark panel for ALERT_HOLD_S
@@ -369,6 +371,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if changed:
                     print(f"screen mode: {changed}", flush=True)
             except Exception:
+                pass
+            self.send_response(204)
+            self.end_headers()
+            return
+        if path == "/wake/painted":
+            # The page's splash is on screen: the boot cover (boot-cover.py),
+            # which shows the same picture above everything, can go.
+            try:
+                with open(PAGE_PAINTED_FLAG, "w") as f:
+                    f.write(str(time.time()))
+            except OSError:
                 pass
             self.send_response(204)
             self.end_headers()

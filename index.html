@@ -3578,6 +3578,13 @@ const ONBOARD_URL = 'http://127.0.0.1:8090/onboard';
 // LAN or the public page -- used to ask its OWN loopback every five seconds
 // for nothing, which the public page's Content-Security-Policy now reports.
 const ON_DEVICE = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+// The unit covers the screen with the StratoScan picture from the start of
+// its session until the page has painted (deploy/boot-cover.py). Two frames
+// on, the splash is on screen, so the cover can go: the picture beneath is
+// the same.
+if (ON_DEVICE) requestAnimationFrame(() => requestAnimationFrame(() => {
+  fetch('/wake/painted', { method: 'POST' }).catch(() => {});
+}));
 let radarName = '';   // this radar's name, once the setup service has said it
 const ONBOARD_POLL_MS = 5000;
 

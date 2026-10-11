@@ -110,6 +110,39 @@ q = (D / "quiet-boot.sh").read_text()
 check("dpkg-divert --package stratoscan --add --rename" in q,
       "the Raspberry Pi splash picture is diverted, so a package upgrade cannot put it back")
 check("plymouth-set-default-theme -R pix" in q, "the initramfs is rebuilt with the new picture")
+check("for f in splash.png pix.script" in q, "the splash script is diverted too")
+ps = (D / "boot-splash" / "pix.script").read_text()
+code = "\n".join(l for l in ps.splitlines() if not l.lstrip().startswith("#"))
+check("SetUpdateStatusFunction" not in code and "Image.Text" not in code,
+      "the splash script prints no start-up messages")
+check("Image(\"splash.png\")" in code and "Sprite(image)" in code, "it draws the picture")
+check("10 / 255" in code and "13 / 255" in code and "15 / 255" in code, "on the picture's own background colour")
+
+# ---- the boot cover: the picture above Chromium until the page paints ----
+import importlib.util
+os.environ["XDG_RUNTIME_DIR"] = tempfile.mkdtemp()
+spec = importlib.util.spec_from_file_location("bc", D / "boot-cover.py")
+bc = importlib.util.module_from_spec(spec); spec.loader.exec_module(bc)
+flag = pathlib.Path(bc.FLAG)
+check(str(flag).startswith(os.environ["XDG_RUNTIME_DIR"]), "the cover's flag lives in the session's runtime directory")
+check(not bc.should_close(100.0, 101.0), "the cover stays while the page has not painted")
+check(bc.should_close(100.0, 100.0 + bc.MAX_S + 1), "and gives up after MAX_S, whatever happens")
+spec = importlib.util.spec_from_file_location("wl", D / "wake-listener.py")
+wl = importlib.util.module_from_spec(spec); spec.loader.exec_module(wl)
+check(wl.PAGE_PAINTED_FLAG == bc.FLAG, "the listener writes the flag the cover watches")
+H = [v for v in vars(wl).values() if isinstance(v, type) and hasattr(v, "do_POST")][0]
+h = H.__new__(H); h.path = "/wake/painted"; got = []
+h.send_response = lambda c, *a: got.append(c); h.end_headers = lambda: None; h.send_error = lambda c, *a: got.append(c)
+h.do_POST()
+check(got == [204] and flag.exists(), "POST /wake/painted answers 204 and writes the flag")
+check(bc.should_close(100.0, 101.0), "and then the cover closes")
+check("/usr/bin/python3 /opt/stratoscan/boot-cover.py &" in (D / "labwc-autostart").read_text(), "the session starts the cover")
+check("boot-cover.py" in inst and '"boot-cover.py"' in (D / "ota.py").read_text(), "the installer installs it and updates may replace it")
+check("gir1.2-gtklayershell-0.1" in q, "quiet-boot.sh installs the layer-shell binding the cover needs")
+check("fetch('/wake/painted'" in html and "if (ON_DEVICE) requestAnimationFrame" in html,
+      "the page reports its first painted frames, on the unit only")
+fg = (D / "funnel-gateway.py").read_text()
+check('LOCAL_ONLY_PATHS = ("/wake"' in fg, "and /wake stays off the public tunnel")
 
 print("quiet boot checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)
