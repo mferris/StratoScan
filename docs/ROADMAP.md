@@ -85,6 +85,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 1.19 | The relay at hundreds of radars: D1 read replicas, release files on R2, self-hosted map tiles, each at its trigger (#66) | Each done at its trigger, or deferred with a note |
 | 1.20 | Fewer questions per radar: the ring comparison every 60 s or by feeding adsb.lol, the location poll only while a phone shares, a slower away poll in the app (#67) | Requests per day measured on RDU before and after |
 | 1.21 | Boot straight to StratoScan: the StratoScan picture from power-on to the radar, with no Raspberry Pi splash, kernel text or desktop (#72) | A power-on on RDU shows only the StratoScan picture, then the radar |
+| 1.22 | OS updates: Chromium, the kernel and firmware (held from automatic updates) updated on a tested path through the release rings; a quiet weekly restart after patches; each radar's patch state in its heartbeat (#73) | RDU takes a Chromium and a kernel update through ring 0 and still paints; the heartbeat shows its patch state |
 ## Phase 2: the pocket
 
 | # | Item | Done when |
