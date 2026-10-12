@@ -24,6 +24,7 @@ or has reporting off, works exactly as before.
 import base64
 import grp
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
@@ -256,8 +257,23 @@ def collect():
         "ring": unit_ring(),
         "memory_mb": mem,
         "last_watchdog_reboot_age_s": _age("/var/lib/stratoscan-setup/last-watchdog-reboot"),
+        "os": os_patch_state(),
         **fleet_extras(),
     }
+
+
+def os_patch_state():
+    """Whether the operating system is being patched (#73): the last daily
+    security run, updates waiting, the Chromium and kernel versions. Read from
+    os-update.py's state, so a report never runs apt."""
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "stratoscan_os_update", os.path.join(os.path.dirname(os.path.abspath(__file__)), "os-update.py"))
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        return m.status()
+    except Exception:
+        return None
 
 
 def undervoltage_24h():

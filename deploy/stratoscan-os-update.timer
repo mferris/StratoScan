@@ -1,0 +1,13 @@
+[Unit]
+Description=Check the held packages against their tested versions once a day
+
+[Timer]
+# Early evening, before ota-auto's window (19:00 + up to 3 h), so the two
+# never restart the kiosk at once. Like ota-auto it needs a lit, painting
+# panel to prove a new Chromium, so not the small hours.
+OnCalendar=*-*-* 17:00:00
+RandomizedDelaySec=90min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

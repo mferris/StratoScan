@@ -155,6 +155,15 @@ test('assess flags what needs attention', () => {
   assert.ok(assess(unit({ storage: { gb_per_day: 9 } }), now).flags.includes('heavy writes'));
   assert.ok(assess(unit({ ota: { state: 'rolled_back' } }), now).flags.includes('update rolled back'));
   assert.ok(assess(unit({ ota: { state: 'error' } }), now).flags.includes('update error'));
+  // OS patching (#73): a week without the daily security run, updates waiting
+  // a week, or a held package put back.
+  const DAY = 86400;
+  assert.deepEqual(assess(unit({ os: { last_patch_age_s: DAY, pending: 0 } }), now).flags, []);
+  assert.ok(assess(unit({ os: { last_patch_age_s: 9 * DAY } }), now).flags.includes('not patching (9 days)'));
+  assert.ok(assess(unit({ os: { pending: 4, pending_since: now - 8 * DAY } }), now).flags.includes('security updates waiting (4)'));
+  assert.deepEqual(assess(unit({ os: { pending: 4, pending_since: now - 2 * DAY } }), now).flags, []);
+  assert.ok(assess(unit({ os: { held_update: 'rolled back' } }), now).flags.includes('OS update rolled back'));
+  assert.deepEqual(assess(unit({ os: null }), now).flags, []);
   // Power (2026-10-09): a unit that counts its brown-outs is judged on the
   // day's count; one that does not, on get_throttled's sticky bits as before.
   assert.ok(assess(unit({ power: { undervoltage_24h: 260 }, thermal: { throttled: '0x50000' } }), now).flags.includes('power dips (260/day)'));

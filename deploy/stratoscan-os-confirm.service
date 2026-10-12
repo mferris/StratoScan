@@ -1,0 +1,16 @@
+[Unit]
+Description=StratoScan: keep or undo a kernel trial boot (#73)
+Documentation=https://github.com/mferris/StratoScan/issues/73
+# Late in boot and waited on by nothing: it watches for the radar to paint,
+# which needs the session up, and must never hold the boot back.
+After=multi-user.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+StateDirectory=stratoscan-ota
+TimeoutStartSec=20min
+ExecStart=/opt/stratoscan/os-update.py confirm
+
+[Install]
+WantedBy=multi-user.target

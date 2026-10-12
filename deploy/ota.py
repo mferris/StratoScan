@@ -195,6 +195,9 @@ DEPLOY_ALLOWED = {
     # trap setupd.py was in below, and worse here: the one file whose bugs
     # nobody can reach around is the one that installs the fixes.
     "ota-auto.sh",
+    # Chromium, the kernel and Wi-Fi firmware at their tested versions (#73),
+    # and the list of those versions; run by their own timer and at boot.
+    "os-update.py", "os-packages.json",
     # setupd.py is the root helper, and leaving it out looked like caution but
     # bought nothing: ota.py is on this list and also runs as root, so anyone
     # who can sign a release can already run code as root. All excluding it
@@ -668,6 +671,45 @@ def restart_services(units):
         log("restarting " + ", ".join(u for _, u in units))
 
 
+def wait_for_new_paint(kiosk_was, timeout_s=PAINT_TIMEOUT_S):
+    """True once the kiosk has restarted (its start time moved off
+    `kiosk_was`) and the restarted page has painted a frame.
+
+    Only a frame painted by the NEW page proves anything. The old page keeps
+    heartbeating every 20 s until the restart actually lands, and comparing
+    against the pre-install stamp accepted one of those: .14 was reported
+    "installed and painting" before the kiosk had even restarted, so a build
+    that could not paint would have been approved by the page it replaced.
+    So wait for the kiosk unit's start time to move, and only count
+    heartbeats after that. Shared with os-update.py, which proves a new
+    Chromium the same way (#73).
+    """
+    restarted = False
+    settle_until = time.time() + RESTART_SETTLE_S + 60
+    while time.time() < settle_until:
+        now_started = kiosk_started_at()
+        if kiosk_was is None or now_started is None:
+            time.sleep(RESTART_SETTLE_S)      # can't observe it; allow for the delay
+            restarted = True
+            break
+        if now_started != kiosk_was:
+            restarted = True
+            break
+        time.sleep(1)
+    if not restarted:
+        # The old page would keep "passing" the paint check; a new build that
+        # was never shown has not been verified, so it does not stay.
+        log("the kiosk did not restart after the update")
+        return False
+    baseline = time.time()
+    deadline = baseline + RESTART_SETTLE_S + timeout_s
+    while time.time() < deadline:
+        if paint_stamp() > baseline:
+            return True
+        time.sleep(2)
+    return False
+
+
 def apply():
     manifest_path = os.path.join(STAGING, ".manifest.json")
     if not os.path.isfile(manifest_path):
@@ -739,42 +781,14 @@ def apply():
     restart_services(services)
     restart_kiosk()
 
-    # Only a frame painted by the NEW page proves anything. The old page keeps
-    # heartbeating every 20 s until the restart actually lands, and comparing
-    # against the pre-install stamp accepted one of those: .14 was reported
-    # "installed and painting" before the kiosk had even restarted, so a build
-    # that could not paint would have been approved by the page it replaced.
-    # So wait for the kiosk unit's start time to move, and only count
-    # heartbeats after that.
-    restarted = False
-    settle_until = time.time() + RESTART_SETTLE_S + 60
-    while time.time() < settle_until:
-        now_started = kiosk_started_at()
-        if kiosk_was is None or now_started is None:
-            time.sleep(RESTART_SETTLE_S)      # can't observe it; allow for the delay
-            restarted = True
-            break
-        if now_started != kiosk_was:
-            restarted = True
-            break
-        time.sleep(1)
-    if not restarted:
-        # The old page would keep "passing" the paint check below; a new build
-        # that was never shown has not been verified, so it does not stay.
-        log("the kiosk did not restart after the update")
-    baseline = time.time()
-
-    deadline = baseline + RESTART_SETTLE_S + PAINT_TIMEOUT_S if restarted else 0
-    while time.time() < deadline:
-        if paint_stamp() > baseline:
-            with open(INSTALLED, "w") as f:
-                json.dump({"serial": int(manifest["serial"]),
-                           "version": manifest["version"]}, f)
-            write_status(state="ok", version=manifest["version"],
-                         serial=manifest["serial"])
-            log(f"{manifest['version']} installed and painting")
-            return True
-        time.sleep(2)
+    if wait_for_new_paint(kiosk_was):
+        with open(INSTALLED, "w") as f:
+            json.dump({"serial": int(manifest["serial"]),
+                       "version": manifest["version"]}, f)
+        write_status(state="ok", version=manifest["version"],
+                     serial=manifest["serial"])
+        log(f"{manifest['version']} installed and painting")
+        return True
 
     log("no frame painted after the update -- rolling back")
     for keep, dest in saved:

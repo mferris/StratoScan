@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Held operating-system packages updated on a tested path (2026-10-12, #73):
+  Chromium, the kernel and Wi-Fi firmware move only to versions named in a
+  signed release, through the release rings. Chromium must paint or it goes
+  back; a new kernel boots once on trial (tryboot) and is kept only if the
+  radar paints with a network. Radars restart in the small hours, at most
+  weekly, when patched libraries are waiting, and report their patch state;
+  the fleet page flags one that has stopped patching. See
+  [docs/os-updates.md](docs/os-updates.md).
 - The app's internal names are StratoScan too (2026-10-01): the Xcode
   project (`ios/StratoScan.xcodeproj`), its folders and targets, the Swift
   types, the `stratoscan://` pairing link (units from 2026.10.01.2 make it;

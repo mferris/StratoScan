@@ -1,0 +1,8 @@
+[Unit]
+Description=StratoScan: restart if patched libraries are waiting (#73)
+Documentation=https://github.com/mferris/StratoScan/issues/73
+
+[Service]
+Type=oneshot
+StateDirectory=stratoscan-ota
+ExecStart=/opt/stratoscan/os-update.py restart-if-needed

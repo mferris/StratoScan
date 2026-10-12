@@ -1,0 +1,12 @@
+[Unit]
+Description=Restart in the small hours when patches are waiting, at most weekly
+
+[Timer]
+# After the 04:00 kiosk restart, with the panel asleep. os-update.py checks
+# the panel is off, the radar has been up a day, and it has not restarted
+# for this within six days; otherwise it does nothing.
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=20min
+
+[Install]
+WantedBy=timers.target

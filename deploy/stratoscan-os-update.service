@@ -1,0 +1,13 @@
+[Unit]
+Description=StratoScan: Chromium, kernel and firmware at their tested versions (#73)
+Documentation=https://github.com/mferris/StratoScan/issues/73
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+StateDirectory=stratoscan-ota
+# A new Chromium is downloaded and unpacked here; on a slow card that is
+# minutes, and a kernel trial ends in a reboot.
+TimeoutStartSec=45min
+ExecStart=/opt/stratoscan/os-update.py run
