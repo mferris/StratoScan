@@ -1,0 +1,6 @@
+{
+ "kind": "os-packages",
+ "about": "The exact versions of the held packages (Chromium, the kernel, Wi-Fi firmware) a radar may install, tested on ring 0 first. os-update.py installs them; see #73. Empty: every radar keeps the versions it has.",
+ "tested_on": null,
+ "packages": {}
+}

@@ -62,7 +62,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 echo "== packages =="
 apt-get install -y -q lighttpd lighttpd-mod-openssl git curl ca-certificates python3-venv python3-cryptography \
-  python3-qrcode uhubctl unattended-upgrades javascript-common rtl-sdr >/dev/null
+  python3-qrcode uhubctl unattended-upgrades dpkg-repack javascript-common rtl-sdr >/dev/null
 echo "  ok"
 
 echo "== receiver: readsb $READSB_TAG =="
@@ -192,10 +192,10 @@ install -d -m 0755 /opt/stratoscan
 for f in setupd.py setup-server.py funnel-gateway.py offline-map.py heartbeat.py notable-db.py \
          events.py pairing.py feeding.py ota.py ota-auto.sh net-watchdog.py tls-cert.sh sighting-store.py approach-store.py \
          network-compare.py photo-proxy.py tts-service.py shm-guard.sh wake-listener.py \
-         core-feed.py labels.py radio-select.py boot-cover.py controls.py; do
+         core-feed.py labels.py radio-select.py boot-cover.py controls.py os-update.py; do
   install -m 0755 "deploy/$f" "/opt/stratoscan/$f"
 done
-install -m 0644 deploy/setup-ui.html deploy/airports.json deploy/airlines.json /opt/stratoscan/
+install -m 0644 deploy/setup-ui.html deploy/airports.json deploy/airlines.json deploy/os-packages.json /opt/stratoscan/
 # The trust root. Must already be on the device before it ships: fetching the
 # key over the same channel as the update would make the signature pointless.
 # NOT installable by an update, deliberately -- see deploy/allowed_signers.
@@ -221,7 +221,9 @@ for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-ga
          stratoscan-ota-check.service stratoscan-ota-check.timer \
          stratoscan-ota-auto.service stratoscan-ota-auto.timer \
          stratoscan-netwatchdog.service stratoscan-tls-cert.service \
-         stratoscan-radio.service stratoscan-uat.service stratoscan-controls.service; do
+         stratoscan-radio.service stratoscan-uat.service stratoscan-controls.service \
+         stratoscan-os-update.service stratoscan-os-update.timer stratoscan-os-confirm.service \
+         stratoscan-os-restart.service stratoscan-os-restart.timer; do
   install -m 0644 "deploy/$u" /etc/systemd/system/
 done
 # The control arc (Retro with Dials, roadmap 5.1): its service runs only once
@@ -532,7 +534,8 @@ for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-ga
          stratoscan-events.service stratoscan-core.service \
          stratoscan-ota-check.timer stratoscan-ota-auto.timer stratoscan-netwatchdog.service \
          stratoscan-tls-cert.service stratoscan-radio.service stratoscan-uat.service \
-         stratoscan-controls.service lighttpd.service readsb.service; do
+         stratoscan-controls.service lighttpd.service readsb.service \
+         stratoscan-os-update.timer stratoscan-os-restart.timer stratoscan-os-confirm.service; do
   enable_unit "$u"
 done
 if ! live; then

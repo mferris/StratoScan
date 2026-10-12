@@ -99,6 +99,19 @@ export function assess(unit, now) {
   // are an update in progress, 'ok' is one installed; flagging those made
   // every healthy radar look wrong (seen on the fleet page 2026-10-04).
   if (p.ota && ['error', 'rolled_back'].includes(p.ota.state)) flags.push(`update ${p.ota.state.replace('_', ' ')}`);
+  // Operating-system patching (#73). The daily security run touches its stamp
+  // each day it runs; a week without one is a radar that has stopped
+  // patching. Updates waiting a week means it runs but cannot install them.
+  if (p.os && typeof p.os === 'object') {
+    const DAY = 86400;
+    if (typeof p.os.last_patch_age_s === 'number' && p.os.last_patch_age_s > 7 * DAY) {
+      flags.push(`not patching (${Math.floor(p.os.last_patch_age_s / DAY)} days)`);
+    }
+    if (p.os.pending > 0 && typeof p.os.pending_since === 'number' && now - p.os.pending_since > 7 * DAY) {
+      flags.push(`security updates waiting (${p.os.pending})`);
+    }
+    if (p.os.held_update === 'rolled back') flags.push('OS update rolled back');
+  }
   return { flags, p };
 }
 
