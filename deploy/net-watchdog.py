@@ -491,6 +491,19 @@ def check_uat_power(now=None):
 POWER_JSON = os.environ.get("STRATOSCAN_POWER_JSON", "/var/www/html/data/power.json")
 LIMIT_DIPS = 3
 LIMIT_WINDOW_S = 6 * 3600
+VOLUME_CAP = 0.3
+# A maintainer can set the cap by hand for a test, e.g. 0 to silence alerts
+# and see whether the dips still follow them: one number in this file.
+CAP_OVERRIDE = os.environ.get("STRATOSCAN_VOLUME_CAP_OVERRIDE", "/etc/stratoscan/volume-cap")
+
+
+def volume_cap():
+    try:
+        with open(CAP_OVERRIDE) as f:
+            v = float(f.read().strip())
+        return min(1.0, max(0.0, v))
+    except (OSError, ValueError):
+        return VOLUME_CAP
 
 
 def power_limited(dips):
@@ -500,8 +513,8 @@ def power_limited(dips):
 def check_power_status(now=None):
     now = time.time() if now is None else now
     dips = undervoltage_dips(LIMIT_WINDOW_S)
-    doc = {"limited": power_limited(dips), "dips": dips, "window_h": LIMIT_WINDOW_S // 3600,
-           "at": int(now)}
+    doc = {"limited": power_limited(dips), "cap": volume_cap(), "dips": dips,
+           "window_h": LIMIT_WINDOW_S // 3600, "at": int(now)}
     try:
         with open(POWER_JSON) as f:
             before = json.load(f)

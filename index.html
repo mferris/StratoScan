@@ -3961,19 +3961,22 @@ function getMasterGain() {
 // has been steady for hours; the owner's own volume setting is never changed.
 const POWER_VOLUME_CAP = 0.3;
 let powerLimited = false;
+let powerVolumeCap = POWER_VOLUME_CAP;   // the unit may set it (power.json "cap")
 async function checkPowerLimit() {
   if (!ON_DEVICE) return;
   try {
     const r = await fetch('/data/power.json', { cache: 'no-store' });
     if (r.ok) {
-      const was = powerLimited;
-      powerLimited = (await r.json()).limited === true;
-      if (was !== powerLimited) applyVolume();
+      const doc = await r.json();
+      const was = [powerLimited, powerVolumeCap];
+      powerLimited = doc.limited === true;
+      powerVolumeCap = typeof doc.cap === 'number' && doc.cap >= 0 && doc.cap <= 1 ? doc.cap : POWER_VOLUME_CAP;
+      if (was[0] !== powerLimited || was[1] !== powerVolumeCap) applyVolume();
     }
   } catch (e) { /* no file yet: no cap */ }
 }
 function effectiveVolume() {
-  return powerLimited ? Math.min(alertSettings.volume, POWER_VOLUME_CAP) : alertSettings.volume;
+  return powerLimited ? Math.min(alertSettings.volume, powerVolumeCap) : alertSettings.volume;
 }
 function applyVolume() {
   if (!masterGain) return;
@@ -6400,8 +6403,8 @@ function renderSettingsPanel() {
       </div>
       <input type="range" id="volumeSlider" min="0" max="${VOLUME_MAX}" step="0.02"
              value="${alertSettings.volume}" ${alertSettings.muted ? 'disabled' : ''}>
-      <div class="sp-sub">${powerLimited && alertSettings.volume > POWER_VOLUME_CAP
-        ? `Playing at ${Math.round(POWER_VOLUME_CAP * 100)}% for now: the power supply has been dipping, and loud alerts make it worse. This lifts by itself once the supply is steady.`
+      <div class="sp-sub">${powerLimited && alertSettings.volume > powerVolumeCap
+        ? `Playing at ${Math.round(powerVolumeCap * 100)}% for now: the power supply has been dipping, and loud alerts make it worse. This lifts by itself once the supply is steady.`
         : '100% is where the sounds were mastered; past that is amplified and gently limited so it gets louder, not distorted.'}</div>
     </div>
     <div class="sp-section-title">Screen</div>
