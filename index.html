@@ -2192,6 +2192,16 @@ function approachConfirmAltFt() { return AIRPORT.elevFt + 3000; }
 // growing picture. Multiple viewers open at once could each independently
 // report the same real landing; harmless, it just over-represents that one
 // landing by a point or two, not wrong.
+// The shared stores take writes from the panel and any browser at home, but the
+// radar's public page is read-only (funnel-gateway.py answers 403 "Read-only").
+// A visitor's page used to keep trying, a refused request every few seconds;
+// after the first refusal it stops for the rest of the visit (#67).
+let storeWritesRefused = false;
+function storeWrite(url, body) {
+  if (storeWritesRefused) return Promise.resolve(null);
+  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(res => { if (res.status === 403) storeWritesRefused = true; return res; });
+}
 const APPROACH_STORE_URL = '/approaches';
 const APPROACH_MAX_POINTS = 6000; // bounds render cost -- oldest points evicted first (server enforces its own copy of this cap too)
 
@@ -2217,7 +2227,7 @@ function commitApproachTrack(points) {
   approachPoints.push(...points);
   if (approachPoints.length > APPROACH_MAX_POINTS) approachPoints.splice(0, approachPoints.length - APPROACH_MAX_POINTS);
   if (map && map.getSource('approaches')) map.getSource('approaches').setData(approachPointsGeoJSON());
-  fetch(APPROACH_STORE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(points) })
+  storeWrite(APPROACH_STORE_URL, points)
     .catch(e => {}); // approach-store unavailable -- this session's own view still updated above, just won't be shared
 }
 
@@ -2302,8 +2312,8 @@ async function loadSightingCounts() {
 function recordSighting(hex, kind) {
   const current = sightingCounts.get(hex) || { total: 0, nearby: 0 };
   sightingCounts.set(hex, { ...current, [kind]: (current[kind] || 0) + 1 });
-  fetch(SIGHTING_STORE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hex, kind }) })
-    .then(res => res.ok ? res.json() : null)
+  storeWrite(SIGHTING_STORE_URL, { hex, kind })
+    .then(res => res && res.ok ? res.json() : null)
     .then(counts => { if (counts) sightingCounts.set(hex, counts); })
     .catch(e => {}); // sighting-store unavailable -- this session's own optimistic count stands, just won't be shared
 }
@@ -2374,11 +2384,8 @@ async function backfillClassifications() {
       } });
     }
     try {
-      await fetch(SIGHTING_STORE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batch }),
-      });
+      const res = await storeWrite(SIGHTING_STORE_URL, { batch });
+      if (!res) return;   // read-only here
     } catch (e) {
       return;
     }
@@ -2388,11 +2395,7 @@ async function backfillClassifications() {
 }
 
 function postSighting(body) {
-  return fetch(SIGHTING_STORE_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  }).catch(e => null);   // same tolerance as recordSighting: it is a counter, not a transaction
+  return storeWrite(SIGHTING_STORE_URL, body).catch(e => null);   // same tolerance as recordSighting: it is a counter, not a transaction
 }
 
 // Military outranks the callsign deliberately: a military airframe flying
@@ -3737,7 +3740,7 @@ function wakeScreenForAlert(why = 'alert') {
   applyNightDim();
   // The reason goes in the journal (wake-listener.py): the panel was found
   // never to blank, and nothing said which alert kept waking it (2026-10-10).
-  fetch('/wake?why=' + encodeURIComponent(why), { method: 'POST' }).catch(() => {});
+  if (ON_DEVICE) fetch('/wake?why=' + encodeURIComponent(why), { method: 'POST' }).catch(() => {});   // the panel only (#67)
 }
 
 // ---- Nearby-aircraft alert ---------------------------------------------
@@ -5578,11 +5581,18 @@ function setStyle(node, el, prop, v, resizes = true) {
 function placeLeader(p, lx, ly) {
   const attach = closestPointOnRect(p.anchorX, p.anchorY, lx, ly, p.labelW, p.labelH);
   let line = leaderNodes.get(p.hex);
+  // A label not measured yet has no size, and the line had nowhere to go:
+  // "attribute x2: Expected length, NaN" on every frame. Hidden until it has.
+  if (![attach.x, attach.y, p.anchorX, p.anchorY].every(Number.isFinite)) {
+    if (line) setStyle(line, line, 'display', 'none', false);
+    return;
+  }
   if (!line) {
     line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     leadersEl.appendChild(line);
     leaderNodes.set(p.hex, line);
   }
+  setStyle(line, line, 'display', '', false);
   setAttr(line, 'x1', p.anchorX.toFixed(1));
   setAttr(line, 'y1', p.anchorY.toFixed(1));
   setAttr(line, 'x2', attach.x.toFixed(1));
@@ -5965,6 +5975,7 @@ const HEARTBEAT_MS = 20 * 1000;
 let lastHeartbeatAt = 0;
 
 function reportPainted(now) {
+  if (!ON_DEVICE) return;   // the panel's watchdog heartbeat: meaningless from any other browser (#67)
   if (now - lastHeartbeatAt < HEARTBEAT_MS) return;
   lastHeartbeatAt = now;
   // The heartbeat doubles as the reload channel. Chromium on this hardware

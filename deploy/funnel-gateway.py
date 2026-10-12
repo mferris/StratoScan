@@ -174,13 +174,13 @@ SECURITY_HEADERS = {
 # Styles stay 'unsafe-inline': MapLibre and the page set them from script,
 # and an attacker who can inject style but not script gains little.
 #
-# REPORT-ONLY FIRST. Getting this wrong breaks the public page for every
-# visitor, on browsers the maintainer doesn't have, so the policy goes out as
-# Content-Security-Policy-Report-Only with violations counted (never stored)
-# at /csp-report and read on the stats listener's /csp, and is switched to
-# enforcing (CSP_ENFORCE=1 in the service's environment) only after a quiet
-# spell on the live radar.
-CSP_ENFORCE = os.environ.get("CSP_ENFORCE", "") == "1"
+# ENFORCED since 2026-10-12. It went out report-only on 2026-10-08, with
+# violations counted (never stored) at /csp-report and read on the stats
+# listener's /csp; a visitor's session through the gateway then reported
+# nothing, so browsers now block what the policy doesn't list. Reports are
+# still counted. CSP_ENFORCE=0 in the service's environment puts it back to
+# report-only, if a browser turns up that the policy breaks.
+CSP_ENFORCE = os.environ.get("CSP_ENFORCE", "1") != "0"
 CSP_DIRECTIVES = (
     "default-src 'none'",
     "script-src 'self' {hashes}",

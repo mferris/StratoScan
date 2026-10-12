@@ -86,5 +86,17 @@ check("Endpoint.shared.whereNow == .away" in vm and "self.currentFetchInterval" 
 check("fixAt = now" in ps and "static let drMaxS: Double = 10" in rv and "p.fixAt" in rv,
       "between reads each blip moves on from its last report (up to 10 s)")
 
+# the public page: nothing it is bound to be refused (found 2026-10-12 testing the CSP)
+check("let storeWritesRefused = false;" in html and "if (res.status === 403) storeWritesRefused = true;" in html,
+      "after one 403 Read-only the page stops writing sightings and approaches for the visit")
+direct = re.findall(r"fetch\((?:SIGHTING|APPROACH)_STORE_URL,\s*\{[^}]*method: 'POST'", html)
+check(not direct and html.count("storeWrite(SIGHTING_STORE_URL") == 3 and html.count("storeWrite(APPROACH_STORE_URL") == 1,
+      "every store write goes through storeWrite")
+check("if (ON_DEVICE) fetch('/wake?why='" in html, "only the panel asks to wake its own screen")
+check("if (!ON_DEVICE) return;" in html.split("function reportPainted(")[1][:200],
+      "only the panel sends its watchdog heartbeat")
+check("every(Number.isFinite)" in html.split("function placeLeader(")[1][:600],
+      "a leader line with no label size yet is hidden, not drawn to NaN")
+
 print("requests per radar checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)

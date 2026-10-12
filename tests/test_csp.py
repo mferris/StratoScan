@@ -54,7 +54,7 @@ text = page.decode("utf-8")
 check(not re.search(r'<[a-z]+[^>]*\son[a-z]+\s*=', text), "the page has no inline event handlers (a hash policy would block them)")
 check(not re.search(r'href=["\']javascript:', text), "and no javascript: links")
 check("'self'" in real and "https://tiles.openfreemap.org" in real and "https://fonts.gstatic.com" in real, "the page's hosts are listed")
-check(fg.CSP_HEADER == "Content-Security-Policy-Report-Only", "report-only by default (CSP_ENFORCE=1 switches it)")
+check(fg.CSP_HEADER == "Content-Security-Policy", "enforced by default (CSP_ENFORCE=0 puts it back to report-only)")
 
 # Reports: counted by directive and host, bounded, nothing else kept.
 fg._csp_reports.clear()
