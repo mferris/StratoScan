@@ -26,6 +26,11 @@ final class PlaneState: Identifiable {
     /// to another city draws its aircraft on the right streets).
     var dispLat: Double?
     var dispLon: Double?
+    /// When the reported position last changed: the blip is carried forward
+    /// from it along `hdg` at `speed` (RadarView.drMaxS at most), so it keeps
+    /// moving between polls -- every 4 s away from home (#67) -- as the
+    /// kiosk's aircraft do between their own reports.
+    var fixAt: Date?
     var airlineIcao: String?
     var airlineLabel: String = AirlineTable.privateLabel
     var badgeColor: Color = AirlineTable.privateColor
@@ -98,6 +103,7 @@ final class PlaneState: Identifiable {
             if history.last.map({ $0.lat != la || $0.lon != lo }) ?? true {
                 let ft: Double = n.alt == .ground ? 0 : (n.alt.feetValue ?? history.last?.altFt ?? 0)
                 history.append(Fix(lat: la, lon: lo, altFt: ft, at: now))
+                fixAt = now
             }
             if let keep = history.firstIndex(where: { now.timeIntervalSince($0.at) <= Self.historySeconds }), keep > 0 {
                 history.removeFirst(keep)

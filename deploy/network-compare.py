@@ -71,7 +71,11 @@ ICAO_HEX = re.compile(r"[0-9a-fA-F]{6}")
 SOURCE_NAME = "adsb.lol"
 SOURCE_URL = "https://api.adsb.lol/v2/point/{lat}/{lon}/{radius}"
 USER_AGENT = "StratoScan/1.0 (+https://github.com/mferris/StratoScan; coverage self-comparison)"
-MIN_UPSTREAM_S = 15
+# Every 60 s since 2026-10-12 (#67; it was 15 s): the comparison changes
+# slowly, the page carries the network's aircraft forward between answers,
+# and this is one radar's share of somebody's donated service -- about 1,440
+# questions a day with a screen open all day, instead of about 5,760.
+MIN_UPSTREAM_S = 60
 UPSTREAM_TIMEOUT = 8
 RADIUS_NM = 25          # a little beyond the 20nm ring the radar draws
 RING_NM = 20            # what the radar actually shows; stats use this
@@ -179,6 +183,20 @@ def flush():
             return
         save_store(_store)
         _dirty = False
+
+
+# Ring questions sent to the network, logged once an hour, so the effect of
+# MIN_UPSTREAM_S can be measured on a unit (#67) rather than assumed.
+_ring_asked = {"n": 0, "since": time.time()}
+
+
+def note_ring_question(now=None):
+    now = time.time() if now is None else now
+    _ring_asked["n"] += 1
+    if now - _ring_asked["since"] >= 3600:
+        print(f"network-compare: {_ring_asked['n']} ring questions to {SOURCE_NAME} in the last hour",
+              flush=True)
+        _ring_asked.update(n=0, since=now)
 
 
 def _flusher():
@@ -759,6 +777,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             out["fetched"] = round(now - _cache["at"], 1)
             return self._json(200, out)
 
+        note_ring_question(now)
         try:
             payload = build_payload()
         except (urllib.error.URLError, OSError, ValueError, KeyError) as e:

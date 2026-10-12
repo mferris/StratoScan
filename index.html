@@ -4373,9 +4373,9 @@ function checkNearbyAlert(pl, range) {
 // upstream request of its own: it only fetches when this page asks, so with
 // the setting off the device is exactly as self-contained as before.
 const NETWORK_URL = '/network';
-const NETWORK_POLL_MS = 20 * 1000;   // proxy caches for 15s; no point going faster
-// Ghosts are TRACKED, not replaced. A poll arrives every 20s, and a 450kt
-// aircraft covers 2.5nm -- 51px on this ring -- in that time, so redrawing
+const NETWORK_POLL_MS = 60 * 1000;   // the proxy asks the network at most once a minute (#67)
+// Ghosts are TRACKED, not replaced. A poll arrives every 60s (#67), and a 450kt
+// aircraft covers 7.5nm in that time, so redrawing
 // from each payload would make them teleport, and a trail built from those
 // samples would be a chain of long straight hops rather than a path.
 //
@@ -4385,8 +4385,8 @@ const NETWORK_POLL_MS = 20 * 1000;   // proxy caches for 15s; no point going fas
 // so this is the network's own reported velocity, not a guess of ours.
 const ghostTracks = new Map();   // hex -> persistent track record
 let ghosts = [];                 // in-ring snapshots, rebuilt each frame
-const GHOST_DR_MAX_S = 45;       // stop extrapolating past this; beyond it we are inventing
-const GHOST_DROP_MS = 60 * 1000; // forget one absent from the feed this long
+const GHOST_DR_MAX_S = 75;       // a 60 s poll plus slack (#67); beyond it we are inventing
+const GHOST_DROP_MS = 150 * 1000; // forget one absent from the feed this long: two missed polls and more
 let networkStats = null;  // last scorecard
 let networkError = null;
 

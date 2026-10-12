@@ -22,6 +22,11 @@ struct RadarView: View {
     @State private var dragStart: (translation: CGSize, centre: Coordinate)?
     private let sweepSpeed: Double = 0.008 * 60 // radians/sec (web version: 0.008/frame @ ~60fps)
     private let smoothTau = 0.35
+    /// How far ahead of its last reported position a blip may be carried
+    /// (seconds of its own speed and track): two of the away poll's 4 s, so a
+    /// missed poll still moves smoothly, and no further, so a turn is not
+    /// drawn as a straight line for long.
+    static let drMaxS: Double = 10
     private let labelGap: CGFloat = 10
     private let labelMargin: CGFloat = 4
     private let labelSpringTau = 0.22
@@ -227,7 +232,16 @@ struct RadarView: View {
         for p in viewModel.allPlanes {
             p.bearing += Geo.bearingDelta(from: p.bearing, to: p.targetBearing) * alpha
             p.range += (p.targetRange - p.range) * alpha
-            if let la = p.lat, let lo = p.lon {
+            if var la = p.lat, var lo = p.lon {
+                // Carried forward from the last reported position at its
+                // reported speed and track, then eased toward that.
+                if let at = p.fixAt, let kt = p.speed, kt >= 40, !p.alt.isGround {
+                    let age = min(Self.drMaxS, max(0, now.timeIntervalSince(at)))
+                    let nm = kt * age / 3600
+                    let rad = p.hdg * .pi / 180
+                    la += nm / 60 * cos(rad)
+                    lo += nm / 60 * sin(rad) / max(0.2, cos(la * .pi / 180))
+                }
                 p.dispLat = (p.dispLat ?? la) + (la - (p.dispLat ?? la)) * alpha
                 p.dispLon = (p.dispLon ?? lo) + (lo - (p.dispLon ?? lo)) * alpha
             }
