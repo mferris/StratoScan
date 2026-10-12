@@ -23,6 +23,12 @@ struct ContentView: View {
 
     /// An iPad, or any window wide enough to be treated like one.
     private var isPad: Bool { sizeClass == .regular }
+    /// Wall mode is for an iPad on a wall, so it goes by the device, not the
+    /// window: a large iPhone turned sideways is also "regular" width, and a tap
+    /// on the wall-mode button there left the phone with no controls at all
+    /// (seen 2026-10-12: only a faint way out, top right, easy to miss).
+    private var canWallMode: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    private var inWallMode: Bool { wallMode && canWallMode }
     /// Text and controls, scaled up on the bigger screen.
     private var ui: CGFloat { isPad ? 1.4 : 1 }
 
@@ -62,13 +68,13 @@ struct ContentView: View {
                 }
                 .padding(.top, 8)
 
-                if wallMode && nightNow {
+                if inWallMode && nightNow {
                     // After dark the wall radar dims, as the kiosk does (its
                     // --night-dim, 55%): an overlay, not the iPad's brightness,
                     // which would stay changed after leaving the app.
                     Color.black.opacity(0.55).ignoresSafeArea().allowsHitTesting(false)
                 }
-                if wallMode {
+                if inWallMode {
                     // Wall mode: only a faint way out, top right.
                     VStack {
                         HStack {
@@ -90,8 +96,7 @@ struct ContentView: View {
                             viewModel.labelMode = viewModel.labelMode.next
                         } label: {
                             Image(systemName: viewModel.labelMode.symbol)
-                                .foregroundColor(pal.textDim)
-                                .padding(10)
+                                .topBarIcon(pal)
                         }
                         .accessibilityLabel("Labels: \(viewModel.labelMode.rawValue)")
                         // Centre on me, as in Apple Maps: the "YOU" dot shows
@@ -106,31 +111,27 @@ struct ContentView: View {
                             if !viewModel.centreOnMe { viewModel.panCentre = nil }
                         } label: {
                             Image(systemName: viewModel.centreOnMe ? "location.fill" : "location")
-                                .foregroundColor(Color(hex: viewModel.centreOnMe ? "#93c5fd" : "#5b7278"))
-                                .padding(10)
+                                .topBarIcon(pal, tint: viewModel.centreOnMe ? Color(hex: "#93c5fd") : nil)
                         }
                         .accessibilityLabel(viewModel.centreOnMe ? "Centre on the radar" : "Centre on me")
                         // Sky view: the aircraft over the camera image (roadmap 2.5).
                         Button { skyFocus = nil; showSky = true } label: {
                             Image(systemName: "binoculars")
-                                .foregroundColor(pal.textDim)
-                                .padding(10)
+                                .topBarIcon(pal)
                         }
                         .accessibilityLabel("Sky view")
                         Spacer()
                         // The logbook: what this radar has seen (roadmap 2.5).
                         Button { showLogbook = true } label: {
                             Image(systemName: "book.closed")
-                                .foregroundColor(pal.textDim)
-                                .padding(10)
+                                .topBarIcon(pal)
                         }
                         .accessibilityLabel("Logbook")
-                        if isPad {
+                        if canWallMode {
                             // Wall mode: an iPad as a second radar screen.
                             Button { wallMode = true } label: {
                                 Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                    .foregroundColor(pal.textDim)
-                                    .padding(10)
+                                    .topBarIcon(pal)
                             }
                             .accessibilityLabel("Wall mode")
                         }
@@ -138,8 +139,7 @@ struct ContentView: View {
                             showSettings = true
                         } label: {
                             Image(systemName: "gearshape")
-                                .foregroundColor(pal.textDim)
-                                .padding(10)
+                                .topBarIcon(pal)
                         }
                     }
                     .font(.system(size: 17 * ui))
@@ -205,10 +205,13 @@ struct ContentView: View {
         }
         .onDisappear { viewModel.stop() }
         .animation(.easeOut(duration: 0.2), value: viewModel.selectedHex)
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = wallMode }
-        .onChange(of: wallMode) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
+        .onAppear {
+            if wallMode && !canWallMode { wallMode = false }   // a phone left in wall mode by an older build
+            UIApplication.shared.isIdleTimerDisabled = inWallMode
+        }
+        .onChange(of: wallMode) { _, on in UIApplication.shared.isIdleTimerDisabled = on && canWallMode }
         .task(id: wallMode) {
-            while wallMode && !Task.isCancelled {
+            while inWallMode && !Task.isCancelled {
                 checkNight()
                 try? await Task.sleep(for: .seconds(60))
             }
@@ -327,13 +330,15 @@ struct ContentView: View {
             Text(locationText)
                 .font(.system(size: 10 * ui, design: .monospaced))
                 .tracking(1.5)
-                .foregroundColor(pal.textDim)
+                .foregroundColor(pal.text.opacity(0.85))
+                .shadow(color: pal.bg.opacity(0.9), radius: 2)
                 .textCase(.uppercase)
                 .multilineTextAlignment(.center)
             Text(countText)
                 .font(.system(size: 15 * ui, design: .monospaced))
                 .tracking(1)
                 .foregroundColor(pal.text)
+                .shadow(color: pal.bg.opacity(0.9), radius: 2)
         }
         .padding(.horizontal, 12)
     }
@@ -453,4 +458,30 @@ private struct SelectedAircraft: Identifiable { let id: String }
 
 #Preview {
     ContentView().environmentObject(PairingStore()).environmentObject(RadarSetup())
+}
+
+
+/// A control on the map's top bar. It used to be the theme's dim text colour
+/// straight on the map, and on a grey map (the Classic theme over the map's
+/// own colour filter) the icons and the location line vanished altogether
+/// (2026-10-12: "the buttons across the top are gone"). A disc of the theme's
+/// background behind each one, and the theme's full text colour, keep them
+/// visible on any map in any theme.
+private struct TopBarIcon: ViewModifier {
+    let pal: Palette
+    let tint: Color?
+    func body(content: Content) -> some View {
+        content
+            .foregroundColor(tint ?? pal.text)
+            .frame(width: 38, height: 38)
+            .background(Circle().fill(pal.bg.opacity(0.72)))
+            .overlay(Circle().stroke(pal.textDim.opacity(0.35), lineWidth: 0.5))
+            .padding(3)
+    }
+}
+
+extension View {
+    func topBarIcon(_ pal: Palette, tint: Color? = nil) -> some View {
+        modifier(TopBarIcon(pal: pal, tint: tint))
+    }
 }
