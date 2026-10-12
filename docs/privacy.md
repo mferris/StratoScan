@@ -31,6 +31,10 @@ turn on:
   names the aircraft and gives its distance rounded to half a nautical
   mile with a compass direction, and the direction the aircraft is
   travelling (which it broadcasts itself). It never includes a position.
+  The text of an alert passes through the relay (kept up to 48 hours) and
+  Apple's push service in the clear, as push notifications do. When the
+  alert is about a well-known person's aircraft, that text names the person
+  (from the list kept on the radar), so the name passes through too.
 - **The radar's name** (from its home airport's city unless you choose one)
   stays on your home network. It's in the pairing code on the radar's
   screen, so a phone you pair shows it, and a paired phone reads it again
@@ -48,7 +52,10 @@ turn on:
   With them on, the radar also asks adsb.lol, adsb.im and adsbdb *through
   the StratoScan relay*, which asks once for every radar that wants the
   same thing (one 250 nm disc of the network's aircraft, a flight's route,
-  an aircraft's registered owner) and serves it to all of them. The relay
+  an aircraft's registered owner) and serves it to all of them. A private
+  aircraft's registered owner, from public aircraft registries, is shown on
+  the radar's own screens and in the app at home, never on the radar's
+  public page. The relay
   sees which disc, flight or aircraft was asked about and keeps none of it
   against the radar: the discs are fixed areas of the world, not centred on
   anyone's radar. With reports off, the radar asks those services itself.

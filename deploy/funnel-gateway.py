@@ -43,6 +43,14 @@ ROUNDED_PATH = "/tar1090/data/receiver.json"
 # computing range from the (rounded) receiver position.
 STRIPPED_PATH = "/tar1090/data/aircraft.json"
 STRIPPED_FIELDS = ("r_dst", "r_dir")
+# The core feed names a private aircraft's registered owner, which for a
+# private aircraft is a person. The radar's own screens show it (public
+# registry metadata, like the registration itself); a stranger looking at
+# the public page does not get a person's name beside a live position
+# (legal audit 2026-10-09 item 10; privacy audit 2026-10-12). Stripped here,
+# so the owner's screens on the LAN, which never pass this gateway, keep it.
+CORE_FEED_PATH = "/api/aircraft"
+CORE_FEED_PUBLIC_STRIPPED = ("owner",)
 
 # Under these, only the files named may answer publicly. readsb writes more
 # than the page needs, and the rest locate the antenna exactly, which the two
@@ -118,6 +126,17 @@ def strip_antenna_relative(data):
             if isinstance(a, dict):
                 for k in STRIPPED_FIELDS:
                     a.pop(k, None)
+    return data
+
+
+def strip_owners(data):
+    """The core feed's answer without registered owners (CORE_FEED_PUBLIC_STRIPPED)."""
+    if isinstance(data, dict) and isinstance(data.get("aircraft"), list):
+        for a in data["aircraft"]:
+            if isinstance(a, dict):
+                for k in CORE_FEED_PUBLIC_STRIPPED:
+                    if k in a:
+                        a[k] = None
     return data
 
 
@@ -568,6 +587,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._serve_rounded_receiver_json()
         elif self.command in ("GET", "HEAD") and self._normalise(self.path) == STRIPPED_PATH:
             self._serve_stripped_aircraft_json()
+        elif self.command in ("GET", "HEAD") and self._normalise(self.path) == CORE_FEED_PATH:
+            self._serve_public_core_feed()
         else:
             self._proxy()
 
@@ -644,6 +665,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return
         body = json.dumps(strip_antenna_relative(data), separators=(",", ":")).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self._send_security_headers()
+        self.end_headers()
+        if self.command == "GET":
+            self.wfile.write(body)
+
+    def _serve_public_core_feed(self):
+        """The core feed for a public viewer: the same answer minus owners."""
+        try:
+            with _opener.open(UPSTREAM + self.path, timeout=10) as upstream:
+                data = json.loads(upstream.read())
+        except Exception:
+            self.send_response(502)
+            self.end_headers()
+            return
+        body = json.dumps(strip_owners(data), separators=(",", ":")).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
