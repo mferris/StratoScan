@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import worker from '../src/index.js';
+import worker, { withSecurityHeaders } from '../src/index.js';
 import {
   assess, HISTORY_PER_UNIT, MAX_UNITS, MIN_INTERVAL_S, STALE_AFTER_S,
   EVENTS_PER_HOUR, EVENTS_PER_UNIT, EVENT_RETENTION_S, MAX_EVENTS_PER_REQUEST,
@@ -874,4 +874,15 @@ test('nearby alerts follow where the phone wants them about', async () => {
                           evt({ kind: 'helicopter', hex: 'a44444', phone: both.id })]);
   assert.equal(a.sent.filter(x => x.body.aps.alert.title.startsWith('Helicopter')).length, 3,
     'legacy + radar get one each, both gets one, me gets none');
+});
+
+test('every response carries HSTS and refuses framing', async () => {
+  const r = withSecurityHeaders(new Response('x', { status: 401, headers: { 'Content-Type': 'text/plain' } }));
+  assert.equal(r.status, 401);
+  assert.equal(r.headers.get('Strict-Transport-Security'), 'max-age=31536000');
+  assert.equal(r.headers.get('X-Frame-Options'), 'DENY');
+  assert.equal(r.headers.get('Content-Security-Policy'), "frame-ancestors 'none'");
+  assert.equal(await r.text(), 'x');
+  const own = withSecurityHeaders(new Response('', { headers: { 'Content-Security-Policy': "default-src 'none'" } }));
+  assert.equal(own.headers.get('Content-Security-Policy'), "default-src 'none'; frame-ancestors 'none'");
 });

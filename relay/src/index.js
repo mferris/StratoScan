@@ -577,6 +577,10 @@ async function phoneLocation(request, env) {
     `INSERT INTO phone_locations (phone, unit, blob, updated) VALUES (?1, ?2, ?3, ?4)
      ON CONFLICT(phone, unit) DO UPDATE SET blob = ?3, updated = ?4`
   ).bind(auth.unit, payload.unit, payload.blob, now).run();
+  // Stale ones go on every write too, not only when a radar reads: a radar
+  // that is off or has stopped asking would otherwise leave its phones'
+  // (sealed) locations here indefinitely (audit, 2026-10-12).
+  await db.prepare('DELETE FROM phone_locations WHERE updated < ?').bind(now - LOCATION_TTL_S).run();
   return json(200, { ok: true });
 }
 
@@ -696,40 +700,69 @@ async function nameUnit(request, env) {
 const fleets = fleetRoutes({ json, signedJson, nowS, maintainer, needAuth, assess, esc, ago });
 const net = netRoutes({ json, readBody, nowS });
 
+// Every response, whatever made it (security and privacy audit, 2026-10-12):
+// HSTS, so a browser that has once reached the relay over https never tries
+// plain http for it again; and no framing, so the fleet pages, which act on
+// a signed-in administrator's clicks, can't be shown inside someone else's
+// page and clicked through it.
+export const SECURITY_HEADERS = {
+  'Strict-Transport-Security': 'max-age=31536000',
+  'X-Frame-Options': 'DENY',
+  'Content-Security-Policy': "frame-ancestors 'none'",
+  'X-Content-Type-Options': 'nosniff',
+};
+
+export function withSecurityHeaders(response) {
+  const r = new Response(response.body, response);
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
+    // A page that sets its own policy keeps it; the framing rule is added to it.
+    if (k === 'Content-Security-Policy' && r.headers.has(k)) {
+      if (!/frame-ancestors/.test(r.headers.get(k))) r.headers.set(k, `${r.headers.get(k)}; ${v}`);
+    } else {
+      r.headers.set(k, v);
+    }
+  }
+  return r;
+}
+
 export default {
   async fetch(request, env, ctx) {
-    const { pathname } = new URL(request.url);
-    const m = request.method;
-    if (pathname === '/health' && m === 'GET') return json(200, { ok: true });
-    if (pathname === '/v1/heartbeat' && m === 'POST') return heartbeat(request, env);
-    if (pathname === '/v1/events' && m === 'POST') return events(request, env, ctx);
-    if (pathname === '/v1/unit/pairing' && m === 'POST') return unitOffer(request, env);
-    if (pathname === '/v1/unit/pairing/cancel' && m === 'POST') return unitCancelOffer(request, env);
-    if (pathname === '/v1/unit/phones' && m === 'GET') return unitPhones(request, env);
-    if (pathname === '/v1/unit/unpair' && m === 'POST') return unitUnpair(request, env);
-    if (pathname === '/v1/pair' && m === 'POST') return phonePair(request, env);
-    if (pathname === '/v1/phone/units' && m === 'GET') return phoneUnits(request, env);
-    if (pathname === '/v1/phone/unpair' && m === 'POST') return phoneUnpair(request, env);
-    if (pathname === '/v1/phone/register' && m === 'POST') return phoneRegister(request, env);
-    if (pathname === '/v1/phone/test' && m === 'POST') return phoneTest(request, env);
-    if (pathname === '/v1/phone/activity' && m === 'POST') return phoneActivity(request, env);
-    if (pathname === '/v1/unit/boxkey' && m === 'POST') return unitBoxKey(request, env);
-    if (pathname === '/v1/unit/locations' && m === 'GET') return unitLocations(request, env);
-    if (pathname === '/v1/phone/boxkey' && m === 'POST') return phoneBoxKey(request, env);
-    if (pathname === '/v1/phone/location' && m === 'POST') return phoneLocation(request, env);
-    if (pathname.startsWith('/v1/net/')) return (await net.route(request, env, ctx, pathname, m)) || json(404, { error: 'not found' });
-    const fleetReply = await fleets.route(request, env, pathname, m);
-    if (fleetReply) return fleetReply;
-    if (pathname === '/fleet' || pathname === '/fleet.json' || pathname === '/fleet/name') {
-      const state = maintainer(request, env);
-      if (state !== 'ok') return needAuth(state);
-      if (pathname === '/fleet' && m === 'GET') return fleetPage(env, await fleets.fleetsSection(env));
-      if (pathname === '/fleet.json' && m === 'GET') {
-        const now = nowS();
-        return json(200, (await listUnits(env)).map(u => ({ ...u, payload: undefined, ...assess(u, now) })));
-      }
-      if (pathname === '/fleet/name' && m === 'POST') return nameUnit(request, env);
-    }
-    return json(404, { error: 'not found' });
+    return withSecurityHeaders(await route(request, env, ctx));
   },
 };
+
+async function route(request, env, ctx) {
+  const { pathname } = new URL(request.url);
+  const m = request.method;
+  if (pathname === '/health' && m === 'GET') return json(200, { ok: true });
+  if (pathname === '/v1/heartbeat' && m === 'POST') return heartbeat(request, env);
+  if (pathname === '/v1/events' && m === 'POST') return events(request, env, ctx);
+  if (pathname === '/v1/unit/pairing' && m === 'POST') return unitOffer(request, env);
+  if (pathname === '/v1/unit/pairing/cancel' && m === 'POST') return unitCancelOffer(request, env);
+  if (pathname === '/v1/unit/phones' && m === 'GET') return unitPhones(request, env);
+  if (pathname === '/v1/unit/unpair' && m === 'POST') return unitUnpair(request, env);
+  if (pathname === '/v1/pair' && m === 'POST') return phonePair(request, env);
+  if (pathname === '/v1/phone/units' && m === 'GET') return phoneUnits(request, env);
+  if (pathname === '/v1/phone/unpair' && m === 'POST') return phoneUnpair(request, env);
+  if (pathname === '/v1/phone/register' && m === 'POST') return phoneRegister(request, env);
+  if (pathname === '/v1/phone/test' && m === 'POST') return phoneTest(request, env);
+  if (pathname === '/v1/phone/activity' && m === 'POST') return phoneActivity(request, env);
+  if (pathname === '/v1/unit/boxkey' && m === 'POST') return unitBoxKey(request, env);
+  if (pathname === '/v1/unit/locations' && m === 'GET') return unitLocations(request, env);
+  if (pathname === '/v1/phone/boxkey' && m === 'POST') return phoneBoxKey(request, env);
+  if (pathname === '/v1/phone/location' && m === 'POST') return phoneLocation(request, env);
+  if (pathname.startsWith('/v1/net/')) return (await net.route(request, env, ctx, pathname, m)) || json(404, { error: 'not found' });
+  const fleetReply = await fleets.route(request, env, pathname, m);
+  if (fleetReply) return fleetReply;
+  if (pathname === '/fleet' || pathname === '/fleet.json' || pathname === '/fleet/name') {
+    const state = maintainer(request, env);
+    if (state !== 'ok') return needAuth(state);
+    if (pathname === '/fleet' && m === 'GET') return fleetPage(env, await fleets.fleetsSection(env));
+    if (pathname === '/fleet.json' && m === 'GET') {
+      const now = nowS();
+      return json(200, (await listUnits(env)).map(u => ({ ...u, payload: undefined, ...assess(u, now) })));
+    }
+    if (pathname === '/fleet/name' && m === 'POST') return nameUnit(request, env);
+  }
+  return json(404, { error: 'not found' });
+}

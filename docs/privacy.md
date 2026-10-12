@@ -166,11 +166,18 @@ The relay is a small service run by the StratoScan maintainer on Cloudflare.
 
 | What | Kept for |
 |---|---|
-| Which phones are paired with which radar | Until either side unpairs |
-| A phone's push address and alert choices | Until it is no longer paired with any radar |
+| Which phones are paired with which radar, and the name each phone gives itself (such as "Alex's iPhone"), which the radar's settings show | Until either side unpairs |
+| A phone's push address and alert choices, and the push addresses of its Live Activities | Until it is no longer paired with any radar (a Live Activity's, until it ends) |
+| A phone's location, if it shares one with its radar for approach alerts: sealed so only that radar can read it | At most 6 hours |
 | Alerts waiting to be delivered | At most 48 hours (500 per radar) |
-| Health reports (only if turned on) | About 30 days |
+| Health reports (only if turned on), and, for a radar in a fleet, its name and its public page's daily visit counts | About 30 days |
 | A one-time pairing code's fingerprint (never the code itself) | Until used, or 10 minutes |
+| Fingerprints of fleet invite codes and administrator links (never the codes) | Until replaced or the fleet is removed |
+| Aircraft positions, routes and registered owners fetched for radars (the shared cache). An owner comes from public aircraft registries and, for a private aircraft, can be a person's name | Positions seconds, routes 6 hours, owners 7 days |
+
+The relay doesn't store IP addresses. Cloudflare, which runs it, sees them
+when it delivers requests, under
+[Cloudflare's own privacy policy](https://www.cloudflare.com/privacypolicy/).
 
 A factory reset of a radar unpairs its phones and gives it a new identity.
 Nothing on the relay is sold or shared, or used for advertising or
