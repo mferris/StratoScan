@@ -134,6 +134,14 @@ final class RadarViewModel: ObservableObject {
     }
 
     let fetchInterval: TimeInterval = 1.0
+    /// Away from home the app reads the radar's public page, through its
+    /// tunnel: every 4 s is plenty for a map whose blips move on their own
+    /// between reads (RadarView.drMaxS), and asks the radar a quarter as often
+    /// (#67; it was every second).
+    let awayFetchInterval: TimeInterval = 4.0
+    private var currentFetchInterval: TimeInterval {
+        (!DemoFeed.isOn && Endpoint.shared.whereNow == .away) ? awayFetchInterval : fetchInterval
+    }
     let staleInterval: TimeInterval = 15
     let dropInterval: TimeInterval = 45
     /// The network's aircraft around the view are asked for this often while
@@ -237,7 +245,7 @@ final class RadarViewModel: ObservableObject {
             await self.loadHome()
             while !Task.isCancelled {
                 await self.pollOnce()
-                try? await Task.sleep(nanoseconds: UInt64(self.fetchInterval * 1_000_000_000))
+                try? await Task.sleep(nanoseconds: UInt64(self.currentFetchInterval * 1_000_000_000))
             }
         }
     }
