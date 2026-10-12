@@ -58,7 +58,14 @@ html = (ROOT / "index.html").read_text()
 check("const POWER_VOLUME_CAP = 0.3;" in html, "the cap is 30%")
 check("masterGain.gain.value = soundAllowedNow() ? effectiveVolume() : 0;" in html,
       "every sound goes through the capped volume (one master gain)")
-check("Math.min(alertSettings.volume, POWER_VOLUME_CAP)" in html, "the cap only lowers, never raises")
+check("Math.min(alertSettings.volume, powerVolumeCap)" in html, "the cap only lowers, never raises")
+check("doc.cap >= 0 && doc.cap <= 1 ? doc.cap : POWER_VOLUME_CAP" in html, "the unit may set the cap; anything odd falls back to 30%")
+ov = pathlib.Path(tmp) / "volume-cap"
+nw.CAP_OVERRIDE = str(ov)
+check(nw.volume_cap() == 0.3, "no override file: 30%")
+ov.write_text("0\n"); check(nw.volume_cap() == 0.0, "an override of 0 silences alerts (a test)")
+ov.write_text("7"); check(nw.volume_cap() == 1.0, "and is kept within 0..1")
+ov.write_text("loud"); check(nw.volume_cap() == 0.3, "a broken override is ignored")
 check(html.count("alertSettings.volume = ") == html.count("alertSettings.volume = ") and
       "alertSettings.volume = POWER" not in html, "the owner's own volume setting is never rewritten")
 check("if (!ON_DEVICE) return;" in html.split("async function checkPowerLimit")[1][:80],
