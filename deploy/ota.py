@@ -255,7 +255,9 @@ SOUNDS_EXT_ALLOWED = {".ogg", ".mp3", ".wav"}
 # files directly in vendor/, and only these types; vendor/VERSIONS.json says
 # what each is, and scripts/check-vendor.py checks them against GitHub's
 # advisory database before a release.
-VENDOR_EXT_ALLOWED = {".js", ".css"}
+# .mjs since MapLibre 6, which ships only as ES modules (#74); this rule
+# goes out a release before the files that need it (the lag above).
+VENDOR_EXT_ALLOWED = {".js", ".mjs", ".css"}
 
 
 class Fail(Exception):

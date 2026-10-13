@@ -182,7 +182,7 @@ SECURITY_HEADERS = {
 # ---- Content-Security-Policy for the page (security review 2026-10-04, #5) --
 # The last layer behind the page's own escaping: a script that slipped past
 # it could still not run, because the only scripts the browser may run are
-# the page's own file (vendor/maplibre-gl.js) and its one inline block, named
+# the page's own files (vendor/, MapLibre) and its one inline block, named
 # by the SHA-256 of its exact bytes -- computed here from the page lighttpd
 # serves, so a release that changes the page changes the hash with it, and
 # nothing is ever 'unsafe-inline' for scripts. The page has no inline event
@@ -203,8 +203,10 @@ CSP_ENFORCE = os.environ.get("CSP_ENFORCE", "1") != "0"
 CSP_DIRECTIVES = (
     "default-src 'none'",
     "script-src 'self' {hashes}",
-    "worker-src blob:",
-    "child-src blob:",                      # older Safari reads this for workers
+    # 'self' for MapLibre 6's module worker (vendor/maplibre-gl-worker.mjs,
+    # #74); blob: for 5.x's, until every radar has moved.
+    "worker-src 'self' blob:",
+    "child-src 'self' blob:",               # older Safari reads this for workers
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' data: https://fonts.gstatic.com",
     "img-src 'self' data: blob: https:",    # map tiles and sprites, overlay tiles, the aircraft photos

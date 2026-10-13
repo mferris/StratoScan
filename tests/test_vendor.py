@@ -50,6 +50,8 @@ ota = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ota)
 check(ota.dest_for("vendor/maplibre-gl.js") == "/var/www/html/vendor/maplibre-gl.js", "a release installs vendor/*.js")
 check(ota.dest_for("vendor/maplibre-gl.css") == "/var/www/html/vendor/maplibre-gl.css", "and vendor/*.css")
+check(ota.dest_for("vendor/maplibre-gl-worker.mjs") == "/var/www/html/vendor/maplibre-gl-worker.mjs",
+      "and vendor/*.mjs (MapLibre 6 ships only ES modules)")
 for bad in ("vendor/VERSIONS.json", "vendor/x.sh", "vendor/sub/x.js", "vendor/../x.js", "vendor/", "vendor/.hidden.js",
             "vendor/x.html"):
     check(ota.dest_for(bad) is None, f"but not {bad}")
