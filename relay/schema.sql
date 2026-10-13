@@ -152,3 +152,12 @@ CREATE TABLE IF NOT EXISTS fleet_members (
   joined  INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS fleet_members_fleet ON fleet_members (fleet);
+
+-- Signed requests that change something are accepted once (audit
+-- 2026-10-12): each signature is kept until it could no longer be fresh
+-- (twice the allowed clock skew, plus a minute), and a second use is refused.
+CREATE TABLE IF NOT EXISTS replay_guard (
+  sig      TEXT PRIMARY KEY,        -- base64url Ed25519 signature, as sent
+  expires  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS replay_guard_expires ON replay_guard (expires);

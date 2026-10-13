@@ -23,7 +23,7 @@
 // A unit that cannot reach this keeps working exactly as before: the radar
 // never depends on it.
 
-import { verifyRequest, sha256Hex, b64urlDecode } from './auth.js';
+import { verifyRequest, sha256Hex, b64urlDecode, MAX_SKEW_S } from './auth.js';
 // Only `default` may be exported from this file: the Workers runtime treats
 // every named export of the main module as an entrypoint and refuses to
 // start on anything else. Shared constants and helpers live in limits.js.
@@ -283,7 +283,7 @@ const forgetUnpairedPhones = db => db.batch([
 ]);
 
 async function phoneRegister(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone');
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env);
   if (error) return error;
   const token = payload.token;
   if (typeof token !== 'string' || !/^[0-9a-f]{64,200}$/.test(token)) return json(400, { error: 'expected a hex device token' });
@@ -319,7 +319,7 @@ async function phoneRegister(request, env) {
 // The phone reports the update token of a Live Activity it just started, so
 // the relay can end it after the aircraft has passed.
 async function phoneActivity(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone');
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env);
   if (error) return error;
   const { unit, hex, token } = payload;
   if (!isId(unit) || typeof hex !== 'string' || !/^[0-9a-f]{6}$/.test(hex)
@@ -359,7 +359,7 @@ async function phoneActivity(request, env) {
 }
 
 async function phoneTest(request, env) {
-  const { auth, error } = await signedJson(request, 'X-FR-Phone');
+  const { auth, error } = await signedJson(request, 'X-FR-Phone', env);
   if (error) return error;
   if (!apns.configured(env)) return json(503, { error: 'Notifications are not set up on this StratoScan service yet.' });
   const phone = await env.DB.prepare('SELECT * FROM phones WHERE id = ?').bind(auth.unit).first();
@@ -379,12 +379,35 @@ async function phoneTest(request, env) {
 const phoneCount = async (db, unit) =>
   (await db.prepare('SELECT COUNT(*) AS n FROM pairings WHERE unit = ?').bind(unit).first()).n;
 
-async function signedJson(request, idHeader) {
+// A signed request that changes something is accepted once (audit
+// 2026-10-12, from Codex's scan). The signature binds the time, method,
+// path and body, but for the five minutes it stays fresh an identical copy
+// was accepted again: replaying a radar's pairing offer after the radar had
+// cancelled it brought the cancelled code back. Each signature is now kept
+// until it could no longer be fresh, and a second use is refused.
+// Heartbeats and events have their own ordering guard (last_ts) and don't
+// come through here.
+const REPLAY_KEEP_S = 2 * MAX_SKEW_S + 60;
+
+async function firstUse(env, sig, now) {
+  const db = env.DB;
+  if (Math.random() < 1 / 50) await db.prepare('DELETE FROM replay_guard WHERE expires < ?').bind(now).run();
+  const row = await db.prepare(
+    'INSERT INTO replay_guard (sig, expires) VALUES (?1, ?2) ON CONFLICT(sig) DO NOTHING RETURNING sig'
+  ).bind(sig, now + REPLAY_KEEP_S).first();
+  return !!row;
+}
+
+async function signedJson(request, idHeader, env) {
   const body = await readBody(request);
   if (!body) return { error: json(413, { error: 'too large' }) };
   const auth = await verifyRequest(request, body, nowS(), idHeader);
   if (auth.error) return { error: json(401, { error: auth.error }) };
   if (request.method === 'GET') return { auth, payload: {} };
+  if (!env) throw new Error('signedJson needs env for a request that changes something');
+  if (!(await firstUse(env, request.headers.get('X-FR-Sig'), nowS()))) {
+    return { error: json(409, { error: 'this request was already used' }) };
+  }
   try {
     const payload = JSON.parse(new TextDecoder().decode(body));
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error();
@@ -397,7 +420,7 @@ async function signedJson(request, idHeader) {
 const isId = v => typeof v === 'string' && (b64urlDecode(v) || []).length === 32;
 
 async function unitOffer(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit');
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env);
   if (error) return error;
   if (typeof payload.secret_hash !== 'string' || !/^[0-9a-f]{64}$/.test(payload.secret_hash)) {
     return json(400, { error: 'secret_hash must be a hex SHA-256' });
@@ -420,14 +443,14 @@ async function unitOffer(request, env) {
 }
 
 async function unitCancelOffer(request, env) {
-  const { auth, error } = await signedJson(request, 'X-FR-Unit');
+  const { auth, error } = await signedJson(request, 'X-FR-Unit', env);
   if (error) return error;
   await env.DB.prepare('DELETE FROM pairing_offers WHERE unit = ?').bind(auth.unit).run();
   return json(200, { ok: true });
 }
 
 async function unitPhones(request, env) {
-  const { auth, error } = await signedJson(request, 'X-FR-Unit');
+  const { auth, error } = await signedJson(request, 'X-FR-Unit', env);
   if (error) return error;
   const db = env.DB;
   const { results } = await db.prepare(
@@ -439,7 +462,7 @@ async function unitPhones(request, env) {
 }
 
 async function unitUnpair(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit');
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env);
   if (error) return error;
   const db = env.DB;
   if (payload.all === true) {
@@ -458,7 +481,7 @@ async function unitUnpair(request, env) {
 }
 
 async function phonePair(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone');
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env);
   if (error) return error;
   const { unit, secret } = payload;
   if (!isId(unit) || typeof secret !== 'string' || secret.length < 16 || secret.length > 64) {
@@ -489,19 +512,25 @@ async function phonePair(request, env) {
       return json(409, { error: `A phone can be paired with at most ${MAX_UNITS_PER_PHONE} radars. Unpair one first.` });
     }
   }
-  await db.batch([
-    db.prepare(
-      `INSERT INTO pairings (unit, phone, name, created) VALUES (?1, ?2, ?3, ?4)
-       ON CONFLICT(unit, phone) DO UPDATE SET name = ?3`
-    ).bind(unit, auth.unit, cleanPhoneName(payload.name), nowS()),
-    // One use only: the code on screen is spent.
-    db.prepare('DELETE FROM pairing_offers WHERE unit = ?').bind(unit),
-  ]);
+  // One use only, in one step: the offer is spent by whichever phone deletes
+  // it first. Reading it, then pairing, then deleting let two phones with
+  // the same code at the same moment both pair (audit 2026-10-12, from
+  // Codex's scan).
+  const spent = await db.prepare(
+    'DELETE FROM pairing_offers WHERE unit = ?1 AND secret_hash = ?2 AND expires > ?3 RETURNING unit'
+  ).bind(unit, offer.secret_hash, nowS()).first();
+  if (!spent) {
+    return json(404, { error: 'That pairing code has been used or has expired. Start again from the radar’s screen.' });
+  }
+  await db.prepare(
+    `INSERT INTO pairings (unit, phone, name, created) VALUES (?1, ?2, ?3, ?4)
+     ON CONFLICT(unit, phone) DO UPDATE SET name = ?3`
+  ).bind(unit, auth.unit, cleanPhoneName(payload.name), nowS()).run();
   return json(200, { ok: true, unit });
 }
 
 async function phoneUnits(request, env) {
-  const { auth, error } = await signedJson(request, 'X-FR-Phone');
+  const { auth, error } = await signedJson(request, 'X-FR-Phone', env);
   if (error) return error;
   const { results } = await env.DB.prepare(
     'SELECT unit, created FROM pairings WHERE phone = ? ORDER BY created'
@@ -510,7 +539,7 @@ async function phoneUnits(request, env) {
 }
 
 async function phoneUnpair(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone');
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env);
   if (error) return error;
   if (!isId(payload.unit)) return json(400, { error: 'name a unit' });
   await env.DB.prepare('DELETE FROM pairings WHERE unit = ? AND phone = ?').bind(payload.unit, auth.unit).run();
@@ -529,7 +558,7 @@ const paired = (db, unit, phone) =>
 
 // A radar publishes its box key, signed by its identity key.
 async function unitBoxKey(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit');
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env);
   if (error) return error;
   const key = b64urlDecode(payload.key || ''), sig = b64urlDecode(payload.sig || '');
   if (!key || key.length !== 32 || !sig || sig.length !== 64) return json(400, { error: 'key and sig expected' });
@@ -546,7 +575,7 @@ async function unitBoxKey(request, env) {
 
 // A paired phone fetches that key (and checks the signature itself).
 async function phoneBoxKey(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone');
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env);
   if (error) return error;
   if (!isId(payload.unit)) return json(400, { error: 'name a unit' });
   if (!(await paired(env.DB, payload.unit, auth.unit))) return json(403, { error: 'not paired with that unit' });
@@ -557,7 +586,7 @@ async function phoneBoxKey(request, env) {
 
 // A paired phone leaves its encrypted location for one radar; null withdraws it.
 async function phoneLocation(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone');
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env);
   if (error) return error;
   const db = env.DB, now = nowS();
   if (!isId(payload.unit)) return json(400, { error: 'name a unit' });
@@ -586,7 +615,7 @@ async function phoneLocation(request, env) {
 
 // A radar collects its phones' encrypted locations.
 async function unitLocations(request, env) {
-  const { auth, error } = await signedJson(request, 'X-FR-Unit');
+  const { auth, error } = await signedJson(request, 'X-FR-Unit', env);
   if (error) return error;
   const db = env.DB, now = nowS();
   await db.prepare('DELETE FROM phone_locations WHERE updated < ?').bind(now - LOCATION_TTL_S).run();
