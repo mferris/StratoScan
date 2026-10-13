@@ -36,9 +36,13 @@ for name, rec in doc["files"].items():
     check(hashlib.sha256(data).hexdigest() == rec["sha256"], f"{name} matches its recorded hash")
     check(rec.get("ecosystem") == "npm" and rec.get("package") and re.fullmatch(r"\d+\.\d+\.\d+", rec.get("version", "")),
           f"{name} names its npm package and version")
-js = (ROOT / "vendor" / "maplibre-gl.js").read_text(errors="replace")[:2000]
-ver = doc["files"]["maplibre-gl.js"]["version"]
-check(f'"{ver}"' in js or f"v{ver}" in js, f"the MapLibre file really is {ver}")
+for name in ("maplibre-gl.mjs", "maplibre-gl-worker.mjs"):
+    head = (ROOT / "vendor" / name).read_text(errors="replace")[:400]
+    ver = doc["files"][name]["version"]
+    check(f"v{ver}/LICENSE" in head and "@license 3-Clause BSD" in head,
+          f"{name} really is MapLibre {ver}, with its licence header intact")
+    check("sourceMappingURL" not in (ROOT / "vendor" / name).read_text(errors="replace")[-300:],
+          f"{name} asks for no source map (not shipped, so it would only be a 404)")
 for gid, acc in doc.get("accepted_advisories", {}).items():
     check(re.fullmatch(r"\d{4}-\d{2}-\d{2}", acc.get("until", "")) is not None and len(acc.get("why", "")) > 40,
           f"accepting {gid} has a reason and an end date")
@@ -70,8 +74,16 @@ check(cv.in_range("5.24.0", "<= 6.4.0") and not cv.in_range("6.14.0", "<= 6.4.0"
 check(cv.in_range("5.6.0", ">= 5.0.0, < 5.7.1") and not cv.in_range("5.7.1", ">= 5.0.0, < 5.7.1"), "ranges: a pair reads right")
 check(cv.in_range("1.0.0", "weird"), "an unreadable range is assumed to apply")
 
-# the advisory accepted today is unreachable, and stays so
+# MapLibre 6: loaded as an ES module, its worker beside it (2026-10-13)
 html = (ROOT / "index.html").read_text()
+check("import('./vendor/maplibre-gl.mjs')" in html and 'src="vendor/maplibre-gl.js"' not in html,
+      "the page loads MapLibre 6 with import(), not the old classic script")
+check("await loadMapLibre();" in html.split("async function initMap()")[1][:600],
+      "and waits for it before building the first map")
+check((ROOT / "vendor" / "maplibre-gl-worker.mjs").exists(), "its worker ships beside it")
+check(not (ROOT / "vendor" / "maplibre-gl.js").exists(), "the 5.x file is gone")
+
+# no HTML reaches MapLibre (its DOM.sanitize had GHSA-jrc7-96c5-q579 to 6.4.0)
 check("attributionControl: false" in html, "MapLibre's credits control is off (it sanitises provider HTML)")
 check("maplibregl.Popup" not in html and "setHTML(" not in html, "the page has no MapLibre popups or HTML")
 check("function renderMapCredits()" in html and "innerHTML" not in html.split("function renderMapCredits()")[1].split("\n}\n")[0],
