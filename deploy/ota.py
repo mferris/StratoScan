@@ -247,6 +247,16 @@ DEPLOY_ALLOWED = {
 # file arrives one release later, or plan to cut a trivial follow-up.
 SOUNDS_EXT_ALLOWED = {".ogg", ".mp3", ".wav"}
 
+# The page's vendored libraries (MapLibre GL JS and its stylesheet), the same
+# kind of thing as sounds/: browser-sandboxed, served from the web root, no
+# privilege of their own. Before 2026-10-13 nothing installed them: a release
+# carried index.html, deploy/ and sounds/ only, so a radar kept the copy its
+# installer put there for good, through any security advisory (#74). Only
+# files directly in vendor/, and only these types; vendor/VERSIONS.json says
+# what each is, and scripts/check-vendor.py checks them against GitHub's
+# advisory database before a release.
+VENDOR_EXT_ALLOWED = {".js", ".css"}
+
 
 class Fail(Exception):
     pass
@@ -264,6 +274,12 @@ def dest_for(name):
         base = name[len("deploy/"):]
         if base in DEPLOY_ALLOWED:
             return os.path.join(OPT_ROOT, base)
+    if name.startswith("vendor/"):
+        rest = name[len("vendor/"):]
+        if not rest or "/" in rest or rest.startswith(".") \
+                or os.path.splitext(rest)[1].lower() not in VENDOR_EXT_ALLOWED:
+            return None
+        return os.path.join(WEB_ROOT, "vendor", rest)
     if name.startswith("sounds/"):
         if os.path.splitext(name)[1].lower() not in SOUNDS_EXT_ALLOWED:
             return None

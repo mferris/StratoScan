@@ -237,13 +237,22 @@
     filter: var(--map-filter);
   }
 
-  #mapbg .maplibregl-ctrl-attrib {
-    background: transparent;
+  /* The map's credits, drawn by the page (renderMapCredits), where
+     MapLibre's own control used to sit. */
+  #mapCredits {
+    position: absolute;
+    left: 50%;
+    bottom: 3%;
+    transform: translateX(-50%);
+    z-index: 2;
     font-size: 8px;
+    line-height: 1.2;
+    white-space: nowrap;
+    color: var(--text-dim);
     opacity: 0.5;
+    pointer-events: auto;
   }
-  #mapbg .maplibregl-ctrl-attrib a { color: var(--text-dim); }
-  #mapbg .maplibregl-ctrl-bottom-right { right: auto; left: 4px; bottom: 2px; }
+  #mapCredits a { color: var(--text-dim); text-decoration: none; }
 
   canvas {
     position: relative;
@@ -1455,6 +1464,49 @@ const HOME_OVERRIDE = null; // was briefly set to a different address for a one-
 // has real color (blue water, green parks, warm road tones) — we darken it
 // ourselves via the #mapbg CSS filter instead.
 const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+
+// The map's credits, drawn by the page itself (#74, 2026-10-13). MapLibre's
+// credits control builds HTML from the attribution text each tile provider
+// supplies and runs it through its DOM.sanitize, which an advisory
+// (GHSA-jrc7-96c5-q579, every version to 6.4.0) shows can be bypassed: a
+// compromised map or weather provider could have run script in the panel's
+// page, which has no CSP. The credits read the same; they come from this
+// table, by source, built as elements, never from a provider's text.
+const MAP_CREDITS = {
+  openmaptiles: [['OpenFreeMap', 'https://openfreemap.org'], ['© OpenMapTiles', 'https://www.openmaptiles.org/'],
+                 ['© OpenStreetMap', 'https://www.openstreetmap.org/copyright']],
+  offline: [['© OpenStreetMap contributors', 'https://www.openstreetmap.org/copyright'], ['Protomaps', 'https://protomaps.com']],
+  storms: [['RainViewer', 'https://www.rainviewer.com/']],
+  lightning: [['Source: SSEC RealEarth, UW-Madison', null]],
+};
+function renderMapCredits() {
+  if (!map) return;
+  let el = document.getElementById('mapCredits');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'mapCredits';
+    document.getElementById('mapbg').appendChild(el);
+  }
+  const items = [];
+  for (const [id, credits] of Object.entries(MAP_CREDITS)) {
+    if (!map.getSource(id)) continue;
+    for (const c of credits) if (!items.some(x => x[0] === c[0])) items.push(c);
+  }
+  const key = items.map(x => x[0]).join('|');
+  if (el._key === key) return;
+  el._key = key;
+  el.replaceChildren();
+  items.forEach(([text, href], i) => {
+    if (i) el.append(' · ');
+    if (href && !IS_KIOSK) {   // a link on the panel would open a tab no one can close
+      const a = document.createElement('a');
+      a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = text;
+      el.append(a);
+    } else {
+      el.append(text);
+    }
+  });
+}
 const RANGE_NM = 20;             // outer ring range in nautical miles
 const RINGS = 2;                 // number of range rings
 // Radians per SECOND, not per frame. It was 0.008 rad/frame, which silently
@@ -2702,8 +2754,12 @@ function createMap(style, offline) {
     center: [home.lon, home.lat],
     zoom: zoomForRange(RANGE_NM, home.lat, rCss),
     interactive: false,
-    attributionControl: { compact: true },
+    // Off, and drawn by the page instead (renderMapCredits): MapLibre's
+    // control turns each provider's attribution text into HTML.
+    attributionControl: false,
   });
+  map.on('styledata', renderMapCredits);
+  map.on('sourcedata', e => { if (e.sourceDataType === 'metadata') renderMapCredits(); });
   // The vector tileset's own aeroway (runway/taxiway) layers simply carry no
   // geometry at this low a zoom (confirmed via queryRenderedFeatures — the
   // tiles are generated without that detail below ~z11, independent of the
