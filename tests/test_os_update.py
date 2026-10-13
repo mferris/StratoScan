@@ -311,7 +311,8 @@ check("os_prefix" not in (boot / "config.txt").read_text(), "config.txt itself i
 check(st["trial"]["expect"] == "6.12.47+rpt-rpi-2712"
       and st["trial"]["images"] == ["linux-headers-6.12.47+rpt-rpi-2712", "linux-image-6.12.47+rpt-rpi-2712"],
       "the trial expects the new kernel of this radar's flavour, and knows its packages by their /usr/lib path")
-check(world.ran("systemctl", "reboot", "0 tryboot"), "and reboots once onto it")
+check(world.ran("systemctl", "reboot", "--reboot-argument=0 tryboot"),
+      "and reboots once onto it, in the form systemd 257 accepts")
 world.calls.clear()
 osu.run()
 check(not world.ran("apt-get", "install"), "nothing else is installed while a trial is pending")
@@ -383,6 +384,30 @@ osu.kernel_release = lambda: "6.12.25+rpt-rpi-2712"
 world.calls.clear()
 osu.confirm()
 check(world.ran("apt-get", "purge") and "cleanup" not in osu.load_state(), "which removes it")
+
+# the reboot is refused (as systemd 257 refused the old form on RDU)
+make_boot()
+set_tryboot(False)
+world = World()
+world.have = {"linux-image-rpi-2712": "1:6.12.25-1"}
+world.on_install = kernel_install
+real_run = world.run
+def refusing(cmd, timeout=120, cwd=None):
+    if cmd[:2] == ["systemctl", "reboot"]:
+        world.calls.append(cmd)
+        return 1, "", "Too many arguments."
+    return real_run(cmd, timeout, cwd)
+fresh(world)
+osu.run_cmd = refusing
+osu.kernel_release = lambda: "6.12.25+rpt-rpi-2712"
+write_packages({"linux-image-rpi-2712": "1:6.12.47-1"})
+rc = osu.run()
+st = osu.load_state()
+check(rc == 1 and "trial" not in st and "cleanup" not in st and not (boot / "tryboot.txt").exists(),
+      "a refused reboot undoes the trial instead of leaving it waiting")
+check(["apt-get", "purge", "-y", "-q", "linux-headers-6.12.47+rpt-rpi-2712", "linux-image-6.12.47+rpt-rpi-2712"] in world.calls
+      and (boot / "kernel_2712.img").read_text() == "old kernel_2712.img", "its kernel removed, the radar's own kept")
+check("failed" not in st and "refused" in st["result"]["why"], "and the version is not marked failed, so it may be tried again")
 
 # a radar that cannot boot a trial keeps its kernel
 make_boot()
