@@ -213,11 +213,16 @@ SHORT=$(git rev-parse --short "$SHA")
 # Built from the commit, so anything uncommitted under the payload paths
 # would silently not ship -- which is a surprise either way round.
 if [ "$COMMIT" = HEAD ]; then
-    if ! git diff --quiet HEAD -- index.html deploy sounds \
-       || [ -n "$(git ls-files --others --exclude-standard -- index.html deploy sounds)" ]; then
-        guard "uncommitted changes under index.html, deploy/ or sounds/ would not ship (a release is built from the commit, not the working tree): commit them, or name a commit with --commit"
+    if ! git diff --quiet HEAD -- index.html deploy sounds vendor \
+       || [ -n "$(git ls-files --others --exclude-standard -- index.html deploy sounds vendor)" ]; then
+        guard "uncommitted changes under index.html, deploy/, sounds/ or vendor/ would not ship (a release is built from the commit, not the working tree): commit them, or name a commit with --commit"
     fi
 fi
+# The page's vendored libraries, against GitHub's advisory database (#74): a
+# release refuses to ship one with a published fix it doesn't have. An
+# advisory with no fix yet is printed, not refused, or nothing could ship.
+python3 "$REPO_ROOT/scripts/check-vendor.py" --commit "$SHA" \
+    || guard "a vendored library has a security advisory with a fix available (above): update vendor/ first"
 # The release is tagged on the commit, and GitHub refuses a commit it has
 # never seen ("Release.target_commitish is invalid", 2026-10-08).
 git fetch -q origin 2>/dev/null || guard "could not reach origin to confirm $SHORT is pushed"
@@ -244,13 +249,13 @@ BUNDLE="stratoscan-$VERSION.tar.gz"
 # history. git archive carries only tracked files, so .DS_Store and macOS
 # "._name" resource forks never get in; the excludes stay as a second refusal
 # (a test release once listed "._index.html" in a signed manifest).
-git archive --format=tar "$SHA" index.html deploy sounds > "$OUT/tree.tar"
+git archive --format=tar "$SHA" index.html deploy sounds vendor > "$OUT/tree.tar"
 tar -xf "$OUT/tree.tar" -C "$OUT/tree"
 (cd "$OUT/tree" && COPYFILE_DISABLE=1 tar -czf "$OUT/$BUNDLE" \
     --exclude='.DS_Store' \
     --exclude='._*' \
     --exclude='CREDITS.md' \
-    index.html deploy sounds)
+    index.html deploy sounds vendor)
 rm -rf "$OUT/tree" "$OUT/tree.tar"
 
 python3 - "$OUT" "$BUNDLE" "$VERSION" "$SERIAL" "$SHA" <<'PY'
