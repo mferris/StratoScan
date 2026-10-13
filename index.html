@@ -3430,7 +3430,7 @@ const LIGHTNING_ALERT_CLEAR_RADIUS_NM = 20;  // wider exit threshold
 const LIGHTNING_ALERT_CHECK_MS = 2 * 60 * 1000; // matches the overlay's own refresh cadence -- no point checking more often than the underlying data updates
 const LIGHTNING_PROBE_RING_POINTS = 8;
 
-let lightningAlerted = false; // survives across checks, not per-plane -- there's no single "object" a storm alert is about
+let lightningAlerted = false; // survives across checks, not per-plane -- there's no single "object" a storm alert is about; and across a reload (carryAlerts)
 
 async function probeLightningValue(lat, lon) {
   try {
@@ -4199,9 +4199,69 @@ function announcementFor(pl, lead) {
   return sentence.charAt(0).toUpperCase() + sentence.slice(1);
 }
 
+// ---- A reload waits for a quiet moment ---------------------------------------
+// The shared-memory guard's reload (reportPainted) used to land the moment it
+// arrived. On 2026-10-13 it landed six seconds into a nearby alert: the voice
+// was cut off mid-sentence, the screen showed the start-up picture, and the
+// reloaded page, not knowing it had just announced that aircraft, announced
+// it again. Now a reload waits until no alert is sounding or speaking (at
+// most RELOAD_WAIT_MAX_MS: the guard only measures 45 s later and never
+// forces anything, so a short wait costs nothing), and the alerts just
+// raised are carried across it (carryAlerts below).
+let soundBusyUntil = 0;   // performance.now() until which a chime may still be playing
+let speechInFlight = 0;   // spoken alerts fetched or playing
+const RELOAD_WAIT_MAX_MS = 60 * 1000;
+let reloadWantedAt = 0;
+function markSoundBusy(ms) { soundBusyUntil = Math.max(soundBusyUntil, performance.now() + ms); }
+function alertQuiet() { return speechInFlight === 0 && performance.now() >= soundBusyUntil; }
+function reloadWhenQuiet() {
+  if (!reloadWantedAt) reloadWantedAt = performance.now();
+  if (alertQuiet() || performance.now() - reloadWantedAt > RELOAD_WAIT_MAX_MS) {
+    carryAlerts();
+    location.reload();
+    return;
+  }
+  setTimeout(reloadWhenQuiet, 500);
+}
+
+// The alerts already raised, carried across a reload: the reloaded page
+// builds every aircraft afresh, so an aircraft still inside the alert ring
+// was announced a second time. Kept in sessionStorage, which a reload keeps
+// and a new browser does not, and only for a few minutes.
+const CARRIED_ALERTS_KEY = 'stratoscan_carried_alerts_v1';
+const CARRIED_ALERTS_MAX_AGE_MS = 10 * 60 * 1000;
+const CARRIED_FLAGS = ['alerted', 'rareAlerted', 'emergencyAlerted', 'airportPhaseAlerted'];
+const carriedAlerts = (() => {
+  try {
+    const d = JSON.parse(sessionStorage.getItem(CARRIED_ALERTS_KEY) || 'null');
+    sessionStorage.removeItem(CARRIED_ALERTS_KEY);
+    if (!d || typeof d !== 'object' || !(Date.now() - d.at < CARRIED_ALERTS_MAX_AGE_MS)) return { planes: new Map() };
+    return { planes: new Map(Object.entries(d.planes || {})), lightning: !!d.lightning };
+  } catch (e) {
+    return { planes: new Map() };
+  }
+})();
+if (carriedAlerts.lightning) lightningAlerted = true;
+function carryAlerts() {
+  try {
+    const out = {};
+    for (const [hex, pl] of planes) {
+      const flags = {};
+      for (const f of CARRIED_FLAGS) if (pl[f]) flags[f] = pl[f];
+      if (Object.keys(flags).length) out[hex] = flags;
+    }
+    sessionStorage.setItem(CARRIED_ALERTS_KEY, JSON.stringify({ at: Date.now(), planes: out, lightning: lightningAlerted }));
+  } catch (e) { /* storage unavailable: at worst an alert repeats, as before */ }
+}
+window.addEventListener('pagehide', carryAlerts);   // any reload, not only the guard's
+
 const spokenBuffers = new Map();   // phrase -> Promise<AudioBuffer>, bounded
 function speak(text, delayMs = 1100) {
   if (!alertSettings.voice || !soundAllowedNow() || !text) return;
+  speechInFlight++;
+  let done = false;
+  const finished = () => { if (!done) { done = true; speechInFlight = Math.max(0, speechInFlight - 1); } };
+  setTimeout(finished, 30000);   // never let a lost callback hold a reload for ever
   let p = spokenBuffers.get(text);
   if (!p) {
     p = fetch('/tts?text=' + encodeURIComponent(text.slice(0, 240)), { signal: AbortSignal.timeout(15000) })
@@ -4219,9 +4279,10 @@ function speak(text, delayMs = 1100) {
       const src = ctx.createBufferSource();
       src.buffer = buffer;
       src.connect(getMasterGain());
+      src.onended = finished;
       src.start();
     }, Math.max(0, startAt - performance.now()));
-  }).catch(() => { /* no speech on this unit or viewer: the chime already said it */ });
+  }).catch(() => { finished(); /* no speech on this unit or viewer: the chime already said it */ });
 }
 
 // ---- Sound themes ---------------------------------------------------
@@ -4315,6 +4376,7 @@ preloadSoundTheme(soundTheme());
 
 // Two-note ascending chime in the classic theme; a meow in the kitten one.
 function playAlertSound() {
+  markSoundBusy(3000);
   soundTheme().nearby();
 }
 
@@ -4323,6 +4385,7 @@ function playAlertSound() {
 // fires for actual emergency squawks (7500/7600/7700), not routine traffic.
 function playEmergencySound() {
   if (emergencyThroughQuiet()) allowThroughQuiet(QUIET_EMERGENCY_WINDOW_MS);
+  markSoundBusy(4000);
   soundTheme().emergency();
 }
 
@@ -4332,6 +4395,7 @@ function playEmergencySound() {
 // down, takeoff pitches up, so the two are distinguishable by ear without
 // looking at the screen.
 function playAirportPhaseSound(phase) {
+  markSoundBusy(2000);
   soundTheme().airportPhase(phase);
 }
 
@@ -4980,6 +5044,7 @@ function checkRareAircraft(pl) {
 // sounds, so it reads as "something good" rather than the nearby chime's
 // two notes or the emergency alert's insistent alternation.
 function playRareSound() {
+  markSoundBusy(2000);
   playTones([[660, 0, 0.16, 0.22], [880, 0.16, 0.16, 0.22], [1320, 0.32, 0.3, 0.24]]);
 }
 
@@ -5356,6 +5421,12 @@ function applyUpdate(list) {
         lastSeen: now,
         trail: [],
       });
+      const carried = carriedAlerts.planes.get(n.hex);
+      if (carried) {
+        // alerted before a reload: not announced again (see carryAlerts)
+        for (const f of CARRIED_FLAGS) if (carried[f]) planes.get(n.hex)[f] = carried[f];
+        carriedAlerts.planes.delete(n.hex);
+      }
       recordPlaneFix(planes.get(n.hex), n, now);
       recordSightingOnce(n.hex, 'total'); // a genuinely new visit, not just still-in-view -- see "Sighting counts" above
     }
@@ -5991,7 +6062,7 @@ function reportPainted(now) {
   // within a sweep.
   fetch('/wake/alive', { method: 'POST' })
     .then(r => (r.status === 200 ? r.json() : null))
-    .then(d => { if (d && d.reload) location.reload(); })
+    .then(d => { if (d && d.reload && !reloadWantedAt) reloadWhenQuiet(); })
     .catch(() => {});  // absent off-device; harmless
 }
 
