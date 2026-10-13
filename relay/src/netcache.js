@@ -51,7 +51,13 @@ export const DISC_R_NM = 250;                      // what adsb.lol serves at mo
 export const DISC_SPACING_NM = DISC_R_NM * Math.SQRT2;   // discs this far apart leave no gap
 export const LATTICE_ROWS = Math.ceil(10800 / DISC_SPACING_NM);   // 31 rows of discs pole to pole
 export const DISC_TTL_S = 10;
-export const DISC_MAX_BYTES = 8 * 1024 * 1024;
+// A real disc is about 400 KB (791 aircraft round RDU, 2026-10-13); the
+// busiest is a few times that. Checked in full before it is shared, so the
+// cap also bounds that check's CPU (1.2 ms for 400 KB, 4.8 ms for 2 MB).
+export const DISC_MAX_BYTES = 3 * 1024 * 1024;
+export const DISC_MAX_AIRCRAFT = 10000;
+export const DISC_SLACK_NM = 50;                   // positions may sit a little outside the disc
+export const GRANT_TTL_S = 60;                     // how long a radar asked to fetch may hand it up
 export const LEASE_TTL_S = 6;                      // how long "a radar is fetching it" holds
 export const LEASE_RETRY_S = 2;                    // what a waiting radar is told
 export const ROUTE_TTL_S = 6 * 3600;
@@ -164,6 +170,32 @@ function cachePut(env, ctx, name, body, ttlS, contentType = 'application/json') 
 
 const cacheDrop = (env, name) => cacheOf(env).delete(CACHE_ORIGIN + name);
 
+function nmBetween(lat1, lon1, lat2, lon2) {
+  const r = Math.PI / 180, p1 = lat1 * r, p2 = lat2 * r;
+  const a = Math.sin((p2 - p1) / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin((lon2 - lon1) * r / 2) ** 2;
+  return 3440.065 * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+// Whether what a radar hands up is adsb.lol's answer for this disc, as far as
+// the relay can tell without asking adsb.lol: an object with an aircraft
+// list, every aircraft an object, and every position inside the disc (audit
+// 2026-10-12: anything starting with "{" was shared before, so a radar could
+// draw fake aircraft, or none, on every other radar for that cell).
+export function discLooksRight(buf, centre) {
+  let d;
+  try { d = JSON.parse(dec.decode(buf)); } catch { return false; }
+  if (!d || typeof d !== 'object' || Array.isArray(d) || !Array.isArray(d.ac)) return false;
+  if (d.ac.length > DISC_MAX_AIRCRAFT) return false;
+  for (const a of d.ac) {
+    if (!a || typeof a !== 'object' || Array.isArray(a)) return false;
+    const has = typeof a.lat === 'number' || typeof a.lon === 'number';
+    if (!has) continue;
+    if (!Number.isFinite(a.lat) || !Number.isFinite(a.lon) || Math.abs(a.lat) > 90 || Math.abs(a.lon) > 180) return false;
+    if (nmBetween(centre.lat, centre.lon, a.lat, a.lon) > DISC_R_NM + DISC_SLACK_NM) return false;
+  }
+  return true;
+}
+
 // A disc handed up by a unit: bigger than any other body the relay takes.
 async function readDisc(request) {
   const len = Number(request.headers.get('Content-Length') || 0);
@@ -213,12 +245,20 @@ export function netRoutes({ json, readBody, nowS }) {
     if (!allow(w.id, 'disc')) return json(429, { error: 'too many discs; a view is a few a minute' });
     const c = latticeCentre(lat, lon);
     const name = `disc/${c.lat}/${c.lon}`, lease = `lease/${c.lat}/${c.lon}`;
+    const grant = `grant/${c.lat}/${c.lon}/${w.id}`;
     if (putting) {
-      // What a unit hands up must at least look like adsb.lol's answer; the
-      // unit is a signed, reporting radar, and the entry lives DISC_TTL_S.
-      if (!/^\s*\{/.test(dec.decode(body.slice(0, 32)))) return json(400, { error: 'not a disc' });
+      // Only a radar, only one the relay asked to fetch this disc, and only
+      // once per ask (audit 2026-10-12, from Codex's scan: any reporting
+      // radar, or any paired phone, could hand up any cell, and the same
+      // signed upload could be sent again). Phones never fetch discs.
+      if (w.kind !== 'unit') return json(403, { error: 'only a radar hands up a disc' });
+      if (!(await cacheOf(env).match(CACHE_ORIGIN + grant))) {
+        return json(409, { error: 'this radar was not asked to fetch that disc' });
+      }
+      if (!discLooksRight(body, c)) return json(400, { error: 'not a disc' });
       await cachePut(env, ctx, name, body, DISC_TTL_S);
       await cacheDrop(env, lease);
+      await cacheDrop(env, grant);
       return new Response(null, { status: 204 });
     }
     const hit = await cacheGet(env, name);
@@ -228,6 +268,7 @@ export function netRoutes({ json, readBody, nowS }) {
         { status: 404, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Retry-After': String(LEASE_RETRY_S) } });
     }
     await cachePut(env, ctx, lease, '1', LEASE_TTL_S, 'text/plain');
+    await cachePut(env, ctx, grant, '1', GRANT_TTL_S, 'text/plain');
     return json(404, { error: 'not cached', fetch: true });
   }
 

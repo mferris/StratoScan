@@ -8,6 +8,7 @@ import worker from '../src/index.js';
 import {
   latticeCentre, isLatticeCentre, latticeCols, LATTICE_ROWS, DISC_SPACING_NM, DISC_R_NM,
   DISC_TTL_S, LEASE_TTL_S, ROUTE_TTL_S, NO_ROUTE_TTL_S, OWNER_TTL_S, LIMITS, tune,
+  GRANT_TTL_S, DISC_MAX_AIRCRAFT, discLooksRight,
 } from '../src/netcache.js';
 import { sha256Hex, signedMessage } from '../src/auth.js';
 import { makeD1 } from './d1-sqlite.js';
@@ -176,6 +177,7 @@ test('a paired phone may ask; an unpaired one may not', async () => {
   paired(e, u, phone);
   const c = latticeCentre(35.8, -78.8);
   const path = `/v1/net/disc/${c.lat}/${c.lon}`;
+  assert.equal((await ask(e, u, path)).status, 404, 'the radar is asked to fetch it');
   assert.equal((await put(e, u, path, JSON.stringify(DISC))).status, 204);
   assert.equal((await ask(e, phone, path, 'X-FR-Phone')).status, 200);
   assert.equal((await ask(e, loner, path, 'X-FR-Phone')).status, 403);
@@ -252,11 +254,61 @@ test('an asker that will not stop is refused for a minute', async () => {
   const u = await newUnit(); await reporting(e, u);
   const c = latticeCentre(35.8, -78.8);
   const path = `/v1/net/disc/${c.lat}/${c.lon}`;
+  assert.equal((await ask(e, u, path)).status, 404);
   assert.equal((await put(e, u, path, JSON.stringify(DISC))).status, 204);
   let last;
   for (let i = 0; i < LIMITS.disc; i++) last = await ask(e, u, path);
   assert.equal(last.status, 429);
   clock += 61;
-  assert.equal((await put(e, u, path, JSON.stringify(DISC))).status, 204, 'a minute later it may ask again');
+  assert.deepEqual(await (await ask(e, u, path)).json(), { error: 'not cached', fetch: true }, 'a minute later it may ask again');
+  assert.equal((await put(e, u, path, JSON.stringify(DISC))).status, 204);
   assert.equal((await ask(e, u, path)).status, 200);
+});
+
+// Audit 2026-10-12, from Codex's scan: any reporting radar, or any paired
+// phone, could hand up any disc, with anything starting "{" in it, as often
+// as it liked, and every other radar drew it.
+test('only the radar asked to fetch a disc may hand it up, once, and it must look like one', async () => {
+  const e = envOf(() => DISC);
+  const asked = await newUnit(), other = await newUnit(), phone = await newUnit();
+  await reporting(e, asked); await reporting(e, other); paired(e, asked, phone);
+  const c = latticeCentre(35.8, -78.8);
+  const path = `/v1/net/disc/${c.lat}/${c.lon}`;
+  assert.equal((await put(e, other, path, JSON.stringify(DISC))).status, 409, 'a radar nobody asked: refused');
+  assert.equal((await ask(e, asked, path)).status, 404, 'one radar is asked to fetch it');
+  assert.equal((await put(e, other, path, JSON.stringify(DISC))).status, 409, 'another radar still may not');
+  assert.equal((await put(e, phone, path, JSON.stringify(DISC), 'X-FR-Phone')).status, 403, 'a phone never may');
+  const far = { ac: [{ hex: 'abc123', lat: c.lat + 8, lon: c.lon }] };
+  assert.equal((await put(e, asked, path, JSON.stringify(far))).status, 400, 'aircraft outside the disc: refused');
+  assert.equal((await put(e, asked, path, JSON.stringify({ msg: 'No error' }))).status, 400, 'no aircraft list: refused');
+  assert.equal((await put(e, asked, path, JSON.stringify({ ac: [1, 2] }))).status, 400, 'entries that are not aircraft: refused');
+  const body = JSON.stringify(DISC);
+  const upload = await signed(asked, body, { path, method: 'PUT' });
+  const again = upload.clone();
+  assert.equal((await worker.fetch(upload, e)).status, 204, 'the real answer is shared');
+  assert.equal((await worker.fetch(again, e)).status, 409, 'and the same upload sent again is refused');
+  assert.equal((await put(e, asked, path, body)).status, 409, 'as is a fresh one: the ask was used up');
+  assert.deepEqual(await (await ask(e, other, path)).json(), DISC, 'what others draw is what was fetched');
+});
+
+test('a grant to hand up a disc lapses', async () => {
+  const e = envOf(() => DISC);
+  const u = await newUnit(); await reporting(e, u);
+  const c = latticeCentre(35.8, -78.8);
+  const path = `/v1/net/disc/${c.lat}/${c.lon}`;
+  assert.equal((await ask(e, u, path)).status, 404);
+  clock += GRANT_TTL_S + 1;
+  assert.equal((await put(e, u, path, JSON.stringify(DISC))).status, 409);
+});
+
+test('discLooksRight: the real thing passes, near misses do not', () => {
+  const c = latticeCentre(35.8, -78.8);
+  const enc = o => new TextEncoder().encode(JSON.stringify(o));
+  assert.ok(discLooksRight(enc({ ac: [{ hex: 'a', lat: c.lat, lon: c.lon }, { hex: 'b' }], now: 1 }), c), 'positions inside, and an aircraft with none');
+  assert.ok(discLooksRight(enc({ ac: [] }), c), 'an empty sky is a real answer');
+  assert.ok(!discLooksRight(new TextEncoder().encode('{"ac":[{"lat":'), c), 'truncated');
+  assert.ok(!discLooksRight(enc([{ ac: [] }]), c), 'an array');
+  assert.ok(!discLooksRight(enc({ ac: [{ lat: 'x', lon: 1 }] }), c), 'a position that is not a number');
+  assert.ok(!discLooksRight(enc({ ac: [{ lat: 95, lon: 0 }] }), c), 'a position off the planet');
+  assert.ok(!discLooksRight(enc({ ac: Array.from({ length: DISC_MAX_AIRCRAFT + 1 }, () => ({})) }), c), 'too many aircraft');
 });

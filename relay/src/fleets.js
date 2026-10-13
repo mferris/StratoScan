@@ -73,7 +73,7 @@ function sameSite(request) {
 export function fleetRoutes({ json, signedJson, nowS, maintainer, needAuth, assess, esc, ago }) {
   // ---- the radar's side -------------------------------------------------------
   async function unitJoin(request, env) {
-    const { auth, payload, error } = await signedJson(request, 'X-FR-Unit');
+    const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env);
     if (error) return error;
     const code = normaliseCode(payload.code);
     if (!code) return json(400, { error: 'That doesn’t look like an invite code.' });
@@ -88,14 +88,14 @@ export function fleetRoutes({ json, signedJson, nowS, maintainer, needAuth, asse
   }
 
   async function unitLeave(request, env) {
-    const { auth, error } = await signedJson(request, 'X-FR-Unit');
+    const { auth, error } = await signedJson(request, 'X-FR-Unit', env);
     if (error) return error;
     await env.DB.prepare('DELETE FROM fleet_members WHERE unit = ?').bind(auth.unit).run();
     return json(200, { ok: true, fleet: null });
   }
 
   async function unitStatus(request, env) {
-    const { auth, error } = await signedJson(request, 'X-FR-Unit');
+    const { auth, error } = await signedJson(request, 'X-FR-Unit', env);
     if (error) return error;
     const row = await env.DB.prepare(
       'SELECT f.name FROM fleet_members m JOIN fleets f ON f.id = m.fleet WHERE m.unit = ?'
