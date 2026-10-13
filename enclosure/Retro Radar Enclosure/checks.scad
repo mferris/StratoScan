@@ -36,7 +36,7 @@ rib_h=4.0; rib_w=5; rib_z_list=[10,22]; rib_a0=340; rib_arc=220;
 grille_hole_dia=2.5; grille_pitch=4.5; grille_w=90; grille_h=40;
 speaker_d=45; speaker_angles=[0,180]; exhaust_slot_w=2.2; exhaust_slot_h=12;
 n_exhaust=24; exhaust_a0=30; exhaust_a1=150;
-ant_cable_slot_w=7; ant_cable_exit_h=7.98; ant_flange_t=7; ant_flange_insert_d=5.5; back_insert_d=8;
+ant_cable_slot_w=7; ant_cable_exit_h=7.98; ant_flange_t=7; ant_flange_insert_d=5.5; back_insert_d=7;
 
 // The SMA bulkhead variant. Restated here for the same reason as everything
 // above: `use <>` brings in modules, not variables, so a check that names one

@@ -80,7 +80,8 @@ The two cable glands are gone, replaced by a single opening for a panel-mount
 USB-C cable; the antenna's coax comes in through the mount's own bore
 instead. **The cutout has been fitted to the real
 connector** (2026-09-29): it fits, its two M3 mounting screws are 16.5mm
-apart, and the holes are M3 clearance. For a different connector, print
+apart, and the holes are M3 clearance. Since 2026-10-13 they are short slots
+reaching to 17mm centres, so a 5 A / 100 W jumper with 17mm spacing fits too. For a different connector, print
 `usbc_gauge`, a coupon carrying the cutout plus four neighbours at ±0.5 and
 ±1.0mm, and fit it before committing a plate.
 
