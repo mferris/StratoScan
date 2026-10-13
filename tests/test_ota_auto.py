@@ -149,6 +149,40 @@ def main():
     if rc != 0:
         failures.append(f"missing-stamp run exited {rc}, expected a soft skip")
 
+    # The kiosk user is found, never assumed (2026-10-13): the script once
+    # hard-coded the first unit's user, so a unit from the factory image
+    # ("stratoscan") never found its paint stamp and never updated itself.
+    src = SCRIPT.read_text()
+    fn = src[src.index("kiosk_user() {"):]
+    fn = fn[:fn.index("\n}\n") + 3]
+    with tempfile.TemporaryDirectory() as d:
+        a, b = pathlib.Path(d) / "lightdm.conf", pathlib.Path(d) / "50-kiosk.conf"
+        a.write_text("[Seat:*]\n#autologin-user=nobody\nautologin-user=pi\n")
+        b.write_text("[Seat:*]\nautologin-user=stratoscan\n")
+        def who(extra_env, confs):
+            env = {k: v for k, v in os.environ.items() if k != "STRATOSCAN_KIOSK_USER"}
+            env.update(extra_env)
+            env["STRATOSCAN_LIGHTDM_CONFS"] = confs
+            return subprocess.run(["sh", "-c", fn + "kiosk_user"], env=env,
+                                  capture_output=True, text=True).stdout.strip()
+        cases = [
+            ({}, f"{a} {b}", "stratoscan", "the display manager's autologin user, later files winning"),
+            ({}, str(a), "pi", "a commented-out line doesn't count"),
+            ({"STRATOSCAN_KIOSK_USER": "override"}, f"{a} {b}", "override", "an explicit override wins"),
+        ]
+        for extra, confs, want, what in cases:
+            checks += 1
+            got = who(extra, confs)
+            if got != want:
+                failures.append(f"kiosk user: {what}: got {got!r}, want {want!r}")
+        checks += 1
+        got = who({}, str(pathlib.Path(d) / "missing.conf"))
+        if not got:
+            failures.append("kiosk user with no autologin: got nothing (uid 1000, else stratoscan, expected)")
+    checks += 1
+    if "mferris" in src.split("kiosk_user() {")[0] + src.split("KIOSK_USER=$(kiosk_user)")[1]:
+        failures.append("ota-auto.sh still names a particular user")
+
     for f in failures:
         print("FAIL:", f)
     print(f"{checks - len(failures)}/{checks} ota-auto checks passed")

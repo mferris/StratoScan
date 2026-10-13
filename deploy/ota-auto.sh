@@ -26,7 +26,22 @@
 set -eu
 
 WAKE_URL="${STRATOSCAN_WAKE_URL:-http://127.0.0.1/wake}"
-KIOSK_USER="${STRATOSCAN_KIOSK_USER:-mferris}"
+# The desktop user the kiosk runs as, found the way ota.py's
+# detect_kiosk_user finds it: an explicit override, then the display
+# manager's autologin user (that IS the kiosk session; later files win),
+# then uid 1000. This was hard-coded to the first unit's user, which a unit
+# built from the factory image ("stratoscan") doesn't have: its paint stamp
+# was then never found, and it would never have applied an update by itself
+# (found 2026-10-13, reviewing the image for #5).
+kiosk_user() {
+    [ -n "${STRATOSCAN_KIOSK_USER:-}" ] && { echo "$STRATOSCAN_KIOSK_USER"; return; }
+    u=$(cat ${STRATOSCAN_LIGHTDM_CONFS:-/etc/lightdm/lightdm.conf /etc/lightdm/lightdm.conf.d/*.conf} 2>/dev/null \
+        | sed -n 's/^[[:space:]]*autologin-user=[[:space:]]*\([^[:space:]]\{1,\}\).*/\1/p' | tail -n 1)
+    [ -n "$u" ] && { echo "$u"; return; }
+    u=$(getent passwd 1000 2>/dev/null | cut -d: -f1)
+    echo "${u:-stratoscan}"
+}
+KIOSK_USER=$(kiosk_user)
 OTA="${STRATOSCAN_OTA:-/opt/stratoscan/ota.py}"
 PAINT_WAIT_S="${STRATOSCAN_PAINT_WAIT_S:-60}"
 
