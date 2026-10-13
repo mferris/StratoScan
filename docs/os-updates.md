@@ -65,3 +65,18 @@ everything else. Ring 0 is where a new version is tried first.
 The listed version must still be in the archive when a radar runs. Debian's
 security archive keeps only the latest version, so widen promptly, and cut a
 new release if a version has been replaced.
+
+## The page's own libraries
+
+The radar page bundles one third-party library, MapLibre GL JS, in `vendor/`
+(#74). Releases carry `vendor/` like the rest of the page, so a new version
+reaches radars through the rings. `vendor/VERSIONS.json` records each file's
+npm package, version and hash. Before every release, `scripts/check-vendor.py`
+asks GitHub's advisory database about those versions. An advisory with a fix
+available stops the release unless `VERSIONS.json` accepts it, with a reason
+and an end date.
+
+To update a library: replace the file in `vendor/`, update its record (`npm
+pack` gives the official file; `shasum -a 256` its hash), run
+`python3 tests/test_vendor.py` and `python3 scripts/check-vendor.py`, and
+release as usual.
