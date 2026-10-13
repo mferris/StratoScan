@@ -453,6 +453,12 @@ echo "== start-up picture =="
 # splash or the desktop (2026-10-11). See deploy/quiet-boot.sh.
 sh deploy/quiet-boot.sh
 
+echo "== unused OS services =="
+# Printing, Bluetooth, the VNC helper, USB automount, the battery monitor,
+# NFS and cloud-init: a radar uses none of them (2026-10-13). See
+# deploy/trim-os.sh for what stays and why.
+if live; then sh deploy/trim-os.sh; else STRATOSCAN_LIVE=0 sh deploy/trim-os.sh; fi
+
 echo "== the kiosk (desktop user: ${KIOSK_USER:-none}) =="
 # These run under the desktop user's systemd, because they need its Wayland
 # session. Enabled by linking into the user's .wants directories, which works
