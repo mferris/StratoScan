@@ -55,6 +55,7 @@ KIOSK_USER="$KIOSK_USER" sh deploy/migrate-names.sh
 READSB_INSTALLER_COMMIT=f933123935631da855a7f8a16c0cb7ad4eedca48   # wiedehopf/adsb-scripts (MIT)
 READSB_TAG=v3.16.17                                                 # wiedehopf/readsb (GPL-3.0-or-later)
 DUMP978_TAG=v11.1                                                   # flightaware/dump978 (GPL-2.0-or-later), the 978 MHz decoder
+DUMP978_COMMIT=f40aa9a0d2d0a0067c0c628b44ba316f7049b8ce             # what that tag is: a tag can be moved, a commit can't (audit 2026-10-12)
 TAR1090_COMMIT=383a9cb085860277c6c1972a4aca5be7e56bcc66             # wiedehopf/tar1090 (GPL-2.0-or-later)
 PIPER_VERSION=1.8.0                                                 # piper-tts (GPL-3.0-or-later)
 VOICE=en_US-ljspeech-medium                                         # public-domain dataset
@@ -87,6 +88,8 @@ if ! command -v dump978-fa >/dev/null 2>&1; then
     libboost-regex-dev libboost-filesystem-dev libsoapysdr-dev >/dev/null
   rm -rf /tmp/dump978
   git clone -q --depth 1 --branch "$DUMP978_TAG" https://github.com/flightaware/dump978 /tmp/dump978
+  [ "$(git -C /tmp/dump978 rev-parse HEAD)" = "$DUMP978_COMMIT" ] \
+    || { echo "  dump978 $DUMP978_TAG is not the commit we pinned ($DUMP978_COMMIT); refusing to build it"; exit 1; }
   make -C /tmp/dump978 -j"$(nproc)" dump978-fa >/tmp/dump978-build.log 2>&1 \
     || { tail -30 /tmp/dump978-build.log; exit 1; }
   install -m 0755 /tmp/dump978/dump978-fa /usr/local/bin/dump978-fa

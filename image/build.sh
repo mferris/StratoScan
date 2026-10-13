@@ -28,6 +28,7 @@ COMMIT=$(git -C "$REPO" rev-parse --short HEAD)
 # The 978 MHz decoder's version, as the installer pins it (GPL: its source
 # goes with the image, below).
 DUMP978_TAG=$(sed -n 's/^DUMP978_TAG=\([^ ]*\).*/\1/p' "$REPO/deploy/install-setup-server.sh")
+DUMP978_COMMIT=$(sed -n 's/^DUMP978_COMMIT=\([^ ]*\).*/\1/p' "$REPO/deploy/install-setup-server.sh")
 
 chroot_prepare
 # Keep the image's own resolv.conf (a NetworkManager symlink) to put back.
@@ -52,12 +53,32 @@ for f in /usr/bin/readsb /usr/local/share/tar1090/git/.stratoscan-commit /var/ww
          /etc/systemd/system/multi-user.target.wants/stratoscan-firstboot.service \
          /etc/systemd/system/multi-user.target.wants/stratoscan-events.service \
          /home/stratoscan/.config/systemd/user/default.target.wants/stratoscan-kiosk.service \
-         /usr/bin/tailscale; do must "$f"; done
+         /usr/bin/tailscale \
+         /opt/stratoscan/os-update.py /opt/stratoscan/os-packages.json /usr/bin/dpkg-repack \
+         /etc/systemd/system/timers.target.wants/stratoscan-os-update.timer \
+         /etc/systemd/system/timers.target.wants/stratoscan-os-restart.timer \
+         /etc/systemd/system/multi-user.target.wants/stratoscan-os-confirm.service \
+         /var/www/html/vendor/maplibre-gl.mjs /var/www/html/vendor/maplibre-gl-worker.mjs \
+         /opt/stratoscan/boot-cover.py /opt/stratoscan/controls.py \
+         /etc/systemd/system/stratoscan-controls.service \
+         /etc/cloud/cloud-init.disabled; do must "$f"; done
 for f in /var/lib/stratoscan-relay/unit.key /var/lib/stratoscan-setup/setup.json \
          /var/lib/stratoscan-setup/hotspot-psk /var/lib/tailscale/tailscaled.state \
          /var/lib/stratoscan-relay/events.json /var/lib/stratoscan-relay/heartbeat.json \
          /etc/xdg/autostart/piwiz.desktop /etc/sudoers.d/010_wiz-nopasswd \
-         /etc/stratoscan/tls/unit.pem; do mustnot "$f"; done
+         /etc/stratoscan/tls/unit.pem \
+         /etc/stratoscan/controls.json /var/lib/stratoscan-ota/os-update.json; do mustnot "$f"; done
+# Added since the first image (2026-09-28), each checked as it ships:
+# quiet boot (no Raspberry Pi splash, text or desktop; #72), the unused OS
+# services off, speech held to one core (#53), and no control arc unless
+# the unit has one.
+grep -q "console=tty3" "$MNT/boot/firmware/cmdline.txt" || { echo "  quiet boot: cmdline.txt not quiet"; fail=1; }
+grep -q "boot-cover.py" "$MNT/etc/xdg/labwc/autostart" || { echo "  quiet boot: the start-up cover is not in the session"; fail=1; }
+grep -q "^dtoverlay=disable-bt" "$MNT/boot/firmware/config.txt" || { echo "  Bluetooth radio not off"; fail=1; }
+for u in bluetooth.service cups.service udisks2.service wayvnc-control.service; do
+  [ "$(readlink "$MNT/etc/systemd/system/$u")" = "/dev/null" ] || { echo "  $u is not masked"; fail=1; }
+done
+grep -q "^AllowedCPUs=" "$MNT/etc/systemd/system/stratoscan-tts.service" || { echo "  speech is not held to one core"; fail=1; }
 # The setup certificate is made per unit on first boot (tls-cert.sh), never in
 # the image: one baked in would be every unit's, and its key public.
 # Every new unit is in rollout ring 3, everyone, until its owner's install
@@ -76,7 +97,7 @@ TAR_GIT=$MNT/usr/local/share/tar1090/git
   echo "Base: $(basename "$BASE_URL")  sha256 $BASE_SHA256"
   echo "readsb: $(git -C "$READSB_GIT" describe --tags --always 2>/dev/null || echo '?') ($(git -C "$READSB_GIT" rev-parse HEAD 2>/dev/null || echo '?'))"
   echo "tar1090: $(cat "$TAR_GIT/.stratoscan-commit")"
-  echo "dump978: $DUMP978_TAG"
+  echo "dump978: $DUMP978_TAG ($DUMP978_COMMIT)"
   echo "piper-tts: $(chroot "$MNT" /opt/stratoscan/tts/venv/bin/pip show piper-tts | awk '/^Version/{print $2}')"
   echo
   echo "Installed packages:"
@@ -89,7 +110,8 @@ PIPER_V=$(chroot "$MNT" /opt/stratoscan/tts/venv/bin/pip show piper-tts | awk '/
 PIPER_SDIST=$(curl -fsSL "https://pypi.org/pypi/piper-tts/$PIPER_V/json" \
   | python3 -c "import json,sys; print(next(u['url'] for u in json.load(sys.stdin)['urls'] if u['packagetype']=='sdist'))")
 curl -fsSL -o "$OUT/src/$(basename "$PIPER_SDIST")" "$PIPER_SDIST"
-curl -fsSL -o "$OUT/src/dump978-source.tar.gz" "https://github.com/flightaware/dump978/archive/refs/tags/$DUMP978_TAG.tar.gz"
+# By commit, so the source offered is exactly what was built (a tag can move).
+curl -fsSL -o "$OUT/src/dump978-source.tar.gz" "https://github.com/flightaware/dump978/archive/$DUMP978_COMMIT.tar.gz"
 cp "$HERE/SOURCES.md" "$OUT/SOURCES.md"
 
 echo "== restore and seal"
