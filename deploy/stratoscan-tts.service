@@ -17,6 +17,15 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 # The voice model is ~64 MB; bound it so a runaway input can't starve the kiosk.
 MemoryMax=600M
 Nice=5
+# One core, not four (2026-10-13, #53). Piper synthesises a sentence on every
+# core at once, at the very moment an alert's chime plays and the backlight
+# comes on, and that burst alone pulled RDU's 5 V from 4.94 V to 4.67 V (the
+# Pi warns at about 4.63 V); two power collapses followed alerts on 10-12.
+# On one core the same sentence takes about 4 s instead of 1.6 s, and the
+# supply stays above 4.82 V. The words start about 2 s later; the chime is
+# unchanged.
+AllowedCPUs=3
+CPUQuota=100%
 
 [Install]
 WantedBy=multi-user.target
