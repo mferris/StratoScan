@@ -1,25 +1,27 @@
 {
  "about": "What each file in vendor/ is: its npm package and version, and its hash. scripts/check-vendor.py checks the versions against GitHub's advisory database before every release (#74).",
  "files": {
-  "maplibre-gl.js": {
+  "maplibre-gl.mjs": {
    "package": "maplibre-gl",
    "ecosystem": "npm",
-   "version": "5.24.0",
-   "upstream": "dist/maplibre-gl.js",
-   "sha256": "45a9b07a9189ce56054c620a947ccf41e291e58c95e9b61533b740aaa65ee5cb"
+   "version": "6.14.0",
+   "upstream": "dist/maplibre-gl.mjs (source-map comment removed)",
+   "sha256": "c6db9f65ee69073f1a2421a363994ac21db15465787b38b6c3da664fc55eaba0"
+  },
+  "maplibre-gl-worker.mjs": {
+   "package": "maplibre-gl",
+   "ecosystem": "npm",
+   "version": "6.14.0",
+   "upstream": "dist/maplibre-gl-worker.mjs (source-map comment removed)",
+   "sha256": "cee8963b136f0d50d636084d57db3dda8a22018c87adea8c50d74270b56042b8"
   },
   "maplibre-gl.css": {
    "package": "maplibre-gl",
    "ecosystem": "npm",
-   "version": "5.24.0",
+   "version": "6.14.0",
    "upstream": "dist/maplibre-gl.css",
-   "sha256": "ab1e70d59ec40465bae7e7030da2f3ccf28133fd502e62bd598eefbadfd7a732"
+   "sha256": "bacba6a85a867fcf602f2ff88331b8acf7edf3fbd063a519888cfbff39970193"
   }
  },
- "accepted_advisories": {
-  "GHSA-jrc7-96c5-q579": {
-   "why": "Not reachable on a radar since 2026-10-13: the advisory is MapLibre's DOM.sanitize, which only its popups and its credits control use. The page has no popups, and draws the map credits itself from its own table (attributionControl: false), so no HTML reaches MapLibre. tests/test_vendor.py keeps it that way. Until MapLibre 6.x is tested on the panel (#74).",
-   "until": "2026-10-31"
-  }
- }
+ "accepted_advisories": {}
 }

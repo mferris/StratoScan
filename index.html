@@ -1395,7 +1395,6 @@
   <div id="kbd"><div id="kbdField"><span id="kbdLabel"></span><span id="kbdValue"></span></div><div id="kbdKeys"></div></div>
 </div>
 
-<script src="vendor/maplibre-gl.js"></script>
 <script>
 // ---- Saved settings from before the rename -----------------------------
 // Everything this page keeps in localStorage was stored under 'flightradar'
@@ -2701,6 +2700,23 @@ function offlineStyle(meta) {
   };
 }
 
+// MapLibre 6 ships only as ES modules (#74), so it is loaded with import(),
+// which this classic script may use, once, before the first map is built.
+// It finds its worker (vendor/maplibre-gl-worker.mjs) beside itself. The
+// load starts at once, so it downloads while the style is fetched; a failed
+// load is tried again on the next initMap.
+let maplibregl = null;
+let maplibreLoading = null;
+function loadMapLibre() {
+  if (!maplibreLoading) {
+    maplibreLoading = import('./vendor/maplibre-gl.mjs')
+      .then(m => { maplibregl = m; return m; })
+      .catch(e => { maplibreLoading = null; throw e; });
+  }
+  return maplibreLoading;
+}
+loadMapLibre().catch(() => {});
+
 // Picks the style, then builds the map. Async (both checks are network
 // round trips), so a second call while one is in flight is ignored rather
 // than building two maps into the same container.
@@ -2710,6 +2726,7 @@ async function initMap() {
   try {
     const online = await fetchOnlineStyle();
     const meta = online ? null : await fetchOfflineMeta();
+    await loadMapLibre();
     if (!home || map) return;
     if (online) createMap(online, false);
     else if (meta) createMap(offlineStyle(meta), true);

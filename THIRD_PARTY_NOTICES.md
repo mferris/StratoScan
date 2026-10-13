@@ -10,7 +10,7 @@ re-check it whenever a dependency or data source is added.
 
 | Component | Where | License | How the obligation is met |
 |---|---|---|---|
-| [MapLibre GL JS](https://github.com/maplibre/maplibre-gl-js) 5.24.0 | `vendor/maplibre-gl.js`, `.css` | BSD-3-Clause | The license header is kept intact at the top of the vendored file. |
+| [MapLibre GL JS](https://github.com/maplibre/maplibre-gl-js) 6.14.0 | `vendor/maplibre-gl.mjs`, `maplibre-gl-worker.mjs`, `maplibre-gl.css` | BSD-3-Clause | The license header is kept intact at the top of the vendored file. |
 | [MapLibre Native (iOS distribution)](https://github.com/maplibre/maplibre-gl-native-distribution) | `ios/` (Swift package, resolved at build time) | BSD-2-Clause | Not vendored. The iOS app's About/credits must carry its notice when the app ships. |
 | Sound effects (kitten, plane themes) | `sounds/` | CC0 1.0 | No obligation. Sources and processing are still credited in each theme's `CREDITS.md`. |
 | [OurAirports](https://ourairports.com/data/) airport table | `deploy/airports.json` | Public domain | None required; credited in the README. |
