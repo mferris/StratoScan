@@ -380,8 +380,15 @@ def start_trial(steps, state):
                 f"[all]\nos_prefix={NEXT_DIR}/\n")
     images = []
     for m in new:
-        rc, out, _ = run_cmd(["dpkg", "-S", os.path.join(MODULES_DIR, m)], timeout=30)
-        images += [p.strip() for p in out.split(":")[0].split(",") if rc == 0 and p.strip()]
+        # Debian's merged /usr: /lib is a link to /usr/lib, and dpkg knows
+        # the modules only by their /usr/lib path (found on RDU 2026-10-13,
+        # before the first trial: asking by /lib finds nothing, and a failed
+        # trial would have left its kernel installed).
+        for base in ("/usr/lib/modules", MODULES_DIR):
+            rc, out, _ = run_cmd(["dpkg", "-S", os.path.join(base, m)], timeout=30)
+            if rc == 0 and out.strip():
+                images += [p.strip() for p in out.split(":")[0].split(",") if p.strip()]
+                break
     state["trial"] = {"started": int(time.time()), "expect": expect, "from": running,
                       "packages": {n: [c, v] for n, c, v, _ in steps}, "images": sorted(set(images))}
     save_state(state)

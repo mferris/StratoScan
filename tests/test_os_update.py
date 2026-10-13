@@ -95,7 +95,12 @@ class World:
                 self.on_install()
             return 0, "", ""
         if c == "dpkg" and cmd[1] == "-S":
-            return 0, f"{self.pkg_of_modules.get(cmd[2], 'unknown')}: {cmd[2]}\n", ""
+            # as on Raspberry Pi OS trixie: dpkg knows the modules only by
+            # their /usr/lib path, and the headers own the folder too
+            if not cmd[2].startswith("/usr/lib/modules/"):
+                return 1, "", f"dpkg-query: no path found matching pattern {cmd[2]}"
+            name = os.path.basename(cmd[2])
+            return 0, f"linux-image-{name}, linux-headers-{name}: {cmd[2]}\n", ""
         if c == "apt-get" and cmd[1] == "-s":
             return 0, ("Inst libssl3t64 [3.5.1-1] (3.5.1-1+deb13u1 Debian-Security:13/stable-security [arm64])\n"
                        "Inst tzdata [2025b-1] (2025b-4 Debian:13.1/stable [all])\n"
@@ -303,8 +308,9 @@ tb = (boot / "tryboot.txt").read_text()
 check(tb.startswith("dtparam=audio=on") and tb.rstrip().endswith("os_prefix=stratoscan-next/"),
       "tryboot.txt is config.txt plus the trial folder, for one boot")
 check("os_prefix" not in (boot / "config.txt").read_text(), "config.txt itself is untouched")
-check(st["trial"]["expect"] == "6.12.47+rpt-rpi-2712" and st["trial"]["images"] == ["linux-image-6.12.47+rpt-rpi-2712"],
-      "the trial expects the new kernel of this radar's flavour")
+check(st["trial"]["expect"] == "6.12.47+rpt-rpi-2712"
+      and st["trial"]["images"] == ["linux-headers-6.12.47+rpt-rpi-2712", "linux-image-6.12.47+rpt-rpi-2712"],
+      "the trial expects the new kernel of this radar's flavour, and knows its packages by their /usr/lib path")
 check(world.ran("systemctl", "reboot", "0 tryboot"), "and reboots once onto it")
 world.calls.clear()
 osu.run()
@@ -342,8 +348,9 @@ osu.run()
 world.calls.clear()
 check(osu.confirm() == 1, "an ordinary boot with a trial pending: the trial failed")
 st = osu.load_state()
-check(world.ran("dpkg", "-i") and ["apt-get", "purge", "-y", "-q", "linux-image-6.12.47+rpt-rpi-2712"] in world.calls,
-      "the kept packages go back and the trial kernel is removed")
+check(world.ran("dpkg", "-i") and ["apt-get", "purge", "-y", "-q", "linux-headers-6.12.47+rpt-rpi-2712",
+                                     "linux-image-6.12.47+rpt-rpi-2712"] in world.calls,
+      "the kept packages go back and the trial kernel (and its headers) are removed")
 check((boot / "kernel_2712.img").read_text() == "old kernel_2712.img" and not (boot / "tryboot.txt").exists(),
       "the radar keeps its own kernel")
 check(st["failed"] == {"linux-image-rpi-2712": "1:6.12.47-1"} and "cleanup" not in st
