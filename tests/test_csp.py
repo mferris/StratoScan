@@ -55,6 +55,8 @@ check(not re.search(r'<[a-z]+[^>]*\son[a-z]+\s*=', text), "the page has no inlin
 check(not re.search(r'href=["\']javascript:', text), "and no javascript: links")
 check("'self'" in real and "https://tiles.openfreemap.org" in real and "https://fonts.gstatic.com" in real, "the page's hosts are listed")
 check(fg.CSP_HEADER == "Content-Security-Policy", "enforced by default (CSP_ENFORCE=0 puts it back to report-only)")
+check("worker-src 'self' blob:" in real and "child-src 'self' blob:" in real,
+      "MapLibre's worker may load from the radar itself (6.x, a module) or a blob (5.x)")
 
 # Reports: counted by directive and host, bounded, nothing else kept.
 fg._csp_reports.clear()
