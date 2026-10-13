@@ -50,7 +50,10 @@ ant_sma_boss_d=22; ant_sma_boss_h=10; ant_sma_cavity_d=25;
 // same reason as everything above: `use <>` brings in modules, never values.
 back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9;
 back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40;
-usbc_cut_pos=[60,-14]; usbc_cut_w=11.0; usbc_cut_h=6.5; usbc_screw_pitch=16.5; usbc_screw_dia=3.4;
+// The USB-C window moved to [60,-51] on 2026-10-10 and this copy didn't,
+// so usbc_open probed the old spot and failed from then (found 2026-10-13).
+usbc_cut_pos=[60,-51]; usbc_cut_w=11.0; usbc_cut_h=6.5; usbc_screw_pitch=16.5; usbc_screw_dia=3.4;
+usbc_screw_pitch_max=17.0;
 mount_hole_x=58; mount_hole_y=49;
 
 if (check=="ear_vs_post") {

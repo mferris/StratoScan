@@ -148,6 +148,38 @@ def params(path):
     return out
 
 
+def evaluate(defs, name, fallback=None, _seen=None):
+    """A parameter's value, worked out: numbers, + - * /, brackets and vectors,
+    other parameters by name (from `defs`, then `fallback`). None for
+    anything else (a function call, a string, a condition)."""
+    _seen = set() if _seen is None else _seen
+    src = defs.get(name, (fallback or {}).get(name))
+    if src is None or name in _seen:
+        return None
+    _seen = _seen | {name}
+    expr = normalise(src)
+    if not re.fullmatch(r"[\w\s.+\-*/()\[\],]+", expr):
+        return None
+    env = {}
+    for ref in set(re.findall(r"[A-Za-z_]\w*", expr)):
+        v = evaluate(defs, ref, fallback, _seen) if ref in defs else evaluate(fallback or {}, ref, None, _seen)
+        if v is None:
+            return None
+        env[ref] = v
+    try:
+        return eval(expr, {"__builtins__": {}}, env)   # only names, numbers and arithmetic reach here
+    except Exception:
+        return None
+
+
+def same_value(a, b):
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+        return len(a) == len(b) and all(same_value(x, y) for x, y in zip(a, b))
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return abs(a - b) <= 0.01
+    return a == b
+
+
 def geometry(path):
     """(volume mm3, min corner, max corner) of an STL, ASCII or binary."""
     import struct
@@ -310,6 +342,26 @@ def main():
         if name in ra and name in ka and ra[name] == ka[name]:
             failures.append(f"{name} is listed as cosmetic but is now identical; "
                             f"remove it from COSMETIC")
+
+    # 9. A checks.scad that `use`s its design can't see the design's values,
+    #    so it restates the ones it probes with -- and a restated value that
+    #    has gone stale checks the wrong place. The kitten's copy kept the
+    #    USB-C window at its old spot for three days after it moved, and its
+    #    usbc_open probe failed for a fault that wasn't there (2026-10-13).
+    #    Every value a check file restates must equal its design's.
+    for design in FULL.values():
+        chk = design.parent / "checks.scad"
+        if not chk.exists():
+            continue
+        dp, cp = params(design), params(chk)
+        for name in sorted(set(cp) & set(dp)):
+            want, got = evaluate(dp, name), evaluate(cp, name, fallback=dp)
+            if want is None or got is None:
+                continue          # not plain arithmetic: nothing to compare numerically
+            checks += 1
+            if not same_value(want, got):
+                failures.append(f"{design.parent.name}/checks.scad restates {name}={cp[name]!r} ({got}), "
+                                f"but the design has {dp[name]!r} ({want}): update the copy")
 
     more, n = folders_and_prints()
     failures += more

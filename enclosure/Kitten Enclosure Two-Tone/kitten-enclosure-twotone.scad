@@ -312,6 +312,10 @@ usbc_cut_w       = 11.0;   // window width  (across the connector body)
 usbc_cut_h       = 6.5;    // window height (through the connector body)
 usbc_cut_r       = 1.2;    // corner radius
 usbc_screw_pitch = 16.5;   // centre-to-centre of the two mounting screws
+// ...and up to this: each screw hole is a short slot, so a connector with
+// its screws 17 mm apart fits too (the 5 A, 100 W jumper ordered
+// 2026-10-13; the first one's are 16.5 mm).
+usbc_screw_pitch_max = 17.0;
 usbc_screw_dia   = screw_clear_dia;   // M3 clearance (3.4), same as every other M3 hole
 // 37 mm below where it was ([60, -14]): the owner's ask, 2026-10-10. At
 // the old spot the power jumper bent hard against the Pi's USB ports; the
@@ -1421,8 +1425,9 @@ module usbc_cutout() {
             offset(r = usbc_cut_r) offset(delta = -usbc_cut_r)
                 square([usbc_cut_w, usbc_cut_h], center = true);
         for (sx = [-1, 1])
-            translate([sx * usbc_screw_pitch/2, 0, 0])
-                cylinder(d = usbc_screw_dia, h = back_plate_t + 2);
+            hull() for (pitch = [usbc_screw_pitch, usbc_screw_pitch_max])
+                translate([sx * pitch/2, 0, 0])
+                    cylinder(d = usbc_screw_dia, h = back_plate_t + 2);
         // the pocket for the connector's boss, in the outer face (z = -back_plate_t)
         linear_extrude(height = usbc_recess_d + 1)
             offset(r = usbc_cut_r) offset(delta = -usbc_cut_r)

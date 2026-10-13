@@ -73,6 +73,9 @@ for f in /var/lib/stratoscan-relay/unit.key /var/lib/stratoscan-setup/setup.json
 # services off, speech held to one core (#53), and no control arc unless
 # the unit has one.
 grep -q "console=tty3" "$MNT/boot/firmware/cmdline.txt" || { echo "  quiet boot: cmdline.txt not quiet"; fail=1; }
+# The base's "resize" makes a new card grow its root filesystem to the whole
+# SD card on first boot; quiet boot rewrites the same line and must keep it.
+grep -qw "resize" "$MNT/boot/firmware/cmdline.txt" || { echo "  cmdline.txt lost 'resize': a new card would never grow"; fail=1; }
 grep -q "boot-cover.py" "$MNT/etc/xdg/labwc/autostart" || { echo "  quiet boot: the start-up cover is not in the session"; fail=1; }
 grep -q "^dtoverlay=disable-bt" "$MNT/boot/firmware/config.txt" || { echo "  Bluetooth radio not off"; fail=1; }
 for u in bluetooth.service cups.service udisks2.service wayvnc-control.service; do

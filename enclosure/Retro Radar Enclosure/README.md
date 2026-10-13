@@ -121,7 +121,9 @@ inside the bolt circle.
 
 **The cutout has been fitted to the real connector** (2026-09-29): it fits
 the window, and its two mounting screws are 16.5mm apart. Those screws are
-M3, so the holes are M3 clearance (3.4mm) like every other screw hole. The
+M3, so the holes are M3 clearance (3.4mm) like every other screw hole. Since
+2026-10-13 each hole is a short slot reaching to 17mm centres, so a 5 A /
+100 W jumper with its screws 17mm apart fits too (reprint the plate for one). The
 listing publishes no cutout size, so for a different connector print
 `usbc_gauge` — the cutout plus four neighbours at ±0.5 and ±1.0mm — and fit
 it before committing a back plate. A coupon is minutes; a plate is hours.
