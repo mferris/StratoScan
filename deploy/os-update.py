@@ -394,7 +394,15 @@ def start_trial(steps, state):
     save_state(state)
     log(f"trial boot of {expect} (from {running}); rebooting once onto it")
     run_cmd(["sync"], timeout=60)
-    run_cmd(["systemctl", "reboot", "0 tryboot"], timeout=60)
+    # systemd 257 (trixie) takes the firmware's argument only as an option:
+    # the older `systemctl reboot "0 tryboot"` is refused as "Too many
+    # arguments", which on RDU's first trial (2026-10-13) left everything
+    # staged and nothing rebooting. A refused reboot now undoes the trial
+    # rather than leave it waiting for whatever restart comes next.
+    rc, _, err = run_cmd(["systemctl", "reboot", "--reboot-argument=0 tryboot"], timeout=60)
+    if rc != 0:
+        abandon_trial(state, f"the trial reboot was refused: {err.strip()[-200:]}")
+        raise Fail("the trial reboot was refused; the kernel stays as it is")
 
 
 def kernel_release():
@@ -404,6 +412,22 @@ def kernel_release():
 def uptime_s():
     with open("/proc/uptime") as f:
         return float(f.read().split()[0])
+
+
+def abandon_trial(state, why):
+    """Undo a trial that never booted, through no fault of the kernel: the
+    kept packages go back, the trial's kernel is removed, and the version is
+    NOT marked failed, so the next run may try again."""
+    trial = state.pop("trial", {})
+    p = os.path.join(BOOT_DIR, "tryboot.txt")
+    if os.path.exists(p):
+        os.remove(p)
+    state["cleanup"] = {"images": trial.get("images", []),
+                        "release": trial.get("expect"), "from": trial.get("from")}
+    finish_cleanup(state)
+    state["result"] = {"at": int(time.time()), "ok": False, "why": why}
+    save_state(state)
+    log(f"kernel trial abandoned: {why}")
 
 
 def network_up():
