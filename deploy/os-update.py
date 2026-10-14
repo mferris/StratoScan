@@ -488,8 +488,52 @@ def promote(trial, state):
     state["result"] = {"at": int(time.time()), "ok": True,
                        "installed": {n: v[1] for n, v in trial["packages"].items()},
                        "kernel": trial["expect"]}
+    state["keep_kernels"] = [r for r in (trial["expect"], trial.get("from")) if r]
     save_state(state)
     log(f"kernel {trial['expect']} booted and painted; it is now the radar's kernel")
+    prune_kernels(state)
+
+
+def kernel_base(release):
+    """What one kernel's packages share: 6.18.50+rpt-rpi-2712 -> 6.18.50+rpt
+    (linux-image-, linux-headers-, the -common-rpi headers, linux-kbuild-)."""
+    m = re.match(r"(\d+\.\d+(?:\.\d+)*\+rpt)(?:-|$)", release or "")
+    return m.group(1) if m else None
+
+
+def prune_kernels(state, have=None):
+    """Remove the packages of every Raspberry Pi kernel but the radar's own
+    and the one it came from (state["keep_kernels"], set when a trial is
+    kept). Each kernel is about 190 MB on the card and nothing else removes
+    them: the daily updates leave kernels to this program, and on RDU two
+    were already kept by 2026-10-14. Removing an older kernel leaves the boot
+    partition alone (its hooks act only when no kernel of that flavour is
+    left), and apt is asked first, so nothing goes but those packages."""
+    keep = state.get("keep_kernels")
+    running = kernel_base(kernel_release())
+    if not keep or not running:
+        return []
+    bases = {running} | {kernel_base(r) for r in keep} - {None}
+    old = sorted(n for n in (have if have is not None else installed_packages())
+                 if (m := re.fullmatch(r"linux-(?:image|headers|kbuild)-(\d+\.\d+(?:\.\d+)*\+rpt)(?:-[a-z0-9-]+)?", n))
+                 and m.group(1) not in bases)
+    if not old:
+        return []
+    try:
+        rc, out, err = run_cmd(["apt-get", "-s", "-q", "purge", *old], timeout=600)
+        going = set(re.findall(r"^(?:Purg|Remv) (\S+)", out, re.M))
+        if rc != 0 or going - set(old):
+            log("older kernels kept: apt would remove more than them "
+                f"({', '.join(sorted(going - set(old))) or err.strip()[-200:]})")
+            return []
+        rc, _, err = run_cmd(["apt-get", "purge", "-y", "-q", *old], timeout=APT_TIMEOUT_S)
+    except (OSError, subprocess.SubprocessError) as e:
+        rc, err = 1, str(e)
+    if rc != 0:
+        log(f"older kernels kept for now (the next daily run tries again): {err.strip()[-200:]}")
+        return []
+    log(f"removed older kernels: {' '.join(old)}")
+    return old
 
 
 def fail_trial(state, why):
@@ -559,6 +603,9 @@ def run():
             return 0
         if not steps:
             log("the held packages are at their tested versions")
+        # Again here, in case apt was busy at the boot that kept the kernel.
+        if prune_kernels(state, have):
+            have = installed_packages()
     except Fail as e:
         log(f"REFUSED: {e}")
         state["result"] = {"at": int(time.time()), "ok": False, "why": str(e)}
