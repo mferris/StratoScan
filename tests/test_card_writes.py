@@ -44,7 +44,8 @@ check("87-stratoscan-uploads.conf" in inst.split("for c in 85-stratoscan-tls.con
 fs = inst.split("ROOT_LINE=")[1].split("\nfi\n")[0]
 check(",lazytime,commit=60" in fs and "mount -o remount,lazytime,commit=60 /" in fs,
       "the installer mounts the root filesystem lazytime,commit=60 (ext4's journal batched)")
-check("findmnt --verify" in fs and "fstab.stratoscan-orig" in fs and "commit=" in fs.split("then")[0],
+check("findmnt --verify" in fs and "^(Success|0 parse errors)" in fs
+      and "fstab.stratoscan-orig" in fs and "commit=" in fs.split("then")[0],
       "keeping the original fstab, leaving one with commit= alone, and undoing a result findmnt cannot parse")
 
 ss = (D / "sighting-store.py").read_text()
