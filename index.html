@@ -4532,6 +4532,71 @@ function playAirportPhaseSound(phase) {
 // Called once per poll (real GPS-derived range, not the eased per-frame
 // value) for each tracked aircraft -- mirrors updateApproachTracking's same
 // reasoning for why this belongs on the poll, not the render loop.
+// ---- One alert at a time ---------------------------------------------------
+// Two alerts close together used to collide: the second replaced the first's
+// panel, and both spoke at once (RDU, 2026-10-14: "they don't stack ... they
+// both talk over each other"). Now an alert that arrives while another is on
+// screen waits its turn: the panel says how many more are waiting, each
+// alert gets ALERT_MIN_SHOW_MS on screen and its words finish before the
+// next one's chime, and closing the panel brings the next at once. An
+// emergency goes to the front. One that has waited too long, or whose
+// aircraft has gone, is dropped: it would be about something no longer there.
+const ALERT_MIN_SHOW_MS = 9000;
+const ALERT_QUEUE_MAX_AGE_MS = 60 * 1000;
+const alertQueue = [];
+let alertOnScreen = null;      // { hex, shownAt } while an alert's panel is up
+let nextAlertTimer = null;
+function alertPanelUp() {
+  return !!alertOnScreen && detailPanelEl.classList.contains('show') && detailPanelEl.classList.contains('alert');
+}
+// a: { pl, label, glyph, sound(), speech(), speechDelay, after(), urgent }
+function raiseAlert(a) {
+  if (alertPanelUp() && alertOnScreen.hex !== a.pl.hex) {
+    if (!alertQueue.some(q => q.pl.hex === a.pl.hex)) {
+      a.queuedAt = performance.now();
+      if (a.urgent) alertQueue.unshift(a); else alertQueue.push(a);
+    }
+    showAlertsWaiting();
+    scheduleNextAlert();
+    return;
+  }
+  presentAlert(a);
+}
+function presentAlert(a) {
+  alertOnScreen = { hex: a.pl.hex, shownAt: performance.now() };
+  showDetailPanel(a.pl, true, a.label, a.glyph);
+  if (a.sound) a.sound();
+  const words = a.speech ? a.speech() : null;
+  if (words) speak(words, a.speechDelay);
+  if (a.after) a.after();
+  showAlertsWaiting();
+  scheduleNextAlert();
+}
+function scheduleNextAlert() {
+  clearTimeout(nextAlertTimer);
+  if (!alertQueue.length) return;
+  const due = alertOnScreen ? alertOnScreen.shownAt + ALERT_MIN_SHOW_MS : 0;
+  nextAlertTimer = setTimeout(showNextAlert, Math.max(0, due - performance.now()));
+}
+function showNextAlert() {
+  clearTimeout(nextAlertTimer);
+  if (!alertQuiet()) { nextAlertTimer = setTimeout(showNextAlert, 400); return; }   // the last one's words first
+  while (alertQueue.length) {
+    const a = alertQueue.shift();
+    if (performance.now() - a.queuedAt > ALERT_QUEUE_MAX_AGE_MS || !planes.has(a.pl.hex)) continue;
+    presentAlert(a);
+    return;
+  }
+  showAlertsWaiting();
+}
+function showAlertsWaiting() {
+  const tag = detailPanelEl.querySelector('.dp-alert-tag');
+  if (!tag) return;
+  let more = tag.querySelector('.dp-alert-more');
+  if (!more) { more = document.createElement('span'); more.className = 'dp-alert-more'; tag.append(more); }
+  more.textContent = alertQueue.length ? ` \u00b7 ${alertQueue.length} MORE` : '';
+}
+
 function checkNearbyAlert(pl, range) {
   if (!pl) return;
   if (range <= ALERT_RADIUS_NM) {
@@ -4544,9 +4609,8 @@ function checkNearbyAlert(pl, range) {
       recordSightingOnce(pl.hex, 'nearby');
       if (alertSettings.nearby) {
         wakeScreenForAlert('nearby');
-        showDetailPanel(pl, true);
-        playAlertSound();
-        speak(announcementFor(pl));
+        raiseAlert({ pl, label: 'WITHIN 2 MILES', glyph: '\u26a0', sound: playAlertSound,
+                     speech: () => announcementFor(pl) });   // worded when shown, so a waiting one is current
       }
     }
   } else if (range > ALERT_CLEAR_RADIUS_NM) {
@@ -5160,14 +5224,13 @@ function checkRareAircraft(pl) {
   // "Never seen here before" is the commonest rare alert, every new tail:
   // it shows, but no longer turns a dark panel on (2026-10-10).
   if (why.kind !== 'first') wakeScreenForAlert('rare:' + why.kind);
-  showDetailPanel(pl, true, why.label.toUpperCase(), '\u2726');
-  playRareSound();
   // A named operator (a well-known person, a military unit) is said and shown:
   // "Aircraft of a well-known person, <name>, ..." rather than leaving the
   // listener to guess who.
   const who = why.operator ? `${why.label}, ${why.operator}` : why.label;
-  speak(announcementFor(pl, who));
-  showToast(`\u2726 ${why.label.toUpperCase()}${why.operator ? ' \u00b7 ' + why.operator : ''} \u00b7 ${pl.cs}`, 8000);
+  raiseAlert({ pl, label: why.label.toUpperCase(), glyph: '\u2726', sound: playRareSound,
+               speech: () => announcementFor(pl, who),
+               after: () => showToast(`\u2726 ${why.label.toUpperCase()}${why.operator ? ' \u00b7 ' + why.operator : ''} \u00b7 ${pl.cs}`, 8000) });
 }
 
 // A rising three-note arpeggio -- the only ascending triad among the alert
@@ -5203,10 +5266,9 @@ function checkEmergencySquawk(pl) {
     if (!pl.emergencyAlerted && alertSettings.emergency) {
       pl.emergencyAlerted = true;
       wakeScreenForAlert('emergency');
-      playEmergencySound();
-      showDetailPanel(pl, true, label);
       // "Emergency squawk 7700", in words a person reads aloud, not the banner's.
-      speak(announcementFor(pl, `${label.split(' — ')[0].toLowerCase()}, squawk ${String(pl.squawk).split('').join(' ')}`), 2200);
+      raiseAlert({ pl, label, glyph: '\u26a0', sound: playEmergencySound, urgent: true, speechDelay: 2200,
+                   speech: () => announcementFor(pl, `${label.split(' — ')[0].toLowerCase()}, squawk ${String(pl.squawk).split('').join(' ')}`) });
     }
   } else {
     pl.emergencyAlerted = false;
@@ -6497,10 +6559,14 @@ async function loadDetailPhoto(hex) {
 
 function hideDetailPanel() {
   detailPanelHex = null;
+  const wasAlert = alertPanelUp();
   detailPanelEl.classList.remove('show');
   detailPanelEl.classList.remove('alert');
   detailBackdropEl.classList.remove('show');
   clearTimeout(detailDismissTimer);
+  alertOnScreen = null;
+  // closed (or timed out) with alerts waiting: the next one, once the last one's words end
+  if (wasAlert && alertQueue.length) { clearTimeout(nextAlertTimer); nextAlertTimer = setTimeout(showNextAlert, 300); }
 }
 
 // ---- Settings panel -------------------------------------------------

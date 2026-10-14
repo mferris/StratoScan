@@ -96,7 +96,7 @@ check("notableNames: true" in html, "naming is on by default")
 check("fetch('/data/notable-people.json')" in html, "the page loads the names (refused on the public page)")
 check("alertSettings.notableNames && notablePeople" in html, "and uses them only while the setting is on")
 check("const who = why.operator ? `${why.label}, ${why.operator}` : why.label;" in html
-      and "speak(announcementFor(pl, who));" in html, "the spoken alert says who it is")
+      and "speech: () => announcementFor(pl, who)" in html, "the spoken alert says who it is")
 check("why.operator ? ' \\u00b7 ' + why.operator : ''" in html, "and the banner shows it")
 check("key: 'notableNames'" in html, "a setting can turn names off")
 
