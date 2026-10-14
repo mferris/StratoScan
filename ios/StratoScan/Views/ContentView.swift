@@ -62,7 +62,7 @@ struct ContentView: View {
                     .ignoresSafeArea()
 
                 VStack {
-                    hud
+                    hud(geo.size.width)
                     Spacer()
                     footer(geo)
                 }
@@ -305,10 +305,29 @@ struct ContentView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { showSky = true }
     }
 
-    private var hud: some View {
-        VStack(spacing: 2) {
-            StratoScanLogo(height: 32 * ui, onLight: !pal.dark)
+    /// The logo sits centred between the top bar's two groups of buttons. On
+    /// an iPhone the left group (labels, location, Sky view: three buttons on
+    /// discs, 44 pt each) reached into it (2026-10-13: "the binoculars
+    /// overlaps the StratoScan icon"). So it is sized to the gap that is left
+    /// on both sides of the centre, and on a phone so narrow that it would be
+    /// too small to read, it moves below the buttons instead.
+    private func logoLayout(_ width: CGFloat) -> (height: CGFloat, below: Bool) {
+        let full = 32 * ui
+        if inWallMode { return (full, false) }        // no buttons up there
+        let group: CGFloat = 3 * 44                    // the wider group
+        let gap = width - 2 * (group + 8)              // centred: clear of it on both sides
+        let fit = gap / StratoScanLogo.widthPerHeight
+        if fit >= full { return (full, false) }
+        if fit >= 22 { return (fit, false) }        // the wordmark still about 9 pt high
+        return (full, true)
+    }
+
+    private func hud(_ width: CGFloat) -> some View {
+        let logo = logoLayout(width)
+        return VStack(spacing: 2) {
+            StratoScanLogo(height: logo.height, onLight: !pal.dark)
                 .opacity(0.9)
+                .padding(.top, logo.below ? 44 : 0)
                 .padding(.bottom, 6)
             if viewModel.isZoomed {
                 // A real button: it was small text, easy to miss and to miss tapping.
