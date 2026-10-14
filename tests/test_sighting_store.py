@@ -218,6 +218,36 @@ with tempfile.TemporaryDirectory() as tmp:
     m.evict(store)
     check("an undated v1 entry goes before any dated one", "undated" not in store["ac"])
 
+    # ---- at the cap, the all-time totals keep counting -----------------------
+    # They were summed from the aircraft still kept, so once eviction began
+    # they would have stalled (2026-10-14). Evicted aircraft now stay in them.
+    store = m.fresh_store()
+    for i in range(m.MAX_HEXES + 5):
+        e = {"t": 2, "n": 1 if i % 10 == 0 else 0, "f": 100 + i, "l": 100 + i,
+             "op": "mil" if i % 7 == 0 else "com", "k": "heli" if i % 3 == 0 else "jet"}
+        if i % 11 == 0:
+            e = {"t": 0, "g": 4, "f": 100 + i, "l": 100 + i}          # only ever on the network
+        store["ac"]["z%05d" % i] = e
+    before = m.summarise(store)
+    m.evict(store)
+    after = m.summarise(store)
+    check("eviction happened", len(store["ac"]) == m.EVICT_TO)
+    for key in ("aircraft", "heard", "visits", "nearby", "networkVisits", "networkOnly", "byOp", "byKind"):
+        check(f"and the all-time {key} is unchanged by it", after[key] == before[key])
+    store["ac"]["new001"] = {"t": 1, "f": 9e9, "l": 9e9, "op": "pri", "k": "prop"}
+    check("and goes on counting new aircraft past the cap",
+          m.summarise(store)["aircraft"] == before["aircraft"] + 1
+          and m.summarise(store)["byOp"]["pri"]["ac"] == before["byOp"]["pri"]["ac"] + 1)
+    for _ in range(3):
+        for i in range(2000):
+            store["ac"]["w%d_%05d" % (_, i)] = {"t": 1, "f": 1e10 + i, "l": 1e10 + i}
+        m.evict(store)
+    check("through repeated evictions", m.summarise(store)["visits"] == before["visits"] + 1 + 6000)
+    kept = m.migrate(json.loads(json.dumps(store, separators=(",", ":"))))
+    check("the evicted counts survive a save and load", m.summarise(kept)["visits"] == m.summarise(store)["visits"])
+    bad = m.fresh_store(); bad["gone"] = "junk"
+    check("a damaged evicted-counts field is dropped, not fatal", "gone" not in m.migrate(bad))
+
     # ---- writes are batched: a flush writes only when something changed --
     with open(store_path, "w") as f:
         json.dump(m.fresh_store(), f)

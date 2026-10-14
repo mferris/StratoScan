@@ -75,13 +75,17 @@ import time
 LISTEN = ("127.0.0.1", 8083)
 STORE_PATH = os.path.join(os.environ.get("STATE_DIRECTORY", "."), "sightings.json")
 # A busy site (SFO, Schiphol) sees ~20k distinct airframes within weeks, so
-# the cap is really an eviction policy, not headroom. 50k entries is ~5.5 MB
-# on disk; with FLUSH_INTERVAL batching that is well under 1 GB/day of writes.
+# the cap is really an eviction policy, not headroom: logging never stops,
+# the aircraft unseen for longest make room, and their counts stay in the
+# all-time totals (store["gone"]). 50k entries is ~5.5 MB on disk, which
+# FLUSH_INTERVAL writes at most 48 times a day (~260 MB/day at the cap).
 MAX_HEXES = 50000
 # Evict down to this, not to MAX_HEXES exactly, so a full store evicts in
 # occasional chunks rather than scanning all entries on every new aircraft.
 EVICT_TO = MAX_HEXES - 1000
-FLUSH_INTERVAL = 600
+# Every 30 minutes, not 10 (2026-10-14): RDU's 1.4 MB store was 200 MB/day
+# of the card's 1.85 GB/day. A power cut loses at most this much counting.
+FLUSH_INTERVAL = 1800
 # A real body is ~40 bytes for a bare increment and ~150 with a classification
 # and a record offer. Still tight: this endpoint is reachable from the public
 # internet via Funnel, where the gateway allows GET and refuses writes -- this
@@ -147,6 +151,8 @@ def migrate(data):
             store["dows"] = [0] * 7
         if not isinstance(store.get("rec"), dict):
             store["rec"] = {}
+        if not isinstance(store.get("gone", {}), dict):
+            del store["gone"]
         return store
     store = fresh_store()
     # v1 recorded no timestamps at all, so the day this migration ran is NOT
@@ -178,7 +184,7 @@ def save_store(store):
     # throw away the entire accumulated history on a power cut mid-write.
     tmp = STORE_PATH + ".tmp"
     with open(tmp, "w") as f:
-        json.dump(store, f)
+        json.dump(store, f, separators=(",", ":"))
         # Writes are now rare, so pay for durability: without this a power
         # cut shortly after the rename can leave a zero-length file on ext4.
         f.flush()
@@ -218,13 +224,34 @@ def evict(store):
     its position) threw out the aircraft seen FIRST -- the daily regulars --
     instead of one-off transits. Undated entries carried over from v1 have no
     `l` and go before anything with a real last-seen time.
+
+    An evicted aircraft's counts move to store["gone"], so the all-time
+    totals keep counting what was really heard; before 2026-10-14 they were
+    summed from the aircraft still kept, and would have stalled at the cap.
+    One that comes back after eviction counts as an aircraft again.
     """
     ac = store["ac"]
     if len(ac) <= MAX_HEXES:
         return
     doomed = heapq.nsmallest(len(ac) - EVICT_TO, ac, key=lambda h: ac[h].get("l", 0))
+    gone = store.setdefault("gone", {})
     for h in doomed:
-        del ac[h]
+        for key, n in tally(ac.pop(h)).items():
+            gone[key] = gone.get(key, 0) + n
+
+
+def tally(entry):
+    """One aircraft's share of the all-time totals, as flat counters:
+    "ac", "heard", "netOnly", "visits", "nearby", "net", and per operator and
+    kind "op.<op>.ac|visits|nearby" and "k.<kind>.ac|visits|nearby"."""
+    t, n, g = entry.get("t", 0), entry.get("n", 0), entry.get("g", 0)
+    op = entry.get("op") if entry.get("op") in OPERATORS else "unk"
+    kind = entry.get("k") if entry.get("k") in KINDS else "unknown"
+    out = {"ac": 1, "heard": 1 if t else 0, "netOnly": 1 if not t and g else 0,
+           "visits": t, "nearby": n, "net": g}
+    for pre in (f"op.{op}", f"k.{kind}"):
+        out[pre + ".ac"], out[pre + ".visits"], out[pre + ".nearby"] = 1, t, n
+    return out
 
 
 def _flusher():
@@ -384,9 +411,17 @@ def summarise(store):
     ac = store["ac"]
     by_op = {k: {"ac": 0, "visits": 0, "nearby": 0} for k in OPERATORS + ("unk",)}
     by_kind = {k: {"ac": 0, "visits": 0, "nearby": 0} for k in KINDS}
-    visits = nearby = 0
-    net_visits = net_only = 0
-    heard = 0
+    # Aircraft evicted at the cap still count (see evict).
+    gone = store.get("gone") if isinstance(store.get("gone"), dict) else {}
+    visits, nearby = gone.get("visits", 0), gone.get("nearby", 0)
+    net_visits, net_only = gone.get("net", 0), gone.get("netOnly", 0)
+    heard = gone.get("heard", 0)
+    for key, n in gone.items():
+        parts = key.split(".")
+        if len(parts) == 3:
+            group = by_op if parts[0] == "op" else by_kind if parts[0] == "k" else None
+            if group is not None and parts[1] in group and parts[2] in group[parts[1]]:
+                group[parts[1]][parts[2]] += n
 
     for entry in ac.values():
         t = entry.get("t", 0)
@@ -427,7 +462,7 @@ def summarise(store):
         "since": since,
         "days": days,
         "undated": undated,
-        "aircraft": len(ac),
+        "aircraft": len(ac) + gone.get("ac", 0),
         "heard": heard,
         "visits": visits,
         "nearby": nearby,

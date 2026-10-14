@@ -12,7 +12,11 @@ ExecStartPre=/bin/sh -c 'i=0; while [ $i -lt 60 ]; do ls "$XDG_RUNTIME_DIR"/wayl
 # profile were rewritten every few minutes (~1 GB/day with the rest of the
 # browser, measured 2026-09-28); recompiling the page's few shaders at start
 # costs nothing that matters on a kiosk that restarts once a night.
-ExecStart=/usr/bin/chromium --disk-cache-dir=%t/chromium-cache --disk-cache-size=104857600 --disable-gpu-shader-disk-cache --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --disable-restore-session-state --check-for-update-interval=31536000 --overscroll-history-navigation=0 --disable-pinch --password-store=basic --disable-features=TranslateUI --autoplay-policy=no-user-gesture-required "http://localhost/index.html?kiosk=1"
+# --disable-extensions: Raspberry Pi OS installs uBlock Origin Lite and
+# h264ify into every new profile. The kiosk shows only its own page, which
+# needs neither, and the ad blocker kept rewriting its filter store: the
+# browser's largest writer on RDU (2026-10-14, ~0.5 GB/day all told).
+ExecStart=/usr/bin/chromium --disk-cache-dir=%t/chromium-cache --disk-cache-size=104857600 --disable-gpu-shader-disk-cache --disable-extensions --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --disable-restore-session-state --check-for-update-interval=31536000 --overscroll-history-navigation=0 --disable-pinch --password-store=basic --disable-features=TranslateUI --autoplay-policy=no-user-gesture-required "http://localhost/index.html?kiosk=1"
 Restart=always
 RestartSec=5
 
