@@ -41,6 +41,12 @@ inst = (D / "install-setup-server.sh").read_text()
 check("87-stratoscan-uploads.conf" in inst.split("for c in 85-stratoscan-tls.conf")[1].split("done")[0],
       "and the installer enables that")
 
+fs = inst.split("ROOT_LINE=")[1].split("\nfi\n")[0]
+check(",lazytime,commit=60" in fs and "mount -o remount,lazytime,commit=60 /" in fs,
+      "the installer mounts the root filesystem lazytime,commit=60 (ext4's journal batched)")
+check("findmnt --verify" in fs and "fstab.stratoscan-orig" in fs and "commit=" in fs.split("then")[0],
+      "keeping the original fstab, leaving one with commit= alone, and undoing a result findmnt cannot parse")
+
 ss = (D / "sighting-store.py").read_text()
 m = re.search(r"^FLUSH_INTERVAL = (\d+)$", ss, re.M)
 check(m and int(m.group(1)) >= 1800, "the sighting history is saved at most every 30 minutes")
@@ -65,6 +71,15 @@ for cmd, path, code in (("GET", "/setup/api/hello", 200), ("HEAD", "/setup/", 30
 check(logged[0] == "" and logged[1] == "", "the setup server does not log routine reads (/setup/api/hello: 30 in 15 minutes)")
 check(logged[2] == "setup GET /setup/api/status\n" and logged[3] == "setup POST /setup/api/wifi\n",
       "but still logs failures and changes, without their query strings")
+
+guard = (D / "shm-guard.sh").read_text()
+unit = (D / "stratoscan-shmguard.service").read_text()
+check("LogLevelMax=notice" in unit,
+      "the five-minute shared-memory guard's start and finish lines stay out of the journal")
+says = re.findall(r'echo "([^"]*)shm-guard:', guard)
+check(says and all(p == "<5>" for p in says), "while every line it logs goes out at notice, so it is kept")
+check('"$STATE/last-log"' in guard.split("below thresholds")[0][-600:],
+      "and its all's-well line is written once an hour, not every five minutes")
 
 osu = (D / "os-update.py").read_text()
 promote = osu.split("def promote(")[1].split("\ndef ")[0]

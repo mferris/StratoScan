@@ -307,6 +307,28 @@ install -m 0644 deploy/journald-stratoscan.conf /etc/systemd/journald.conf.d/str
 # Applying sysctl in the image build would change the BUILD machine's kernel;
 # the image picks the file up at boot.
 if live; then sysctl -q -p /etc/sysctl.d/90-stratoscan-sysctl.conf; fi
+# The root filesystem's mount options, for the SD card's sake: lazytime keeps
+# timestamp-only inode updates in memory, and commit=60 lets ext4 write its
+# own journal every 60 s instead of every 5. That journal was ~300 MB/day of
+# RDU's card writes (2026-10-14). Dirty data already waits up to 2 minutes
+# (the sysctl above), so a power cut loses no more than before; what a
+# program fsyncs is on the card at once, as ever. Only an ext4 root line
+# without commit= is changed, and a result findmnt cannot parse is undone.
+ROOT_LINE='^[^#[:space:]]+[[:space:]]+/[[:space:]]+ext4[[:space:]]'
+if grep -Eq "$ROOT_LINE" /etc/fstab && ! grep -E "$ROOT_LINE" /etc/fstab | grep -q 'commit='; then
+  [ -e /etc/fstab.stratoscan-orig ] || cp -p /etc/fstab /etc/fstab.stratoscan-orig
+  cp -p /etc/fstab /etc/fstab.stratoscan-new
+  sed -E -i "\\|$ROOT_LINE|s|^([^[:space:]]+[[:space:]]+/[[:space:]]+ext4[[:space:]]+)([^[:space:]]+)|\\1\\2,lazytime,commit=60|" /etc/fstab.stratoscan-new
+  if findmnt --verify --tab-file /etc/fstab.stratoscan-new 2>&1 | grep -q '^0 parse errors' \
+     && grep -E "$ROOT_LINE" /etc/fstab.stratoscan-new | grep -q ',lazytime,commit=60[[:space:]]'; then
+    mv /etc/fstab.stratoscan-new /etc/fstab
+    if live; then mount -o remount,lazytime,commit=60 / || true; fi
+    echo "  root filesystem: lazytime,commit=60"
+  else
+    rm -f /etc/fstab.stratoscan-new
+    echo "  root filesystem: the new fstab did not check out; left unchanged"
+  fi
+fi
 # Checked cheaply, not with `unattended-upgrade --dry-run`: on a Pi that
 # simulates every pending upgrade one at a time and ran past 40 minutes on the
 # first unit. `apt-config dump` fails on a syntax error in any apt.conf.d
