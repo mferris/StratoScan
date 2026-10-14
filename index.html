@@ -1791,10 +1791,18 @@ let viewResetTimer = null;
 function viewIsHome() { return view.ox === 0 && view.oy === 0 && view.scale === 1; }
 // Where the radar's centre is drawn, and the ring's radius, for this view.
 function viewCentre() { return { x: CX + view.ox, y: CY + view.oy, r: R * view.scale }; }
+// How far from the radar the view may wander: a distance, not screen pixels.
+// It was pixels (two dials, or 1.5 rings), from before the view could go
+// anywhere (2.23). Zoomed far out, a place 500 nm away is a short way across
+// the screen; zooming in multiplies that until it hit the pixel limit, which
+// then dragged the view back towards the radar instead of keeping the spot
+// under the fingers ("it zooms in and jumps to the right and down", RDU,
+// 2026-10-14). Near the radar the offsets stayed small, so it worked there.
+// The view comes home on its own after VIEW_RESET_MS, and the home button.
+const VIEW_MAX_NM_FROM_HOME = 2500;   // all of North America from RDU; past it the flat projection strains
 function setView(ox, oy, scale) {
   const sc = Math.min(VIEW_MAX_SCALE, Math.max(VIEW_MIN_SCALE, scale));
-  // the radar never further than two dials away, so a stray swipe cannot lose it
-  const lim = Math.max(W * 2, R * sc * 1.5);   // far enough to follow an aircraft near the ring at any zoom
+  const lim = Math.max(W * 2, R * sc * 1.5, R * sc * VIEW_MAX_NM_FROM_HOME / RANGE_NM);
   view.ox = Math.max(-lim, Math.min(lim, ox));
   view.oy = Math.max(-lim, Math.min(lim, oy));
   view.scale = sc;
