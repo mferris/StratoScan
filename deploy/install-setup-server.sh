@@ -255,7 +255,7 @@ if [ -e /etc/systemd/system/stratoscan-netwatchdog.timer ]; then
   if live; then systemctl disable --now stratoscan-netwatchdog.timer 2>/dev/null || true; fi
   rm -f /etc/systemd/system/stratoscan-netwatchdog.timer
 fi
-for c in 85-stratoscan-tls.conf 86-stratoscan-nocache.conf 89-stratoscan-photo-proxy.conf 91-stratoscan-approach-store.conf \
+for c in 85-stratoscan-tls.conf 86-stratoscan-nocache.conf 87-stratoscan-uploads.conf 89-stratoscan-photo-proxy.conf 91-stratoscan-approach-store.conf \
          93-stratoscan-sighting-store.conf 94-stratoscan-core.conf 95-stratoscan-network.conf 96-stratoscan-wake.conf \
          97-stratoscan-tts.conf 98-stratoscan-setup.conf 99-stratoscan-captive.conf; do
   lighttpd_conf "$c"

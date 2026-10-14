@@ -269,6 +269,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         print(f"setup {self.command} {path}", flush=True)
 
+    def log_request(self, code="-", size="-"):
+        # A read that works is routine: the phone app and the heartbeat ask
+        # /setup/api/hello (30 times in 15 minutes on RDU), and each journal
+        # line costs the SD card ~60 KB of writes (measured 2026-10-14).
+        # Changes and failures are still logged.
+        try:
+            ok = int(code) < 400
+        except (TypeError, ValueError):
+            ok = False
+        if ok and self.command in ("GET", "HEAD"):
+            return
+        super().log_request(code, size)
+
     # -- helpers ---------------------------------------------------------
 
     def _send(self, code, obj=None, body=None, ctype="application/json"):

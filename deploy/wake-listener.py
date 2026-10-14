@@ -470,7 +470,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if alert and state == "on":
                     # Already lit: an alert does not buy the panel more time
                     # (the owner's ask, 2026-10-10), or a busy sky keeps it on.
-                    print(f"wake: {why} (panel already on; nothing to do)", flush=True)
+                    # Not logged: it is most alerts, and nothing happens.
+                    pass
                 else:
                     print(f"wake: {why} (panel was {state}"
                           f"{'; lit for the alert hold' if alert else ''})", flush=True)
