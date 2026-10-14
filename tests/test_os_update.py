@@ -66,6 +66,8 @@ class World:
         self.install_ok = True
         self.on_install = None
         self.pkg_of_modules = {}
+        self.purge_also = []           # what apt would remove besides the packages named
+        self.purge_ok = True
 
     def run(self, cmd, timeout=120, cwd=None):
         self.calls.append(cmd)
@@ -101,6 +103,14 @@ class World:
                 return 1, "", f"dpkg-query: no path found matching pattern {cmd[2]}"
             name = os.path.basename(cmd[2])
             return 0, f"linux-image-{name}, linux-headers-{name}: {cmd[2]}\n", ""
+        if c == "apt-get" and cmd[1:4] == ["-s", "-q", "purge"]:
+            return 0, "".join(f"Purg {n} [x]\n" for n in [*cmd[4:], *self.purge_also]), ""
+        if c == "apt-get" and cmd[1] == "purge":
+            if not self.purge_ok:
+                return 100, "", "E: Could not get lock /var/lib/dpkg/lock-frontend"
+            for n in cmd[4:]:
+                self.have.pop(n, None)
+            return 0, "", ""
         if c == "apt-get" and cmd[1] == "-s":
             return 0, ("Inst libssl3t64 [3.5.1-1] (3.5.1-1+deb13u1 Debian-Security:13/stable-security [arm64])\n"
                        "Inst tzdata [2025b-1] (2025b-4 Debian:13.1/stable [all])\n"
@@ -418,6 +428,92 @@ fresh(world)
 rc = osu.run()
 check(rc == 1 and not world.ran("apt-get", "install") and "cannot boot a trial" in osu.load_state()["result"]["why"],
       "no tryboot support: the kernel is not touched")
+
+
+# ---- older kernels are removed ----------------------------------------------
+# Each kernel is about 190 MB on the card, and nothing else removed them: RDU
+# had two by 2026-10-14, and a monthly kernel would add ~2 GB a year.
+
+def kernel_pkgs(v):
+    return {f"linux-image-{v}+rpt-rpi-2712": "x", f"linux-image-{v}+rpt-rpi-v8": "x",
+            f"linux-headers-{v}+rpt-rpi-2712": "x", f"linux-headers-{v}+rpt-common-rpi": "x",
+            f"linux-kbuild-{v}+rpt": "x"}
+
+
+def kept_trial(world):
+    """A trial of 6.12.47 from 6.12.25 that boots and paints."""
+    flag_dir.mkdir(parents=True, exist_ok=True)
+    make_boot()
+    set_tryboot(False)
+    fresh(world)
+    osu.kernel_release = lambda: "6.12.25+rpt-rpi-2712"
+    write_packages({"linux-image-rpi-2712": "1:6.12.47-1"})
+    osu.run()
+    set_tryboot(True)
+    osu.kernel_release = lambda: "6.12.47+rpt-rpi-2712"
+    fake = FakeOta()
+    fake.stamp = 9e18
+    osu._ota = fake
+    osu.time.time = __import__("time").time
+    world.calls.clear()
+    return osu.confirm()
+
+
+def with_kernels(*versions):
+    w = World()
+    w.have = {"linux-image-rpi-2712": "1:6.12.25-1", "linux-image-6.12.25+deb13-arm64": "x"}
+    for v in versions:
+        w.have.update(kernel_pkgs(v))
+    def install():
+        kernel_install()
+        w.have.update(kernel_pkgs("6.12.47"))
+    w.on_install = install
+    return w
+
+
+world = with_kernels("6.12.20", "6.12.25")
+check(kept_trial(world) == 0, "a kernel trial is kept")
+purge = world.ran("apt-get", "purge")
+check(purge == [["apt-get", "purge", "-y", "-q", *sorted(kernel_pkgs("6.12.20"))]],
+      "and the older kernels' packages go: images, headers (with the common ones) and kbuild")
+check(all(n in world.have for n in [*kernel_pkgs("6.12.25"), *kernel_pkgs("6.12.47")]),
+      "keeping the radar's new kernel and the one it came from")
+check("linux-image-6.12.25+deb13-arm64" in world.have and "linux-image-rpi-2712" in world.have,
+      "and anything that is not a versioned Raspberry Pi kernel")
+check(world.calls.index(["apt-get", "-s", "-q", "purge", *sorted(kernel_pkgs("6.12.20"))]) < world.calls.index(purge[0]),
+      "apt is asked first what the removal would take")
+check((boot / "kernel_2712.img").read_text() == "new kernel_2712.img", "the boot files are the kept kernel's")
+
+world = with_kernels("6.12.20", "6.12.25")
+world.purge_also = ["stratoscan-something"]
+kept_trial(world)
+check(not world.ran("apt-get", "purge") and "linux-image-6.12.20+rpt-rpi-2712" in world.have,
+      "if apt would remove anything else, nothing is removed")
+
+world = with_kernels("6.12.20", "6.12.25")
+world.purge_ok = False
+check(kept_trial(world) == 0 and osu.load_state()["keep_kernels"] == ["6.12.47+rpt-rpi-2712", "6.12.25+rpt-rpi-2712"],
+      "apt busy at that boot: the kernel is still kept, and what to keep is remembered")
+world.purge_ok = True
+world.calls.clear()
+osu.run()
+check("linux-image-6.12.20+rpt-rpi-2712" not in world.have and "linux-image-6.12.25+rpt-rpi-2712" in world.have,
+      "so the next daily run removes them")
+world.calls.clear()
+osu.run()
+check(not world.ran("apt-get", "purge"), "and then has nothing to remove")
+
+fresh(world)
+world.have.update(kernel_pkgs("6.12.20"))
+osu.save_state({"keep_kernels": ["6.12.47+rpt-rpi-2712"]})
+osu.kernel_release = lambda: "6.12.20+rpt-rpi-2712"
+osu.prune_kernels(osu.load_state())
+check("linux-image-6.12.20+rpt-rpi-2712" in world.have, "the kernel it is running on is never removed")
+fresh(world)
+osu.kernel_release = lambda: "6.12.47+rpt-rpi-2712"
+world.calls.clear()
+osu.run()
+check(not world.ran("apt-get", "purge"), "and nothing is removed before a trial has been kept here")
 
 
 # ---- restarts after patches -------------------------------------------------

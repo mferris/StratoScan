@@ -11,7 +11,7 @@ They are updated on a tested path instead (`deploy/os-update.py`, #73):
 | Held | How it moves |
 |---|---|
 | Chromium, which draws the radar | The versions it replaces are kept as .debs. After the upgrade the kiosk restarts, and the new browser must paint a frame, or the kept versions go back. |
-| The kernel, its boot files and the Wi-Fi firmware | One trial boot from its own folder on the boot partition (the Pi firmware's `tryboot`). It is kept only if the radar boots, paints and has a network. Otherwise the next boot is the old kernel, and the new one is removed. A power cycle always brings back the old kernel. |
+| The kernel, its boot files and the Wi-Fi firmware | One trial boot from its own folder on the boot partition (the Pi firmware's `tryboot`). It is kept only if the radar boots, paints and has a network. Otherwise the next boot is the old kernel, and the new one is removed. A power cycle always brings back the old kernel. Once a new kernel is kept, kernels older than the one it replaced are removed, about 190 MB each. |
 | The EEPROM bootloader (`rpi-eeprom`) | Not moved. |
 
 A version that fails on a radar is never tried again on that radar.
