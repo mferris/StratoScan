@@ -53,6 +53,10 @@ struct StratoScanMark: View {
 /// The mark on its sky tile, with the wordmark beside it ("Wordmark" and
 /// "WordmarkLight", from assets/brand/wordmark-on-dark.svg and -on-light.svg).
 struct StratoScanLogo: View {
+    /// How wide the logo is for its height: the mark (1), the gap (0.16) and
+    /// the wordmark (0.42 high at 355:46). Lets a layout size it to a space.
+    static let widthPerHeight: CGFloat = 1 + 0.16 + 0.42 * 355 / 46
+
     var height: CGFloat = 24
     /// Dark letters for a light background (the app's Daylight theme). Left
     /// out, it follows the screen's light or dark appearance.
