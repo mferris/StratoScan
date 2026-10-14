@@ -3037,11 +3037,12 @@ function initApproachLayer() {
     // Since the grid (2026-10-14) each point is a ~200 m square weighted by
     // its landings (see approachPointsGeoJSON), ~3 px apart at the normal
     // zoom, so radius 2 still draws the paths as lines; zoomed in, the radius
-    // grows with the squares so a path does not break into dots.
+    // keeps up with the squares (~7 px apart at zoom 12, doubling with each
+    // level) so a path does not break into dots.
     paint: {
       'heatmap-weight': ['get', 'w'],
       'heatmap-intensity': 2.5,
-      'heatmap-radius': ['interpolate', ['exponential', 2], ['zoom'], 11, 2, 16, 64],
+      'heatmap-radius': ['interpolate', ['exponential', 2], ['zoom'], 11, 2, 12, 6, 16, 96],
       'heatmap-opacity': 0.95,
       'heatmap-color': [
         'interpolate', ['linear'], ['heatmap-density'],
