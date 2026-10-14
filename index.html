@@ -1791,20 +1791,32 @@ let viewResetTimer = null;
 function viewIsHome() { return view.ox === 0 && view.oy === 0 && view.scale === 1; }
 // Where the radar's centre is drawn, and the ring's radius, for this view.
 function viewCentre() { return { x: CX + view.ox, y: CY + view.oy, r: R * view.scale }; }
-// How far from the radar the view may wander: a distance, not screen pixels.
-// It was pixels (two dials, or 1.5 rings), from before the view could go
-// anywhere (2.23). Zoomed far out, a place 500 nm away is a short way across
-// the screen; zooming in multiplies that until it hit the pixel limit, which
-// then dragged the view back towards the radar instead of keeping the spot
-// under the fingers ("it zooms in and jumps to the right and down", RDU,
-// 2026-10-14). Near the radar the offsets stayed small, so it worked there.
-// The view comes home on its own after VIEW_RESET_MS, and the home button.
-const VIEW_MAX_NM_FROM_HOME = 2500;   // all of North America from RDU; past it the flat projection strains
+// How far the view may wander: to the edges of the world map, not a number of
+// screen pixels. It was pixels (two dials, or 1.5 rings), from before the
+// view could go anywhere (2.23). Zoomed far out, a distant place is a short
+// way across the screen; zooming in multiplies its offset until it hit that
+// limit, which then dragged the view back towards the radar instead of
+// keeping the spot under the fingers ("it zooms in and jumps to the right
+// and down", RDU, 2026-10-14). Near the radar it worked. A first fix allowed
+// 2,500 nm, and France, 3,300 nm away, still jumped home.
+// The view's position maps to the globe as viewCentreLatLon does: east-west
+// along each latitude, which covers the world. So the limits are the map's
+// own: half the world east or west (180 degrees of longitude, 10,800 nm at
+// the equator), and no nearer a pole than the map shows. The view still
+// comes home on its own after VIEW_RESET_MS, and with the home button.
+const VIEW_MAX_EAST_NM = 180 * 60;
+const VIEW_MAX_LAT = 85;              // Web Mercator stops here; past it the map can't follow
 function setView(ox, oy, scale) {
   const sc = Math.min(VIEW_MAX_SCALE, Math.max(VIEW_MIN_SCALE, scale));
-  const lim = Math.max(W * 2, R * sc * 1.5, R * sc * VIEW_MAX_NM_FROM_HOME / RANGE_NM);
-  view.ox = Math.max(-lim, Math.min(lim, ox));
-  view.oy = Math.max(-lim, Math.min(lim, oy));
+  if (home) {
+    const pxPerNm = R * sc / RANGE_NM;                 // east = -ox / pxPerNm, north = oy / pxPerNm
+    view.ox = Math.max(-VIEW_MAX_EAST_NM * pxPerNm, Math.min(VIEW_MAX_EAST_NM * pxPerNm, ox));
+    view.oy = Math.max((-VIEW_MAX_LAT - home.lat) * 60 * pxPerNm, Math.min((VIEW_MAX_LAT - home.lat) * 60 * pxPerNm, oy));
+  } else {
+    const lim = Math.max(W * 2, R * sc * 1.5);         // no position yet: keep near the dial
+    view.ox = Math.max(-lim, Math.min(lim, ox));
+    view.oy = Math.max(-lim, Math.min(lim, oy));
+  }
   view.scale = sc;
   if (typeof redrawStaticLayers === 'function') redrawStaticLayers();
   syncMapToView();
@@ -1818,9 +1830,46 @@ function setView(ox, oy, scale) {
   clearTimeout(viewResetTimer);
   viewResetTimer = (viewIsHome() || viewLocked || followHex) ? null : setTimeout(() => setView(0, 0, 1), VIEW_RESET_MS);
 }
+// Far from the radar the zoom is worked out on the map itself. The view's
+// position reaches the globe through viewCentreLatLon, east-west along each
+// latitude, which matches the map (Web Mercator) near the radar and slides
+// off it far away: over France a pinch moved the place under the fingers
+// 114 km across the map even with the edges fixed (2026-10-14). So past
+// MAP_ANCHOR_NM the place under the fingers is read off the map, and the new
+// centre put where the map, at the new zoom, shows that place under them.
+const MAP_ANCHOR_NM = 150;
+const mercX = lon => (lon + 180) / 360;
+const mercY = lat => { const t = Math.sin(lat * Math.PI / 180); return 0.5 - Math.log((1 + t) / (1 - t)) / (4 * Math.PI); };
+const mercLon = x => x * 360 - 180;
+const mercLat = y => Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180 / Math.PI;
+function viewFarFromHome() {
+  if (!home) return false;
+  const nmPerPx = RANGE_NM / (R * view.scale);
+  return Math.hypot(view.ox, view.oy) * nmPerPx > MAP_ANCHOR_NM;
+}
+function zoomViewAboutOnMap(sc, mx, my) {
+  const rect = stage.getBoundingClientRect(), kCss = rect.width / W;
+  const box = map.getContainer().getBoundingClientRect();
+  const fx = rect.left + mx * kCss - box.left, fy = rect.top + my * kCss - box.top;   // the fingers, on the map
+  const under = map.unproject([fx, fy]);
+  const dx = fx - box.width / 2, dy = fy - box.height / 2;   // from the map's centre, which is the view's
+  let lat = under.lat, lon = under.lng;
+  for (let i = 0; i < 2; i++) {          // the map's zoom depends a little on the centre's latitude
+    const world = 512 * Math.pow(2, zoomForRange(RANGE_NM / sc, lat, R * kCss));
+    lon = mercLon(mercX(under.lng) - dx / world);
+    lat = mercLat(mercY(under.lat) - dy / world);
+  }
+  const dl = ((lon - home.lon + 540) % 360) - 180;
+  const pxPerNm = R * sc / RANGE_NM;
+  setView(-dl * 60 * Math.cos(lat * Math.PI / 180) * pxPerNm, (lat - home.lat) * 60 * pxPerNm, sc);
+}
 // Zoom by `k` about canvas point (mx, my): that point stays under the fingers.
 function zoomViewAbout(k, mx, my) {
   const sc = Math.min(VIEW_MAX_SCALE, Math.max(VIEW_MIN_SCALE, view.scale * k));
+  // Not gated on map.isStyleLoaded(): the page changes the style every so often (the weather
+  // overlay's refresh), and a step that fell back to the radar's maths then slid ~19 km.
+  // Reading a place off the map needs only the map's position, which it always has.
+  if (map && viewFarFromHome()) { zoomViewAboutOnMap(sc, mx, my); return; }
   const kk = sc / view.scale;
   const px = CX + view.ox, py = CY + view.oy;
   setView(mx + (px - mx) * kk - CX, my + (py - my) * kk - CY, sc);
