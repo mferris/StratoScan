@@ -791,10 +791,15 @@ busy sites (SFO, Schiphol) as well as quiet ones:
   every 10 minutes and on shutdown; they used to rewrite the whole file on
   every sighting (3.5 GB in 17 hours, ~100 GB/day at a busy site once full).
   Chromium's HTTP cache lives in RAM, and it keeps no shader cache on disk.
-  Dirty pages are batched for two minutes before writeback. The history store evicts the aircraft
-  seen *least recently*, so daily regulars survive a full store. Measured in
-  steady state: 2.25 GB/day, about 8 TB over ten years, well under a 128 GB
-  high-endurance card's rating.
+  Dirty pages are batched for two minutes before writeback, and the root
+  filesystem is mounted `lazytime,commit=60`. The history store evicts the
+  aircraft seen *least recently*, so daily regulars survive a full store, and
+  their counts stay in the all-time totals. Routine "all is well" log lines
+  are gone: each journal line costs the card ~60 KB of writes. Measured in
+  steady state (2026-10-14): 0.81 GB/day, about 3 TB over ten years, a small
+  share of a high-endurance card's rating. Everything that grows has a
+  ceiling (the journal 200 MB, the history ~6 MB, old kernels are removed),
+  so a 64 GB card stays about 15% full.
 - **Recovery without a person.** The hardware watchdog reboots a hung kernel;
   `kernel.panic=10` reboots a panicked one. `net-watchdog.py` also restarts
   `readsb` when its output goes stale and reboots after repeated failed
