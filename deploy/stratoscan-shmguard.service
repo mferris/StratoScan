@@ -9,4 +9,9 @@ StateDirectory=stratoscan-shmguard
 # leave this unit 'activating' for good, and its timer never fired again --
 # silently disabling the leak guard.
 TimeoutStartSec=5min
+# Runs every five minutes: systemd's own "Starting"/"Finished" lines for it
+# were ~530 of the radar's journal lines a day, each ~60 KB of SD card
+# writes. Notice and above still reach the journal, and the script logs
+# what it does at notice ("<5>").
+LogLevelMax=notice
 ExecStart=/opt/stratoscan/shm-guard.sh

@@ -50,7 +50,7 @@ mkdir -p "$STATE"
 # Never act on a kiosk that is not running: restarting a stopped or failed
 # unit turns an unrelated problem into a restart loop.
 if [ "$(systemctl --user is-active stratoscan-kiosk.service)" != "active" ]; then
-    echo "shm-guard: kiosk not active, nothing to do"; exit 0
+    echo "<5>shm-guard: kiosk not active, nothing to do"; exit 0
 fi
 
 WD=$(basename "$(ls "$XDG_RUNTIME_DIR"/wayland-*[0-9] 2>/dev/null | head -1)" 2>/dev/null || true)
@@ -141,7 +141,7 @@ rate_ok() {   # stamp  min_seconds
 }
 
 restart_kiosk() {   # reason
-    echo "shm-guard: restarting kiosk -- $1"
+    echo "<5>shm-guard: restarting kiosk -- $1"
     date +%s > "$RESTART_STAMP"
     # CHROMIUM MUST NOT BE RESTARTED WHILE THE PANEL IS BLANKED -- it comes up
     # windowed. Reproduced both ways on the device. This matters most for the
@@ -149,7 +149,7 @@ restart_kiosk() {   # reason
     was_off=0
     if [ "$panel" = "off" ] && [ -n "${WD:-}" ]; then
         was_off=1
-        echo "shm-guard: panel is off -- waking it first, or Chromium restarts windowed"
+        echo "<5>shm-guard: panel is off -- waking it first, or Chromium restarts windowed"
         WAYLAND_DISPLAY="$WD" timeout 10 wlopm --on HDMI-A-1 >/dev/null 2>&1 || true
         sleep 2
     fi
@@ -157,7 +157,7 @@ restart_kiosk() {   # reason
     if [ "$was_off" = "1" ]; then
         sleep "$RESTART_SETTLE_S"
         WAYLAND_DISPLAY="$WD" timeout 10 wlopm --off HDMI-A-1 >/dev/null 2>&1 || true
-        echo "shm-guard: panel blanked again after ${RESTART_SETTLE_S}s"
+        echo "<5>shm-guard: panel blanked again after ${RESTART_SETTLE_S}s"
     fi
 }
 
@@ -172,7 +172,7 @@ if [ "$panel" = "on" ]; then
             restart_kiosk "browser is NOT fullscreen (corner brightness ${tl}, fullscreen reads ~0)"
             exit 0
         fi
-        echo "shm-guard: browser not fullscreen (${tl}) but a restart is rate-limited -- holding"
+        echo "<5>shm-guard: browser not fullscreen (${tl}) but a restart is rate-limited -- holding"
         exit 0
     fi
 fi
@@ -189,7 +189,7 @@ if [ "$mb" -ge "$RESTART_MB" ]; then
     if rate_ok "$RESTART_STAMP" "$RESTART_MIN_S"; then
         restart_kiosk "${mb}MB >= ${RESTART_MB}MB (panel=${panel})"
     else
-        echo "shm-guard: ${mb}MB over the restart mark but rate-limited -- holding"
+        echo "<5>shm-guard: ${mb}MB over the restart mark but rate-limited -- holding"
     fi
     exit 0
 fi
@@ -200,7 +200,7 @@ if [ "$panel" = "off" ] && [ "$mb" -ge "$RESTART_IDLE_MB" ]; then
     if rate_ok "$RESTART_STAMP" "$RESTART_MIN_S"; then
         restart_kiosk "idle mark ${mb}MB >= ${RESTART_IDLE_MB}MB, panel off so nobody sees it"
     else
-        echo "shm-guard: ${mb}MB over the idle mark but a restart is rate-limited -- holding"
+        echo "<5>shm-guard: ${mb}MB over the idle mark but a restart is rate-limited -- holding"
     fi
     exit 0
 fi
@@ -211,23 +211,30 @@ if [ "$panel" = "on" ] && [ "$mb" -ge "$RELOAD_ON_MB" ]; then
 fi
 
 if [ "$want_reload" = "0" ]; then
-    echo "shm-guard: ${mb}MB (shm=${df_mb} maps=${map_mb}) panel=${panel} -- below thresholds"
+    # Once an hour, not every five minutes: the hourly figure still shows a
+    # leak's trend, and each journal line costs the SD card ~60 KB of writes
+    # (measured on RDU, 2026-10-14).
+    hour=$(date +%Y%m%d%H)
+    if [ "$(cat "$STATE/last-log" 2>/dev/null)" != "$hour" ]; then
+        echo "<5>shm-guard: ${mb}MB (shm=${df_mb} maps=${map_mb}) panel=${panel} -- below thresholds"
+        echo "$hour" > "$STATE/last-log" 2>/dev/null || true
+    fi
     exit 0
 fi
 
 if ! rate_ok "$RELOAD_STAMP" "$RELOAD_MIN_S"; then
-    echo "shm-guard: ${why} but a reload is rate-limited -- holding"
+    echo "<5>shm-guard: ${why} but a reload is rate-limited -- holding"
     exit 0
 fi
 
-echo "shm-guard: ${why} -- asking the page to reload (panel=${panel})"
+echo "<5>shm-guard: ${why} -- asking the page to reload (panel=${panel})"
 date +%s > "$RELOAD_STAMP"
 : > "$RELOAD_REQUEST" 2>/dev/null || true
 sleep 45
 before="$mb"
 measure
 freed=$(( before - mb ))
-echo "shm-guard: reload ${before}MB -> ${mb}MB (freed ${freed}MB)"
+echo "<5>shm-guard: reload ${before}MB -> ${mb}MB (freed ${freed}MB)"
 # Do not leave an unconsumed request behind to reload the fresh page too.
 rm -f "$RELOAD_REQUEST" 2>/dev/null || true
 
