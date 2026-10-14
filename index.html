@@ -2311,31 +2311,61 @@ function storeWrite(url, body) {
     .then(res => { if (res.status === 403) storeWritesRefused = true; return res; });
 }
 const APPROACH_STORE_URL = '/approaches';
-const APPROACH_MAX_POINTS = 6000; // bounds render cost -- oldest points evicted first (server enforces its own copy of this cap too)
+// Counts on a grid of APPROACH_CELL_DEG squares (~200 m), not raw positions
+// (2026-10-14): each landing adds one to every square it passed through, so
+// the map keeps every landing. It used to keep the last 6,000 positions, one
+// a second -- only the last 15-40 landings. deploy/approach-store.py bins
+// the same way, floor(x / CELL + 0.5), so the two always agree.
+const APPROACH_CELL_DEG = 0.002;
 
-let approachPoints = []; // [[lon,lat], ...] confirmed-landing points, shared across viewers
+let approachCells = new Map(); // "i,j" -> [lon, lat, landings] at the square's centre, shared across viewers
+
+function approachCellOf(lon, lat) {
+  return `${Math.floor(lat / APPROACH_CELL_DEG + 0.5)},${Math.floor(lon / APPROACH_CELL_DEG + 0.5)}`;
+}
+
+function countApproachCell(key, n) {
+  const c = approachCells.get(key);
+  if (c) { c[2] += n; return; }
+  const [i, j] = key.split(',').map(Number);
+  approachCells.set(key, [j * APPROACH_CELL_DEG, i * APPROACH_CELL_DEG, n]);
+}
 
 async function loadApproachPoints() {
   try {
     const res = await fetch(APPROACH_STORE_URL, { cache: 'no-store' });
     const data = await res.json();
-    if (Array.isArray(data)) approachPoints = data;
+    if (Array.isArray(data)) {
+      approachCells = new Map();
+      for (const p of data) {
+        if (!Array.isArray(p) || typeof p[0] !== 'number' || typeof p[1] !== 'number') continue;
+        // [lon, lat, landings]; a store from before the grid sends bare [lon, lat]
+        countApproachCell(approachCellOf(p[0], p[1]), typeof p[2] === 'number' ? p[2] : 1);
+      }
+    }
   } catch (e) {
     // approach-store unavailable -- starts/stays empty for this session, purely cosmetic either way
   }
   if (map && map.getSource('approaches')) map.getSource('approaches').setData(approachPointsGeoJSON());
 }
 
+// Each square's weight is its landings on a log scale against the busiest
+// square's: the main corridor stays brightest after years of landings, and a
+// path flown once still shows, faintly.
 function approachPointsGeoJSON() {
-  return { type: 'FeatureCollection', features: approachPoints.map(pt => ({ type: 'Feature', geometry: { type: 'Point', coordinates: pt } })) };
+  let most = 1;
+  for (const c of approachCells.values()) if (c[2] > most) most = c[2];
+  const scale = Math.log1p(most);
+  return { type: 'FeatureCollection', features: [...approachCells.values()].map(([lon, lat, n]) => ({
+    type: 'Feature', properties: { w: Math.log1p(n) / scale }, geometry: { type: 'Point', coordinates: [lon, lat] } })) };
 }
 
-function commitApproachTrack(points) {
+function commitApproachTrack(points, hex) {
   if (!points.length) return;
-  approachPoints.push(...points);
-  if (approachPoints.length > APPROACH_MAX_POINTS) approachPoints.splice(0, approachPoints.length - APPROACH_MAX_POINTS);
+  for (const key of new Set(points.map(p => approachCellOf(p[0], p[1])))) countApproachCell(key, 1);
   if (map && map.getSource('approaches')) map.getSource('approaches').setData(approachPointsGeoJSON());
-  storeWrite(APPROACH_STORE_URL, points)
+  // The hex lets the store count a landing once when several open browsers report it.
+  storeWrite(APPROACH_STORE_URL, { hex, points })
     .catch(e => {}); // approach-store unavailable -- this session's own view still updated above, just won't be shared
 }
 
@@ -2343,7 +2373,7 @@ function commitApproachTrack(points) {
 // How many distinct times this receiver has picked up each aircraft
 // ("total"), and how many of those times it came within the nearby-alert
 // radius ("nearby", see ALERT_RADIUS_NM) -- shared server-side (same
-// reasoning as approachPoints above: a browser-local count would never be
+// reasoning as approachCells above: a browser-local count would never be
 // visible to anyone checking in from a different device) so the kiosk's
 // own accumulated history is visible to every viewer, not just whoever
 // happens to have it open. "Distinct visit", not "every poll" -- recorded
@@ -2583,7 +2613,7 @@ function updateApproachTracking(pl, lat, lon, alt) {
   const airportRange = haversineBearingRange(AIRPORT.lat, AIRPORT.lon, lat, lon).range;
 
   if (alt === 'ground' && airportRange <= AIRPORT_APPROACH_CONFIRM_RADIUS_NM) {
-    commitApproachTrack(pl.approachPoints);
+    commitApproachTrack(pl.approachPoints, pl.hex);
     pl.approachPoints = [];
     return;
   }
@@ -2611,7 +2641,7 @@ function confirmApproachOnDrop(pl) {
   const lat = pl.fixLat ?? pl.lat, lon = pl.fixLon ?? pl.lon;
   if (lat == null || lon == null) return;
   if (haversineBearingRange(AIRPORT.lat, AIRPORT.lon, lat, lon).range > AIRPORT_APPROACH_CONFIRM_RADIUS_NM) return;
-  commitApproachTrack(pl.approachPoints);
+  commitApproachTrack(pl.approachPoints, pl.hex);
 }
 
 function formatLoc() {
@@ -3004,10 +3034,14 @@ function initApproachLayer() {
     // real production zoom that individual points read clearly rather than
     // smearing together, and the color pops harder against the darkened
     // map than the original teal did.
+    // Since the grid (2026-10-14) each point is a ~200 m square weighted by
+    // its landings (see approachPointsGeoJSON), ~3 px apart at the normal
+    // zoom, so radius 2 still draws the paths as lines; zoomed in, the radius
+    // grows with the squares so a path does not break into dots.
     paint: {
-      'heatmap-weight': 0.6,
+      'heatmap-weight': ['get', 'w'],
       'heatmap-intensity': 2.5,
-      'heatmap-radius': 2,
+      'heatmap-radius': ['interpolate', ['exponential', 2], ['zoom'], 11, 2, 16, 64],
       'heatmap-opacity': 0.95,
       'heatmap-color': [
         'interpolate', ['linear'], ['heatmap-density'],
