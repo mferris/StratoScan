@@ -319,7 +319,9 @@ if grep -Eq "$ROOT_LINE" /etc/fstab && ! grep -E "$ROOT_LINE" /etc/fstab | grep 
   [ -e /etc/fstab.stratoscan-orig ] || cp -p /etc/fstab /etc/fstab.stratoscan-orig
   cp -p /etc/fstab /etc/fstab.stratoscan-new
   sed -E -i "\\|$ROOT_LINE|s|^([^[:space:]]+[[:space:]]+/[[:space:]]+ext4[[:space:]]+)([^[:space:]]+)|\\1\\2,lazytime,commit=60|" /etc/fstab.stratoscan-new
-  if findmnt --verify --tab-file /etc/fstab.stratoscan-new 2>&1 | grep -q '^0 parse errors' \
+  # findmnt ends with "0 parse errors, ..." when it has warnings (a chroot
+  # cannot see the partitions) and "Success, ..." when it has none (RDU).
+  if findmnt --verify --tab-file /etc/fstab.stratoscan-new 2>&1 | grep -Eq '^(Success|0 parse errors)' \
      && grep -E "$ROOT_LINE" /etc/fstab.stratoscan-new | grep -q ',lazytime,commit=60[[:space:]]'; then
     mv /etc/fstab.stratoscan-new /etc/fstab
     if live; then mount -o remount,lazytime,commit=60 / || true; fi
