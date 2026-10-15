@@ -294,6 +294,45 @@ class UatHeard:
             return True
 
 
+# The sighting store's counts, for each aircraft's "sightings" and the "first
+# time here" reason (#77): the app shows them as the kiosk does. Its legacy
+# view is the whole store, so it is asked at most once a minute.
+SIGHTINGS_URL = os.environ.get("STRATOSCAN_SIGHTINGS_URL", "http://127.0.0.1:8083/sightings")
+SIGHTINGS_CACHE_S = 60.0
+# index.html's RARE_FIRST_MIN_CATALOGUE: until the radar has seen this many
+# aircraft, "never seen here before" is true of nearly everything.
+RARE_FIRST_MIN_CATALOGUE = 2000
+
+
+class SightingCounts:
+    """hex -> (total, nearby) from the sighting store, refreshed at most once
+    a minute; the last good answer is kept through a failure."""
+
+    def __init__(self, url=SIGHTINGS_URL):
+        self.url = url
+        self.counts = {}
+        self.at = -1e9
+        self.lock = threading.Lock()
+
+    def get(self):
+        if not LOOKUPS and self.url == SIGHTINGS_URL:
+            return self.counts                # tests: no store to ask
+        with self.lock:
+            if _now() - self.at < SIGHTINGS_CACHE_S:
+                return self.counts
+            self.at = _now()              # one try a minute, answered or not
+        try:
+            with urllib.request.urlopen(self.url, timeout=3) as r:
+                doc = json.load(r)
+            counts = {h.lower(): (int(v.get("total") or 0), int(v.get("nearby") or 0))
+                      for h, v in doc.items() if isinstance(h, str) and isinstance(v, dict)}
+        except (OSError, ValueError, AttributeError, TypeError):
+            return self.counts
+        with self.lock:
+            self.counts = counts
+        return counts
+
+
 def band_of(a, hex_, uat):
     """'978' (decoded by this radar's 978 radio), '978 via 1090' (a 978
     aircraft re-sent on 1090 by a ground station, ADS-R), or '1090'."""
@@ -305,11 +344,12 @@ def band_of(a, hex_, uat):
 
 
 class Feed:
-    def __init__(self, lookups=None, uat=None):
+    def __init__(self, lookups=None, uat=None, sightings=None):
         self.types = labels.TypeDb()
         self.notable = labels.NotableDb()
         self.lookups = lookups or Lookups()
         self.uat = uat if uat is not None else UatHeard()
+        self.sightings = sightings if sightings is not None else SightingCounts()
         self._antenna = (0.0, [])
         self._network = (0.0, [])
         self.lock = threading.Lock()
@@ -345,7 +385,7 @@ class Feed:
             self._network = (_now(), ac)
         return ac
 
-    def label(self, a, source):
+    def label(self, a, source, counts=None):
         hex_ = a["hex"].lower().lstrip("~")
         info = self.types.lookup(hex_)
         flight = (a.get("flight") or "").strip() or None
@@ -361,11 +401,27 @@ class Feed:
         out["vrate"] = vrate if vrate is not None else a.get("geom_rate")
         out["operator"] = labels.operator(hex_, flight)
         out["reg"] = info.get("reg") or a.get("r") or a.get("reg")
-        out["type"] = {"code": info.get("type_code") or a.get("t") or a.get("type"),
-                       "name": info.get("type"), "desc": info.get("desc")}
+        # readsb's own "type" is the message type ("adsb_icao"), never the
+        # aircraft's: it was shown as one when the type database had no entry
+        # (2026-10-15). network-compare.py's records do put the aircraft type
+        # there (adsb.lol's "t"), so only theirs is read.
+        code = info.get("type_code") or a.get("t") or (a.get("type") if source == "network" else None)
+        out["type"] = {"code": code, "name": info.get("type"), "desc": info.get("desc")}
         nb = self.notable.get(hex_)
         out["notable"] = ({"category": nb[0], "label": labels.NOTABLE_LABELS.get(nb[0], nb[0])}
                           if isinstance(nb, list) and nb else None)
+        # What the kiosk shows for an aircraft and the app now does too (#77):
+        # its sighting counts, and the strongest reason it is notable, worked
+        # out once here (labels.rare_reason, as the phone alerts are).
+        total = nearby = None
+        if source == "antenna" and counts is not None:
+            total, nearby = counts.get(hex_, (0, 0))
+            out["sightings"] = {"total": total, "nearby": nearby}
+        rare = labels.rare_reason(hex_, out["type"]["code"], self.notable)
+        if (rare is None and total is not None and total <= 1
+                and len(counts) >= RARE_FIRST_MIN_CATALOGUE):
+            rare = {"kind": "first", "label": "Never seen here before", "operator": None}
+        out["rare"] = rare
         cs = labels.real_callsign(flight)
         out["route"] = self.lookups.routes.get(cs) if cs else None
         if cs and cs not in self.lookups.routes and isinstance(a.get("lat"), (int, float)):
@@ -381,7 +437,8 @@ class Feed:
         home = self._receiver()
         antenna = self._antenna_raw()
         heard = {a["hex"].lower().lstrip("~") for a in antenna}
-        aircraft = [self.label(a, "antenna") for a in antenna]
+        counts = self.sightings.get()
+        aircraft = [self.label(a, "antenna", counts) for a in antenna]
         network = []
         if with_network:
             for a in self._network_raw():

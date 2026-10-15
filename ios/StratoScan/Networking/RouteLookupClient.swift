@@ -1,9 +1,9 @@
 import Foundation
 
-struct FlightRoute {
-    let from: String
-    let to: String
-}
+/// An aircraft's route as the kiosk words it (#77): the core feed's text,
+/// or this lookup's in the same form -- every stop's city joined with " → ",
+/// "(unconfirmed)" when the route doesn't fit where the aircraft is.
+struct RouteText { let text: String; let plausible: Bool }
 
 /// Batched/cached/throttled the same way tar1090 itself queries this API,
 /// and the same way the web version's queueRouteLookup/flushRouteQueue do:
@@ -20,7 +20,14 @@ final class RouteLookupClient {
     private let batchInterval: UInt64 = 4_000_000_000 // 4s, in nanoseconds
     private let batchMax = 50
 
-    private(set) var cache: [String: FlightRoute?] = [:]
+    private(set) var cache: [String: FeedRoute?] = [:]
+
+    /// The route to show for an aircraft: the core feed's, else this lookup's.
+    func route(for p: PlaneState) -> RouteText? {
+        guard let r = p.feedRoute ?? (cache[p.cs] ?? nil) else { return nil }
+        let plausible = r.plausible != false
+        return RouteText(text: plausible ? r.text : "\(r.text) (unconfirmed)", plausible: plausible)
+    }
     private var pending: Set<String> = []
     private var queue: [(callsign: String, lat: Double, lon: Double)] = []
     private var flushTask: Task<Void, Never>?
@@ -67,18 +74,17 @@ final class RouteLookupClient {
             for r in routes {
                 guard let cs = r.callsign else { continue }
                 found.insert(cs)
-                // skip routes the API itself flags implausible for this
-                // flight's current position, rather than showing a
-                // possibly-wrong city pair
-                let airports = (r.plausible != false) ? r._airports : nil
-                if let airports, airports.count == 2 {
-                    cache[cs] = FlightRoute(from: airports[0].location, to: airports[1].location)
+                // As the core feed words it (core-feed.py): every stop, and an
+                // implausible route kept but marked, as the kiosk shows it.
+                if let airports = r._airports, airports.count >= 2 {
+                    cache[cs] = FeedRoute(text: airports.map(\.location).joined(separator: " → "),
+                                          plausible: r.plausible != false)
                 } else {
-                    cache[cs] = FlightRoute?.none
+                    cache[cs] = FeedRoute?.none
                 }
             }
             for e in batch where !found.contains(e.callsign) {
-                cache[e.callsign] = FlightRoute?.none
+                cache[e.callsign] = FeedRoute?.none
             }
         } catch {
             // network hiccup — don't cache anything, so these get retried later

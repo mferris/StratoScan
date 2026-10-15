@@ -17,6 +17,7 @@ final class PlaneState: Identifiable {
     var targetRange: Double = 0
     var alt: Altitude = .unknown
     var hdg: Double = 0
+    var realHdg: Double?
     var speed: Double?
     var lat: Double?
     var lon: Double?
@@ -45,6 +46,12 @@ final class PlaneState: Identifiable {
     var feedRoute: FeedRoute?
     var reg: String?
     var owner: FeedOwner?
+    /// The rest of what the kiosk shows for an aircraft (#77).
+    var squawk: String?
+    var vrate: Double?
+    var band: String?
+    var rare: FeedRare?
+    var sightings: FeedSightings?
     /// True when the core feed labelled this aircraft, so the app needn't.
     var fromFeed = false
 
@@ -94,6 +101,7 @@ final class PlaneState: Identifiable {
         cs = n.cs
         alt = n.alt
         hdg = n.hdg
+        realHdg = n.realHdg
         speed = n.speed
         lat = n.lat
         lon = n.lon
@@ -116,6 +124,11 @@ final class PlaneState: Identifiable {
         feedRoute = n.raw.feedRoute
         if let r = n.raw.reg { reg = r }
         owner = n.raw.owner
+        squawk = n.raw.squawk
+        vrate = n.raw.vrate
+        band = n.raw.band
+        rare = n.raw.rare
+        if let s = n.raw.sightings { sightings = s }
         if let name = n.raw.feedType?.name ?? n.raw.feedType?.code { typeLabel = name }
         if let op = n.raw.feedOperator {
             // The radar's own label (deploy/labels.py): the same rules as below,
@@ -135,11 +148,12 @@ final class PlaneState: Identifiable {
     /// The chosen theme's altitude colour (see Palette).
     static func altColor(_ alt: Altitude) -> Color { Palette.current.altColor(alt) }
 
+    /// Altitude as the kiosk writes it (formatAltitude in index.html, #77).
     static func altLabel(_ alt: Altitude) -> String {
         switch alt {
-        case .ground: return "GND"
-        case .unknown: return "----"
-        case .feet(let ft): return "FL\(Int((ft / 100).rounded()))"
+        case .ground: return "On ground"
+        case .unknown: return "—"
+        case .feet(let ft): return "\(Int(ft).formatted()) ft"
         }
     }
 }

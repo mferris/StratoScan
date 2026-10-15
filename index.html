@@ -580,6 +580,7 @@
   #detailPanel .dp-owner { margin-top: 2px; color: var(--text-dim); font-size: 0.75rem; }
   #detailPanel .dp-route { margin-top: 2px; color: var(--text-dim); font-size: 0.75rem; }
   #detailPanel .dp-route.implausible { color: var(--bad); }
+  #detailPanel .dp-icao { margin-top: 8px; color: var(--text-dim); font-size: 0.62rem; letter-spacing: 0.06em; }   /* as the app's details view ends (#77) */
   #detailPanel .dp-grid {
     margin-top: 14px;
     display: grid;
@@ -6399,12 +6400,13 @@ function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES', aler
       <div class="dp-field"><div class="dp-label">Heading</div><div class="dp-value">${hdgTxt}</div></div>
       <div class="dp-field"><div class="dp-label">Vert. rate</div><div class="dp-value">${vrateLabel(p.vrate)}</div></div>
       <div class="dp-field"><div class="dp-label">Squawk</div><div class="dp-value">${esc(p.squawk ?? '—')}</div></div>
-      <div class="dp-field"><div class="dp-label">Range / Brg</div><div class="dp-value">${rangeTxt}</div></div>
+      <div class="dp-field"><div class="dp-label">Distance</div><div class="dp-value">${rangeTxt}</div></div>
       ${p.band ? `<div class="dp-field"><div class="dp-label">Heard on</div><div class="dp-value">${esc(p.band === '1090' ? '1090 MHz' : p.band === '978' ? '978 MHz (UAT)' : '978 MHz, re-sent on 1090')}</div></div>` : ''}
       ${!p.rareReason ? '' : `<div class="dp-field dp-rare"><div class="dp-label">Notable</div><div class="dp-value">${esc(p.rareReason.label)}${p.rareReason.operator ? ' · ' + esc(p.rareReason.operator) : ''}</div></div>`}
       <div class="dp-field"><div class="dp-label">Sightings</div><div class="dp-value">${counts.total}</div></div>
-      <div class="dp-field"><div class="dp-label">Within 2mi</div><div class="dp-value">${counts.nearby}</div></div>
+      <div class="dp-field"><div class="dp-label">Within 2 mi</div><div class="dp-value">${counts.nearby}</div></div>
     </div>
+    <div class="dp-icao">ICAO ${esc(p.hex.toUpperCase())}</div>
     ${p.rareReason && p.rareReason.kind === 'notable' ? '<div class="dp-photo-credit" style="position:static;padding-top:6px">Notable list: plane-alert-db (ODbL)</div>' : ''}
   `;
   detailPanelEl.classList.add('show');

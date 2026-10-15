@@ -87,6 +87,27 @@ NOTABLE_LABELS = {
 
 # ---- what an aircraft is --------------------------------------------------------
 
+def rare_reason(hex_, type_code, notable, people=None):
+    """{"kind", "label", "operator"} for the strongest reason an aircraft is
+    notable, or None: listed in plane-alert-db ("notable"), a military operator
+    ("military"), or a rare type ("type"). The same order as the page's
+    rarityOf(). One copy for the phone alerts and the core feed (#77); the feed
+    is public and never passes `people`, so a well-known person's name only
+    ever reaches the owner's own screens and phone."""
+    e = notable.get(hex_)
+    if e:
+        operator = (e[2] or None) if len(e) > 2 else None
+        if not operator and people is not None:
+            operator = people.get(hex_)
+        return {"kind": "notable", "label": NOTABLE_LABELS.get(e[0], "Notable aircraft"), "operator": operator}
+    mil = military_operator(hex_)
+    if mil:
+        return {"kind": "military", "label": mil, "operator": None}
+    if type_code and type_code in NOTABLE_TYPES:
+        return {"kind": "type", "label": NOTABLE_TYPES[type_code], "operator": None}
+    return None
+
+
 def military_operator(hex_):
     try:
         v = int(hex_, 16)

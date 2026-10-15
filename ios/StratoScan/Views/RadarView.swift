@@ -446,6 +446,8 @@ struct RadarView: View {
 
     // MARK: - Label content & layout
 
+    private struct LabelLine { let text: String; let font: Font; let color: Color }
+
     private struct LabelContent {
         let callsign: String
         let callsignColor: Color
@@ -453,35 +455,45 @@ struct RadarView: View {
         let badgeColor: Color
         /// The airline's mark, when the app has it (#60).
         var badgeMark: UIImage? = nil
-        let typeLine: String?
-        let altLine: String
-        let routeLine: String?
+        /// The lines under the badge, as the kiosk's tag has them and in its
+        /// order (#77, docs/aircraft-fields.md): seen before, type,
+        /// altitude · speed, route, owner.
+        var lines: [LabelLine] = []
     }
 
     private func labelContent(for p: PlaneState) -> LabelContent {
         let speedTxt = p.speed.map { "\(Int($0.rounded()))" } ?? "--"
-        let altLine = "\(PlaneState.altLabel(p.alt)) · \(speedTxt)kt"
-        var routeLine: String?
-        if let r = p.feedRoute {
-            routeLine = r.plausible == false ? "\(r.text) (unconfirmed)" : r.text
-        } else if let route = viewModel.routeClient.cache[p.cs], let r = route {
-            routeLine = "\(r.from) → \(r.to)"
-        }
         if viewModel.labelMode != .full && p.hex != viewModel.selectedHex {
             return LabelContent(callsign: p.cs, callsignColor: p.color, badgeText: "", badgeColor: p.badgeColor,
-                                typeLine: nil, altLine: PlaneState.altLabel(p.alt), routeLine: nil)
+                                lines: [LabelLine(text: PlaneState.altLabel(p.alt), font: fontLine, color: colorTextDim)])
+        }
+        var lines: [LabelLine] = []
+        // Only once it means something, as on the kiosk: "×1" on every first
+        // sighting would be noise on every label.
+        if let s = p.sightings, s.total > 1 {
+            lines.append(LabelLine(text: "SEEN ×\(s.total)", font: fontSeen, color: pal.mid))
+        }
+        if let t = p.typeLabel { lines.append(LabelLine(text: t, font: fontLine, color: colorTextDim)) }
+        lines.append(LabelLine(text: "\(PlaneState.altLabel(p.alt)) · \(speedTxt)kt", font: fontLine, color: colorTextDim))
+        if let r = viewModel.routeClient.route(for: p) {
+            lines.append(LabelLine(text: r.text, font: fontLine, color: r.plausible ? colorTextDim : pal.bad))
+        }
+        if let o = p.owner {
+            lines.append(LabelLine(text: o.country.map { "\(o.name) (\($0))" } ?? o.name, font: fontOwner, color: colorTextDim))
         }
         return LabelContent(
             callsign: p.cs, callsignColor: p.color,
             badgeText: p.airlineLabel, badgeColor: p.badgeColor,
             badgeMark: AirlineLogoStore.shared.mark(for: p.airlineIcao),
-            typeLine: p.typeLabel, altLine: altLine, routeLine: routeLine
+            lines: lines
         )
     }
 
     private var fontCallsign: Font { .system(size: 11 * uiScale, weight: .bold, design: .monospaced) }
     private var fontBadge: Font { .system(size: 8 * uiScale, weight: .bold, design: .monospaced) }
     private var fontLine: Font { .system(size: 9 * uiScale, design: .monospaced) }
+    private var fontSeen: Font { .system(size: 7.5 * uiScale, weight: .bold, design: .monospaced) }
+    private var fontOwner: Font { .system(size: 8.5 * uiScale, design: .monospaced) }
 
     private struct LabelMetrics {
         let size: CGSize
@@ -493,9 +505,7 @@ struct RadarView: View {
         var lines: [(String, Font)] = [(c.callsign, fontCallsign)]
         if !c.badgeText.isEmpty { lines.append((c.badgeText, fontBadge)) }
         let markW: CGFloat = c.badgeMark == nil ? 0 : markSize(context) + 4
-        if let t = c.typeLine { lines.append((t, fontLine)) }
-        lines.append((c.altLine, fontLine))
-        if let rt = c.routeLine { lines.append((rt, fontLine)) }
+        for l in c.lines { lines.append((l.text, l.font)) }
 
         var maxW: CGFloat = 0
         var heights: [CGFloat] = []
@@ -551,21 +561,11 @@ struct RadarView: View {
             y += badgeRect.height + 2
             lineIdx = 2
         }
-        if let t = content.typeLine {
-            let text = context.resolve(Text(t).font(fontLine).foregroundColor(colorTextDim))
+        for l in content.lines {
+            let text = context.resolve(Text(l.text).font(l.font).foregroundColor(l.color))
             context.draw(text, at: CGPoint(x: x, y: y), anchor: .topLeading)
             y += metrics.lineHeights[lineIdx] + 2
             lineIdx += 1
-        }
-
-        let altText = context.resolve(Text(content.altLine).font(fontLine).foregroundColor(colorTextDim))
-        context.draw(altText, at: CGPoint(x: x, y: y), anchor: .topLeading)
-        y += metrics.lineHeights[lineIdx] + 2
-        lineIdx += 1
-
-        if let rt = content.routeLine {
-            let text = context.resolve(Text(rt).font(fontLine).foregroundColor(colorTextDim))
-            context.draw(text, at: CGPoint(x: x, y: y), anchor: .topLeading)
         }
     }
 
