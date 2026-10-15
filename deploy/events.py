@@ -45,7 +45,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from labels import (MILITARY_HEX_RANGES, NOTABLE_TYPES, NOTABLE_LABELS,  # noqa: E402
-                    military_operator, humanize_type, TypeDb, NotableDb, NotablePeople)
+                    military_operator, humanize_type, rare_reason, TypeDb, NotableDb, NotablePeople)
 AIRCRAFT_JSON = os.environ.get("STRATOSCAN_AIRCRAFT_JSON", "/run/readsb/aircraft.json")
 # The core feed (core-feed.py) knows each flight's route, looked up once there
 # (adsb.im); an alert leads with the type and where it is going (#59). Asked
@@ -143,20 +143,10 @@ def is_rotorcraft(a, info):
 def notable_reason(a, info, notable, people=None):
     """(label, operator) for the strongest reason this aircraft is notable, or None.
     A well-known person's aircraft carries the person's name (NotablePeople),
-    so the phone says who it is."""
-    e = notable.get(a["hex"])
-    if e:
-        operator = (e[2] or None) if len(e) > 2 else None
-        if not operator and people is not None:
-            operator = people.get(a["hex"])
-        return NOTABLE_LABELS.get(e[0], "Notable aircraft"), operator
-    mil = military_operator(a["hex"])
-    if mil:
-        return mil, None
-    code = info.get("type_code")
-    if code and code in NOTABLE_TYPES:
-        return NOTABLE_TYPES[code], None
-    return None
+    so the phone says who it is. The reasoning is labels.rare_reason, which
+    the core feed shares (#77)."""
+    r = rare_reason(a["hex"], info.get("type_code"), notable, people)
+    return (r["label"], r["operator"]) if r else None
 
 
 # ---- detection -----------------------------------------------------------------------

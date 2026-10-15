@@ -11,6 +11,10 @@ struct NormalizedAircraft {
     let range: Double
     let alt: Altitude
     let hdg: Double
+    /// The heading actually reported, nil when there is none: `hdg` falls
+    /// back to the bearing so the blip points somewhere, but the details
+    /// view says "—" then, as the kiosk does (#77).
+    let realHdg: Double?
     let speed: Double?
     let lat: Double?
     let lon: Double?
@@ -40,7 +44,8 @@ struct NormalizedAircraft {
         }
 
         let alt = a.altBaro ?? a.altGeom ?? .unknown
-        let hdg = a.track ?? a.trueHeading ?? a.magHeading ?? a.calcTrack ?? bearing
+        let realHdg = a.track ?? a.trueHeading ?? a.magHeading ?? a.calcTrack
+        let hdg = realHdg ?? bearing
         let cs = (a.flight?.trimmingCharacters(in: .whitespaces)).flatMap { $0.isEmpty ? nil : $0 } ?? a.hex.uppercased()
 
         // scheduled/charter flights are 3 letters + a number (e.g. DAL1234);
@@ -59,7 +64,7 @@ struct NormalizedAircraft {
         let airline = airlineIcao.flatMap { AirlineTable.byICAO[$0] }
 
         return NormalizedAircraft(
-            hex: a.hex, cs: cs, bearing: bearing, range: range, alt: alt, hdg: hdg,
+            hex: a.hex, cs: cs, bearing: bearing, range: range, alt: alt, hdg: hdg, realHdg: realHdg,
             speed: a.gs, lat: a.lat, lon: a.lon, airlineIcao: airlineIcao, airline: airline,
             military: military, raw: a
         )

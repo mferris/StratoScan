@@ -34,6 +34,18 @@ struct FeedOperator: Decodable { let kind: String; let label: String; let color:
 struct FeedRoute: Decodable { let text: String; let plausible: Bool? }
 struct FeedType: Decodable { let code: String?; let name: String?; let desc: String? }
 struct FeedOwner: Decodable { let name: String; let country: String? }
+/// Why an aircraft is notable, worked out on the radar (labels.rare_reason):
+/// kind "notable" (plane-alert-db), "military", "type" or "first". Never a
+/// person's name: the feed is public (#77).
+struct FeedRare: Decodable {
+    let kind: String
+    let label: String
+    let operatorName: String?
+    enum CodingKeys: String, CodingKey { case kind, label; case operatorName = "operator" }
+}
+/// How many times this radar has picked it up, and how many came within
+/// the nearby-alert radius (the sighting store's counts, #77).
+struct FeedSightings: Decodable { let total: Int; let nearby: Int }
 
 /// Raw shape of one entry in aircraft.json, decoded permissively — most
 /// fields are optional since readsb omits whatever it hasn't received yet.
@@ -58,11 +70,20 @@ struct RawAircraft: Decodable {
     let feedType: FeedType?
     let reg: String?
     let owner: FeedOwner?
+    // Shown in the details view and on the tags as the kiosk shows them (#77).
+    let squawk: String?
+    let vrate: Double?
+    let band: String?             // "1090", "978" or "978 via 1090"
+    let rare: FeedRare?
+    let sightings: FeedSightings?
 
     var isNetwork: Bool { source == "network" }
 
     enum CodingKeys: String, CodingKey {
         case hex, flight, lat, lon, gs, track, source, reg, owner, alt
+        case squawk, vrate, band, rare, sightings
+        case baroRate = "baro_rate"
+        case geomRate = "geom_rate"
         case feedOperator = "operator"
         case feedRoute = "route"
         case feedType = "type"
@@ -96,6 +117,13 @@ struct RawAircraft: Decodable {
         feedType = try? c.decodeIfPresent(FeedType.self, forKey: .feedType)   // readsb's "type" is a string: nil
         reg = try? c.decodeIfPresent(String.self, forKey: .reg)
         owner = try? c.decodeIfPresent(FeedOwner.self, forKey: .owner)
+        squawk = try? c.decodeIfPresent(String.self, forKey: .squawk)
+        // The core feed says "vrate"; plain aircraft.json, baro_rate or geom_rate.
+        vrate = (try? c.decodeIfPresent(Double.self, forKey: .vrate)) ?? (try? c.decodeIfPresent(Double.self, forKey: .baroRate))
+            ?? (try? c.decodeIfPresent(Double.self, forKey: .geomRate)) ?? nil
+        band = try? c.decodeIfPresent(String.self, forKey: .band)
+        rare = try? c.decodeIfPresent(FeedRare.self, forKey: .rare)
+        sightings = try? c.decodeIfPresent(FeedSightings.self, forKey: .sightings)
     }
 
     private static func decodeAltitude(_ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) throws -> Altitude? {
