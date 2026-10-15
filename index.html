@@ -1896,6 +1896,10 @@ const locEl = document.getElementById('loc');
 //   canvasFps   redraw the aircraft canvas this many times a second instead of CANVAS_FPS
 //   sweepJs     turn the sweep from the page's frame loop, as before, not the compositor
 //   sweepSteps  compositor sweep in this many steps a second instead of every display frame
+//   noHeatmap   hide the landing heatmap      noWeather  no storm or lightning overlays
+//   noNetwork   no network (adsb.lol) aircraft
+// These three override only what is drawn, never the saved settings (2026-10-15:
+// finding what doubled the renderer's shared-memory growth, 2 MB blocks).
 // The sweep turns on the compositor, not in tick(). tick() only redraws the
 // aircraft canvas every third frame (see CANVAS_FPS), so its frames are
 // uneven -- two cheap, one heavy -- and a sweep stepped from it visibly
@@ -1924,6 +1928,9 @@ function applyPerfFlags() {
   if (PERF.canvasFps > 0) canvasMinMs = 1000 / PERF.canvasFps - 4;
   if (PERF.sweepJs) { sweepAnim.cancel(); sweepAnim = null; }
   else if (PERF.sweepSteps > 0) startSweep(PERF.sweepSteps);
+  if (PERF.noHeatmap) applyHeatmapVisibility();
+  if (PERF.noWeather && map) for (const id of ['storms', 'lightning']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
+  if (PERF.noNetwork) { ghosts = []; ghostTracks.clear(); }
   console.log('perf experiment flags:', JSON.stringify(PERF));
 }
 fetch('/data/perf-debug.json', { cache: 'no-store' })
@@ -3063,7 +3070,7 @@ function initApproachLayer() {
 // than opting out).
 function applyHeatmapVisibility() {
   if (!map || !map.getLayer('approaches-heat')) return;
-  map.setLayoutProperty('approaches-heat', 'visibility', alertSettings.heatmap ? 'visible' : 'none');
+  map.setLayoutProperty('approaches-heat', 'visibility', alertSettings.heatmap && !PERF.noHeatmap ? 'visible' : 'none');
 }
 
 // "liberty" is styled for a light background (black text, white halo) --
@@ -3164,7 +3171,7 @@ function viewLooksBeyondRing() {
   return !!home && (view.scale < 0.66 || Math.hypot(view.ox, view.oy) > R * view.scale);
 }
 async function refreshViewFeed() {
-  const on = alertSettings.networkCompare && viewLooksBeyondRing();
+  const on = alertSettings.networkCompare && !PERF.noNetwork && viewLooksBeyondRing();
   if (!on) {
     if (viewFeedOn) { for (const [hex, t] of ghostTracks) if (t.fromView) ghostTracks.delete(hex); }
     viewFeedOn = false; viewFeedCount = 0; viewFeedCovered = 0; viewFeedLast = { at: -1e9, key: '' };
@@ -3442,7 +3449,7 @@ async function refreshStorms() {
   // RainViewer, no tiles decoded, no textures uploaded. This ran on its timer
   // regardless before, so a radar with storms off was still pulling a fresh
   // radar mosaic every five minutes and throwing it away.
-  if (!map || !alertSettings.storms) return;
+  if (!map || !alertSettings.storms || PERF.noWeather) return;
   try {
     const res = await fetch(RAINVIEWER_API_URL, { cache: 'no-store' });
     if (!res.ok) return;
@@ -3544,7 +3551,7 @@ function applyLightningVisibility() {
 // stale cached tile indefinitely, same problem RainViewer's storms layer
 // avoids by baking a real timestamp into its own tile path instead.
 function refreshLightning() {
-  if (!map || !alertSettings.lightning) return;
+  if (!map || !alertSettings.lightning || PERF.noWeather) return;
   // A unit relocated out of GOES-East's footprint keeps whatever setting it
   // had, so the guard belongs here too, not only on the settings row: every
   // tile outside the footprint is a 404, forever, on a timer.
@@ -4687,7 +4694,7 @@ let networkStats = null;  // last scorecard
 let networkError = null;
 
 async function refreshNetworkCompare() {
-  if (!alertSettings.networkCompare) { ghosts = []; ghostTracks.clear(); return; }
+  if (!alertSettings.networkCompare || PERF.noNetwork) { ghosts = []; ghostTracks.clear(); return; }
   try {
     const res = await fetch(NETWORK_URL, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
