@@ -35,7 +35,7 @@ check("ConditionPathExists=!/etc/stratoscan/tls/unit.pem" in svc and "Before=lig
 drop = (D / "lighttpd-stratoscan-tls.conf").read_text()
 check("After=stratoscan-tls-cert.service" in drop and "Wants=stratoscan-tls-cert.service" in drop, "lighttpd waits for it")
 conf = (D / "85-stratoscan-tls.conf").read_text()
-check('$SERVER["socket"] == ":443"' in conf and 'ssl.pemfile = "/etc/stratoscan/tls/unit.pem"' in conf and "mod_openssl" in conf,
+check('$SERVER["socket"] == ":4443"' in conf and 'ssl.pemfile = "/etc/stratoscan/tls/unit.pem"' in conf and "mod_openssl" in conf,
       "lighttpd serves https with the certificate")
 inst = (D / "install-setup-server.sh").read_text()
 for needle in ("lighttpd-mod-openssl", "tls-cert.sh", "stratoscan-tls-cert.service", "lighttpd-stratoscan-tls.conf", "85-stratoscan-tls.conf"):
@@ -84,5 +84,45 @@ if made:
     check(link.endswith("&f=" + fp) and len(fp) == 64, "and the link ends with it")
 else:
     print("skip openssl not usable here; fingerprint checks skipped")
+# ---- #75: the setup https and the public address never want the same port ----
+# Both asked for 443: lighttpd on every address, Tailscale on the tailnet ones
+# for the public address. Whichever started first at boot won, and a lighttpd
+# that lost took the whole page down. Found rebuilding the first unit (2026-10-15).
+import re
+socket_ports = set()
+for f in D.glob("*.conf"):
+    for m in re.finditer(r'\$SERVER\["socket"\]\s*==\s*"[^"]*:(\d+)"', f.read_text()):
+        socket_ports.add(int(m.group(1)))
+lighttpd_ports = {80} | socket_ports                 # 80: Debian's server.port
+setupd = (D / "setupd.py").read_text()
+funnel_on = re.findall(r'run\(\[TAILSCALE, "funnel", "--bg"[^\]]*\]', setupd)
+check(len(funnel_on) == 1 and "--https" not in funnel_on[0],
+      "the public address is turned on in one place, on Tailscale's default port 443")
+tailscale_ports = {443}
+check(not (lighttpd_ports & tailscale_ports), f"lighttpd binds {sorted(lighttpd_ports)}, never Tailscale's 443")
+https_port = int(re.search(r'\$SERVER\["socket"\] == ":(\d+)"', conf).group(1))
+check(https_port not in (443, 8443, 10000), "nor any port Funnel can use (443, 8443, 10000)")
+nft = (D / "stratoscan-https.nft").read_text()
+rule = [l.strip() for l in nft.splitlines() if "redirect" in l and not l.strip().startswith("#")]
+check(len(rule) == 1 and rule[0] == f'iifname != "tailscale0" fib daddr type local tcp dport 443 redirect to :{https_port}',
+      "the app's 443 goes to lighttpd's https port, for the radar's own addresses, off the tailnet")
+check("type nat hook prerouting priority dstnat" in nft, "as incoming connections are made")
+body = "\n".join(l for l in nft.splitlines() if not l.strip().startswith("#"))
+check("flush ruleset" not in body and body.index("table ip stratoscan_https\n") < body.index("delete table ip stratoscan_https")
+      < body.index("table ip stratoscan_https {"),
+      "replacing only its own table, never Tailscale's rules")
+svc = (D / "stratoscan-https.service").read_text()
+check("ExecStart=/usr/sbin/nft -f /etc/stratoscan/https.nft" in svc and "RemainAfterExit=yes" in svc
+      and "ExecStop=-/usr/sbin/nft delete table ip stratoscan_https" in svc, "its service loads it and can take it away")
+check("After=nftables.service" in svc and "PartOf=nftables.service" in svc,
+      "and loads it again after Debian's nftables.service, whose config flushes everything")
+check("WantedBy=multi-user.target" in svc, "at every boot")
+check(" nftables >/dev/null" in inst.split('echo "== packages =="')[1].split("echo")[0], "the installer adds nftables to every unit")
+check("install -m 0644 deploy/stratoscan-https.nft /etc/stratoscan/https.nft" in inst
+      and "if live; then nft -c -f /etc/stratoscan/https.nft; fi" in inst, "installs the rule, and on a live unit checks it with nft")
+enabling = inst.split('echo "== enabling =="')[1].split("done")[0]
+check("stratoscan-https.service" in enabling and "stratoscan-https.service" in inst.split('echo "== system services and web routing =="')[1].split("done")[0],
+      "and installs and enables its service")
+
 print("setup tls checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)

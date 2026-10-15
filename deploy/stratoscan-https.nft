@@ -1,0 +1,21 @@
+#!/usr/sbin/nft -f
+# Install to /etc/stratoscan/https.nft (loaded by stratoscan-https.service).
+#
+# The app's setup flow opens https://<the radar's address>, port 443, and
+# lighttpd serves it on 4443 (85-stratoscan-tls.conf, #75): Tailscale keeps
+# 443 on the tailnet addresses for the public address. This sends 443 to 4443
+# for connections to the radar itself (fib daddr type local) arriving on any
+# interface but tailscale0. Only the radar's own addresses: a phone on the
+# setup hotspot reaching some other https site must not be pulled in here.
+#
+# It replaces only its own table, never the whole ruleset: Tailscale keeps its
+# own rules there too. (The empty declaration first lets the delete succeed
+# when the table is not there yet.)
+table ip stratoscan_https
+delete table ip stratoscan_https
+table ip stratoscan_https {
+    chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept;
+        iifname != "tailscale0" fib daddr type local tcp dport 443 redirect to :4443
+    }
+}

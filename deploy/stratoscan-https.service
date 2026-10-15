@@ -1,0 +1,17 @@
+[Unit]
+Description=StratoScan: the setup page's https (443) to lighttpd's 4443, except on the tailnet
+Documentation=https://github.com/mferris/StratoScan/issues/75
+# Debian's nftables.service, where a managed unit enables it, starts its
+# config with `flush ruleset`, which would drop this table as well: so this
+# loads after it, and again whenever it is restarted.
+After=nftables.service
+PartOf=nftables.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/stratoscan/https.nft
+ExecStop=-/usr/sbin/nft delete table ip stratoscan_https
+
+[Install]
+WantedBy=multi-user.target

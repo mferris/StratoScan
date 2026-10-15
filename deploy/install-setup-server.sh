@@ -63,7 +63,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 echo "== packages =="
 apt-get install -y -q lighttpd lighttpd-mod-openssl git curl ca-certificates python3-venv python3-cryptography \
-  python3-qrcode uhubctl unattended-upgrades dpkg-repack javascript-common rtl-sdr >/dev/null
+  python3-qrcode uhubctl unattended-upgrades dpkg-repack javascript-common rtl-sdr nftables >/dev/null
 echo "  ok"
 
 echo "== receiver: readsb $READSB_TAG =="
@@ -226,7 +226,7 @@ for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-ga
          stratoscan-netwatchdog.service stratoscan-tls-cert.service \
          stratoscan-radio.service stratoscan-uat.service stratoscan-controls.service \
          stratoscan-os-update.service stratoscan-os-update.timer stratoscan-os-confirm.service \
-         stratoscan-os-restart.service stratoscan-os-restart.timer; do
+         stratoscan-os-restart.service stratoscan-os-restart.timer stratoscan-https.service; do
   install -m 0644 "deploy/$u" /etc/systemd/system/
 done
 # The control arc (Retro with Dials, roadmap 5.1): its service runs only once
@@ -246,6 +246,12 @@ install -m 0644 deploy/readsb-stratoscan-radio.conf /etc/systemd/system/readsb.s
 install -d -m 0755 /etc/systemd/system/lighttpd.service.d
 install -m 0644 deploy/lighttpd-stratoscan-tls.conf /etc/systemd/system/lighttpd.service.d/stratoscan-tls.conf
 if live; then sh deploy/tls-cert.sh; fi
+# lighttpd's https is on 4443; this sends the app's 443 there, except on the
+# tailnet, where Tailscale's public address keeps 443 (#75). Checked before
+# anything relies on it: a rule nft would refuse fails the install.
+install -d -m 0755 /etc/stratoscan
+install -m 0644 deploy/stratoscan-https.nft /etc/stratoscan/https.nft
+if live; then nft -c -f /etc/stratoscan/https.nft; fi
 # A unit built before 2026-10-09 has the directory closed (0750), which kept
 # the setup server from reading the certificate: open it, the key stays 0640.
 if [ -d /etc/stratoscan/tls ]; then chmod 0755 /etc/stratoscan/tls; fi
@@ -568,7 +574,8 @@ for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-ga
          stratoscan-ota-check.timer stratoscan-ota-auto.timer stratoscan-netwatchdog.service \
          stratoscan-tls-cert.service stratoscan-radio.service stratoscan-uat.service \
          stratoscan-controls.service lighttpd.service readsb.service \
-         stratoscan-os-update.timer stratoscan-os-restart.timer stratoscan-os-confirm.service; do
+         stratoscan-os-update.timer stratoscan-os-restart.timer stratoscan-os-confirm.service \
+         stratoscan-https.service; do
   enable_unit "$u"
 done
 if ! live; then
