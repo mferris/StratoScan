@@ -456,6 +456,19 @@ if live; then
   echo "  fan steps now: $(cat $TZ0/trip_point_3_temp 2>/dev/null) / $(cat $TZ0/trip_point_4_temp 2>/dev/null)"
 fi
 
+# USB current. Powered by the case's 12 V trigger and 5 V regulator (#53),
+# the Pi can't ask its supply what it offers, and its firmware then limits
+# the USB ports to 600 mA in all: too little for the display, which draws
+# through the Pi's USB, and the receiver's two radios. With the official 5 A
+# supply plugged straight in, the firmware sets this itself, so it changes
+# nothing there. PSU_MAX_CURRENT in the EEPROM would also hide the warning at
+# boot, but writing the EEPROM moves the bootloader, which this project never
+# does. It goes under its own [all], whatever section config.txt ends in.
+if [ -f "$CFG" ] && ! grep -q '^usb_max_current_enable=' "$CFG"; then
+  printf '\n[all]\n# StratoScan: full USB current when powered by the case regulator (#53)\nusb_max_current_enable=1\n' >> "$CFG"
+  echo "  USB current limit lifted in config.txt (from the next boot)"
+fi
+
 echo "== spoken alerts (Piper text-to-speech, offline) =="
 # Piper (GPL-3.0-or-later) runs as its own program in its own virtualenv,
 # installed from PyPI rather than shipped in this repository. The voice is
