@@ -161,6 +161,9 @@ DEPLOY_ALLOWED = {
     "wake-listener.py", "sighting-store.py", "approach-store.py",
     "network-compare.py", "photo-proxy.py", "funnel-gateway.py",
     "setup-server.py", "setup-ui.html", "shm-guard.sh", "ota.py",
+    # The screensaver's resume step (2026-10-16); swayidle runs it fresh each
+    # time, so no restart is needed.
+    "screen-resume.sh",
     "airports.json", "net-watchdog.py",
     # Makes a unit's own TLS certificate once (run by its oneshot service).
     "tls-cert.sh",

@@ -485,6 +485,85 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass  # systemd journal already timestamps; this would just be noise
 
 
+# ---- real input, for the screensaver (2026-10-16) --------------------------
+# The desktop reports "activity" for a touch, and also whenever an application
+# keeps the screen awake -- Chromium does for as long as the page plays a
+# sound -- and swayidle cannot tell the two apart, so every alert chime woke
+# the dark panel for 20 minutes, all night. screen-resume.sh can tell: this
+# notes each real input (a touch, a key, a button, the dials' virtual
+# keyboard) in LAST_INPUT, and the screensaver lights the panel only for one.
+LAST_INPUT = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "stratoscan-last-input")
+INPUT_RESCAN_S = 30          # new devices (a reconnected touchscreen, the dials) are found this often
+EV_KEY, EV_REL, EV_ABS = 1, 2, 3
+
+
+def _is_input(ev_type):
+    """A person did something: a key or button, a pointer move, a touch.
+    Not a switch event (the HDMI jacks' plugged/unplugged), a sync or misc."""
+    return ev_type in (EV_KEY, EV_REL, EV_ABS)
+
+
+def _note_input(path=None):
+    path = path or LAST_INPUT
+    try:
+        with open(path, "a"):
+            pass
+        os.utime(path, None)
+    except OSError:
+        pass
+
+
+def _input_watch(evdev=None, rounds=None):
+    """Note real input from every input device, found again every
+    INPUT_RESCAN_S. Without python3-evdev or readable devices nothing is ever
+    noted, and the screensaver wakes on any activity, as before."""
+    import select
+    if evdev is None:
+        try:
+            import evdev
+        except ImportError:
+            return
+    devices = {}                 # fd -> device
+    last_scan = last_note = 0.0
+    while rounds is None or rounds > 0:
+        if rounds is not None:
+            rounds -= 1
+        now = time.time()
+        if now - last_scan >= INPUT_RESCAN_S:
+            last_scan = now
+            known = {d.path for d in devices.values()}
+            for path in evdev.list_devices():
+                if path in known:
+                    continue
+                try:
+                    d = evdev.InputDevice(path)
+                except OSError:
+                    continue
+                devices[d.fd] = d
+        if not devices:
+            time.sleep(INPUT_RESCAN_S if rounds is None else 0)
+            continue
+        try:
+            ready, _, _ = select.select(list(devices), [], [], 5)
+        except (OSError, ValueError):
+            ready = []
+        for fd in ready:
+            d = devices.get(fd)
+            try:
+                for e in d.read():
+                    if _is_input(e.type):
+                        if time.time() - last_note >= 1:
+                            _note_input()
+                            last_note = time.time()
+                        break
+            except OSError:              # unplugged: found again when it comes back
+                devices.pop(fd, None)
+                try:
+                    d.close()
+                except OSError:
+                    pass
+
+
 if __name__ == "__main__":
     # A fresh process has restarted nothing yet, so any count on disk is a
     # previous instance's. Left in place it could never be cleared -- a
@@ -493,4 +572,5 @@ if __name__ == "__main__":
     _record_stuck(0)
     threading.Thread(target=_watchdog, daemon=True).start()
     threading.Thread(target=_hold_loop, daemon=True).start()
+    threading.Thread(target=_input_watch, daemon=True).start()
     http.server.ThreadingHTTPServer(LISTEN, Handler).serve_forever()
