@@ -82,6 +82,12 @@ RING_NM = 20            # what the radar draws; counts use it, as the kiosk's do
 UAT_JSON = ("127.0.0.1", int(os.environ.get("STRATOSCAN_UAT_JSON_PORT", "30979")))
 UAT_KEEP_S = 90
 UAT_RETRY_S = 30
+# How long the decoder may say nothing before the connection is made again. A
+# quiet 978 band is normal (RDU has decoded nothing at all), and every
+# reconnect costs two "accepted a connection" lines in the journal: at 120 s
+# that was ~1,150 lines a day, ~70 MB of SD card writes (2026-10-16). A
+# decoder that restarts closes the connection, which is seen at once anyway.
+UAT_IDLE_S = 3600
 STALE_S = 60            # readsb keeps an aircraft this long after its last message
 AIRCRAFT_CACHE_S = 1.0  # one read of aircraft.json per second, however many clients
 NETWORK_CACHE_S = 60.0  # network-compare caches upstream for 60 s itself (#67)
@@ -259,7 +265,7 @@ class UatHeard:
         while True:
             try:
                 with socket.create_connection(UAT_JSON, timeout=10) as s:
-                    s.settimeout(120)
+                    s.settimeout(UAT_IDLE_S)
                     buf = b""
                     while True:
                         d = s.recv(65536)

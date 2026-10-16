@@ -82,6 +82,11 @@ check(says and all(p == "<5>" for p in says), "while every line it logs goes out
 check('"$STATE/last-log"' in guard.split("below thresholds")[0][-600:],
       "and its all's-well line is written once an hour, not every five minutes")
 
+core = (D / "core-feed.py").read_text()
+m = re.search(r"^UAT_IDLE_S = (\d+)$", core, re.M)
+check(m and int(m.group(1)) >= 3600 and "s.settimeout(UAT_IDLE_S)" in core,
+      "the core feed stays connected to a quiet 978 decoder (each reconnect logged two lines)")
+
 osu = (D / "os-update.py").read_text()
 promote = osu.split("def promote(")[1].split("\ndef ")[0]
 check("prune_kernels(state)" in promote, "a kept kernel removes the older ones (~190 MB each)")
