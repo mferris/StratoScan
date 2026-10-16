@@ -143,7 +143,7 @@ else:
     coords = [[rng.uniform(-180, 180), rng.uniform(-85, 85)] for _ in range(3000)]
     coords += [[k * 0.002 + 0.001, -k * 0.002 - 0.001] for k in range(-500, 500)]      # half-way points
     coords += [[RDU[0], RDU[1]], [0.0, 0.0], [-0.001, 0.001]]
-    js = "let map = null; const posted = []; const APPROACH_STORE_URL = '/approaches';\nfunction storeWrite(url, body) { posted.push(body); return Promise.resolve(); }\n" + block + r"""
+    js = "let map = null; const posted = []; const APPROACH_STORE_URL = '/approaches';\nfunction storeWrite(url, body) { posted.push(body); return Promise.resolve(); }\nfunction drain(r) { return r; }\n" + block + r"""
 const coords = JSON.parse(process.argv[1]);
 const keys = coords.map(([lon, lat]) => approachCellOf(lon, lat));
 commitApproachTrack(JSON.parse(process.argv[2]), 'a1b2c3');

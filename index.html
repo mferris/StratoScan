@@ -1397,6 +1397,27 @@
 </div>
 
 <script>
+// ---- Unread response bodies are let go (2026-10-15) --------------------------
+// Chromium hands every response body to the page through a 2 MB shared-memory
+// pipe, which stays mapped until the Response is garbage-collected -- and the
+// collector, which cannot see that memory, is in no hurry. The page's
+// fire-and-forget posts, and error replies nobody reads, left a few a minute:
+// the renderer's shared memory grew 6-10 MB a minute and the shm guard
+// reloaded the page every ~80 minutes (the StratoScan picture flashing up). So
+// a body still unread 10 s after its response arrived is cancelled; every
+// reader in this page starts reading at once.
+const nativeFetch = window.fetch.bind(window);
+const UNREAD_BODY_MS = 10000;
+window.fetch = async function (...args) {
+  const res = await nativeFetch(...args);
+  if (res.body) setTimeout(() => drain(res), UNREAD_BODY_MS);
+  return res;
+};
+/** The reply isn't wanted: let its body go now rather than in 10 s. */
+function drain(res) {
+  try { if (res && res.body && !res.bodyUsed) res.body.cancel().catch(() => {}); } catch (e) {}
+  return res;
+}
 // ---- Saved settings from before the rename -----------------------------
 // Everything this page keeps in localStorage was stored under 'flightradar'
 // keys until the project became StratoScan. Copy each one across once, before
@@ -2373,7 +2394,7 @@ function commitApproachTrack(points, hex) {
   for (const key of new Set(points.map(p => approachCellOf(p[0], p[1])))) countApproachCell(key, 1);
   if (map && map.getSource('approaches')) map.getSource('approaches').setData(approachPointsGeoJSON());
   // The hex lets the store count a landing once when several open browsers report it.
-  storeWrite(APPROACH_STORE_URL, { hex, points })
+  storeWrite(APPROACH_STORE_URL, { hex, points }).then(drain)
     .catch(e => {}); // approach-store unavailable -- this session's own view still updated above, just won't be shared
 }
 
@@ -2459,7 +2480,7 @@ function recordSighting(hex, kind) {
   const current = sightingCounts.get(hex) || { total: 0, nearby: 0 };
   sightingCounts.set(hex, { ...current, [kind]: (current[kind] || 0) + 1 });
   storeWrite(SIGHTING_STORE_URL, { hex, kind })
-    .then(res => res && res.ok ? res.json() : null)
+    .then(res => res && res.ok ? res.json() : (drain(res), null))
     .then(counts => { if (counts) sightingCounts.set(hex, counts); })
     .catch(e => {}); // sighting-store unavailable -- this session's own optimistic count stands, just won't be shared
 }
@@ -2530,7 +2551,7 @@ async function backfillClassifications() {
       } });
     }
     try {
-      const res = await storeWrite(SIGHTING_STORE_URL, { batch });
+      const res = drain(await storeWrite(SIGHTING_STORE_URL, { batch }));
       if (!res) return;   // read-only here
     } catch (e) {
       return;
@@ -2541,7 +2562,7 @@ async function backfillClassifications() {
 }
 
 function postSighting(body) {
-  return storeWrite(SIGHTING_STORE_URL, body).catch(e => null);   // same tolerance as recordSighting: it is a counter, not a transaction
+  return storeWrite(SIGHTING_STORE_URL, body).then(drain).catch(e => null);   // same tolerance as recordSighting: it is a counter, not a transaction
 }
 
 // Military outranks the callsign deliberately: a military airframe flying
@@ -3759,7 +3780,7 @@ const ON_DEVICE = location.hostname === 'localhost' || location.hostname === '12
 // on, the splash is on screen, so the cover can go: the picture beneath is
 // the same.
 if (ON_DEVICE) requestAnimationFrame(() => requestAnimationFrame(() => {
-  fetch('/wake/painted', { method: 'POST' }).catch(() => {});
+  fetch('/wake/painted', { method: 'POST' }).then(drain).catch(() => {});
 }));
 let radarName = '';   // this radar's name, once the setup service has said it
 const ONBOARD_POLL_MS = 5000;
@@ -3913,7 +3934,7 @@ function wakeScreenForAlert(why = 'alert') {
   applyNightDim();
   // The reason goes in the journal (wake-listener.py): the panel was found
   // never to blank, and nothing said which alert kept waking it (2026-10-10).
-  if (ON_DEVICE) fetch('/wake?why=' + encodeURIComponent(why), { method: 'POST' }).catch(() => {});   // the panel only (#67)
+  if (ON_DEVICE) fetch('/wake?why=' + encodeURIComponent(why), { method: 'POST' }).then(drain).catch(() => {});   // the panel only (#67)
 }
 
 // ---- Nearby-aircraft alert ---------------------------------------------
@@ -4229,7 +4250,7 @@ function applyScreenPolicy() {
   const now = Date.now();
   if (mode === screenModeSent.mode && now - screenModeSent.at < 5 * 60 * 1000) return;
   screenModeSent = { mode, at: now };
-  fetch('/wake/mode?m=' + encodeURIComponent(mode), { method: 'POST' }).catch(() => {});
+  fetch('/wake/mode?m=' + encodeURIComponent(mode), { method: 'POST' }).then(drain).catch(() => {});
 }
 
 // Opens a short window in which quiet hours step aside, then closes it on its
@@ -4267,7 +4288,7 @@ document.addEventListener('pointerdown', () => {
   const now = performance.now();
   if (now - lastTouchReport < 5000) return;
   lastTouchReport = now;
-  fetch('/wake/touch', { method: 'POST' }).catch(() => {});
+  fetch('/wake/touch', { method: 'POST' }).then(drain).catch(() => {});
 }, { capture: true, passive: true });
 
 // Shared tone-sequence player -- each note is [freq, startOffset, dur, peakGain].
@@ -6296,7 +6317,7 @@ function reportPainted(now) {
   // the server-side stores -- beyond trails and ghost tracks, which rebuild
   // within a sweep.
   fetch('/wake/alive', { method: 'POST' })
-    .then(r => (r.status === 200 ? r.json() : null))
+    .then(r => (r.status === 200 ? r.json() : (drain(r), null)))
     .then(d => { if (d && d.reload && !reloadWantedAt) reloadWhenQuiet(); })
     .catch(() => {});  // absent off-device; harmless
 }
@@ -8749,7 +8770,7 @@ document.addEventListener('keydown', (e) => {
   const fn = CONTROL_KEYS[e.code];
   if (!fn) return;
   e.preventDefault();
-  if (ON_DEVICE) fetch('/wake/touch', { method: 'POST' }).catch(() => {});   // using the dials counts as using the screen
+  if (ON_DEVICE) fetch('/wake/touch', { method: 'POST' }).then(drain).catch(() => {});   // using the dials counts as using the screen
   fn();
 }, { capture: true });
 document.addEventListener('keydown', (e) => {   // a laptop: + and - zoom, 0 goes home, l holds
