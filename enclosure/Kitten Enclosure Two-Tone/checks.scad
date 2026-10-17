@@ -862,9 +862,10 @@ if (check=="cable_slot_other_side") {
 }
 
 // ---- the power fix (roadmap 5.7): the trigger board in the USB-C window ----
-// The bezel and the mount clamp the board through the window's two screws.
-// The speakers themselves aren't in shell() (only their brackets), so their
-// bodies are drawn here: 100 x 45 x 21 on each bracket's face.
+// The mount holds the board behind the plate: its flange in front, a 1.75 mm
+// filament pin behind. The speakers themselves aren't in shell() (only their
+// brackets), so their bodies are drawn here: 100 x 45 x 21 on each bracket's
+// face.
 module pwr_speaker_bodies() {
   for (a = speaker_angles) rotate([0, 0, a])
     translate([outer_dia/2 - wall - speaker_bracket_depth - speaker_h, -speaker_w/2, (shell_depth - speaker_d)/2])
@@ -877,13 +878,15 @@ module pwr_screw_probes(into, d) {
       cylinder(d = d, h = back_plate_t + into, $fn = 24);
 }
 if (check=="power_mount_vs_plate")    intersection() { power_trigger_mount_placed(); back_plate(); }
-if (check=="power_bezel_in_pocket")   intersection() { power_bezel_placed(); back_plate(); }
-if (check=="power_board_held")        intersection() { power_trigger_board_placed(); union() { back_plate(); power_trigger_mount_placed(); power_bezel_placed(); } }
-if (check=="power_plug_reaches")      intersection() { power_plug_probe(); union() { back_plate(); power_bezel_placed(); power_trigger_mount_placed(); } }
-if (check=="power_screws_pass")       intersection() { pwr_screw_probes(0, 2.9); union() { back_plate(); power_bezel_placed(); } }
+if (check=="power_board_held")        intersection() { power_trigger_board_placed(); union() { back_plate(); power_trigger_mount_placed(); } }
+if (check=="power_plug_reaches")      intersection() { power_plug_probe(); union() { back_plate(); power_trigger_mount_placed(); } }
+if (check=="power_pin_passes")        intersection() { power_pin_probe(); union() { power_trigger_mount_placed(); power_trigger_board_placed(); } }
+if (check=="power_screws_pass")       intersection() { pwr_screw_probes(0, 2.9); back_plate(); }
 if (check=="power_mount_vs_shell")    intersection() { power_trigger_mount_placed(); shell(); }
 if (check=="power_mount_vs_speakers") intersection() { power_trigger_mount_placed(); pwr_speaker_bodies(); }
-// Positive controls: the screws do reach the mount's pilots, and the plug
-// probe does hit the bezel when moved 3 mm off the socket.
+// Positive controls: the screws do reach the mount's pilots; the plug probe
+// does hit the plate when moved 4 mm off the socket; and the pin does stop
+// the board when it is pushed 1.5 mm back.
 if (check=="power_screws_bite")       intersection() { pwr_screw_probes(7, 3.0); power_trigger_mount_placed(); }
-if (check=="power_plug_probe_works")  intersection() { translate([0, 3, 0]) power_plug_probe(); power_bezel_placed(); }
+if (check=="power_plug_probe_works")  intersection() { translate([0, 4, 0]) power_plug_probe(); back_plate(); }
+if (check=="power_pin_holds")         intersection() { translate([0, 0, 1.5]) power_trigger_board_placed(); power_pin_probe(); }
