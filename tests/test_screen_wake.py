@@ -124,5 +124,30 @@ check(" screen-resume.sh " in (D / "install-setup-server.sh").read_text().split(
 check('"screen-resume.sh",' in (D / "ota.py").read_text(), "an update may carry it")
 check(os.access(D / "screen-resume.sh", os.X_OK), "and it is executable")
 
+# ---- the screensaver finds the compositor when the session hadn't said yet --------
+# After a boot it can start before the session publishes WAYLAND_DISPLAY:
+# swayidle still connects, but wlopm refuses, and the panel never went dark
+# (RDU, 2026-10-16). Run the unit's own script, as systemd hands it to sh.
+line = next(l for l in unit.splitlines() if l.startswith("ExecStart="))
+script = line.split("-c '", 1)[1].rsplit("'", 1)[0].replace("$$", "$").replace("\\\\", "\\")
+(bin_ / "swayidle").write_text('#!/bin/sh\necho "${WAYLAND_DISPLAY:-unset}" > "$XDG_RUNTIME_DIR/seen"\n')
+(bin_ / "swayidle").chmod(0o755)
+
+
+def screensaver_sees(wayland=None):
+    run = tmp / f"ss{time.time_ns()}"; run.mkdir()
+    (run / "wayland-0").write_text(""); (run / "wayland-0.lock").write_text("")
+    env = dict(os.environ, XDG_RUNTIME_DIR=str(run), PATH=f"{bin_}:{os.environ['PATH']}",
+               IDLE_MINUTES="20", ALERT_HOLD_S="120")
+    env.pop("WAYLAND_DISPLAY", None)
+    if wayland:
+        env["WAYLAND_DISPLAY"] = wayland
+    subprocess.run(["sh", "-c", script], env=env, check=True, timeout=20)
+    return (run / "seen").read_text().strip()
+
+
+check(screensaver_sees() == "wayland-0", "started before the session said, the screensaver finds the compositor itself")
+check(screensaver_sees("wayland-1") == "wayland-1", "and keeps the session's own answer when it has one")
+
 print("screen wake checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)
