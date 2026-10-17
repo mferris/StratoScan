@@ -208,12 +208,78 @@ def _hold_tick(now=None):
 
 
 def _hold_loop():
+    n = 0
     while True:
         time.sleep(HOLD_CHECK_S)
+        n += 1
         try:
             _hold_tick()
         except Exception:
             pass               # a failed check must never take the listener down
+        if n % (IDLE_CHECK_S // HOLD_CHECK_S) == 0:
+            try:
+                _idle_tick()
+            except Exception:
+                pass
+
+
+# The idle rule (2026-10-17). The screensaver's 20-minute timer counts from
+# the desktop's last "activity", and the desktop calls a sound activity: on
+# RDU every alert chime made it active a second before its audio stream
+# opened, so on a morning of alerts the countdown kept starting again and a
+# lit panel stayed lit. Like the alert hold, the rule now lives here: the
+# panel goes out IDLE_MINUTES after the later of its last real input
+# (LAST_INPUT, noted below and by the page's touch reports) and the moment it
+# was last lit, by a touch, a wake or anything else. The screensaver keeps
+# touch-to-wake, and its own timer as a backstop.
+IDLE_CHECK_S = 30
+_lit_at = time.time()          # lit when the listener starts: a boot, or a restart
+_seen_on = True
+
+
+def _idle_s():
+    """IDLE_MINUTES, in seconds, from the screensaver unit, where it is set."""
+    try:
+        out = subprocess.run(["systemctl", "--user", "show", "-p", "Environment", SCREENSAVER_UNIT],
+                             capture_output=True, text=True, timeout=10).stdout
+        m = re.search(r"\bIDLE_MINUTES=(\d+)\b", out or "")
+        if m and int(m.group(1)) > 0:
+            return 60 * int(m.group(1))
+    except Exception:
+        pass
+    return 20 * 60
+
+
+def _note_lit(now=None):
+    """The panel was lit just now: its idle time starts again."""
+    global _lit_at, _seen_on
+    _lit_at = time.time() if now is None else now
+    _seen_on = True
+
+
+def _idle_tick(now=None, idle_s=None):
+    """Put the panel out once it has gone IDLE_MINUTES untouched. True if it did."""
+    global _seen_on
+    if _mode == "on":
+        return False
+    _ensure_wayland()
+    now = time.time() if now is None else now
+    if _panel_state() != "on":
+        _seen_on = False
+        return False
+    if not _seen_on:               # lit since the last look, by something that didn't say
+        _note_lit(now)
+        return False
+    try:
+        last_input = os.path.getmtime(LAST_INPUT)
+    except OSError:
+        last_input = 0.0
+    if now - max(last_input, _lit_at) < (idle_s or _idle_s()):
+        return False
+    subprocess.run(["wlopm", "--off", "*"], timeout=5, check=False)
+    subprocess.run(["logger", "-t", "stratoscan-screen", "off-idle"], timeout=5, check=False)
+    _seen_on = False
+    return True
 
 
 # The screen's mode (2026-10-11), set by the radar page from the owner's
@@ -245,6 +311,8 @@ def set_mode(mode):
         subprocess.run(["wlopm", "--on", "*"], timeout=5, check=False)
         return f"{before} -> on" if before != mode else ""
     # every other mode runs the screensaver
+    if before == "on":
+        _note_lit()            # a fresh idle time, as starting the screensaver gives
     if _unit_state(SCREENSAVER_UNIT) != "active":
         subprocess.run(["systemctl", "--user", "start", SCREENSAVER_UNIT], timeout=10, check=False)
     if mode in ("alerts", "dark") and before != mode:
@@ -276,6 +344,7 @@ def _wake(alert=False):
         subprocess.run(["logger", "-t", "stratoscan-screen", "on-alert" if alert else "on-wake"],
                        timeout=5, check=False)
     subprocess.run(["wlopm", "--on", "*"], timeout=5, check=False)
+    _note_lit()
     global _hold_until
     if _mode == "on":
         _hold_until = 0.0        # always on: nothing to hold, and no screensaver to restart
@@ -301,6 +370,7 @@ def screen_button():
         return "off"
     subprocess.run(["logger", "-t", "stratoscan-screen", "on-button"], timeout=5, check=False)
     subprocess.run(["wlopm", "--on", "*"], timeout=5, check=False)
+    _note_lit()
     if _mode != "on":
         # a fresh idle time from now, as a touch would give
         subprocess.run(["systemctl", "--user", "restart", SCREENSAVER_UNIT], timeout=10, check=False)
@@ -432,6 +502,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # ordinary idle time.
             global _hold_until
             _hold_until = 0.0
+            _note_input()               # real input, for the idle rule and the screensaver
             try:
                 os.unlink(ALERT_FLAG)   # the screensaver's own alert rule gives way too
             except OSError:

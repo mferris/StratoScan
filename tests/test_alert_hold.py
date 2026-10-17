@@ -2,7 +2,12 @@
 """wake-listener.py's alert hold (2026-10-11): an alert that lights a dark
 panel puts it out again after ALERT_HOLD_S, a touch reported by the page
 cancels that, a non-alert wake (an update) never starts one, and a panel
-already dark is left alone."""
+already dark is left alone.
+
+And its idle rule (2026-10-17): a lit panel goes out IDLE_MINUTES after its
+last real input or its last lighting, whichever is later. The screensaver's
+own timer counted from the desktop's last "activity", which includes every
+sound the page plays, so on a morning of alerts it never ran out."""
 import importlib.util
 import pathlib
 import sys
@@ -51,7 +56,56 @@ panel[0] = "off"                # someone else put it out already
 before = len(calls)
 check(not wl._hold_tick(t0 + 9999) and len(calls) == before, "a panel already dark is left alone")
 
+# ---- the idle rule ------------------------------------------------------------
+import os
+import tempfile
+li = pathlib.Path(tempfile.mkdtemp()) / "last-input"
+wl.LAST_INPUT = str(li)
+IDLE = 1200
+wl._mode = "sleep"
+panel[0] = "on"
+wl._note_lit(5000.0)
+check(not wl._idle_tick(5000 + IDLE - 1, IDLE) and panel[0] == "on", "lit and untouched, the panel stays on for IDLE_MINUTES")
+check(wl._idle_tick(5000 + IDLE + 1, IDLE) and panel[0] == "off", "then the listener puts it out, whatever sounds the page played")
+check(["logger", "-t", "stratoscan-screen", "off-idle"] in calls, "and logs it")
+
+panel[0] = "on"
+wl._note_lit(8000.0)
+li.write_text("")
+os.utime(li, (8900.0, 8900.0))
+check(not wl._idle_tick(8000 + IDLE + 1, IDLE) and panel[0] == "on", "a touch since it was lit gives the full time again")
+check(wl._idle_tick(8900 + IDLE + 1, IDLE) and panel[0] == "off", "counted from the touch")
+li.unlink()
+
+panel[0] = "off"
+check(not wl._idle_tick(20000.0, IDLE), "a dark panel is left alone")
+panel[0] = "on"                 # the screensaver's touch-to-wake lit it, and said nothing
+check(not wl._idle_tick(20030.0, IDLE), "a panel something else lit is noticed at the next look")
+check(not wl._idle_tick(20030 + IDLE - 1, IDLE) and wl._idle_tick(20030 + IDLE + 1, IDLE),
+      "and its time counts from then")
+
+wl._mode = "on"
+panel[0] = "on"
+wl._note_lit(30000.0)
+check(not wl._idle_tick(30000 + 10 * IDLE, IDLE) and panel[0] == "on", "always on stays on")
+wl._mode = "sleep"
+
+wl.time.time = lambda: 40000.0
+panel[0] = "on"
+wl._note_lit(39000.0)
+wl._wake(alert=False)           # an update, about to check its paint
+check(not wl._idle_tick(40000 + IDLE - 1, IDLE), "a wake gives a lit panel a fresh idle time")
+
+check(wl._idle_s() == 1200, "IDLE_MINUTES falls back to 20 when the unit can't be read")
+stub = wl.subprocess.run
+wl.subprocess.run = lambda argv, **k: type("R", (), {"stdout": "Environment=IDLE_MINUTES=7 ALERT_HOLD_S=120\n"})()
+check(wl._idle_s() == 420, "and is read from the screensaver unit, where it is set")
+wl.subprocess.run = stub
+
 src = (root / "deploy" / "wake-listener.py").read_text()
+check("_idle_tick()" in src.split("def _hold_loop")[1].split("\ndef ")[0], "the hold loop runs the idle rule")
+check("_note_input()" in src.split('path == "/wake/touch"')[1].split("send_response")[0],
+      "a touch the page reports counts as real input")
 check('path == "/wake/touch"' in src and "_hold_loop" in src.split('if __name__')[1], "the touch route and the hold loop are wired in")
 page = (root / "index.html").read_text()
 check("fetch('/wake/touch'" in page and "if (!ON_DEVICE) return;" in page, "the page reports touches, on the device only")
