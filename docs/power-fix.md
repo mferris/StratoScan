@@ -1,8 +1,11 @@
 # The power fix: 12 V into the case, 5 V made beside the Pi
 
 Roadmap 5.7, [#53](https://github.com/mferris/StratoScan/issues/53).
-**Being built and tested on the first unit (October 2026).** This page gets
-the measurements once it has run for a while.
+**Running on the first unit since 2026-10-17.** In its first minutes, with
+the panel lit and both radios on, the Pi got 5.01–5.08 V (5.05 V on
+average), with no under-voltage. The 1090 MHz noise floor was unchanged at
+−32.4 dBFS, so the regulator adds no noise the receiver can hear. A longer
+run's numbers come next.
 
 ## Why
 
