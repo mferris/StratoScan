@@ -11,6 +11,9 @@ PartOf=graphical-session.target
 # input, so `resume` fires and the display comes straight back.
 #
 # IDLE_MINUTES: how long the panel stays lit after the last touch.
+# wake-listener.py reads it from here and enforces it itself (2026-10-17):
+# swayidle's timer counts from the desktop's last activity, and every sound
+# the page plays is activity, so it is only the backstop now.
 # ALERT_HOLD_S: how long it stays lit when an ALERT turned it on and nobody
 # has touched it since (2026-10-10). Every alert used to give a fresh 20
 # minutes, and the radar alerts every few minutes in the day, so the panel
