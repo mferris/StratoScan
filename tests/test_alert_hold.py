@@ -43,6 +43,15 @@ check(wl._hold_tick(t0 + wl.ALERT_HOLD_S + 1) and panel[0] == "off", "after the 
 check(["logger", "-t", "stratoscan-screen", "off-after-alert"] in calls, "and logs it")
 check(not wl._hold_tick(t0 + 500), "a hold runs once")
 
+import tempfile as _tf
+flag = pathlib.Path(_tf.mkdtemp()) / "alert-wake"
+flag.write_text("")
+wl.ALERT_FLAG, panel[0] = str(flag), "on"
+wl._hold_until = t0 + 1
+check(wl._hold_tick(t0 + 2) and not flag.exists(),
+      "and clears the alert flag, so the screensaver's backstop doesn't put the dark panel out again")
+wl.ALERT_FLAG = "/nonexistent/flag"
+
 wl._wake(alert=True)
 wl._hold_until = 0.0            # what /wake/touch does
 check(not wl._hold_tick(t0 + 999) and panel[0] == "on", "a touch during the hold cancels it: the ordinary idle time applies")

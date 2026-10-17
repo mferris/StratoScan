@@ -204,6 +204,12 @@ def _hold_tick(now=None):
         return False
     subprocess.run(["wlopm", "--off", "*"], timeout=5, check=False)
     subprocess.run(["logger", "-t", "stratoscan-screen", "off-after-alert"], timeout=5, check=False)
+    # The hold is over: the screensaver's backstop for it must not fire again
+    # on the dark panel (it did, logging every alert's off twice, 2026-10-17).
+    try:
+        os.unlink(ALERT_FLAG)
+    except OSError:
+        pass
     return True
 
 
