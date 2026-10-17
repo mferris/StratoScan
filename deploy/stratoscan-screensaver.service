@@ -36,7 +36,13 @@ ExecStartPre=/bin/sh -c 'i=0; while [ $i -lt 60 ]; do ls "$XDG_RUNTIME_DIR"/wayl
 # `resume` is screen-resume.sh (2026-10-16): the desktop also reports
 # activity while Chromium plays a sound, and the script lights the panel, and
 # ends an alert's hold, only for real input (wake-listener.py notes it).
-ExecStart=/bin/sh -c 'F="$XDG_RUNTIME_DIR/stratoscan-alert-wake"; exec swayidle -w timeout 1 true resume /opt/stratoscan/screen-resume.sh timeout "$ALERT_HOLD_S" "[ -e $$F ] && wlopm --off \\* && logger -t stratoscan-screen off-after-alert" timeout $((IDLE_MINUTES * 60)) "wlopm | grep -q \\" on\\" && wlopm --off \\* && logger -t stratoscan-screen off-idle"'
+# The script finds the compositor itself when the session had not yet
+# published WAYLAND_DISPLAY: after a boot this service can start first, and
+# swayidle still connects (libwayland falls back to wayland-0) but every
+# wlopm call fails with "WAYLAND_DISPLAY is not set", so the panel never went
+# dark (RDU, 2026-10-16 13:40 to the next morning). wake-listener.py does the
+# same (2026-10-11).
+ExecStart=/bin/sh -c '[ -n "$${WAYLAND_DISPLAY}" ] || export WAYLAND_DISPLAY="$$(basename "$$(ls -d "$XDG_RUNTIME_DIR"/wayland-*[0-9] | head -n 1)")"; F="$XDG_RUNTIME_DIR/stratoscan-alert-wake"; exec swayidle -w timeout 1 true resume /opt/stratoscan/screen-resume.sh timeout "$ALERT_HOLD_S" "[ -e $$F ] && wlopm --off \\* && logger -t stratoscan-screen off-after-alert" timeout $((IDLE_MINUTES * 60)) "wlopm | grep -q \\" on\\" && wlopm --off \\* && logger -t stratoscan-screen off-idle"'
 Restart=always
 RestartSec=5
 
