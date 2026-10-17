@@ -35,6 +35,7 @@ flowchart LR
 | A **USB-C plug pigtail**: two wires, 20 AWG or thicker, rated 5 A | Or cut one from a USB-C to USB-C cable rated 5 A (sold as 100 W or 240 W), as in step 4. Not a USB-A to USB-C cable: its power wires are thin |
 | Snap-on ferrite clip | For the pigtail |
 | Heat-shrink, a soldering iron, a multimeter | |
+| For the case: `power_bezel`, `power_trigger_mount` and `power_regulator_tray`, printed, two M3 × 10 countersunk screws, and VHB tape | In the case folders; see [In the case](#in-the-case) |
 
 The Pi's 5 V pins would also take the regulator's output, but they sit under
 the FlyCatcher, so the 5.2 V goes into the Pi's own USB-C port instead.
@@ -105,13 +106,16 @@ question.
 
 ## In the case
 
-- **The trigger board sits at the back plate.** The extension's inside plug
-  goes into the trigger board, and the charger plugs into the outside. At
-  12 V any extension that fits will do; a 3 A one is enough.
-- **Keep the regulator away from the receiver.** Put it as far from the
-  FlyCatcher and the antenna leads as the case allows, about 10 cm if you
-  can.
-- **Keep the 5 V side short.** Use a 10–20 cm pigtail, and twist the 12 V
-  pair together.
-- **A holder for the two boards is next.** It's a shared part, so it'll go
-  into every case design.
+- **The trigger board goes in the back plate's USB-C window.** `power_bezel`
+  fills the window's outer pocket and `power_trigger_mount` sits behind it.
+  The window's own two holes take two M3 × 10 countersunk screws, which clamp
+  the board between the two parts. The charger plugs straight into the
+  trigger board, and no extension is needed. Fitting steps are in the
+  [retro case's README](../enclosure/Retro%20Radar%20Enclosure/README.md#the-power-fix-the-charger-plugs-into-the-trigger-board).
+- **The regulator goes in `power_regulator_tray`,** stuck to the plate's
+  inner face with VHB tape. Put it as far from the FlyCatcher and the antenna
+  leads as the case allows, and where the pigtail reaches the Pi's power
+  port. Keep the 5 V side short (a 10–20 cm pigtail), and twist the 12 V pair.
+- **Check the boards first.** The parts are drawn to the boards' published
+  sizes, and each is a short print, so print and fit them before the final
+  assembly.

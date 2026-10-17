@@ -12,6 +12,8 @@
 // nothing and every check "passes" against empty geometry.
 use <kitten-enclosure-twotone.scad>
 check = "none";
+// the power fix's checks read these (restated, as below)
+speaker_h=21; speaker_w=100;
 // front heat-set inserts (restated): shelf top face, insert length, hole
 fi_top = 57; fi_len = 5; fi_hole = 4.0;
 // Must match the design's resolution or the checks validate different
@@ -858,3 +860,30 @@ if (check=="cable_slot_other_side") {
     antenna_mount();
   }
 }
+
+// ---- the power fix (roadmap 5.7): the trigger board in the USB-C window ----
+// The bezel and the mount clamp the board through the window's two screws.
+// The speakers themselves aren't in shell() (only their brackets), so their
+// bodies are drawn here: 100 x 45 x 21 on each bracket's face.
+module pwr_speaker_bodies() {
+  for (a = speaker_angles) rotate([0, 0, a])
+    translate([outer_dia/2 - wall - speaker_bracket_depth - speaker_h, -speaker_w/2, (shell_depth - speaker_d)/2])
+      cube([speaker_h, speaker_w, speaker_d]);
+}
+// The window's two M3 shanks, from the outer face to `into` past the inner one.
+module pwr_screw_probes(into, d) {
+  for (sx = [-1, 1])
+    translate([usbc_cut_pos[0] + sx*usbc_screw_pitch_max/2, usbc_cut_pos[1], -back_plate_t - 0.01])
+      cylinder(d = d, h = back_plate_t + into, $fn = 24);
+}
+if (check=="power_mount_vs_plate")    intersection() { power_trigger_mount_placed(); back_plate(); }
+if (check=="power_bezel_in_pocket")   intersection() { power_bezel_placed(); back_plate(); }
+if (check=="power_board_held")        intersection() { power_trigger_board_placed(); union() { back_plate(); power_trigger_mount_placed(); power_bezel_placed(); } }
+if (check=="power_plug_reaches")      intersection() { power_plug_probe(); union() { back_plate(); power_bezel_placed(); power_trigger_mount_placed(); } }
+if (check=="power_screws_pass")       intersection() { pwr_screw_probes(0, 2.9); union() { back_plate(); power_bezel_placed(); } }
+if (check=="power_mount_vs_shell")    intersection() { power_trigger_mount_placed(); shell(); }
+if (check=="power_mount_vs_speakers") intersection() { power_trigger_mount_placed(); pwr_speaker_bodies(); }
+// Positive controls: the screws do reach the mount's pilots, and the plug
+// probe does hit the bezel when moved 3 mm off the socket.
+if (check=="power_screws_bite")       intersection() { pwr_screw_probes(7, 3.0); power_trigger_mount_placed(); }
+if (check=="power_plug_probe_works")  intersection() { translate([0, 3, 0]) power_plug_probe(); power_bezel_placed(); }

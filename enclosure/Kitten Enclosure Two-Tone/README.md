@@ -35,6 +35,8 @@ The head is one colour and prints as before:
 | `antenna_mount_twin_8`, `antenna_mount_twin_11` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight. Two styles, for jumpers whose bulkhead body is an 8 mm hex or an 11 mm hex; two parts each, this body and the cover below (`antenna_mount_twin` is whichever `ant_twin_jack_af` names) |
 | `antenna_mount_twin_cover_8`, `antenna_mount_twin_cover_11` | the 3 mm cover that closes the twin body's cable channel, on five M2 screws, with each side's frequency engraved in it (`twin_assembled` and `twin_assembled_11` show both parts on the plate, for pictures only) |
 | `usbc_gauge` | — | test coupon: five candidate USB-C cutouts, to fit the connector before printing a plate |
+| `power_bezel`, `power_trigger_mount` | black, — | the power fix's 12 V trigger board in the USB-C window ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)); identical to the retro parts |
+| `power_regulator_tray` | — | a tray for the power fix's 5 V regulator, stuck to the plate's inner face |
 
 The stand is split into five bodies, one per colour region:
 
@@ -304,6 +306,18 @@ is its paired positive control — an empty result from the first would also be
 what a probe in the wrong place produces, so a probe at a normal position has
 to find a real hole for the pair to mean anything.
 
+## The power fix: the charger plugs into the trigger board
+
+The same three parts as the retro case, since they fit the shared back plate:
+`power_bezel` in the USB-C window's outer pocket, `power_trigger_mount` behind
+it holding the 12 V trigger board, and two M3 × 10 countersunk screws through
+the window's own holes clamping the board between them. The charger plugs
+straight into the trigger board. `power_regulator_tray` holds the 5 V
+regulator, stuck to the plate's inner face with VHB tape. Fitting, sizes and
+checks are in the retro case's README
+([The power fix](../Retro%20Radar%20Enclosure/README.md#the-power-fix-the-charger-plugs-into-the-trigger-board)),
+and the build in [docs/power-fix.md](../../docs/power-fix.md).
+
 ## Heat-set inserts
 
 Every screw that gets undone goes into a brass M3 heat-set insert. The holes are sized for the Kadrick M2–M5 kit: its M3 inserts are 4.5 mm across the knurl and 3.9 mm at the lead-in. Every insert hole is **4.0 mm**, so the lead-in drops in square and the knurl melts 0.25 mm a side into the plastic. (They were 4.2, which left a 4.5 mm insert only 0.15 mm of bite.)
@@ -412,6 +426,7 @@ check.
 
 ```sh
 for p in shell front_trim retainer stand back_plate usbc_gauge \
+           power_bezel power_trigger_mount power_regulator_tray \
            antenna_mount antenna_mount_sma antenna_mount_twin_8 antenna_mount_twin_11 \
            antenna_mount_twin_cover_8 antenna_mount_twin_cover_11 \
            stand_body stand_paws stand_toes stand_claws stand_tail stand_tail_tip; do
