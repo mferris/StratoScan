@@ -20,6 +20,8 @@ the rest follows.
 | `antenna_mount_twin_cover_8`, `antenna_mount_twin_cover_11` | the 3 mm cover that closes the twin body's cable channel, on five M2 screws, with each side's frequency engraved in it (`twin_assembled` and `twin_assembled_11` show both parts on the plate, for pictures only) |
 | `antenna_mount_twin_cover_8_twotone.3mf`, `antenna_mount_twin_cover_11_twotone.3mf` | the same covers with the frequencies in a second colour: one object, the cover on filament 1 and the lettering (`antenna_mount_twin_cover_text_8` / `_11`) on filament 2. Built by `make-cover-3mf.py` from binary STL exports |
 | `usbc_gauge` | test coupon: five candidate USB-C cutouts, to fit the connector before printing a whole plate |
+| `power_bezel`, `power_trigger_mount` | the power fix's 12 V trigger board in the USB-C window ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)): the bezel fills the window's outer pocket, the mount sits behind it, and the window's two screws clamp the board between them |
+| `power_regulator_tray` | a tray for the power fix's 5 V regulator, stuck to the plate's inner face |
 
 Two extra targets, `test_antenna` and `test_speaker`, clip the real shell
 geometry to a small box so a fit test prints in minutes instead of hours.
@@ -229,6 +231,53 @@ Each speaker's grille is now only the rows in front of the ribs: five rows of 21
 These checks hold the change:
 - `grille_in_front_of_ribs` and `rivets_clear_of_grilles` must come out empty. Both find the old geometry when run against it.
 - `grille_present` and `rivets_present` are their positive controls.
+
+## The power fix: the charger plugs into the trigger board
+
+Roadmap 5.7 ([#53](https://github.com/mferris/StratoScan/issues/53)) feeds
+the Pi from a 12 V USB-C trigger board and a 5 V regulator
+([docs/power-fix.md](../../docs/power-fix.md)). Three small parts fit them to
+the back plate without changing it:
+
+- **`power_bezel`** goes in the USB-C window's outer pocket, where the panel
+  connector's boss sat. Its opening lets the trigger board's socket through
+  but not the board, so unplugging the charger can't pull the board out.
+- **`power_trigger_mount`** sits behind it, inside the case, and holds the
+  board in a sleeve. Its two back posts take the push of plugging in, and the
+  board's wires leave between them.
+- **The window's own two screw holes** take two **M3 × 10 countersunk**
+  screws, through the bezel and the plate into the mount. They cut their own
+  thread in its 2.5 mm holes, and clamp the board between the two parts.
+
+The socket's face ends up 1 mm below the plate's outer face: the depth at
+which the old connector's socket took a plug. The charger plugs straight into
+the trigger board, so the panel-mount extension isn't needed.
+
+To fit it:
+
+1. Solder the 12 V pair to the trigger board.
+2. Feed the wires into the mount's sleeve from its flat face and out between
+   the back posts, then slide the board in after them, socket last.
+3. Hold the mount against the plate's inner face with the socket in the
+   window, and drop the bezel into the pocket from outside.
+4. Put in the two screws.
+
+**`power_regulator_tray`** holds the regulator (63 × 27 mm), with both ends
+open for its terminals, input jack and USB socket. Stick it to the plate's
+inner face with VHB tape, away from the receiver and its antenna leads, and
+where the pigtail reaches the Pi's power port. Two grooves under its floor
+take an optional cable tie round the board.
+
+The sizes are the boards' published ones: the trigger board is 17.6 × 10.2 ×
+4.2 mm, with its socket standing 1 mm past the board's front edge. Check
+yours against `pwr_trig_*` and `pwr_reg_*` first. All three parts print in
+minutes, so each is its own test piece. Print the bezel outer face down and
+the mount flat face down.
+
+`power_mount_vs_plate`, `power_bezel_in_pocket`, `power_board_held`,
+`power_plug_reaches`, `power_screws_pass`, `power_mount_vs_shell` and
+`power_mount_vs_speakers` must come out empty. `power_screws_bite` and
+`power_plug_probe_works` are their positive controls.
 
 ## Heat-set inserts
 

@@ -42,7 +42,8 @@ VARIANTS = {
 SHARED_PRINTS = ["back_plate", "retainer", "usbc_gauge", "antenna_socket_gauge",
                  "antenna_mount", "antenna_mount_sma", "antenna_mount_twin_8", "antenna_mount_twin_11",
                  "antenna_mount_twin_cover_8", "antenna_mount_twin_cover_11",
-                 "antenna_mount_twin_cover_text_8", "antenna_mount_twin_cover_text_11"]
+                 "antenna_mount_twin_cover_text_8", "antenna_mount_twin_cover_text_11",
+                 "power_trigger_mount", "power_bezel", "power_regulator_tray"]
 OPENSCAD = "/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD"
 
 # Everything the hardware touches: the shell's internal furniture, the back,
@@ -72,6 +73,10 @@ CORE = {
     # the twin mount (1090 + 978 MHz) and its check helpers
     "antenna_mount_twin", "antenna_mount_twin_cover", "ant_twin_frame", "ant_twin_teardrop", "ant_twin_outline2d", "ant_twin_slab", "ant_twin_cover2d", "ant_twin_bore", "ant_twin_cover_placed", "ant_twin_bore_probe", "ant_twin_jack_probe", "ant_twin_barrel_probe", "ant_twin_channel_probe", "ant_twin_screw_probes",
     "ant_twin_envelopes", "ant_twin_panel_ring", "ant_twin_hole_probe",
+    # the power fix (roadmap 5.7): the trigger board in the USB-C window,
+    # clamped between a bezel and a mount, and the regulator's tray
+    "power_trigger_mount", "power_bezel", "power_regulator_tray", "pwr_board_front_z",
+    "power_trigger_mount_placed", "power_bezel_placed", "power_trigger_board_placed", "power_plug_probe",
 }
 
 # The only shared names allowed to differ, and why. Anything NOT listed here
