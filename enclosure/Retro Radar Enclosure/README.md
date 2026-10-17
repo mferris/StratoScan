@@ -276,8 +276,8 @@ port. Two grooves under its floor take an optional cable tie round the board.
 
 The trigger board's size was measured: 19.19 × 10.72 × 4.83 mm, from its
 socket's face to its back edge, across it, and from its underside to the top
-of the socket. How far the socket's face stands past the board's front edge,
-`pwr_trig_proud`, is still the usual 1 mm; it sets the flange's thickness.
+of the socket. Its socket stands about 2 mm past the board's front edge
+(`pwr_trig_proud`), which makes the flange 2 mm thick.
 Both parts print in minutes, so each is its own test piece. Print the mount
 flat face down.
 
