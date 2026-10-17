@@ -469,6 +469,14 @@ if [ -f "$CFG" ] && ! grep -q '^usb_max_current_enable=' "$CFG"; then
   echo "  USB current limit lifted in config.txt (from the next boot)"
 fi
 
+# The speakers' starting volume (2026-10-17). WirePlumber starts a new
+# output at 40%, which made the alerts and announcements much too quiet; this
+# starts it at 70% instead. It only sets where a new output starts: a volume
+# already set on this unit (by wpctl or a slider) is kept.
+install -d -m 0755 /etc/wireplumber/wireplumber.conf.d
+install -m 0644 deploy/50-stratoscan-volume.conf /etc/wireplumber/wireplumber.conf.d/50-stratoscan-volume.conf
+echo "  speakers start at 70% (a volume already set here is kept)"
+
 echo "== spoken alerts (Piper text-to-speech, offline) =="
 # Piper (GPL-3.0-or-later) runs as its own program in its own virtualenv,
 # installed from PyPI rather than shipped in this repository. The voice is
