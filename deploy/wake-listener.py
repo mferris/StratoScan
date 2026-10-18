@@ -200,16 +200,17 @@ def _hold_tick(now=None):
     if not _hold_until or now < _hold_until:
         return False
     _hold_until = 0.0
-    if _panel_state() != "on":
-        return False
-    subprocess.run(["wlopm", "--off", "*"], timeout=5, check=False)
-    subprocess.run(["logger", "-t", "stratoscan-screen", "off-after-alert"], timeout=5, check=False)
-    # The hold is over: the screensaver's backstop for it must not fire again
-    # on the dark panel (it did, logging every alert's off twice, 2026-10-17).
+    # The hold is over, whoever put the panel out: the screensaver's backstop
+    # for it must not fire again on the dark panel (it did, logging every
+    # alert's off twice, 2026-10-17).
     try:
         os.unlink(ALERT_FLAG)
     except OSError:
         pass
+    if _panel_state() != "on":
+        return False
+    subprocess.run(["wlopm", "--off", "*"], timeout=5, check=False)
+    subprocess.run(["logger", "-t", "stratoscan-screen", "off-after-alert"], timeout=5, check=False)
     return True
 
 
@@ -238,9 +239,17 @@ def _hold_loop():
 # (LAST_INPUT, noted below and by the page's touch reports) and the moment it
 # was last lit, by a touch, a wake or anything else. The screensaver keeps
 # touch-to-wake, and its own timer as a backstop.
+#
+# Both times are on the monotonic clock. A radar can boot with its clock far
+# behind (a long power cut with no RTC cell) and then jump forward when NTP
+# answers, which on the wall clock made a panel lit a minute ago look idle
+# for hours. Every real input passes through this process (the input watcher
+# and the page's touch reports both call _note_input), so it is timed here
+# too; LAST_INPUT stays for screen-resume.sh.
 IDLE_CHECK_S = 30
-_lit_at = time.time()          # lit when the listener starts: a boot, or a restart
+_lit_at = time.monotonic()     # lit when the listener starts: a boot, or a restart
 _seen_on = True
+_input_at = None               # monotonic time of the last real input, if any
 
 
 def _idle_s():
@@ -259,7 +268,7 @@ def _idle_s():
 def _note_lit(now=None):
     """The panel was lit just now: its idle time starts again."""
     global _lit_at, _seen_on
-    _lit_at = time.time() if now is None else now
+    _lit_at = time.monotonic() if now is None else now
     _seen_on = True
 
 
@@ -269,18 +278,15 @@ def _idle_tick(now=None, idle_s=None):
     if _mode == "on":
         return False
     _ensure_wayland()
-    now = time.time() if now is None else now
+    now = time.monotonic() if now is None else now
     if _panel_state() != "on":
         _seen_on = False
         return False
     if not _seen_on:               # lit since the last look, by something that didn't say
         _note_lit(now)
         return False
-    try:
-        last_input = os.path.getmtime(LAST_INPUT)
-    except OSError:
-        last_input = 0.0
-    if now - max(last_input, _lit_at) < (idle_s or _idle_s()):
+    last = _lit_at if _input_at is None else max(_input_at, _lit_at)
+    if now - last < (idle_s or _idle_s()):
         return False
     subprocess.run(["wlopm", "--off", "*"], timeout=5, check=False)
     subprocess.run(["logger", "-t", "stratoscan-screen", "off-idle"], timeout=5, check=False)
@@ -580,7 +586,9 @@ def _is_input(ev_type):
     return ev_type in (EV_KEY, EV_REL, EV_ABS)
 
 
-def _note_input(path=None):
+def _note_input(path=None, now=None):
+    global _input_at
+    _input_at = time.monotonic() if now is None else now
     path = path or LAST_INPUT
     try:
         with open(path, "a"):
