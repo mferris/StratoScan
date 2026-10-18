@@ -118,6 +118,10 @@ question.
   inner face with VHB tape. Put it as far from the FlyCatcher and the antenna
   leads as the case allows, and where the pigtail reaches the Pi's power
   port. Keep the 5 V side short (a 10–20 cm pigtail), and twist the 12 V pair.
+- **Never run the regulator's leads along an antenna cable.** On the first
+  unit (2026-10-18) its lead had ended up wrapped round the external
+  antenna's cable: 1090 MHz reception fell to a few messages a minute,
+  against hundreds, and came back as soon as the two were apart.
 - **Check the boards first.** The trigger board's size is measured, and the
   regulator's is published. Each part is a short print, so print and fit
   them before the final assembly.
