@@ -50,6 +50,10 @@ wl.ALERT_FLAG, panel[0] = str(flag), "on"
 wl._hold_until = t0 + 1
 check(wl._hold_tick(t0 + 2) and not flag.exists(),
       "and clears the alert flag, so the screensaver's backstop doesn't put the dark panel out again")
+flag.write_text("")
+panel[0] = "off"                # something else put it out first
+wl._hold_until = t0 + 1
+check(not wl._hold_tick(t0 + 2) and not flag.exists(), "a hold that ends on a dark panel clears its flag too")
 wl.ALERT_FLAG = "/nonexistent/flag"
 
 wl._wake(alert=True)
@@ -80,11 +84,10 @@ check(["logger", "-t", "stratoscan-screen", "off-idle"] in calls, "and logs it")
 
 panel[0] = "on"
 wl._note_lit(8000.0)
-li.write_text("")
-os.utime(li, (8900.0, 8900.0))
+wl._note_input(str(li), now=8900.0)    # (this file stubs open(); test_screen_wake checks the file itself)
 check(not wl._idle_tick(8000 + IDLE + 1, IDLE) and panel[0] == "on", "a touch since it was lit gives the full time again")
 check(wl._idle_tick(8900 + IDLE + 1, IDLE) and panel[0] == "off", "counted from the touch")
-li.unlink()
+wl._input_at = None
 
 panel[0] = "off"
 check(not wl._idle_tick(20000.0, IDLE), "a dark panel is left alone")
@@ -99,11 +102,18 @@ wl._note_lit(30000.0)
 check(not wl._idle_tick(30000 + 10 * IDLE, IDLE) and panel[0] == "on", "always on stays on")
 wl._mode = "sleep"
 
-wl.time.time = lambda: 40000.0
+wl.time.monotonic = lambda: 40000.0
 panel[0] = "on"
 wl._note_lit(39000.0)
 wl._wake(alert=False)           # an update, about to check its paint
 check(not wl._idle_tick(40000 + IDLE - 1, IDLE), "a wake gives a lit panel a fresh idle time")
+
+# The wall clock plays no part: a radar that boots with its clock behind and
+# jumps forward when NTP answers keeps its lit panel lit.
+wl.time.time = lambda: 9e9
+panel[0] = "on"
+wl._note_lit(50000.0)
+check(not wl._idle_tick(50000.0 + 60) and panel[0] == "on", "a jump of the wall clock doesn't make a lit panel look idle")
 
 check(wl._idle_s() == 1200, "IDLE_MINUTES falls back to 20 when the unit can't be read")
 stub = wl.subprocess.run
