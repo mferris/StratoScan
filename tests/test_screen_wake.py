@@ -39,6 +39,7 @@ def check(ok, what):
 tmp = pathlib.Path(tempfile.mkdtemp())
 bin_ = tmp / "bin"; bin_.mkdir()
 (bin_ / "wlopm").write_text('#!/bin/sh\nif [ "$1" = "--on" ]; then echo on >> "$XDG_RUNTIME_DIR/calls"; echo on > "$XDG_RUNTIME_DIR/state"; '
+                            'elif [ "$1" = "--off" ]; then echo off >> "$XDG_RUNTIME_DIR/calls"; echo off > "$XDG_RUNTIME_DIR/state"; '
                             'else echo "HDMI-A-1 $(cat "$XDG_RUNTIME_DIR/state")"; fi\n')
 (bin_ / "logger").write_text('#!/bin/sh\necho "$*" >> "$XDG_RUNTIME_DIR/log"\n')
 for f in bin_.iterdir():
@@ -130,7 +131,8 @@ check(os.access(D / "screen-resume.sh", os.X_OK), "and it is executable")
 # (RDU, 2026-10-16). Run the unit's own script, as systemd hands it to sh.
 line = next(l for l in unit.splitlines() if l.startswith("ExecStart="))
 script = line.split("-c '", 1)[1].rsplit("'", 1)[0].replace("$$", "$").replace("\\\\", "\\")
-(bin_ / "swayidle").write_text('#!/bin/sh\necho "${WAYLAND_DISPLAY:-unset}" > "$XDG_RUNTIME_DIR/seen"\n')
+(bin_ / "swayidle").write_text('#!/bin/sh\necho "${WAYLAND_DISPLAY:-unset}" > "$XDG_RUNTIME_DIR/seen"\n'
+                                'printf "%s\\0" "$@" > "$XDG_RUNTIME_DIR/argv"\n')
 (bin_ / "swayidle").chmod(0o755)
 
 
@@ -148,6 +150,38 @@ def screensaver_sees(wayland=None):
 
 check(screensaver_sees() == "wayland-0", "started before the session said, the screensaver finds the compositor itself")
 check(screensaver_sees("wayland-1") == "wayland-1", "and keeps the session's own answer when it has one")
+
+# The alert hold's backstop, exactly as swayidle is handed it (the unit's
+# script names the flag by its full path, so it runs in the same directory).
+def backstop_cmd(run):
+    (run / "wayland-0").write_text("")
+    env = dict(os.environ, XDG_RUNTIME_DIR=str(run), PATH=f"{bin_}:{os.environ['PATH']}",
+               IDLE_MINUTES="20", ALERT_HOLD_S="120", WAYLAND_DISPLAY="wayland-0")
+    subprocess.run(["sh", "-c", script], env=env, check=True, timeout=20)
+    argv = (run / "argv").read_text().split("\0")
+    i = next(k for k in range(len(argv) - 2) if argv[k] == "timeout" and argv[k + 1] == "120")
+    return argv[i + 2]
+
+
+def backstop(panel, flag):
+    run = tmp / f"bt{time.time_ns()}"; run.mkdir()
+    cmd = backstop_cmd(run)
+    (run / "state").write_text(panel + "\n")
+    if flag:
+        (run / "stratoscan-alert-wake").write_text("")
+    env = dict(os.environ, XDG_RUNTIME_DIR=str(run), PATH=f"{bin_}:{os.environ['PATH']}")
+    subprocess.run(["sh", "-c", cmd], env=env, timeout=20)
+    calls = (run / "calls").read_text() if (run / "calls").exists() else ""
+    log = (run / "log").read_text() if (run / "log").exists() else ""
+    return {"off": "off" in calls, "log": log, "flag": (run / "stratoscan-alert-wake").exists()}
+
+
+r = backstop("on", True)
+check(r["off"] and "off-after-alert" in r["log"] and not r["flag"], "the hold's backstop puts a lit panel out, logs it once, and clears its flag")
+r = backstop("off", True)
+check(not r["off"] and r["log"] == "" and not r["flag"], "on a panel already dark it only clears the flag: no second \"off\" in the log")
+r = backstop("on", False)
+check(not r["off"] and r["log"] == "", "and with no alert held it does nothing")
 
 print("screen wake checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)

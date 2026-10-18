@@ -34,6 +34,9 @@ PartOf=graphical-session.target
 Environment=IDLE_MINUTES=20
 Environment=ALERT_HOLD_S=120
 ExecStartPre=/bin/sh -c 'i=0; while [ $i -lt 60 ]; do ls "$XDG_RUNTIME_DIR"/wayland-*[0-9] >/dev/null 2>&1 && exit 0; sleep 1; i=$((i+1)); done; exit 1'
+# The alert hold's backstop clears its flag and acts only on a lit panel: a
+# listener restarted in the middle of a hold left the flag behind, and the
+# backstop then logged an "off" for a panel already dark (2026-10-18).
 # Each change is logged (journalctl -t stratoscan-screen), so the hours the
 # panel is lit can be counted rather than guessed (2026-10-10).
 # `resume` is screen-resume.sh (2026-10-16): the desktop also reports
@@ -45,7 +48,7 @@ ExecStartPre=/bin/sh -c 'i=0; while [ $i -lt 60 ]; do ls "$XDG_RUNTIME_DIR"/wayl
 # wlopm call fails with "WAYLAND_DISPLAY is not set", so the panel never went
 # dark (RDU, 2026-10-16 13:40 to the next morning). wake-listener.py does the
 # same (2026-10-11).
-ExecStart=/bin/sh -c '[ -n "$${WAYLAND_DISPLAY}" ] || export WAYLAND_DISPLAY="$$(basename "$$(ls -d "$XDG_RUNTIME_DIR"/wayland-*[0-9] | head -n 1)")"; F="$XDG_RUNTIME_DIR/stratoscan-alert-wake"; exec swayidle -w timeout 1 true resume /opt/stratoscan/screen-resume.sh timeout "$ALERT_HOLD_S" "[ -e $$F ] && wlopm --off \\* && logger -t stratoscan-screen off-after-alert" timeout $((IDLE_MINUTES * 60)) "wlopm | grep -q \\" on\\" && wlopm --off \\* && logger -t stratoscan-screen off-idle"'
+ExecStart=/bin/sh -c '[ -n "$${WAYLAND_DISPLAY}" ] || export WAYLAND_DISPLAY="$$(basename "$$(ls -d "$XDG_RUNTIME_DIR"/wayland-*[0-9] | head -n 1)")"; F="$XDG_RUNTIME_DIR/stratoscan-alert-wake"; exec swayidle -w timeout 1 true resume /opt/stratoscan/screen-resume.sh timeout "$ALERT_HOLD_S" "[ -e $$F ] && rm -f $$F && wlopm | grep -q \\" on\\" && wlopm --off \\* && logger -t stratoscan-screen off-after-alert" timeout $((IDLE_MINUTES * 60)) "wlopm | grep -q \\" on\\" && wlopm --off \\* && logger -t stratoscan-screen off-idle"'
 Restart=always
 RestartSec=5
 
