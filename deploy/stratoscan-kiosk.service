@@ -16,7 +16,14 @@ ExecStartPre=/bin/sh -c 'i=0; while [ $i -lt 60 ]; do ls "$XDG_RUNTIME_DIR"/wayl
 # h264ify into every new profile. The kiosk shows only its own page, which
 # needs neither, and the ad blocker kept rewriting its filter store: the
 # browser's largest writer on RDU (2026-10-14, ~0.5 GB/day all told).
-ExecStart=/usr/bin/chromium --disk-cache-dir=%t/chromium-cache --disk-cache-size=104857600 --disable-gpu-shader-disk-cache --disable-extensions --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --disable-restore-session-state --check-for-update-interval=31536000 --overscroll-history-navigation=0 --disable-pinch --password-store=basic --disable-features=TranslateUI --autoplay-policy=no-user-gesture-required "http://localhost/index.html?kiosk=1"
+# --log-level=3: only fatal messages. Its error lines were ~340 a day of
+# "CompositorAnimationObserver is active for too long" (the hidden tab strip's
+# sound indicator), each ~60 KB of card writes (#78, 2026-10-23). The browser
+# runs in a scope of its own (app-org.chromium.Chromium-PID.scope), outside
+# this unit, and a user unit cannot filter by pattern anyway, so this is the
+# only switch there is. A crash still shows: this unit restarts, and the wake
+# listener's paint watchdog logs a panel that stops painting.
+ExecStart=/usr/bin/chromium --log-level=3 --disk-cache-dir=%t/chromium-cache --disk-cache-size=104857600 --disable-gpu-shader-disk-cache --disable-extensions --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --disable-restore-session-state --check-for-update-interval=31536000 --overscroll-history-navigation=0 --disable-pinch --password-store=basic --disable-features=TranslateUI --autoplay-policy=no-user-gesture-required "http://localhost/index.html?kiosk=1"
 Restart=always
 RestartSec=5
 

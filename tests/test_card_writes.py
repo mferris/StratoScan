@@ -93,5 +93,22 @@ check("prune_kernels(state)" in promote, "a kept kernel removes the older ones (
 apt = (D / "20auto-upgrades").read_text()
 check('APT::Periodic::AutocleanInterval "7";' in apt, "old .debs leave apt's cache weekly")
 
+# ---- round three (#78, 2026-10-23): over half of RDU's journal lines were chatter
+check("--log-level=3" in start,
+      "the browser logs only fatal messages (~340 'CompositorAnimationObserver' error lines a day)")
+saver = (D / "stratoscan-screensaver.service").read_text()
+check(re.search(r"^LogLevelMax=notice$", saver, re.M) and re.search(r"^SyslogLevel=warning$", saver, re.M),
+      "the screensaver's restarts on alert wakes stay out of the journal (four manager lines each), "
+      "while its own output is raised to warning so it still gets through")
+ts = (D / "tailscaled-quiet.conf").read_text()
+check(re.search(r"^LogFilterPatterns=~\^magicsock:$", ts, re.M) is not None,
+      "tailscaled's 'magicsock:' chatter is filtered out (system unit; LogFilterPatterns)")
+check("deploy/tailscaled-quiet.conf /etc/systemd/system/tailscaled.service.d/stratoscan-quiet.conf" in inst,
+      "and the installer puts that drop-in in place")
+ev = (D / "events.py").read_text()
+check("print(f\"events: {e['kind']}" not in ev
+      and "sent = collections.Counter(f\"{e['kind']} {e.get('flight') or e['hex']}\" for e in batch)" in ev,
+      "phone alerts log one line per send, naming each aircraft, not a line per alert as well")
+
 print("card write checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)

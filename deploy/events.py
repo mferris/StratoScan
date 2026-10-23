@@ -613,8 +613,8 @@ class Sender:
                 self.queue.clear()
                 self.unpaired = True
                 return "no phone is paired with this unit; events off"
-            kinds = collections.Counter(e["kind"] for e in batch)
-            return "sent " + ", ".join(f"{n} {k}" for k, n in sorted(kinds.items()))
+            sent = collections.Counter(f"{e['kind']} {e.get('flight') or e['hex']}" for e in batch)
+            return "sent " + ", ".join(f"{n} {k}" for k, n in sorted(sent.items()))
         if status in (400, 401, 413):
             # The relay refused these events as such; resending the same
             # ones cannot succeed, and must not block the ones behind them.
@@ -776,9 +776,9 @@ class Service:
                     new = self.detector.scan(doc)
                     if new:
                         self.detector.save()
-                    for e in new:
-                        print(f"events: {e['kind']} {e.get('flight') or e['hex']}"
-                              f" {e.get('label', '')}".rstrip(), flush=True)
+                    # Not logged one by one: the line that sends them names
+                    # each, and two lines per alert were a sixth of the
+                    # journal on RDU (#78, 2026-10-23).
                     self.sender.add(new)
             except (OSError, ValueError):
                 pass    # readsb mid-write or restarting; next poll

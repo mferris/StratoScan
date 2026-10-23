@@ -284,6 +284,10 @@ if ! command -v tailscale >/dev/null 2>&1; then
 else
   echo "  already installed"
 fi
+# Its routine "magicsock:" chatter stays out of the journal (see the file).
+install -d -m 0755 /etc/systemd/system/tailscaled.service.d
+install -m 0644 deploy/tailscaled-quiet.conf /etc/systemd/system/tailscaled.service.d/stratoscan-quiet.conf
+systemctl daemon-reload
 
 # Everything below is image-level: ota.py deliberately cannot install system
 # config or unit files, so a unit only ever gets these from this script. That
