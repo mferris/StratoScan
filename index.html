@@ -4691,6 +4691,34 @@ function showAlertsWaiting() {
   more.textContent = alertQueue.length ? ` \u00b7 ${alertQueue.length} MORE` : '';
 }
 
+// ---- Nearby alert: once per half hour per plane (#79) ------------------------
+// A plane flying circuits came inside the ring every five minutes, and every
+// lap re-armed the alert: one night the panel lit 26 times in two and a half
+// hours (RDU, 2026-10-23). The phone's alerts already wait half an hour per
+// plane (COOLDOWN_S in deploy/events.py); the panel's now do too. Kept in
+// localStorage, in wall-clock ms, so neither the 04:00 restart nor the shm
+// guard's reloads forget it. The sighting counts are separate and unchanged.
+const NEARBY_ALERT_COOLDOWN_MS = 30 * 60 * 1000;
+const NEARBY_ALERTED_KEY = 'stratoscan.lastNearbyAlert';
+const lastNearbyAlertAt = new Map();   // hex -> ms of its last nearby alert
+try {
+  const saved = JSON.parse(localStorage.getItem(NEARBY_ALERTED_KEY) || '{}');
+  const cutoff = Date.now() - NEARBY_ALERT_COOLDOWN_MS;
+  for (const [hex, ts] of Object.entries(saved)) if (ts > cutoff) lastNearbyAlertAt.set(hex, ts);
+} catch (e) {}
+function nearbyAlertDue(hex) {
+  const last = lastNearbyAlertAt.get(hex);
+  return last === undefined || Date.now() - last >= NEARBY_ALERT_COOLDOWN_MS;
+}
+function noteNearbyAlert(hex) {
+  const now = Date.now(), out = {};
+  lastNearbyAlertAt.set(hex, now);
+  for (const [h, ts] of lastNearbyAlertAt) {   // pruned as it goes, so it stays small
+    if (now - ts < NEARBY_ALERT_COOLDOWN_MS) out[h] = ts; else lastNearbyAlertAt.delete(h);
+  }
+  try { localStorage.setItem(NEARBY_ALERTED_KEY, JSON.stringify(out)); } catch (e) {}
+}
+
 function checkNearbyAlert(pl, range) {
   if (!pl) return;
   if (range <= ALERT_RADIUS_NM) {
@@ -4701,7 +4729,8 @@ function checkNearbyAlert(pl, range) {
       // toggled on right now, which is a separate, purely presentational
       // concern (see the settings panel below).
       recordSightingOnce(pl.hex, 'nearby');
-      if (alertSettings.nearby) {
+      if (alertSettings.nearby && nearbyAlertDue(pl.hex)) {
+        noteNearbyAlert(pl.hex);
         wakeScreenForAlert('nearby');
         raiseAlert({ pl, label: 'WITHIN 2 MILES', glyph: '\u26a0', sound: playAlertSound,
                      speech: () => announcementFor(pl) });   // worded when shown, so a waiting one is current
