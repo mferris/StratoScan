@@ -178,6 +178,7 @@ def check_reset(fails):
         d.READSB_DEFAULT = os.path.join(tmp, "readsb")
         d.READSB_ORIG = os.path.join(tmp, "orig")
         d.PENDING = os.path.join(tmp, "pending.json")
+        d.APPROACH_FILES = (os.path.join(tmp, "approaches.json"), os.path.join(tmp, "approaches.json.points-v1"))
         pristine = 'DECODER_OPTIONS="--lat 0.00000 --lon 0.00000"\n'
 
         def seed():
@@ -185,7 +186,8 @@ def check_reset(fails):
                                (d.READSB_DEFAULT, 'DECODER_OPTIONS="--lat 35.8 --lon -78.7"\n'),
                                (d.CONFIG_JSON, '{"airport":{"code":"RDU"}}'),
                                (os.path.join(tmp, "setup.json"), '{"claimed":true}'),
-                               (d.PENDING, "{}")):
+                               (d.PENDING, "{}"),
+                               *((path, "{}") for path in d.APPROACH_FILES)):
                 with open(path, "w") as f:
                     f.write(body)
 
@@ -227,6 +229,8 @@ def check_reset(fails):
             fails.append("reset_full left the previous owner's password")
         if os.path.exists(d.CONFIG_JSON):
             fails.append("reset_full left config.json")
+        if any(os.path.exists(path) for path in d.APPROACH_FILES):
+            fails.append("reset_full left the heatmap or its pre-grid points (.points-v1)")
         if not any(c[0] == "hotspot_start" for c in calls):
             fails.append("reset_full did not raise the hotspot (unit arrives unreachable)")
         if not any("logout" in " ".join(map(str, c)) for c in calls):
@@ -429,6 +433,48 @@ def check_radio_verbs(fails):
         d.run, d.RADIOS_FILE, d.UAT_PAUSED = real_run, real_file, real_paused
 
 
+def check_airport_heatmap(fails):
+    """A different home airport starts the landing heatmap empty (2026-10-23).
+
+    The squares are the old field's approach paths, and its busiest square
+    sets the scale, so a moved radar's new paths stayed under the floor.
+    """
+    tmp = tempfile.mkdtemp()
+    real = (d.run, d.CONFIG_JSON, d.APPROACH_FILES, d.load_airports)
+    try:
+        calls = []
+        d.run = lambda argv, **k: calls.append(argv)
+        d.CONFIG_JSON = os.path.join(tmp, "config.json")
+        d.APPROACH_FILES = (os.path.join(tmp, "approaches.json"), os.path.join(tmp, "approaches.json.points-v1"))
+        d.load_airports = lambda: {c: {"code": c, "lat": 35.0, "lon": -80.0, "elevFt": 700, "country": "US"}
+                                   for c in ("RDU", "CLT")}
+
+        def seeded():
+            for path in d.APPROACH_FILES:
+                with open(path, "w") as f:
+                    f.write("{}")
+            calls.clear()
+
+        def cleared():
+            stopped = [d.SYSTEMCTL, "stop", d.APPROACH_STORE] in calls
+            started = [d.SYSTEMCTL, "start", d.APPROACH_STORE] in calls
+            gone = not any(os.path.exists(path) for path in d.APPROACH_FILES)
+            return stopped and started and gone and calls.index([d.SYSTEMCTL, "stop", d.APPROACH_STORE]) \
+                < calls.index([d.SYSTEMCTL, "start", d.APPROACH_STORE])
+
+        seeded(); d.set_airport("RDU")
+        if not cleared():
+            fails.append("a first home airport must start the heatmap empty (store stopped, files gone, started)")
+        seeded(); d.set_airport("RDU")
+        if calls or not all(os.path.exists(path) for path in d.APPROACH_FILES):
+            fails.append("saving the same airport again must keep the heatmap")
+        seeded(); d.set_airport("CLT")
+        if not cleared():
+            fails.append("a different home airport must start the heatmap empty")
+    finally:
+        d.run, d.CONFIG_JSON, d.APPROACH_FILES, d.load_airports = real
+
+
 def main():
     fails = []
     check_health_verbs(fails)
@@ -439,6 +485,7 @@ def main():
     check_readsb(fails)
     check_no_shell(fails)
     check_reset(fails)
+    check_airport_heatmap(fails)
     for f in fails:
         print("FAIL:", f)
     print("all setupd checks passed" if not fails else f"{len(fails)} failures")

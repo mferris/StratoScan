@@ -77,6 +77,38 @@ check("the offer carries only the hash", calls[2][1] == {"hash": H})
 st = ss.load_state()
 check("and records the join as done", st["join"]["state"] == "ok" and st["steps"].get("wifi") is True)
 
+# ---- the nearest airport becomes the home airport when none is set (2026-10-23) ----------
+class FakeRequest:
+    def __init__(self, body):
+        self.body, self.sent = body, None
+
+    def _body(self):
+        return self.body
+
+    def _send(self, code, obj=None, **k):
+        self.sent = (code, obj)
+
+    def _err(self, code, token, message):
+        self.sent = (code, {"error": token})
+
+
+real_nearest, real_actual = ss.nearest_airports, ss.actual_airport
+ss.nearest_airports = lambda lat, lon, n=6: [{"code": "CLT", "distanceNm": 4.2}, {"code": "JQF", "distanceNm": 9.0}]
+answers["set_location"] = {"ok": True, "result": {"lat": 35.2, "lon": -80.9}}
+answers["set_airport"] = {"ok": True, "result": {"code": "CLT"}}
+ss.actual_airport = lambda: None
+calls.clear(); req = FakeRequest({"lat": 35.2, "lon": -80.9}); st = {"schema": 1}
+ss.Handler._location(req, st)
+check("a location with no home airport yet makes the nearest one it",
+      ("set_airport", {"code": "CLT"}) in calls and req.sent[1]["airport"] == {"code": "CLT"}
+      and st["steps"].get("airport") is True)
+ss.actual_airport = lambda: {"code": "RDU"}
+calls.clear(); req = FakeRequest({"lat": 35.2, "lon": -80.9}); st = {"schema": 1}
+ss.Handler._location(req, st)
+check("but never replaces one already chosen",
+      not any(v == "set_airport" for v, _ in calls) and req.sent[1]["airport"] is None)
+ss.nearest_airports, ss.actual_airport = real_nearest, real_actual
+
 calls.clear()
 answers["wifi_connect"] = {"ok": False, "code": "wifi_auth_failed"}
 ss.join_in_background("Home", "wrong", H, delay=0, sleep=lambda s: None)

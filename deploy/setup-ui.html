@@ -469,6 +469,10 @@ $('locBtn').onclick = async () => {
         sel.appendChild(o);
       });
     }
+    if (r.airport) {   // no home airport yet: the nearest became it (setup-server _location)
+      $('tickAir').classList.remove('hide');
+      show($('airMsg'), 'ok', `Home airport set to ${r.airport.code}, the nearest. Pick another below if you like.`);
+    }
   } catch (e) { show($('locMsg'), 'err', e.message); }
 };
 

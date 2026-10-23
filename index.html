@@ -8178,6 +8178,7 @@ async function handleDeviceTap(row) {
       await deviceApi('/onboard/airport', { method: 'POST',
         body: JSON.stringify({ code: airport }) });
       await loadAirportConfig();           // pick the change up immediately
+      loadApproachPoints();                // a new airport's heatmap starts empty (setupd.clear_approach_store)
       deviceMsg = `Home airport set to ${airport}.`;
       airportRows = [];
     } catch (e) { deviceMsg = e.message; }
