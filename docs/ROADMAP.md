@@ -139,6 +139,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 4.5 | Yearly "Wrapped" from the sighting store, shareable from the app | Generated from RDU's real history |
 | 4.6 | Opt-in feeding to FlightAware / FR24 (their feeder licenses checked; precise-location sharing is explicit) | A unit feeds; the perk account activates |
 | 4.7 | Quiet hours: silence the unit's alert sounds (chimes and speech) in a set window or sunset to sunrise; alerts still show on screen; emergencies can still sound | No sound inside the window on RDU, and sound returns on time |
+| 4.8 | One nearby alert per half hour per plane on the panel, as on the phone (#79) | A plane flying circuits lights the panel at most once every half hour |
 
 ## Phase 5: hardware v2
 
@@ -229,6 +230,7 @@ they are security fixes.
 | 1.8 Core feed | **Live on RDU** (2026-09-30, release 2026.09.30.8 plus the installer): `deploy/core-feed.py` serves `/api/aircraft`, labelled by `deploy/labels.py`, the one shared copy; `?network=1` adds the network's aircraft. Read-only on the public address (POST refused). 23 service checks, 14 parity checks | — |
 | 2.8 Network aircraft in the app | Built (c8e25d9): the app reads the core feed, draws the network's aircraft hollow, counts "not heard", falls back to aircraft.json on radars without the feed. **Verified on a real iPhone with RDU** (2026-09-30): hollow network blips and the "not heard" count | — |
 | 4.7 Quiet hours | **Done** (2026-09-30): Settings › Alerts › Quiet hours silences chimes and speech in a set window (default 22:00–07:00, half-hour steps) or sunset to sunrise; alerts still show; emergencies can sound; sounds you trigger in Settings still play. Off by default | — |
+| 4.8 One nearby alert per half hour (#79) | **Done** (2026-10-23, release 2026.10.23.3): a plane flying circuits had lit RDU's panel 26 times in two and a half hours; the panel's nearby alert now waits 30 minutes per plane, like the phone's, and remembers across reloads | — |
 | 1.7 Hung-radio recovery | **Done: recovered a real failure on RDU** (2026-09-30): the FlyCatcher dropped off USB at 16:50 ("Cannot enable", error -71; no under-voltage); the watchdog restarted readsb three times, then power-cycled USB at 16:57 and the radio came back, data flowing again within a minute. About 7 minutes of "No signal" in all | — |
 | 2.10 Logo and app icon | **Done** (2026-09-30): the Climb mark in Stratosphere colours. App icon (light, dark, tinted) verified on a real iPhone; Watch icon. The logo on the radar's start-up and empty-sky screens, its settings and the setup page (live on RDU); in the app's header and Settings, the Watch glance, the widget and the Live Activity. Favicons; README header; social preview ("Window to the Sky"). Files in `assets/brand/`, all rights reserved, not MIT | The social preview uploaded on GitHub; the fleet page favicon with the next relay deploy |
 | 2.11 iPad app | First version built (38352db): scaled-up radar and controls, details in a side panel, wall mode. Simulator only | A real iPad; landscape layout with the panel; night dimming in wall mode |
