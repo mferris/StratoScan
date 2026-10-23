@@ -2320,6 +2320,24 @@ function approachCeilingFt() { return AIRPORT.elevFt + 6000; } // ignore traffic
 // starting point for current conditions, not a settled calibration.
 const AIRPORT_APPROACH_CONFIRM_RADIUS_NM = 4;
 function approachConfirmAltFt() { return AIRPORT.elevFt + 3000; }
+// Only the part of a landing flown towards the field counts (2026-10-23).
+// Every point below the ceiling used to, so a plane flying circuits added its
+// downwind and crosswind legs on every lap, and the climb out of each
+// touch-and-go: on RDU that filled the land round the field with squares and
+// buried the approach paths. A point counts when the plane is not climbing and
+// is heading within APPROACH_MAX_OFF_DEG of the field, or is close in, where
+// the runways lie off to the side of the field's centre. Helicopters never
+// count: they do not fly the corridors.
+const APPROACH_MAX_OFF_DEG = 60;
+const APPROACH_ANY_HEADING_NM = 1.5;
+const APPROACH_MAX_CLIMB_FPM = 300;
+function onApproachLeg(pl, lat, lon, airportRange) {
+  if (pl.category === 'A7') return false;
+  if (typeof pl.vrate === 'number' && pl.vrate > APPROACH_MAX_CLIMB_FPM) return false;
+  if (airportRange <= APPROACH_ANY_HEADING_NM || typeof pl.realHdg !== 'number') return true;
+  const toField = haversineBearingRange(lat, lon, AIRPORT.lat, AIRPORT.lon).bearing;
+  return Math.abs(((pl.realHdg - toField + 540) % 360) - 180) <= APPROACH_MAX_OFF_DEG;
+}
 // Backed by a small same-origin service (deploy/approach-store.py, proxied
 // at /approaches -- see 91-stratoscan-approach-store.conf) instead of
 // localStorage. localStorage is scoped per-browser/per-device, so the
@@ -2379,14 +2397,21 @@ async function loadApproachPoints() {
 }
 
 // Each square's weight is its landings on a log scale against the busiest
-// square's: the main corridor stays brightest after years of landings, and a
-// path flown once still shows, faintly.
+// square's: the main corridor stays brightest after years of landings. The
+// bottom APPROACH_FLOOR of that scale is left out (2026-10-23), so once the
+// map is well built, squares crossed only a few times (3 or fewer when the
+// busiest has 1,200) stop painting a haze over everything; a young map, whose
+// busiest square has a handful, still shows a path flown once.
+const APPROACH_FLOOR = 0.2;
 function approachPointsGeoJSON() {
   let most = 1;
   for (const c of approachCells.values()) if (c[2] > most) most = c[2];
-  const scale = Math.log1p(most);
-  return { type: 'FeatureCollection', features: [...approachCells.values()].map(([lon, lat, n]) => ({
-    type: 'Feature', properties: { w: Math.log1p(n) / scale }, geometry: { type: 'Point', coordinates: [lon, lat] } })) };
+  const top = Math.log1p(most), features = [];
+  for (const [lon, lat, n] of approachCells.values()) {
+    const w = (Math.log1p(n) / top - APPROACH_FLOOR) / (1 - APPROACH_FLOOR);
+    if (w > 0) features.push({ type: 'Feature', properties: { w }, geometry: { type: 'Point', coordinates: [lon, lat] } });
+  }
+  return { type: 'FeatureCollection', features };
 }
 
 function commitApproachTrack(points, hex) {
@@ -2650,8 +2675,10 @@ function updateApproachTracking(pl, lat, lon, alt) {
   const withinRadius = airportRange <= AIRPORT_APPROACH_RADIUS_NM;
   const belowCeiling = typeof alt === 'number' && alt <= approachCeilingFt();
   if (withinRadius && belowCeiling) {
-    pl.approachPoints.push([lon, lat]);
-    if (pl.approachPoints.length > 400) pl.approachPoints.shift(); // bound per-plane buffer
+    if (onApproachLeg(pl, lat, lon, airportRange)) {   // a leg away from the field is skipped, not a reason to give up
+      pl.approachPoints.push([lon, lat]);
+      if (pl.approachPoints.length > 400) pl.approachPoints.shift(); // bound per-plane buffer
+    }
   } else if (pl.approachPoints.length) {
     pl.approachPoints = []; // climbed out or flew away without landing -- not a real approach
   }
@@ -3064,14 +3091,17 @@ function initApproachLayer() {
     // smearing together, and the color pops harder against the darkened
     // map than the original teal did.
     // Since the grid (2026-10-14) each point is a ~200 m square weighted by
-    // its landings (see approachPointsGeoJSON), ~3 px apart at the normal
-    // zoom, so radius 2 still draws the paths as lines; zoomed in, the radius
-    // keeps up with the squares (~7 px apart at zoom 12, doubling with each
-    // level) so a path does not break into dots.
+    // its landings (see approachPointsGeoJSON). The squares' spacing on screen
+    // doubles with each zoom level, so the radius does too, at every zoom: it
+    // is about twice the spacing everywhere (2.3 px at the normal zoom, 1 px
+    // at zoom 8). The first grid's radius ran close to the spacing and stopped
+    // growing at zoom 16, so the map showed a dotted pattern, and zoomed in it
+    // broke into polka dots (RDU, 2026-10-23). Intensity came down from 2.5 to
+    // 2 as the wider kernels overlap more.
     paint: {
       'heatmap-weight': ['get', 'w'],
-      'heatmap-intensity': 2.5,
-      'heatmap-radius': ['interpolate', ['exponential', 2], ['zoom'], 11, 2, 12, 6, 16, 96],
+      'heatmap-intensity': 2,
+      'heatmap-radius': ['interpolate', ['exponential', 2], ['zoom'], 8, 1, 18, 1024],
       'heatmap-opacity': 0.95,
       'heatmap-color': [
         'interpolate', ['linear'], ['heatmap-density'],

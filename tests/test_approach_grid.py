@@ -137,6 +137,8 @@ check("APPROACH_MAX_POINTS" not in html, "the page no longer caps the map at 6,0
 check(html.count("commitApproachTrack(pl.approachPoints, pl.hex)") == 2, "both ways a landing is confirmed send its hex")
 heat = html[html.index("id: 'approaches-heat'"):][:4000]
 check("'heatmap-weight': ['get', 'w']" in heat, "the heatmap weighs each square by its landings")
+check("'heatmap-radius': ['interpolate', ['exponential', 2], ['zoom'], 8, 1, 18, 1024]" in heat,
+      "its radius doubles with every zoom level, as the squares' spacing does, with no cap (no polka dots zoomed in)")
 if not shutil.which("node"):
     print("skip page checks (no node)")
 else:
@@ -169,8 +171,61 @@ console.log(JSON.stringify({ keys, posted: JSON.parse(JSON.stringify(posted)), n
     for t in (north, north, south):
         m.add_landing(s, t, None, now=0)
     check(o.get("n") == len(s["cells"]), "and counts it locally just as the store does")
-    check(o.get("wmax") == 1 and abs(o.get("wmin", 0) - 0.5) < 1e-9,
-          "the busiest square (3 landings) weighs 1, a once-flown one log 2 / log 4")
+    check(o.get("wmax") == 1 and abs(o.get("wmin", 0) - (0.5 - 0.2) / 0.8) < 1e-9,
+          "the busiest square (3 landings) weighs 1, a once-flown one (log 2 / log 4 - floor) / (1 - floor)")
+
+    # ---- the floor, and only the legs flown towards the field count (2026-10-23)
+    def js_function(name):
+        i = html.index("function " + name + "(")
+        j = html.index("{", i); depth = 0
+        for k in range(j, len(html)):
+            depth += {"{": 1, "}": -1}.get(html[k], 0)
+            if depth == 0:
+                return html[i:k + 1]
+    consts = html[html.index("const AIRPORT_APPROACH_RADIUS_NM"):html.index("// Backed by a small same-origin service")]
+    js2 = ("let map = null; const posted = []; const APPROACH_STORE_URL = '/approaches';\n"
+           "function storeWrite(url, body) { posted.push(body); return Promise.resolve(); }\nfunction drain(r) { return r; }\n"
+           "const AIRPORT = { lat: 35.8776, lon: -78.7875, elevFt: 435 };\n"
+           + js_function("haversineBearingRange") + "\n" + consts + "\n" + js_function("updateApproachTracking") + "\n"
+           + block + r"""
+function at(nm, brg) {   // a point nm from the field on bearing brg
+  const lat = AIRPORT.lat + nm / 60 * Math.cos(brg * Math.PI / 180);
+  return [lat, AIRPORT.lon + nm / 60 * Math.sin(brg * Math.PI / 180) / Math.cos(lat * Math.PI / 180)];
+}
+const out = {};
+const fly = (pl, steps) => { for (const [nm, brg, alt] of steps) updateApproachTracking(pl, ...at(nm, brg), alt); return pl.approachPoints.length; };
+// final from the south-west: heading 045, towards the field, descending
+const fin = { realHdg: 45, vrate: -700, category: 'A3' };
+out.final = fly(fin, [[6, 225, 2400], [5, 225, 2100], [4, 225, 1800], [3, 225, 1500], [2, 225, 1200]]);
+updateApproachTracking(fin, ...at(0.5, 225), 'ground'); out.finalCommitted = posted.length && posted[posted.length - 1].points.length;
+// downwind: 3 nm south, heading 180, away from the field; level
+const dw = { realHdg: 180, vrate: 0, category: 'A1', approachPoints: [[0, 0]] };
+out.downwind = fly(dw, [[3, 180, 1400], [3.5, 180, 1400]]);
+// climbing out, heading towards the field (a go-around) and a helicopter on final
+out.climb = fly({ realHdg: 45, vrate: 1500, category: 'A3' }, [[3, 225, 1500]]);
+out.heli = fly({ realHdg: 45, vrate: -500, category: 'A7' }, [[3, 225, 1500]]);
+// close in, any heading counts; no track known counts
+out.closeIn = fly({ realHdg: 135, vrate: -400, category: 'A1' }, [[1, 225, 900]]);
+out.noTrack = fly({ realHdg: null, vrate: null, category: null }, [[3, 225, 1500]]);
+// the floor: 1,200 landings in the busiest square hides squares of 3, keeps 4
+approachCells = new Map([['0,0', [0, 0, 1200]], ['0,1', [0.002, 0, 3]], ['0,2', [0.004, 0, 4]]]);
+out.kept = approachPointsGeoJSON().features.length;
+approachCells = new Map([['0,0', [0, 0, 1]]]);
+out.youngW = approachPointsGeoJSON().features[0].properties.w;
+console.log(JSON.stringify(out));
+""")
+    r2 = subprocess.run(["node", "-e", js2], capture_output=True, text=True, timeout=60)
+    try:
+        o2 = json.loads(r2.stdout.strip().splitlines()[-1])
+    except Exception:
+        o2 = {}
+        print(r2.stderr[-1500:])
+    check(o2.get("final") == 5 and o2.get("finalCommitted") == 5, "a final towards the field is kept, and committed at touchdown")
+    check(o2.get("downwind") == 1, "a downwind leg heading away is skipped, without dropping what was kept")
+    check(o2.get("climb") == 0 and o2.get("heli") == 0, "a climb and a helicopter are skipped")
+    check(o2.get("closeIn") == 1 and o2.get("noTrack") == 1, "close in any heading counts, and so does a plane with no track")
+    check(o2.get("kept") == 2, "once the busiest square has 1,200 landings, squares of 3 drop out and squares of 4 stay")
+    check(o2.get("youngW") == 1, "a young map's first landing shows at full weight")
 
 shutil.rmtree(tmp, ignore_errors=True)
 print("approach grid checks passed" if not fails else "%d FAILED" % fails)
