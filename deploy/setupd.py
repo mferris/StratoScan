@@ -1153,6 +1153,7 @@ def set_airport(code, atc_mount=""):
     if not isinstance(code, str) or code not in airports:
         raise Err("unknown_airport", str(code)[:16])
     a = airports[code]
+    previous = current_airport_code()
     cfg = {"airport": {
         "code": a["code"], "lat": a["lat"], "lon": a["lon"],
         "elevFt": a["elevFt"], "atcMount": v_atc_mount(atc_mount),
@@ -1162,7 +1163,41 @@ def set_airport(code, atc_mount=""):
     }}
     atomic_write(CONFIG_JSON, json.dumps(cfg, indent=1) + "\n", mode=0o644)
     os.chown(CONFIG_JSON, 0, 0)
+    if previous != a["code"]:
+        clear_approach_store()
     return cfg["airport"]
+
+
+def current_airport_code():
+    try:
+        with open(CONFIG_JSON) as f:
+            return ((json.load(f) or {}).get("airport") or {}).get("code")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+# The landing heatmap is the home airport's: its squares are that field's
+# approach paths. A radar moved to another airport kept the old one's, and
+# the old field's busiest squares set the scale (see approachPointsGeoJSON
+# in index.html), so the new field's paths stayed under the floor for weeks
+# (2026-10-23). A different airport, or a first one, starts it empty. The
+# .points-v1 file is the store's copy of its pre-grid points (2026-10-14),
+# never read again, so it goes too.
+APPROACH_STORE = "stratoscan-approach-store.service"
+APPROACH_FILES = ("/var/lib/stratoscan-approaches/approaches.json",
+                  "/var/lib/stratoscan-approaches/approaches.json.points-v1")
+
+
+def clear_approach_store():
+    # Stopped first, as in reset_full: the store keeps its squares in memory
+    # and writes them back as it stops, so a file deleted under it returns.
+    with contextlib.suppress(Exception):
+        run([SYSTEMCTL, "stop", APPROACH_STORE], timeout=60)
+    for path in APPROACH_FILES:
+        with contextlib.suppress(Exception):
+            os.unlink(path)
+    with contextlib.suppress(Exception):
+        run([SYSTEMCTL, "start", APPROACH_STORE], timeout=60)
 
 
 # --------------------------------------------------------------- tailscale
@@ -1395,7 +1430,7 @@ def reset_full():
     for path in (os.path.join(STATE_DIR, "setup.json"),
                  CONFIG_JSON,
                  "/var/lib/stratoscan-sightings/sightings.json",
-                 "/var/lib/stratoscan-approaches/approaches.json",
+                 *APPROACH_FILES,
                  "/var/lib/stratoscan-network/coverage.json"):
         with contextlib.suppress(Exception):
             os.unlink(path)

@@ -576,10 +576,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
                              friendly(r.get("code", ""), r.get("detail", "")))
         st.setdefault("steps", {})["location"] = True
         st["location"] = r["result"]
+        nearest = nearest_airports(r["result"]["lat"], r["result"]["lon"])
+        # The nearest airport is the home airport until the owner picks
+        # another, as the app's setup does (RadarSetup.sendDetails). Without
+        # one the radar ran on the page's RDU defaults, heatmap and all,
+        # whenever the airport step was skipped (2026-10-23).
+        auto = None
+        if nearest and not actual_airport():
+            a = call_setupd("set_airport", {"code": nearest[0]["code"]})
+            if a.get("ok"):
+                auto = a["result"]
+                st["steps"]["airport"] = True
+                st["airport"] = auto
         save_state(st)
-        return self._send(200, {"result": r["result"],
-                                "nearestAirports": nearest_airports(
-                                    r["result"]["lat"], r["result"]["lon"])})
+        return self._send(200, {"result": r["result"], "nearestAirports": nearest,
+                                "airport": auto})
 
     def _airport(self, st):
         b = self._body() or {}
