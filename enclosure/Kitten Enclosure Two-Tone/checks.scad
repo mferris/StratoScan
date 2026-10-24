@@ -903,3 +903,19 @@ module pwr_moulding_probe(h) {
 if (check=="power_moulding_reaches")     intersection() { pwr_moulding_probe(7.6); union() { back_plate(); power_trigger_mount_placed(); } }
 if (check=="power_moulding_probe_works") intersection() { pwr_moulding_probe(10.0); back_plate(); }
 if (check=="power_pin_holds")         intersection() { translate([0, 0, 1.5]) power_trigger_board_placed(); power_pin_probe(); }
+
+// The speaker sleeve is hollow (2026-10-23): inside it, from the speaker's
+// face to the wall and clear of the four screw pads, there is no plastic. It
+// was a solid block with the grille drilled through it as tubes. The control
+// reaches 1 mm into the wall and finds it.
+speaker_boss_h=4; speaker_angles=[0,180];
+module spk_cavity_probe(reach) {
+  for (a = speaker_angles) rotate([0, 0, a])
+    intersection() {
+      translate([outer_dia/2 - wall - speaker_bracket_depth - speaker_boss_h + 0.5, -42, (shell_depth - speaker_d)/2 + speaker_d/2 - 14])
+        cube([30, 84, 28]);
+      cylinder(r = outer_dia/2 - wall - 0.5 + reach, h = shell_depth, $fn = 360);
+    }
+}
+if (check=="speaker_sleeve_hollow") intersection() { spk_cavity_probe(0); shell(); }
+if (check=="speaker_probe_works")   intersection() { spk_cavity_probe(1.5); shell(); }

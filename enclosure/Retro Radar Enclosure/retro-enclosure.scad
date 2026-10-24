@@ -296,6 +296,8 @@ speaker_hole_x = 92; speaker_hole_y = 36;
 speaker_screw_dia = 2.6;     // self-tapping into printed bosses
 speaker_boss_dia  = 6;
 speaker_boss_h    = 4;
+speaker_boss_len  = 6;     // the screw pads' depth, from the speaker's face into the sleeve
+speaker_duct_wall = 1.6;   // the sleeve's walls (2026-10-23: it was a solid block)
 speaker_bracket_depth = 15;  // how far inboard of the wall the flat mounting face sits
 speaker_angles = [0, 180];
 
@@ -695,40 +697,49 @@ module cradle_rails() {
 }
 
 // ============================================================
-// SPEAKERS — one per side (0deg/180deg). A bracket bridges from the
-// curved wall inward to a flat mounting face; screw_bosses land the
-// speaker's real 92x36mm hole pattern; a grille patch is cut straight
-// through the wall right in front of the speaker's face.
+// SPEAKERS — one per side (0deg/180deg). A thin sleeve, the speaker's own
+// outline, runs from the speaker's face to the curved wall, so the sound
+// goes out through the grille and not into the case; four screw pads in
+// its corners land the speaker's real 92x36mm hole pattern; the grille is
+// cut through the wall in front of it. Until 2026-10-23 the bracket was a
+// solid block 15mm deep with the grille drilled through it as tubes, some
+// 50 cm3 of plastic a side for nothing (the owner's ask).
 // ============================================================
 module speaker_bracket(angle) {
     r_wall  = outer_dia/2 - wall;
     r_mount = r_wall - speaker_bracket_depth;
+    r_face  = r_mount - speaker_boss_h;     // the speaker's face, on the sleeve's rim
     z0 = (shell_depth - speaker_d)/2;
-
+    zc = z0 + speaker_d/2;
+    t  = speaker_duct_wall;
     rotate([0,0,angle]) {
-        // Clipped to the case's own outer cylinder: the bracket is a FLAT
-        // slab spanning a 100mm chord of a 223mm circle, so its corners sit
-        // at r=119.6 -- 8mm PROUD of the 111.7mm wall. Unclipped they punched
-        // straight through the shell as four bumps on the outside, and fouled
-        // the cradle arms where they did. Clipping costs nothing: the corners
-        // were outside the case, and the mounting bosses are far inboard.
-        intersection() {
-            hull() {
-                translate([r_wall - 0.2, -speaker_w/2, z0])
-                    cube([0.2, speaker_w, speaker_d]);
-                translate([r_mount, -speaker_w/2, z0])
-                    cube([0.2, speaker_w, speaker_d]);
+        // The sleeve, stopped at the wall and fused 0.5 into it: a flat box
+        // across a 100mm chord of the curved wall would otherwise poke out
+        // through the shell at its ends.
+        difference() {
+            intersection() {
+                translate([r_face, -speaker_w/2, z0]) cube([r_wall + 1 - r_face, speaker_w, speaker_d]);
+                cylinder(r = r_wall + 0.5, h = shell_depth);
             }
-            cylinder(d=outer_dia, h=shell_depth);
+            intersection() {
+                translate([r_face - 1, -speaker_w/2 + t, z0 + t])
+                    cube([r_wall + 2 - r_face, speaker_w - 2*t, speaker_d - 2*t]);
+                cylinder(r = r_wall, h = shell_depth);     // the wall itself stays
+            }
         }
-        for (dy = [-speaker_hole_x/2, speaker_hole_x/2])
-            for (dz = [-speaker_hole_y/2, speaker_hole_y/2])
-                translate([r_mount - speaker_boss_h, dy, z0 + speaker_d/2 + dz])
-                    rotate([0,90,0])
-                        difference() {
-                            cylinder(d=speaker_boss_dia, h=speaker_boss_h, $fn=16);
-                            translate([0,0,-0.1]) cylinder(d=speaker_screw_dia, h=speaker_boss_h+0.2, $fn=12);
-                        }
+        // the four screw pads, filling the sleeve's corners
+        for (sy = [-1, 1]) for (sz = [-1, 1])
+            intersection() {
+                difference() {
+                    translate([r_face, sy > 0 ? speaker_hole_x/2 - speaker_boss_dia/2 : -speaker_w/2,
+                               sz > 0 ? zc + speaker_hole_y/2 - speaker_boss_dia/2 : z0])
+                        cube([speaker_boss_len, speaker_w/2 - speaker_hole_x/2 + speaker_boss_dia/2,
+                              speaker_d/2 - speaker_hole_y/2 + speaker_boss_dia/2]);
+                    translate([r_face - 0.1, sy*speaker_hole_x/2, zc + sz*speaker_hole_y/2])
+                        rotate([0,90,0]) cylinder(d=speaker_screw_dia, h=speaker_boss_len + 0.2, $fn=12);
+                }
+                cylinder(r = r_wall + 0.5, h = shell_depth);
+            }
     }
 }
 
@@ -749,16 +760,9 @@ function behind_ribs(z) =
     z - c < front;
 
 module speaker_grille(angle) {
-    // The holes have to clear BOTH solids in the sound path, not just the
-    // outer wall: speaker_bracket's hull fills the full
-    // speaker_bracket_depth from its mounting face (r_mount) out to the
-    // wall's inner surface, so a cut sized to `wall` alone drilled the
-    // wall and then dead-ended against that slab -- open from outside,
-    // completely blocked from inside. Cutting from r_mount outward makes
-    // it a real through-path. Starting exactly at r_mount also keeps the
-    // four mounting bosses intact: they sit INBOARD of that face
-    // (r_mount - speaker_boss_h .. r_mount), so the cut only meets their
-    // outer end plane and removes no boss material.
+    // Since the bracket became a hollow sleeve (2026-10-23) the holes need
+    // cross only the wall. They start inside the sleeve, just past the screw
+    // pads, so they never bore into a pad, and end past the outer surface.
     r_mount = outer_dia/2 - wall - speaker_bracket_depth;
     z0 = (shell_depth - speaker_d)/2;
     n_y = floor(grille_w / grille_pitch);
@@ -769,10 +773,10 @@ module speaker_grille(angle) {
             for (iz = [0:n_z]) {
                 dz = (iz - n_z/2) * grille_pitch;
                 if (!behind_ribs(z0 + speaker_d/2 + dz))
-                    translate([r_mount, dy, z0 + speaker_d/2 + dz])
+                    translate([r_mount - speaker_boss_h + speaker_boss_len + 0.1, dy, z0 + speaker_d/2 + dz])
                         rotate([0,90,0])
                             cylinder(d=grille_hole_dia,
-                                     h=speaker_bracket_depth + wall + 3, $fn=10);
+                                     h=speaker_bracket_depth + speaker_boss_h - speaker_boss_len - 0.1 + wall + 3, $fn=10);
             }
         }
 }
