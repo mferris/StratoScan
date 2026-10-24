@@ -355,6 +355,8 @@ speaker_hole_x = 92; speaker_hole_y = 36;
 speaker_screw_dia = 2.6;
 speaker_boss_dia  = 6;
 speaker_boss_h    = 4;
+speaker_boss_len  = 6;     // the screw pads' depth, from the speaker's face into the sleeve
+speaker_duct_wall = 1.6;   // the sleeve's walls (2026-10-23: it was a solid block)
 speaker_bracket_depth = 15;
 speaker_angles = [0, 180];
 
@@ -692,35 +694,56 @@ module cradle_rails() {
                     translate([outer_dia/2, 0]) square([retain_h, retain_w]);
 }
 
+// ============================================================
+// SPEAKERS — one per side (0deg/180deg). A thin sleeve, the speaker's own
+// outline, runs from the speaker's face to the curved wall, so the sound
+// goes out through the grille and not into the case; four screw pads in
+// its corners land the speaker's real 92x36mm hole pattern; the grille is
+// cut through the wall in front of it. Until 2026-10-23 the bracket was a
+// solid block 15mm deep with the grille drilled through it as tubes, some
+// 50 cm3 of plastic a side for nothing (the owner's ask).
+// ============================================================
 module speaker_bracket(angle) {
     r_wall  = outer_dia/2 - wall;
     r_mount = r_wall - speaker_bracket_depth;
+    r_face  = r_mount - speaker_boss_h;     // the speaker's face, on the sleeve's rim
     z0 = (shell_depth - speaker_d)/2;
+    zc = z0 + speaker_d/2;
+    t  = speaker_duct_wall;
     rotate([0,0,angle]) {
-        // Clipped to the outer cylinder: a flat slab across a curved
-        // wall otherwise punches through it at the corners.
-        intersection() {
-            hull() {
-                translate([r_wall - 0.2, -speaker_w/2, z0]) cube([0.2, speaker_w, speaker_d]);
-                translate([r_mount, -speaker_w/2, z0])     cube([0.2, speaker_w, speaker_d]);
+        // The sleeve, stopped at the wall and fused 0.5 into it: a flat box
+        // across a 100mm chord of the curved wall would otherwise poke out
+        // through the shell at its ends.
+        difference() {
+            intersection() {
+                translate([r_face, -speaker_w/2, z0]) cube([r_wall + 1 - r_face, speaker_w, speaker_d]);
+                cylinder(r = r_wall + 0.5, h = shell_depth);
             }
-            cylinder(d=outer_dia, h=shell_depth);
+            intersection() {
+                translate([r_face - 1, -speaker_w/2 + t, z0 + t])
+                    cube([r_wall + 2 - r_face, speaker_w - 2*t, speaker_d - 2*t]);
+                cylinder(r = r_wall, h = shell_depth);     // the wall itself stays
+            }
         }
-        for (dy = [-speaker_hole_x/2, speaker_hole_x/2])
-            for (dz = [-speaker_hole_y/2, speaker_hole_y/2])
-                translate([r_mount - speaker_boss_h, dy, z0 + speaker_d/2 + dz])
-                    rotate([0,90,0])
-                        difference() {
-                            cylinder(d=speaker_boss_dia, h=speaker_boss_h, $fn=16);
-                            translate([0,0,-0.1]) cylinder(d=speaker_screw_dia, h=speaker_boss_h+0.2, $fn=12);
-                        }
+        // the four screw pads, filling the sleeve's corners
+        for (sy = [-1, 1]) for (sz = [-1, 1])
+            intersection() {
+                difference() {
+                    translate([r_face, sy > 0 ? speaker_hole_x/2 - speaker_boss_dia/2 : -speaker_w/2,
+                               sz > 0 ? zc + speaker_hole_y/2 - speaker_boss_dia/2 : z0])
+                        cube([speaker_boss_len, speaker_w/2 - speaker_hole_x/2 + speaker_boss_dia/2,
+                              speaker_d/2 - speaker_hole_y/2 + speaker_boss_dia/2]);
+                    translate([r_face - 0.1, sy*speaker_hole_x/2, zc + sz*speaker_hole_y/2])
+                        rotate([0,90,0]) cylinder(d=speaker_screw_dia, h=speaker_boss_len + 0.2, $fn=12);
+                }
+                cylinder(r = r_wall + 0.5, h = shell_depth);
+            }
     }
 }
 
-// Whiskers that are also the speaker grille. The cut has to clear BOTH
-// solids in the sound path — the wall AND the bracket slab behind it —
-// so it starts at r_mount, exactly as the retro grille does. A cut
-// sized to `wall` alone looks open from outside and is sealed inside.
+// Whiskers that are also the speaker grille. Since the bracket became a
+// hollow sleeve (2026-10-23) the dots need cross only the wall; they start
+// inside the sleeve just past the screw pads, as the retro grille's holes do.
 module whisker_grille(angle) {
     r_mount = outer_dia/2 - wall - speaker_bracket_depth;
     z0 = (shell_depth - speaker_d)/2;
@@ -731,10 +754,10 @@ module whisker_grille(angle) {
             for (i = [0:whisker_per_row-1]) {
                 dy = (i - (whisker_per_row-1)/2) * whisker_dx;
                 droop = -abs(i - (whisker_per_row-1)/2) * whisker_droop;
-                translate([r_mount, dy, zc + dz + droop])
+                translate([r_mount - speaker_boss_h + speaker_boss_len + 0.1, dy, zc + dz + droop])
                     rotate([0,90,0])
                         cylinder(d=whisker_dot_dia,
-                                 h=speaker_bracket_depth + wall + 3, $fn=12);
+                                 h=speaker_bracket_depth + speaker_boss_h - speaker_boss_len - 0.1 + wall + 3, $fn=12);
             }
         }
 }

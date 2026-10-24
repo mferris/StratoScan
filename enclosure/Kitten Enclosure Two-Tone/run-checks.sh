@@ -26,7 +26,7 @@ EMPTY="twin_vs_stand_11 twin_slot_takes_jack_11 twin_barrel_through_panel_11 twi
        antenna_clears_head mount_hidden plate_vs_shell mount_vs_stand sma_mount_vs_stand
        material_lost paws_vs_tail lip_clears_posts lip_inside_bore
        vents_clear_of_mount usbc_screws_clear_window claws_off_the_desk connector_passes
-       socket_takes_base connector_has_room cable_slot_open power_mount_vs_plate power_board_held power_plug_reaches power_pin_passes power_screws_pass power_mount_vs_shell power_mount_vs_speakers power_moulding_reaches"
+       socket_takes_base connector_has_room cable_slot_open power_mount_vs_plate power_board_held power_plug_reaches power_pin_passes power_screws_pass power_mount_vs_shell power_mount_vs_speakers power_moulding_reaches speaker_sleeve_hollow"
 
 # Must come out SMALL but non-zero. These are the colour seams, and they
 # overlap on purpose -- see colour_overlap in the .scad. Cutting each part
@@ -102,7 +102,7 @@ done
 # find a real hole. A 3.2mm probe through the bezel is about 56mm3; the
 # threshold only has to separate that from nothing.
 echo "Positive controls — must find real geometry:"
-for c in key_blocks_45 key_blocks_90 key_blocks_135 key_blocks_180 key_blocks_225 key_blocks_270 key_blocks_315 other_screws_present back_inserts_open lip_present usbc_open ant_plate_holes_open ant_flange_inserts_open driver_path_was_blocked vents_were_under_mount socket_gauge_works cable_slot_other_side connector_gauge_works usbc_screw_probe_works sma_passage_joins sma_panel_present sma_hole_open claws_stand_proud top_wall_solid front_insert_holes_open twin_panels_present twin_holes_open top_screw_was_under_mount twin_channel_open twin_cover_seats twin_cover_screws_open twin_antennas_probe_works twin_channel_open_11 twin_cover_seats_11 twin_cover_screws_open_11 twin_panels_present_11 power_screws_bite power_plug_probe_works power_pin_holds power_moulding_probe_works; do
+for c in key_blocks_45 key_blocks_90 key_blocks_135 key_blocks_180 key_blocks_225 key_blocks_270 key_blocks_315 other_screws_present back_inserts_open lip_present usbc_open ant_plate_holes_open ant_flange_inserts_open driver_path_was_blocked vents_were_under_mount socket_gauge_works cable_slot_other_side connector_gauge_works usbc_screw_probe_works sma_passage_joins sma_panel_present sma_hole_open claws_stand_proud top_wall_solid front_insert_holes_open twin_panels_present twin_holes_open top_screw_was_under_mount twin_channel_open twin_cover_seats twin_cover_screws_open twin_antennas_probe_works twin_channel_open_11 twin_cover_seats_11 twin_cover_screws_open_11 twin_panels_present_11 power_screws_bite power_plug_probe_works power_pin_holds power_moulding_probe_works speaker_probe_works; do
     out="$TMP/$c.stl"
     "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
     v=$(vol_of "$out")
