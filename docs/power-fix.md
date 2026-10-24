@@ -103,6 +103,14 @@ The Pi isn't involved until step 6.
    A switching regulator can add radio noise, so compare the receiver's noise
    floor (`"noise"` in `/run/readsb/stats.json`) with what it was before.
 
+10. **Soak it for an hour** before it goes into the case or leaves the house.
+    Keep the display at its normal brightness and the radar on its everyday
+    screens. Then run the same checks again: `get_throttled` must still read
+    `0x0`, and the kernel must have logged no "Undervoltage detected". The
+    dips only show under the full load, so a radar that passes in the first
+    minute can still fail here. After that, every health report carries the
+    day's count of dips, and the fleet page flags a radar that has any.
+
 A Pi 5 should start from the pigtail's two wires alone. If one doesn't, the
 likely missing piece is the 56 kΩ pull-up that USB-A to USB-C cables carry
 on their CC wire. A ready-made pigtail sold for powering devices avoids the
