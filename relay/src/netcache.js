@@ -8,7 +8,9 @@
 // same thing:
 //
 //   GET  /v1/net/disc/<lat>/<lon>   the aircraft in a 250 nm disc on a FIXED
-//                                   world lattice (below), kept DISC_TTL_S
+//                                   world lattice (below), kept DISC_TTL_S;
+//                                   ?near=<lat>,<lon>,<nm> only those within
+//                                   nm of a place (a phone's view, #68)
 //   POST /v1/net/routes             {"planes":[{callsign,lat,lng}]}, as adsb.im
 //                                   takes it; each callsign kept ROUTE_TTL_S
 //   GET  /v1/net/owner/<hex>        adsbdb's registered owner, kept OWNER_TTL_S
@@ -29,6 +31,15 @@
 // too. adsb.lol sees one fetch per disc per DISC_TTL_S whoever is looking,
 // and never a burst from one address. Routes and owners the relay does
 // fetch itself; adsb.im and adsbdb answer it.
+//
+// PHONES (#68) ask too, for the view on their screen, but only take what
+// a radar has already fetched: a phone may not hand a disc up (anyone with
+// a pairing could then draw aircraft on every radar's screen), so it is
+// never asked to fetch one, takes no lease from the radars, and on a miss
+// asks adsb.lol itself, round its own view, as it always did. A disc is
+// about 400 KB and a phone's view a few dozen aircraft, so a phone names
+// its view (`near`, the middle rounded to 0.05 degrees, as adsb.lol gets
+// it; anything finer is refused) and gets only the aircraft in it.
 //
 // Who may ask: a unit that reports to the relay (it is in `units`, which
 // only a signed health report puts it in) or a phone paired with one. The
@@ -176,6 +187,31 @@ function nmBetween(lat1, lon1, lat2, lon2) {
   return 3440.065 * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
+// A phone's view (#68): "lat,lon,nm", the middle to two decimals at most and
+// a radius no wider than a disc. null when not asked for, false when wrong.
+const NEAR = /^(-?\d{1,2}(?:\.\d{1,2})?),(-?\d{1,3}(?:\.\d{1,2})?),(\d{1,3})$/;
+export function nearOf(raw) {
+  if (raw === null || raw === undefined) return null;
+  const m = NEAR.exec(raw);
+  if (!m) return false;
+  const lat = Number(m[1]), lon = Number(m[2]), nm = Number(m[3]);
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180 || nm < 1 || nm > DISC_R_NM) return false;
+  return { lat, lon, nm };
+}
+
+// The aircraft of a cached disc within `near` of a place; everything else in
+// adsb.lol's answer is kept as it was. The disc was checked when it was
+// handed up, so it parses; if it somehow doesn't, the whole disc goes out.
+export function nearOnly(buf, near) {
+  let d;
+  try { d = parse(buf); } catch { return buf; }
+  if (!d || !Array.isArray(d.ac)) return buf;
+  d.ac = d.ac.filter(a => a && Number.isFinite(a.lat) && Number.isFinite(a.lon)
+    && nmBetween(near.lat, near.lon, a.lat, a.lon) <= near.nm);
+  if ('total' in d) d.total = d.ac.length;
+  return JSON.stringify(d);
+}
+
 // Whether what a radar hands up is adsb.lol's answer for this disc, as far as
 // the relay can tell without asking adsb.lol: an object with an aircraft
 // list, every aircraft an object, and every position inside the disc (audit
@@ -238,6 +274,8 @@ export function netRoutes({ json, readBody, nowS }) {
       return json(400, { error: 'not a disc on the lattice', nearest: Number.isFinite(lat) && Number.isFinite(lon) ? latticeCentre(lat, lon) : null });
     }
     const putting = request.method === 'PUT';
+    const near = putting ? null : nearOf(new URL(request.url).searchParams.get('near'));
+    if (near === false) return json(400, { error: 'near is lat,lon,nm: two decimals at most, 1 to 250 nm' });
     const body = putting ? await readDisc(request) : await readBody(request);
     if (!body) return json(413, { error: 'too large' });
     const w = await who(request, body, env);
@@ -262,7 +300,10 @@ export function netRoutes({ json, readBody, nowS }) {
       return new Response(null, { status: 204 });
     }
     const hit = await cacheGet(env, name);
-    if (hit) return discResponse(hit.body, 'hit', hit.ageS);
+    if (hit) return discResponse(near ? nearOnly(hit.body, near) : hit.body, 'hit', hit.ageS);
+    // A phone never fetches for the others (it may not hand up), so it is
+    // not asked to and takes no lease that would keep a radar waiting.
+    if (w.kind === 'phone') return json(404, { error: 'not cached' });
     if (await cacheOf(env).match(CACHE_ORIGIN + lease)) {
       return new Response(JSON.stringify({ error: 'not cached', fetching: true, retry_after: LEASE_RETRY_S }),
         { status: 404, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Retry-After': String(LEASE_RETRY_S) } });

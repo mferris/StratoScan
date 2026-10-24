@@ -54,7 +54,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Public network")
                 } footer: {
-                    Text("One switch for everything the network adds. At home it fills in the aircraft your radar didn't hear, drawn half-filled with an outline so you can tell them from the ones it heard. Away from your radar, beyond its 20 nm, or with no radar at all, the view centres on you and shows the aircraft around you; the centre button switches between that and your radar's view. Pan the map anywhere and it shows the network's aircraft there, within 250 nm of the middle. To ask for aircraft around a place the app sends adsb.lol that place rounded to about 5 km — when that place is you, that is the only thing about you that leaves the phone. Alerts and the logbook come from your radar only.")
+                    Text("One switch for everything the network adds. At home it fills in the aircraft your radar didn't hear, drawn half-filled with an outline so you can tell them from the ones it heard. Away from your radar, beyond its 20 nm, or with no radar at all, the view centres on you and shows the aircraft around you; the centre button switches between that and your radar's view. Pan the map anywhere and it shows the network's aircraft there, within 250 nm of the middle. To ask for aircraft around a place the app sends that place rounded to about 5 km: to the StratoScan relay, which shares what the radars have fetched, while a radar is paired and the relay has them; otherwise to adsb.lol. When that place is you, that is the only thing about you that leaves the phone. Alerts and the logbook come from your radar only.")
                 }
 
                 Section {

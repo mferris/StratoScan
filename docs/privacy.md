@@ -1,6 +1,6 @@
 # StratoScan privacy policy
 
-*Last updated 2026-09-29.*
+*Last updated 2026-10-23.*
 
 StratoScan is an open-source radar for the aircraft flying over your home,
 built around a receiver you own. This page covers the StratoScan radar, the
@@ -14,9 +14,10 @@ The code for all three is public at
 - The app uses your phone's location only if you ask it to show you on the
   radar, and only on the phone. One exception: with the public network on
   (Settings › Public network, one switch, on by default), away from your
-  radar, beyond its 20 nm, or with no radar, the app asks adsb.lol for the
-  aircraft around you, with your location rounded to about 5 km. It doesn't
-  track you and shows no ads.
+  radar, beyond its 20 nm, or with no radar, the app asks for the aircraft
+  around you, with your location rounded to about 5 km: from the StratoScan
+  relay's shared copy when a radar is paired and the relay has them, else
+  from adsb.lol. It doesn't track you and shows no ads.
 - The relay keeps the minimum it needs to deliver alerts, and deletes it
   when it's no longer needed.
 
@@ -130,10 +131,24 @@ and the one thing about you that leaves the phone is your location **rounded
 to about 5 km** (0.05°), asked every 5 seconds while that view is open.
 Pan the map somewhere else and the app asks adsb.lol about that place
 instead, the same way. adsb.lol sees the rounded place and your IP address,
-like any web request. Nothing goes to the StratoScan relay. The map is
-centred on your exact position on the phone only. Turning the switch off
+like any web request. With a radar paired, the app asks the StratoScan
+relay first, for the copy the radars share (above): it
+names the fixed 250 nm disc of the world that holds the view and the same
+rounded place, so the relay sends back only the aircraft in view. The relay
+sees that place and which phone asked (by the phone's random key), keeps
+neither, and refuses a place given more precisely than 0.05°. When no radar
+has fetched that disc in the last few seconds, which today is most of the
+world, the app asks adsb.lol as above and leaves the relay alone for half a
+minute. The map is centred on your exact position on the phone only. Turning the switch off
 stops all of it: the view then shows your radar's aircraft, and nothing
 beyond its ring.
+
+**Routes.** A radar from before the core feed (2026-09-30) doesn't send
+its aircraft's routes, so for those the app looks them up: with a radar
+paired, from the StratoScan relay's shared copy, which asks adsb.im once for
+every radar and phone (the app sends each flight's callsign and position
+rounded to 0.1°, about 10 km); otherwise from adsb.im directly. It is the
+aircraft's position, never yours.
 
 **Airline logos** (since 2026-10-08). To show an airline's mark beside its
 name, the app (and the small extension that dresses an alert before it is
@@ -144,7 +159,7 @@ the airline's web domain and nothing else; those services see your IP
 address, like any web request. Logos are the airlines' trademarks and none
 is shipped in the app or the repository.
 
-**Sky view away from home** (with the public network on). When the phone is more than 3 nm from the radar, Sky view shows the aircraft around the phone from adsb.lol, asked for the same way as above: your location rounded to about 5 km, every 5 seconds while Sky view is open.
+**Sky view away from home** (with the public network on). When the phone is more than 3 nm from the radar, Sky view shows the aircraft around the phone, asked for the same way as above (from the relay's shared copy when it has them, else from adsb.lol): your location rounded to about 5 km, every 5 seconds while Sky view is open.
 
 ### Setting up a radar from the app
 
@@ -180,7 +195,7 @@ The relay is a small service run by the StratoScan maintainer on Cloudflare.
 | Health reports (only if turned on), and, for a radar in a fleet, its name and its public page's daily visit counts | About 30 days |
 | A one-time pairing code's fingerprint (never the code itself) | Until used, or 10 minutes |
 | Fingerprints of fleet invite codes and administrator links (never the codes) | Until replaced or the fleet is removed |
-| Aircraft positions, routes and registered owners fetched for radars (the shared cache). An owner comes from public aircraft registries and, for a private aircraft, can be a person's name | Positions seconds, routes 6 hours, owners 7 days |
+| Aircraft positions, routes and registered owners fetched for radars and phones (the shared cache), never kept against whoever asked. An owner comes from public aircraft registries and, for a private aircraft, can be a person's name | Positions seconds, routes 6 hours, owners 7 days |
 
 The relay doesn't store IP addresses. Cloudflare, which runs it, sees them
 when it delivers requests, under

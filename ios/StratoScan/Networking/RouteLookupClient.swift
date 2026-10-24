@@ -22,6 +22,11 @@ final class RouteLookupClient {
 
     private(set) var cache: [String: FeedRoute?] = [:]
 
+    /// The relay's shared cache of routes (#68), set by the app while a
+    /// radar is paired: one lookup per flight for every radar and phone,
+    /// kept six hours. Nil, or no answer, and adsb.im is asked directly.
+    static var relay: (@Sendable (Data) async -> Data?)?
+
     /// The route to show for an aircraft: the core feed's, else this lookup's.
     func route(for p: PlaneState) -> RouteText? {
         guard let r = p.feedRoute ?? (cache[p.cs] ?? nil) else { return nil }
@@ -53,7 +58,7 @@ final class RouteLookupClient {
 
         struct PlaneQuery: Encodable { let callsign: String; let lat: Double; let lng: Double }
         struct RequestBody: Encodable { let planes: [PlaneQuery] }
-        struct Airport: Decodable { let location: String }
+        struct Airport: Decodable { let location: String? }     // the relay passes a missing one on as null
         struct RouteResponse: Decodable {
             let callsign: String?
             let plausible: Bool?
@@ -61,14 +66,25 @@ final class RouteLookupClient {
         }
 
         do {
-            var req = URLRequest(url: routeAPIURL)
-            req.httpMethod = "POST"
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.httpBody = try JSONEncoder().encode(RequestBody(planes: batch.map { PlaneQuery(callsign: $0.callsign, lat: $0.lat, lng: $0.lon) }))
-
-            let (data, response) = try await URLSession.shared.data(for: req)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
-            let routes = try JSONDecoder().decode([RouteResponse].self, from: data)
+            // Through the relay, positions to 0.1 degrees: all a route check needs.
+            var data: Data? = nil
+            if let relay = Self.relay {
+                let rounded = RequestBody(planes: batch.map {
+                    PlaneQuery(callsign: $0.callsign, lat: ($0.lat * 10).rounded() / 10, lng: ($0.lon * 10).rounded() / 10)
+                })
+                let body = try JSONEncoder().encode(rounded)
+                data = await relay(body)
+            }
+            if data == nil {
+                var req = URLRequest(url: routeAPIURL)
+                req.httpMethod = "POST"
+                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                req.httpBody = try JSONEncoder().encode(RequestBody(planes: batch.map { PlaneQuery(callsign: $0.callsign, lat: $0.lat, lng: $0.lon) }))
+                let (direct, response) = try await URLSession.shared.data(for: req)
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+                data = direct
+            }
+            let routes = try JSONDecoder().decode([RouteResponse].self, from: data ?? Data())
 
             var found: Set<String> = []
             for r in routes {
@@ -76,8 +92,8 @@ final class RouteLookupClient {
                 found.insert(cs)
                 // As the core feed words it (core-feed.py): every stop, and an
                 // implausible route kept but marked, as the kiosk shows it.
-                if let airports = r._airports, airports.count >= 2 {
-                    cache[cs] = FeedRoute(text: airports.map(\.location).joined(separator: " → "),
+                if let airports = r._airports?.compactMap(\.location), airports.count >= 2 {
+                    cache[cs] = FeedRoute(text: airports.joined(separator: " → "),
                                           plausible: r.plausible != false)
                 } else {
                     cache[cs] = FeedRoute?.none

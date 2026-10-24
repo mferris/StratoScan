@@ -15,9 +15,9 @@ import SwiftUI
 ///
 /// Aimed from the phone's location when allowed, the radar's otherwise. Away
 /// from the radar, and only if the owner turns it on here, it also shows the
-/// aircraft around the phone from adsb.lol -- the one time the phone's
-/// location leaves it, rounded to about 5 km first. The camera picture is
-/// never recorded or sent.
+/// aircraft around the phone from adsb.lol (through the relay's shared cache
+/// when it has them, #68) -- the one time the phone's location leaves it,
+/// rounded to about 5 km first. The camera picture is never recorded or sent.
 struct SkyView: View {
     @ObservedObject var viewModel: RadarViewModel
     @ObservedObject var location: PhoneLocation

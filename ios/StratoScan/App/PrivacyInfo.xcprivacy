@@ -8,9 +8,10 @@
   nothing is used for tracking. The radar's live data is read from the
   owner's own radar, not collected.
   Location is used on the phone (the "You" marker, the compass, Sky view)
-  and not sent anywhere -- except, if the owner turns it on, Sky view away
-  from home asks adsb.lol for the aircraft around them, with the location
-  rounded to about 5 km: declared below as coarse location.
+  and not sent anywhere -- except, with the public network on, away from
+  home the app asks for the aircraft around them, with the location rounded
+  to about 5 km, from the StratoScan relay's shared cache (which keeps none
+  of it) or adsb.lol: declared below as coarse location, not linked.
 -->
 <plist version="1.0">
 <dict>

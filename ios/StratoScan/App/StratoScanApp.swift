@@ -31,6 +31,17 @@ struct StratoScanApp: App {
                 // A paired radar that has moved on the home network is found
                 // again by Bonjour, not retyped (#76).
                 .task { [pairing] in Endpoint.shared.finder = { await RadarFinder.find(pairing: pairing) } }
+                // The network's aircraft and routes from the relay's shared
+                // cache while a radar is paired (#68): the relay serves only
+                // phones paired with a radar; adsb.lol and adsb.im directly
+                // otherwise, or when it doesn't have them.
+                .task { [pairing] in
+                    let paired: @Sendable () async -> Bool = { await MainActor.run { !pairing.radars.isEmpty } }
+                    NetworkFeed.relay = { disc, near, nm in
+                        await paired() ? await RelayClient().netDisc(disc, near: near, nm: nm) : nil
+                    }
+                    RouteLookupClient.relay = { body in await paired() ? await RelayClient().netRoutes(body) : nil }
+                }
                 // The widget refreshes on iOS's budget; opening the app is a good moment too.
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     WidgetCenter.shared.reloadAllTimelines()

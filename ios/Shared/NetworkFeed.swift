@@ -7,6 +7,11 @@ import Foundation
 /// The point asked for is rounded to about 5 km first: enough to find the
 /// sky's aircraft, not enough to find a house. Nothing else about the phone
 /// is sent.
+///
+/// A phone paired with a radar asks the relay's shared cache first (#68):
+/// the radars' discs of the world, of which it gets only the aircraft in its
+/// view. A phone may only take what a radar has fetched, so on a miss it
+/// asks adsb.lol itself, as before, and leaves that disc alone for a while.
 enum NetworkFeed {
     /// adsb.lol answers point queries up to this radius.
     static let maxRadiusNm = 250
@@ -78,18 +83,69 @@ enum NetworkFeed {
     private struct ExtraResponse: Decodable { let ac: [Extra]? }
 
     /// The aircraft within `radiusNm` of `centre` (clamped to what adsb.lol
-    /// serves), with the registration and type the network knows.
+    /// serves), with the registration and type the network knows: from the
+    /// relay's cache when it has them, else from adsb.lol.
     static func fetch(around centre: Coordinate, radiusNm: Double = Double(minRadiusNm)) async -> [(RawAircraft, Extra?)]? {
         let at = rounded(centre)
         let radius = max(minRadiusNm, min(maxRadiusNm, Int(radiusNm.rounded())))
+        if let data = await fromRelay(at: at, radius: radius), let got = decode(data, within: (at, Double(radius))) {
+            return got
+        }
         guard let url = URL(string: String(format: "https://api.adsb.lol/v2/point/%.2f/%.2f/%d", at.lat, at.lon, radius)) else { return nil }
         var req = URLRequest(url: url, timeoutInterval: 8)
         req.setValue("StratoScan/1.0 (iOS app)", forHTTPHeaderField: "User-Agent")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200,
-              let list = try? JSONDecoder().decode(Response.self, from: data).ac else { return nil }
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return decode(data, within: nil)
+    }
+
+    /// adsb.lol's answer, with each aircraft's registration and type; only
+    /// those within `within` (a relay that sent a whole disc).
+    private static func decode(_ data: Data, within: (Coordinate, Double)?) -> [(RawAircraft, Extra?)]? {
+        guard var list = try? JSONDecoder().decode(Response.self, from: data).ac else { return nil }
+        if let (at, nm) = within {
+            list = list.filter { a in
+                guard let lat = a.lat, let lon = a.lon else { return false }
+                return NetLattice.nm(at.lat, at.lon, lat, lon) <= nm
+            }
+        }
         let extras = (try? JSONDecoder().decode(ExtraResponse.self, from: data).ac) ?? []
         let byHex = Dictionary(extras.map { ($0.hex, $0) }, uniquingKeysWith: { a, _ in a })
         return list.map { ($0, byHex[$0.hex]) }
+    }
+
+    // ---- the relay's shared cache (#68) ----
+
+    /// Set by the app (not the widget or the Watch: only the app holds the
+    /// phone's relay key), and only answers while a radar is paired: for a
+    /// lattice disc and a view inside it (the middle, already rounded, and
+    /// its reach), adsb.lol's answer for that view as the relay has it, or
+    /// nil when it hasn't.
+    typealias RelayDisc = @Sendable (_ disc: NetLattice.Centre, _ near: Coordinate, _ nm: Int) async -> Data?
+    static var relay: RelayDisc? {
+        get { lock.withLock { relayHook } }
+        set { lock.withLock { relayHook = newValue } }
+    }
+    /// A disc the relay didn't have is left alone this long, adsb.lol asked
+    /// directly meanwhile: today most of the sky is a disc no radar is
+    /// looking at, and a phone asking the relay first every few seconds
+    /// would only double its questions.
+    static let relayMissSeconds: TimeInterval = 30
+    private static let lock = NSLock()
+    private static var relayHook: RelayDisc?
+    private static var missedAt: [String: Date] = [:]
+
+    /// The view from the relay, when one disc holds it and the relay has it.
+    private static func fromRelay(at: Coordinate, radius: Int) async -> Data? {
+        guard let ask = relay, let disc = NetLattice.holding(at.lat, at.lon, wantNm: Double(radius)) else { return nil }
+        let key = "\(disc.lat),\(disc.lon)"
+        let recentMiss = lock.withLock { missedAt[key].map { Date().timeIntervalSince($0) < relayMissSeconds } ?? false }
+        if recentMiss { return nil }
+        if let data = await ask(disc, at, radius) { return data }
+        lock.withLock {
+            if missedAt.count > 64 { missedAt.removeAll() }
+            missedAt[key] = Date()
+        }
+        return nil
     }
 }
