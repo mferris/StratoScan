@@ -81,6 +81,14 @@ module rib_probe(r0, r1, z0, z1) {
         translate([outer_dia/2 + r0, 0]) square([r1 - r0, z1 - z0]);
 }
 
+// A strip along the middle half of the plinth's front face, at distance d0-d1
+// out from the face and height z0-z1 relative to each ridge's underside
+// (plinth_slopes_present, plinth_lip_kept).
+module plinth_rib_probe(d0, d1, z0, z1) {
+  for (z = plinth_rib_z)
+    translate([-base_w/4, -base_d/2 - d1, z + z0]) cube([base_w/2, d1 - d0, z1 - z0]);
+}
+
 if (check=="plate_vs_shell") {
   intersection() { back_plate(); shell(); }
 }
@@ -653,6 +661,13 @@ else if (check=="plinth_ribs_left")  { intersection() { stand(); plinth_side_pro
 else if (check=="plinth_ribs_right") { intersection() { stand(); plinth_side_probe("right"); } }
 else if (check=="ribs_present") {
   ribs();
+}
+// The stand's ridges match (2026-10-24): sloped under, a lip at the edge.
+else if (check=="plinth_slopes_present") {
+  intersection() { stand(); plinth_rib_probe(0.3, 1.3, -2, -1); }
+}
+else if (check=="plinth_lip_kept") {
+  intersection() { stand(); plinth_rib_probe(plinth_rib_h - 0.55, plinth_rib_h - 0.05, -0.45, -0.05); }
 }
 
 // ---- the rings print without support (2026-10-24) ---------------------
