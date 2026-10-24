@@ -284,6 +284,23 @@ if ! command -v tailscale >/dev/null 2>&1; then
 else
   echo "  already installed"
 fi
+# WiFi profiles as NetworkManager keyfiles, not netplan YAML (#80). A unit
+# whose WiFi came from Raspberry Pi Imager (cloud-init) has netplan-backed
+# profiles, and NetworkManager rewrites their YAML soon after each boot: a
+# power cut a minute later left RDU's 0 bytes and the radar with no WiFi
+# (2026-10-23). NetworkManager's own keyfile writer syncs to the card, and the
+# radar's setup already makes keyfiles. Empty YAML left by such a loss goes too.
+if command -v nmcli >/dev/null 2>&1; then
+  nmcli -t -f UUID,FILENAME connection show 2>/dev/null | while IFS=: read -r uuid file; do
+    case "$file" in
+      /run/NetworkManager/system-connections/netplan-*)
+        if nmcli connection migrate --plugin keyfile "$uuid" >/dev/null 2>&1; then
+          echo "  moved a netplan-backed network profile to a keyfile"
+        fi ;;
+    esac
+  done
+fi
+find /etc/netplan -maxdepth 1 -name '90-NM-*.yaml' -size 0 -delete 2>/dev/null || true
 # The phone app finds the radar on the home network by Bonjour after the
 # router gives it a new address (#76); avahi is kept on every unit.
 install -d -m 0755 /etc/avahi/services
