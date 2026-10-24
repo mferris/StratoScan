@@ -19,6 +19,7 @@ because a label-printed secret has a manufacturing lead time. The window is
 narrowed by requiring a code shown on the device's own screen, so claiming
 needs physical sight of the unit rather than merely being on the network.
 """
+import contextlib
 import hashlib
 import ssl
 import hmac
@@ -1239,6 +1240,7 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             "nameIsOwn": "name" in st,
             "network": net,
             "remote": rem,
+            "boot": boot_info(),
         }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -1351,6 +1353,30 @@ def set_name(v):
         st["name"] = name
     save_state(st)
     return {"name": radar_name(st), "own": "name" in st}
+
+
+# The Pi's reset flags at boot (the bootloader's copy of PM_RSTS). HADPOR, bit
+# 12, is set when the power came on; a reboot or a watchdog reset sets other
+# bits instead. RDU, 2026-10-23: 0x1000 after the owner replugged it.
+RSTS_PATH = "/proc/device-tree/chosen/bootloader/rsts"
+RSTS_HADPOR = 0x1000
+
+
+def boot_info():
+    """This boot, for the panel: its id, whether the power came on (as opposed
+    to a reboot or a watchdog reset), and how long ago. The panel plays its
+    take-off sound once, only after a power-on (#81)."""
+    info = {"id": None, "powerOn": False, "uptimeS": None}
+    with contextlib.suppress(OSError, ValueError):
+        with open("/proc/sys/kernel/random/boot_id") as f:
+            info["id"] = f.read().strip()
+    with contextlib.suppress(OSError, ValueError):
+        with open("/proc/uptime") as f:
+            info["uptimeS"] = int(float(f.read().split()[0]))
+    with contextlib.suppress(OSError, ValueError):
+        with open(RSTS_PATH, "rb") as f:
+            info["powerOn"] = bool(int.from_bytes(f.read()[:4], "big") & RSTS_HADPOR)
+    return info
 
 
 def actual_airport():
