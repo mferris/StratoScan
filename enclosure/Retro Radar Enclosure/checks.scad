@@ -23,7 +23,7 @@ speaker_angles=[0,180]; back_plate_t=3;
 // A stale value here checks geometry the design no longer has, and passes.
 back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9; post_od=9;
 back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40; ant_mount_y=81;
-ant_bolt_d=3.4; usbc_cut_pos=[60,-51]; usbc_screw_pitch=16.5; usbc_screw_dia=3.4; usbc_cut_w=11.0; usbc_cut_h=6.5;
+ant_bolt_d=3.4; usbc_cut_pos=[60,-51]; usbc_screw_pitch=16.5; usbc_screw_dia=3.4; usbc_cut_w=11.0; usbc_cut_h=8.0;
 usbc_boss_w=22.25; usbc_boss_h=11.0; usbc_boss_clear=0.3; usbc_recess_d=2.0; usbc_cut_r=1.2;
 mount_hole_x=58; mount_hole_y=49; stand_angle=18;
 base_w=outer_dia*0.86; base_d=150; plinth_rib_h=4; plinth_rib_w=3; plinth_rib_z=[3.5, 9.5];
@@ -858,5 +858,18 @@ if (check=="power_mount_vs_speakers") intersection() { power_trigger_mount_place
 // does hit the plate when moved 4 mm off the socket; and the pin does stop
 // the board when it is pushed 1.5 mm back.
 if (check=="power_screws_bite")       intersection() { pwr_screw_probes(7, 3.0); power_trigger_mount_placed(); }
-if (check=="power_plug_probe_works")  intersection() { translate([0, 4, 0]) power_plug_probe(); back_plate(); }
+if (check=="power_plug_probe_works")  intersection() { translate([0, 5, 0]) power_plug_probe(); back_plate(); }
+
+// A plug's moulding reaches the trigger board's socket (2026-10-23). The socket
+// face is at the plate's inner face, so the moulding must pass the 1 mm web:
+// one 10.4 x 7.6 (about the widest that fits between the screw heads, and
+// taller than the old 6.5 mm window) from outside down to the socket face
+// meets no plastic. The control: one 10 mm tall stops on the web.
+module pwr_moulding_probe(h) {
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 20])
+        linear_extrude(height = 20 + back_plate_t - 0.01)
+            offset(r = 1) offset(delta = -1) square([10.4, h], center = true);
+}
+if (check=="power_moulding_reaches")     intersection() { pwr_moulding_probe(7.6); union() { back_plate(); power_trigger_mount_placed(); } }
+if (check=="power_moulding_probe_works") intersection() { pwr_moulding_probe(10.0); back_plate(); }
 if (check=="power_pin_holds")         intersection() { translate([0, 0, 1.5]) power_trigger_board_placed(); power_pin_probe(); }

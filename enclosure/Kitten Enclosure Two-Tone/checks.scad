@@ -54,7 +54,7 @@ back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9;
 back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40;
 // The USB-C window moved to [60,-51] on 2026-10-10 and this copy didn't,
 // so usbc_open probed the old spot and failed from then (found 2026-10-13).
-usbc_cut_pos=[60,-51]; usbc_cut_w=11.0; usbc_cut_h=6.5; usbc_screw_pitch=16.5; usbc_screw_dia=3.4;
+usbc_cut_pos=[60,-51]; usbc_cut_w=11.0; usbc_cut_h=8.0; usbc_screw_pitch=16.5; usbc_screw_dia=3.4;
 usbc_screw_pitch_max=17.0;
 mount_hole_x=58; mount_hole_y=49;
 
@@ -888,5 +888,18 @@ if (check=="power_mount_vs_speakers") intersection() { power_trigger_mount_place
 // does hit the plate when moved 4 mm off the socket; and the pin does stop
 // the board when it is pushed 1.5 mm back.
 if (check=="power_screws_bite")       intersection() { pwr_screw_probes(7, 3.0); power_trigger_mount_placed(); }
-if (check=="power_plug_probe_works")  intersection() { translate([0, 4, 0]) power_plug_probe(); back_plate(); }
+if (check=="power_plug_probe_works")  intersection() { translate([0, 5, 0]) power_plug_probe(); back_plate(); }
+
+// A plug's moulding reaches the trigger board's socket (2026-10-23). The socket
+// face is at the plate's inner face, so the moulding must pass the 1 mm web:
+// one 10.4 x 7.6 (about the widest that fits between the screw heads, and
+// taller than the old 6.5 mm window) from outside down to the socket face
+// meets no plastic. The control: one 10 mm tall stops on the web.
+module pwr_moulding_probe(h) {
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 20])
+        linear_extrude(height = 20 + back_plate_t - 0.01)
+            offset(r = 1) offset(delta = -1) square([10.4, h], center = true);
+}
+if (check=="power_moulding_reaches")     intersection() { pwr_moulding_probe(7.6); union() { back_plate(); power_trigger_mount_placed(); } }
+if (check=="power_moulding_probe_works") intersection() { pwr_moulding_probe(10.0); back_plate(); }
 if (check=="power_pin_holds")         intersection() { translate([0, 0, 1.5]) power_trigger_board_placed(); power_pin_probe(); }
