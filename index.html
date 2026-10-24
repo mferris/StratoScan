@@ -3992,7 +3992,7 @@ const ALERT_SETTINGS_KEY = 'stratoscan_alert_settings_v1';
 // volume is a plain 0..1 multiplier on the master gain; muted is kept separate
 // rather than being volume 0, so silencing it for an evening does not throw
 // away the level someone settled on. soundTheme picks the voice alerts speak in.
-const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, voice: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic', quietHours: false, quietFrom: 1320, quietTo: 420, quietSunset: false, quietLetEmergencies: true , screenMode: 'sleep', quietScreen: 'same', quietSounds: false, quietDarkEmergencies: false, notableNames: true};
+const DEFAULT_ALERT_SETTINGS = { nearby: true, emergency: true, rareAircraft: true, airportPhase: true, networkCompare: true, emptySky: true, voice: false, storms: true, heatmap: false, lightning: false, lightningAlert: true, nightDim: true, alertWake: true, volume: 0.7, muted: false, soundTheme: 'classic', quietHours: false, quietFrom: 1320, quietTo: 420, quietSunset: false, quietLetEmergencies: true , screenMode: 'sleep', quietScreen: 'same', quietSounds: false, quietDarkEmergencies: false, notableNames: true, bootSound: true};
 let alertSettings = { ...DEFAULT_ALERT_SETTINGS };
 try {
   const saved = JSON.parse(localStorage.getItem(ALERT_SETTINGS_KEY));
@@ -4599,6 +4599,77 @@ function soundTheme() {
 preloadSoundTheme(soundTheme());
 
 // Two-note ascending chime in the classic theme; a meow in the kitten one.
+// ---- Take-off sound at power-on (#81) -------------------------------------
+// The owner's ask (2026-10-23): something nice when the radar is first plugged
+// in, an airliner taking off, and never after a restart or a fault. The unit
+// says whether this boot was a power-on (setup-server boot_info: the Pi's
+// HADPOR reset flag); the page plays it once per boot, in the first minutes,
+// through the same volume, mute and quiet hours as every other sound.
+// Synthesised here, so there is no recording to license: engine roar
+// (low-passed noise) swelling over a climbing turbine whine, then easing off
+// as it climbs away.
+const BOOT_SOUND_KEY = 'stratoscan.bootSoundFor';
+const BOOT_SOUND_WITHIN_S = 300;
+function maybePlayBootSound() {
+  const b = netInfo && netInfo.boot;
+  if (!ON_DEVICE || !b || b.powerOn !== true || !b.id) return;
+  if (typeof b.uptimeS !== 'number' || b.uptimeS > BOOT_SOUND_WITHIN_S) return;
+  if (!alertSettings.bootSound) return;
+  let last = null;
+  try { last = localStorage.getItem(BOOT_SOUND_KEY); } catch (e) {}
+  if (last === b.id) return;                       // once per boot, whatever reloads the page
+  try { localStorage.setItem(BOOT_SOUND_KEY, b.id); } catch (e) {}
+  if (soundAllowedNow()) playTakeoffSound();
+}
+
+function playTakeoffSound() {
+  markSoundBusy(7000);
+  const ctx = getAudioCtx(), out = getMasterGain(), t0 = ctx.currentTime + 0.05, dur = 6.5;
+  // the roar: two seconds of deep (brown-ish) noise, looped, through a
+  // low-pass that opens as the engines spool up and closes as it climbs away
+  const noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  const d = noise.getChannelData(0);
+  let b0 = 0;
+  for (let i = 0; i < d.length; i++) {
+    b0 = 0.97 * b0 + 0.03 * (Math.random() * 2 - 1);
+    d[i] = Math.max(-1, Math.min(1, b0 * 3.5));
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = noise; src.loop = true;
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass'; lp.Q.value = 0.7;
+  lp.frequency.setValueAtTime(250, t0);
+  lp.frequency.exponentialRampToValueAtTime(2200, t0 + 3.2);
+  lp.frequency.exponentialRampToValueAtTime(700, t0 + dur);
+  const roar = ctx.createGain();
+  roar.gain.setValueAtTime(0.0001, t0);
+  roar.gain.exponentialRampToValueAtTime(0.35, t0 + 2.6);
+  roar.gain.setValueAtTime(0.35, t0 + 3.4);
+  roar.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(lp).connect(roar).connect(out);
+  // the whine: two tones a fifth apart climbing with the spool-up, then
+  // dropping a little, like a pass going away
+  const whine = ctx.createGain();
+  whine.gain.setValueAtTime(0.0001, t0);
+  whine.gain.exponentialRampToValueAtTime(0.04, t0 + 2.2);
+  whine.gain.exponentialRampToValueAtTime(0.0001, t0 + dur - 0.5);
+  for (const [f0, f1, type] of [[420, 2300, 'sawtooth'], [630, 3450, 'triangle']]) {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t0);
+    o.frequency.exponentialRampToValueAtTime(f1, t0 + 2.8);
+    o.frequency.exponentialRampToValueAtTime(f1 * 0.82, t0 + dur);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 4;
+    bp.frequency.setValueAtTime(f0, t0);
+    bp.frequency.exponentialRampToValueAtTime(f1, t0 + 2.8);
+    o.connect(bp).connect(whine);
+    o.start(t0); o.stop(t0 + dur);
+  }
+  whine.connect(out);
+  src.start(t0); src.stop(t0 + dur);
+}
+
 function playAlertSound() {
   markSoundBusy(3000);
   soundTheme().nearby();
@@ -5131,7 +5202,7 @@ async function refreshNetStatus() {
   if (!ON_DEVICE) return;    // the listener is on the radar's own loopback
   try {
     const res = await fetch(ONBOARD_URL, { cache: 'no-store' });
-    if (res.ok) { netInfo = await res.json(); netInfoReachable = true; }
+    if (res.ok) { netInfo = await res.json(); netInfoReachable = true; maybePlayBootSound(); }
   } catch (e) {
     // Not on the device (a laptop, or the public URL). Not an error: the
     // receiver half below still works, and claiming the network is down
@@ -6731,6 +6802,7 @@ function alertSettingsMeta() { return [
       : `Military and unusual aircraft types. Still learning the regular traffic (${sightingCounts.size}/${RARE_FIRST_MIN_CATALOGUE} aircraft) before it can flag first-time visitors`,
   },
   { group: 'alerts', key: 'airportPhase', label: `${AIRPORT.code} landing/takeoff chime`, sub: `Quiet tone when a plane lands or departs at ${AIRPORT.code}` },
+  { group: 'alerts', key: 'bootSound', label: 'Take-off sound when plugged in', sub: 'Once, when the radar is switched on; never after a restart' },
 
   { group: 'overlays', key: 'storms', label: 'Storm radar overlay', sub: 'Live weather radar over the map (RainViewer)' },
   { group: 'overlays', key: 'heatmap', label: `${AIRPORT.code} approach heatmap`, sub: `Density pattern built from actually observed ${AIRPORT.code} landings` },
