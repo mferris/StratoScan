@@ -42,7 +42,8 @@ Do this at home before it leaves, once the policy change below is in place.
    - give it a hostname (for example `stratoscan-mom`; nothing that would identify them to the public);
    - turn the public address on.
 3. Check it from outside the house: run `ssh <user>@<hostname>` over the tailnet, and open the public address on a phone with WiFi off.
-4. At its new home, the owner only needs to give it their WiFi, on its screen. Tailscale stays joined when the network changes.
+4. Run it for an hour on the charger and cable it will use at its new home, with the display at normal brightness. Check that `vcgencmd get_throttled` reads `0x0` ([the power fix](power-fix.md), step 10). Power is what has taken a radar down most often.
+5. At its new home, the owner only needs to give it their WiFi, on its screen. Tailscale stays joined when the network changes.
 
 ## Why an untagged unit is a problem
 
