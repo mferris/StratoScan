@@ -26,6 +26,7 @@ import os
 import posixpath
 import re
 import secrets
+import sys
 import threading
 import time
 import urllib.error
@@ -738,14 +739,27 @@ def _save_and_exit(*_):
     os._exit(0)
 
 
+class QuietServer(http.server.ThreadingHTTPServer):
+    """A client that leaves mid-answer is not an error (#78, 2026-10-23).
+
+    socketserver printed a traceback of some 29 journal lines for each
+    BrokenPipeError: a visitor closing the page, or the kiosk restarting,
+    while an answer was still going out. Anything else is reported as before.
+    """
+    def handle_error(self, request, client_address):
+        if isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError)):
+            return
+        super().handle_error(request, client_address)
+
+
 if __name__ == "__main__":
     import signal
     VISITS = Visits()
     signal.signal(signal.SIGTERM, _save_and_exit)     # systemd stops it with SIGTERM
-    threading.Thread(target=lambda: http.server.ThreadingHTTPServer(STATS_LISTEN, _StatsHandler).serve_forever(),
+    threading.Thread(target=lambda: QuietServer(STATS_LISTEN, _StatsHandler).serve_forever(),
                      daemon=True).start()
     try:
-        http.server.ThreadingHTTPServer(LISTEN, Handler).serve_forever()
+        QuietServer(LISTEN, Handler).serve_forever()
     finally:
         try:
             VISITS.save()
