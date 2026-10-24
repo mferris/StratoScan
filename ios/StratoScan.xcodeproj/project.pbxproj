@@ -97,6 +97,7 @@
 		EF30B2F476FFFFAE03E658F5 /* AirlineLogos.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD92F606AFE2E18D2B0D041D /* AirlineLogos.swift */; };
 		F14EEBD43626C281A4908B6A /* LocationBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA2499CEE4298B39243830CF /* LocationBox.swift */; };
 		F441AEAF7530A7F39A3B8594 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BDFEB58F51F452F250E97B40 /* PrivacyInfo.xcprivacy */; };
+		F5990E1CF8C208E28F8463E4 /* RadarFinder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C2E4B86399C51B12F423B1B /* RadarFinder.swift */; };
 		F845C36E53A8D89469F3DF09 /* ApproachActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF1D0E823BF135A626E31C8 /* ApproachActivity.swift */; };
 		FA1F6E8BABAE41C1024B2895 /* ApproachActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF1D0E823BF135A626E31C8 /* ApproachActivity.swift */; };
 		FB75EE609F71C89FEBC67D14 /* SkyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBB03F1CD7B7A71905FF5419 /* SkyView.swift */; };
@@ -194,6 +195,7 @@
 		3EF932BDCEE76DC5575404AD /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
 		4000B97716592BC2F6C0F46E /* WatchSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSync.swift; sourceTree = "<group>"; };
 		4478D23E879A260BD2F0E435 /* StratoScanWatchWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StratoScanWatchWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		4C2E4B86399C51B12F423B1B /* RadarFinder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadarFinder.swift; sourceTree = "<group>"; };
 		4C86D52E6CAC9EDB7B41AA68 /* StratoScan.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StratoScan.entitlements; sourceTree = "<group>"; };
 		532F388099584CEEA9C0299C /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		53FCE9789DB353F57B791A7D /* LogbookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogbookView.swift; sourceTree = "<group>"; };
@@ -466,6 +468,7 @@
 				16423ED1D400C0B2A45C2002 /* PairingScannerView.swift */,
 				1090E20A438B07C7EEB72156 /* PairingStore.swift */,
 				3EF932BDCEE76DC5575404AD /* PushManager.swift */,
+				4C2E4B86399C51B12F423B1B /* RadarFinder.swift */,
 				CC414D1F7C9C0668085FEC8E /* RelayClient.swift */,
 				6E534C32F3ECBB21182EE4C9 /* RelayIdentity.swift */,
 			);
@@ -743,6 +746,7 @@
 				7A0AFB71E8F03D2A97F71761 /* PhoneLocation.swift in Sources */,
 				5777BD63375DF19D2C953815 /* PlaneState.swift in Sources */,
 				6A8895D5B4BD6C96C7599F99 /* PushManager.swift in Sources */,
+				F5990E1CF8C208E28F8463E4 /* RadarFinder.swift in Sources */,
 				1485C468E4F8E97DD13A9225 /* RadarSetup.swift in Sources */,
 				D257E4B524CEA75F7CE1B7A8 /* RadarSetupView.swift in Sources */,
 				2AC5C03DF6FFAA7D3D45F7F3 /* RadarView.swift in Sources */,

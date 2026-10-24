@@ -28,6 +28,9 @@ struct StratoScanApp: App {
                 }
                 // Push tokens can change; re-register whenever a radar is paired.
                 .task { if !pairing.radars.isEmpty { await push.enable() } }
+                // A paired radar that has moved on the home network is found
+                // again by Bonjour, not retyped (#76).
+                .task { [pairing] in Endpoint.shared.finder = { await RadarFinder.find(pairing: pairing) } }
                 // The widget refreshes on iOS's budget; opening the app is a good moment too.
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     WidgetCenter.shared.reloadAllTimelines()

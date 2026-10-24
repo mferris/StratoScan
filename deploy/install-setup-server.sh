@@ -284,6 +284,10 @@ if ! command -v tailscale >/dev/null 2>&1; then
 else
   echo "  already installed"
 fi
+# The phone app finds the radar on the home network by Bonjour after the
+# router gives it a new address (#76); avahi is kept on every unit.
+install -d -m 0755 /etc/avahi/services
+install -m 0644 deploy/avahi-stratoscan.service /etc/avahi/services/stratoscan.service
 # Its routine "magicsock:" chatter stays out of the journal (see the file).
 install -d -m 0755 /etc/systemd/system/tailscaled.service.d
 install -m 0644 deploy/tailscaled-quiet.conf /etc/systemd/system/tailscaled.service.d/stratoscan-quiet.conf
