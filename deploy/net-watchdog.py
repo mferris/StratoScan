@@ -242,6 +242,26 @@ def write_failcount(n):
         print(f"net-watchdog: could not record fail count: {e}", flush=True)
 
 
+def saved_wifi_networks():
+    """How many WiFi networks NetworkManager could join, the setup hotspot and an
+    unconfirmed candidate aside; None when nmcli can't be asked (assume some).
+
+    A power cut soon after boot once left RDU's only saved network empty
+    (NetworkManager's netplan YAML, 0 bytes; #80, 2026-10-23). With nothing
+    to rejoin, waiting for the connection to come back was eight minutes of
+    a dark radar for nothing.
+    """
+    p = run([NMCLI, "-t", "-f", "NAME,TYPE", "connection", "show"], timeout=20)
+    if p.returncode != 0:
+        return None
+    n = 0
+    for line in p.stdout.decode("utf-8", "replace").splitlines():
+        name, _, kind = line.rpartition(":")
+        if kind == "802-11-wireless" and name.replace("\\:", ":") not in (HOTSPOT_PROFILE, "fr-candidate"):
+            n += 1
+    return n
+
+
 def retry_known_networks():
     """Bring the hotspot down and let NetworkManager try the real profiles."""
     run([NMCLI, "connection", "down", HOTSPOT_PROFILE], timeout=30)
@@ -674,7 +694,14 @@ def main():
     # ago, and going to AP mode takes it off that network and hides it from
     # its owner. Give the connection a chance to come back, then try to repair
     # it, and only fall back to the AP once the outage has clearly persisted.
-    if is_claimed():
+    # ...unless there is nothing to come back to: no saved WiFi network at all.
+    # Then the AP comes up at once, as for a new unit, so the owner can rejoin
+    # from the panel or a phone.
+    saved = saved_wifi_networks() if is_claimed() else None
+    if saved == 0:
+        print("net-watchdog: no saved WiFi network to rejoin (lost in a power cut? #80)",
+              flush=True)
+    elif is_claimed():
         if fails < REPAIR_AFTER_FAILS:
             print("net-watchdog: waiting to see if this recovers on its own",
                   flush=True)
