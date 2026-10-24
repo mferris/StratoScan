@@ -62,10 +62,11 @@ warnings rather than as history:
 - **The cradle only cups the case; the retention rails are what hold it.**
   With the bowl's axis tilted, gravity pushes the case straight down that
   axis, and nothing else opposes it.
-- **Speaker brackets must be clipped to the outer cylinder.** They are flat
-  slabs across a curved wall, so their corners otherwise punch through it.
-- **Grille holes have to cut through the bracket as well as the wall**, or
-  they dead-end in solid plastic and no sound gets out.
+- **Speaker brackets must be clipped at the wall.** Each is a flat box across
+  a curved wall, so its ends otherwise poke out through the shell.
+- **The speaker brackets are hollow sleeves**, so the grille holes cross only
+  the wall. They were solid blocks until 2026-10-23, and the holes had to be
+  drilled right through them as tubes.
 
 ## The back comes off
 
@@ -232,6 +233,20 @@ These checks hold the change:
 - `grille_in_front_of_ribs` and `rivets_clear_of_grilles` must come out empty. Both find the old geometry when run against it.
 - `grille_present` and `rivets_present` are their positive controls.
 
+### Speakers: a hollow sleeve, not a solid block
+
+Each speaker used to sit on a solid block 15 mm deep, with the grille drilled
+through it as long tubes: about 38 cm³ of plastic a side for nothing (the
+owner noticed, 2026-10-23). Now a 1.6 mm sleeve with the speaker's own
+100 × 45 mm outline runs from the speaker's face to the wall. It keeps the
+sound going out through the grille instead of into the case. Four 6 mm screw
+pads in its corners take the same 92 × 36 mm screws. The shell went from
+251.5 to 175.7 cm³.
+
+`speaker_sleeve_hollow` must come out empty: nothing in the sleeve between
+the speaker's face and the wall, clear of the pads. `speaker_probe_works`,
+the same probe reaching 1 mm into the wall, is its positive control.
+
 ## The power fix: the charger plugs into the trigger board
 
 Roadmap 5.7 ([#53](https://github.com/mferris/StratoScan/issues/53)) feeds
@@ -251,10 +266,12 @@ on the window's own two holes:
   the window's pocket as the old connector's were. They cut their own thread
   in the mount's 2.5 mm holes.
 
-The socket's face ends 1 mm below the pocket floor, where the old connector's
-was, and the plug's moulding goes into the pocket as before. So the charger
-plugs straight into the trigger board, and the panel-mount extension isn't
-needed.
+The socket's face ends 1 mm below the pocket floor, at the plate's inner
+face. So that a plug seats fully, its moulding has to pass the 1 mm web
+around the window, which is why the window is 8 mm tall (it was 6.5 mm until
+2026-10-23: the owner's cable stopped on the web and made no solid
+connection until the window was cut taller). The charger plugs straight into
+the trigger board, and the panel-mount extension isn't needed.
 
 To fit it:
 
@@ -282,9 +299,11 @@ Both parts print in minutes, so each is its own test piece. Print the mount
 flat face down.
 
 `power_mount_vs_plate`, `power_board_held`, `power_plug_reaches`,
-`power_pin_passes`, `power_screws_pass`, `power_mount_vs_shell` and
-`power_mount_vs_speakers` must come out empty. `power_screws_bite`,
-`power_plug_probe_works` and `power_pin_holds` are their positive controls.
+`power_pin_passes`, `power_screws_pass`, `power_mount_vs_shell`,
+`power_mount_vs_speakers` and `power_moulding_reaches` (a 10.4 × 7.6 mm
+moulding reaches the socket's face) must come out empty. `power_screws_bite`,
+`power_plug_probe_works`, `power_pin_holds` and `power_moulding_probe_works`
+(a 10 mm tall moulding stops on the web) are their positive controls.
 
 ## Heat-set inserts
 
