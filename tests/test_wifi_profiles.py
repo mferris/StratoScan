@@ -32,6 +32,8 @@ check("nmcli connection migrate --plugin keyfile" in block
       and "/run/NetworkManager/system-connections/netplan-*" in block,
       "the installer moves netplan-backed profiles to keyfiles")
 check("-name '90-NM-*.yaml' -size 0 -delete" in block, "and removes the empty YAML such a loss leaves")
+check(block.index('grep -q "^$uuid:/etc/NetworkManager/system-connections/"') < block.index('rm -f "/etc/netplan/90-NM-$uuid.yaml"'),
+      "a moved profile's YAML goes too, but only once its keyfile is confirmed (or netplan would bring the old copy back at boot)")
 
 spec = importlib.util.spec_from_file_location("netwatchdog", ROOT / "deploy" / "net-watchdog.py")
 w = importlib.util.module_from_spec(spec)
@@ -47,7 +49,7 @@ check(counting("fr-hotspot:802-11-wireless\nWired connection 1:802-3-ethernet\nl
       "the setup hotspot and wired profiles are not saved WiFi networks")
 check(counting("fr-Home\\:Net:802-11-wireless\nfr-hotspot:802-11-wireless\n") == 1,
       "a saved network counts, a colon in its name included")
-check(counting("fr-candidate:802-11-wireless\n") == 0, "an unconfirmed candidate doesn't")
+check(counting("fr-candidate:802-11-wireless\n") == 0, "an unconfirmed candidate doesn't (setupd makes it with autoconnect off)")
 check(counting("", rc=1) is None, "nmcli failing means 'don't know', not 'none'")
 
 events, started = [], []
