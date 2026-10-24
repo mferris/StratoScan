@@ -25,7 +25,9 @@
 		2884F43464F114112C0E9493 /* StratoScanNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8DA0A8BFA722DACA5B307874 /* StratoScanNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2AC5C03DF6FFAA7D3D45F7F3 /* RadarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6255B3721DFF53AE0C8D17E0 /* RadarView.swift */; };
 		2BBE19EA046C6ED4E76A20E2 /* RunwayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BDF545DE5A8F64037D0FADF /* RunwayClient.swift */; };
+		2DFE55C71EE56FF975366987 /* NetLattice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D0F437E1386BDC802A4663A /* NetLattice.swift */; };
 		332F9A16CC2FC68ED5987B5B /* AirlineLogos.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD92F606AFE2E18D2B0D041D /* AirlineLogos.swift */; };
+		381C88F564F0B984FF6ECD87 /* NetLattice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D0F437E1386BDC802A4663A /* NetLattice.swift */; };
 		3A992A4171A2BB6C8A4467EA /* Geo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6905BC6DA1BAE8FB5B82B7D3 /* Geo.swift */; };
 		4254C2DF93644335510D3F84 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109B2506F56C929129666781 /* BrandMark.swift */; };
 		4278F89C062ADF951F0EE9C9 /* WatchRadarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF585A4164DCE73E0A7A5475 /* WatchRadarView.swift */; };
@@ -93,6 +95,7 @@
 		EAA2B527983849ACFD037927 /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16A31ACA7FCC70909950AEF1 /* Palette.swift */; };
 		EB944A79D57325EBF257552D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 80C9E605F666B8E6F21F9B09 /* Assets.xcassets */; };
 		ECEC184F87581901614EA200 /* demo-traffic.json in Resources */ = {isa = PBXBuildFile; fileRef = ADFE70925019421DA58CD9F3 /* demo-traffic.json */; };
+		ED939F9799C8EA175FAFD405 /* NetLattice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D0F437E1386BDC802A4663A /* NetLattice.swift */; };
 		EEE12213C8DA5F899E964ADD /* MapBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA3876EBB75F3DB2B38D2A4 /* MapBackgroundView.swift */; };
 		EF30B2F476FFFFAE03E658F5 /* AirlineLogos.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD92F606AFE2E18D2B0D041D /* AirlineLogos.swift */; };
 		F14EEBD43626C281A4908B6A /* LocationBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA2499CEE4298B39243830CF /* LocationBox.swift */; };
@@ -207,6 +210,7 @@
 		6905BC6DA1BAE8FB5B82B7D3 /* Geo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geo.swift; sourceTree = "<group>"; };
 		6CD375C4844C3B75F45C6A59 /* StratoScanWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StratoScanWatchApp.swift; sourceTree = "<group>"; };
 		6E534C32F3ECBB21182EE4C9 /* RelayIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayIdentity.swift; sourceTree = "<group>"; };
+		7D0F437E1386BDC802A4663A /* NetLattice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetLattice.swift; sourceTree = "<group>"; };
 		808B86321C24DFDE215A7F10 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		80C9E605F666B8E6F21F9B09 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		83ECDAD1503BA5D0F233B26F /* StratoScanWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StratoScanWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -365,6 +369,7 @@
 				38770332E10714A40F125D1E /* DemoFeed.swift */,
 				6905BC6DA1BAE8FB5B82B7D3 /* Geo.swift */,
 				BA2499CEE4298B39243830CF /* LocationBox.swift */,
+				7D0F437E1386BDC802A4663A /* NetLattice.swift */,
 				A576CEA30DD8149E5883D1B4 /* NetworkFeed.swift */,
 			);
 			path = Shared;
@@ -694,6 +699,7 @@
 				63AC7D46EBF48380FE2450BB /* DemoFeed.swift in Sources */,
 				D0419AF3AAF3B967830979F9 /* Geo.swift in Sources */,
 				A865B45D14C1BC24C305ACE0 /* LocationBox.swift in Sources */,
+				381C88F564F0B984FF6ECD87 /* NetLattice.swift in Sources */,
 				D679323A58232150307D4D11 /* NetworkFeed.swift in Sources */,
 				1FF8E6AF970A64DBEEDDACDC /* StratoScanWidget.swift in Sources */,
 			);
@@ -737,6 +743,7 @@
 				9C38DCC3E87DA7DEE9B6FEE5 /* LocationBox.swift in Sources */,
 				9D8617F4429628CE7056BFCF /* LogbookView.swift in Sources */,
 				EEE12213C8DA5F899E964ADD /* MapBackgroundView.swift in Sources */,
+				2DFE55C71EE56FF975366987 /* NetLattice.swift in Sources */,
 				7AF06078206BCBE5A9C90481 /* NetworkFeed.swift in Sources */,
 				51BC9F7EDC0A1405433EAD10 /* NormalizedAircraft.swift in Sources */,
 				6092AB4BC94415EAB9DEF3CF /* PairedRadarsSection.swift in Sources */,
@@ -790,6 +797,7 @@
 				9EC8B9A9BC6A5CD9C49ECFE5 /* DemoFeed.swift in Sources */,
 				3A992A4171A2BB6C8A4467EA /* Geo.swift in Sources */,
 				F14EEBD43626C281A4908B6A /* LocationBox.swift in Sources */,
+				ED939F9799C8EA175FAFD405 /* NetLattice.swift in Sources */,
 				E190B6C439D8CDE0C7DFB766 /* NetworkFeed.swift in Sources */,
 				D7B12E42E96B13FE5E97E333 /* NotificationService.swift in Sources */,
 			);
