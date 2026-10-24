@@ -12,7 +12,7 @@ the rest follows.
 | `shell` | the body: Pi, dongle, wiring, speakers |
 | `front_trim` | bezel in front of the glass, rabbeted so it seats flush |
 | `retainer` | ring behind the glass; the glass rests on its front face |
-| `stand` | desk cradle — two ring-arc arms on a plinth with two ridges all the way round, standing 4mm proud so the slicer supports their undersides (BambuStudio skipped the old 1mm strips and they printed rough) |
+| `stand` | desk cradle — two ring-arc arms on a plinth with two ridges all the way round, 4mm proud, their undersides sloped at 45° to a small lip like the case's rings, so they print without support (the old 1mm strips printed rough unsupported, and square 4mm ridges needed supports all round) |
 | `back_plate` | removable back — locating lip, both vent grilles, one USB-C pass-through, the antenna mount's bolt holes and cable hole |
 | `antenna_mount` | bolt-on arm carrying the antenna socket (identical to the kitten's) |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
@@ -255,6 +255,9 @@ square and 4 mm deep.
   against the square rings.
 - `rib_lip_kept` must come out empty: under the outer half millimetre of each
   ring is air. A full 45° slope fills it.
+- The stand's two plinth ridges have the same profile, and the same pair of
+  checks: `plinth_slopes_present` and `plinth_lip_kept`. They sit only 3 mm
+  apart, so the upper ridge's slope fills most of the gap between them.
 
 ### Speakers: a hollow sleeve, not a solid block
 

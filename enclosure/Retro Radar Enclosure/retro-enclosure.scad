@@ -362,6 +362,7 @@ base_w = outer_dia*0.86; base_d = 150; base_h = 16;
 // round, as one band per level so the corners are mitred rather than two
 // strips butting into each other. Tops stay under z=13, where the cradle
 // arms and keel fuse into the plinth (arm_lift puts them at base_h - 3).
+// Their undersides slope like the case's rings (see plinth_ribs()).
 plinth_rib_h = 4;           // how far each band stands out from the plinth
 plinth_rib_w = 3;           // height of each band
 plinth_rib_z = [3.5, 9.5];  // bottom of each band: 3.5-6.5 and 9.5-12.5
@@ -879,15 +880,32 @@ module cradle_front_rivets() {
 }
 
 // The plinth's ridges: for each level, a ring the shape of the plinth's
-// footprint, plinth_rib_h wide, standing out from all four faces.
+// footprint, plinth_rib_h wide, standing out from all four faces. Their
+// undersides slope at 45 degrees to a small square lip, as the case's rings
+// do (rib_lip), so they print without support (2026-10-24): square, the
+// slicer supported them all round. The slope is a frame too, started 0.3mm
+// inside the plinth so the two overlap; it meets the plinth's face
+// plinth_rib_h - rib_lip below each ridge. The upper ridge's slope starts a
+// little below the lower ridge's top, which only joins them.
 module plinth_ribs() {
-    for (z = plinth_rib_z)
+    for (z = plinth_rib_z) {
         translate([0, 0, z])
             linear_extrude(height = plinth_rib_w)
                 difference() {
                     offset(delta = plinth_rib_h) square([base_w, base_d], center = true);
                     square([base_w, base_d], center = true);
                 }
+        difference() {
+            hull() {
+                translate([0, 0, z - (plinth_rib_h - rib_lip) - 0.3])
+                    linear_extrude(height = 0.01) offset(delta = -0.3) square([base_w, base_d], center = true);
+                translate([0, 0, z - 0.01])
+                    linear_extrude(height = 0.02) offset(delta = plinth_rib_h - rib_lip) square([base_w, base_d], center = true);
+            }
+            translate([0, 0, z - plinth_rib_h - 1])
+                linear_extrude(height = plinth_rib_h + 2) offset(delta = -0.6) square([base_w, base_d], center = true);
+        }
+    }
 }
 
 module stand() {
