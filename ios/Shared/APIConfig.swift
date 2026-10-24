@@ -56,7 +56,10 @@ enum APIConfig {
 
 /// Chooses home or away: home when it answers quickly, else away. The choice
 /// is kept for a minute, and dropped at once when the phone's network changes
-/// (WiFi to cellular and back) or a fetch fails.
+/// (WiFi to cellular and back) or a fetch fails. When home doesn't answer and
+/// the phone is on a local network, the app's `finder` looks for the paired
+/// radar there first (#76): a radar given a new address by the router is back
+/// on its home address within a minute, with no typing.
 final class Endpoint {
     enum Where: String { case home, away }
 
@@ -66,10 +69,26 @@ final class Endpoint {
     private var chosen: String?
     private var chosenWhere: Where = .home
     private var checkedAt = Date.distantPast
+    private var onLocalNetwork = false
+    private var foundAt = Date.distantPast
     private let monitor = NWPathMonitor()
 
+    /// Set by the app (not the widget or the Watch): finds a paired radar on
+    /// the local network, returning its new home address.
+    var finder: (@Sendable () async -> String?)? {
+        get { lock.withLock { finderHook } }
+        set { lock.withLock { finderHook = newValue } }
+    }
+    private var finderHook: (@Sendable () async -> String?)?
+    /// How often the finder may look while home keeps not answering.
+    private static let findEvery: TimeInterval = 120
+
     private init() {
-        monitor.pathUpdateHandler = { [weak self] _ in self?.invalidate() }
+        monitor.pathUpdateHandler = { [weak self] path in
+            let local = path.status == .satisfied && (path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet))
+            self?.lock.withLock { self?.onLocalNetwork = local; self?.foundAt = .distantPast }
+            self?.invalidate()
+        }
         monitor.start(queue: DispatchQueue(label: "stratoscan.endpoint.path"))
     }
 
@@ -87,6 +106,17 @@ final class Endpoint {
             set(home, .home)
             await learnAway(from: home)
             return home
+        }
+        let look: (@Sendable () async -> String?)? = lock.withLock {
+            guard let f = finderHook, onLocalNetwork, Date().timeIntervalSince(foundAt) > Self.findEvery else { return nil }
+            foundAt = Date()
+            return f
+        }
+        if let look, let found = await look(), found != home, await Self.answers(found, timeout: 1.5) {
+            APIConfig.baseURL = found       // remembered: the next look-up goes straight there
+            set(found, .home)
+            await learnAway(from: found)
+            return found
         }
         if let away = APIConfig.awayURL, await Self.answers(away, timeout: 8) {
             set(away, .away)

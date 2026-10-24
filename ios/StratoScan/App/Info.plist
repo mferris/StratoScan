@@ -39,6 +39,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_stratoscan._tcp</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>To scan a StratoScan radar's pairing code, and to show aircraft over the camera image in Sky view. Nothing is recorded or sent.</string>
 	<key>NSLocalNetworkUsageDescription</key>
