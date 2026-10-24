@@ -28,6 +28,7 @@ import os
 import re
 import secrets
 import socket
+import sys
 import threading
 import time
 import unicodedata
@@ -1377,6 +1378,17 @@ def lan_addresses():
 class Server(http.server.ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
+
+    """A client that leaves mid-answer is not an error (#78, 2026-10-23).
+
+    socketserver printed a traceback of some 29 journal lines for each
+    BrokenPipeError: a visitor closing the page, or the kiosk restarting,
+    while an answer was still going out. Anything else is reported as before.
+    """
+    def handle_error(self, request, client_address):
+        if isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError)):
+            return
+        super().handle_error(request, client_address)
 
 
 if __name__ == "__main__":

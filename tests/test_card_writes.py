@@ -110,5 +110,35 @@ check("print(f\"events: {e['kind']}" not in ev
       and "sent = collections.Counter(f\"{e['kind']} {e.get('flight') or e['hex']}\" for e in batch)" in ev,
       "phone alerts log one line per send, naming each aircraft, not a line per alert as well")
 
+check(re.search(r"^LogFilterPatterns=~\^netstack: decrementing connsInFlightByClient$", ts, re.M)
+      and re.search(r"^LogFilterPatterns=~\^\\\[RATELIMIT\\\]$", ts, re.M)
+      and not re.search(r"^LogFilterPatterns=~\^Drop", ts, re.M),
+      "and the companion lines of Funnel's stray packets, while the 'Drop:' lines themselves are kept")
+
+# A client that leaves mid-answer is not a 29-line traceback (#78): run each
+# server's handle_error inside a BrokenPipeError, then inside a real error.
+fg_spec = importlib.util.spec_from_file_location("funnel_gateway", D / "funnel-gateway.py")
+fg = importlib.util.module_from_spec(fg_spec)
+fg_spec.loader.exec_module(fg)
+for label, cls in (("the public page's gateway", fg.QuietServer), ("the setup server", mod.Server)):
+    srv = cls.__new__(cls)
+    quiet, loud = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stderr(quiet), contextlib.redirect_stdout(quiet):
+        try:
+            raise BrokenPipeError(32, "Broken pipe")
+        except BrokenPipeError:
+            srv.handle_error(None, ("192.0.2.1", 1))
+        try:
+            raise ConnectionResetError(104, "Connection reset by peer")
+        except ConnectionResetError:
+            srv.handle_error(None, ("192.0.2.1", 1))
+    with contextlib.redirect_stderr(loud), contextlib.redirect_stdout(loud):
+        try:
+            raise ValueError("a real fault")
+        except ValueError:
+            srv.handle_error(None, ("192.0.2.1", 1))
+    check(quiet.getvalue() == "" and "ValueError: a real fault" in loud.getvalue(),
+          f"{label} says nothing when a client leaves mid-answer, but still reports a real fault")
+
 print("card write checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)
