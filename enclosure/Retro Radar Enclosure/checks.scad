@@ -34,7 +34,7 @@ ant_conn_dia=9.15; ant_boss_dia=48; ant_socket_lead=1.2;
 // point. ant_relief_* is the clear space under the socket floor for the
 // connector, which is what was actually stopping the base from seating.
 ant_base_dia=31.25; ant_relief_dia=18; ant_relief_h=4;
-rib_h=4.0; rib_w=5; rib_z_list=[10,22]; rib_a0=340; rib_arc=220;
+rib_h=4.0; rib_w=5; rib_z_list=[10,22]; rib_a0=340; rib_arc=220; rib_lip=0.8;
 grille_hole_dia=2.5; grille_pitch=4.5; grille_w=90; grille_h=40;
 speaker_d=45; speaker_angles=[0,180]; exhaust_slot_w=2.2; exhaust_slot_h=12;
 n_exhaust=24; exhaust_a0=30; exhaust_a1=150;
@@ -70,6 +70,15 @@ module plinth_side_probe(side) {
 module grille_zone(a) {
   rotate([0,0,a]) translate([outer_dia/2 - 5, -grille_w/2 - 2, -1])
     cube([10, grille_w + 4, shell_depth + 2]);
+}
+
+// A ring band of the rib profile, at radius r0-r1 out from the wall's face and
+// height z0-z1 relative to each ring's underside (rib_slopes_present, rib_lip_kept).
+module rib_probe(r0, r1, z0, z1) {
+  for (z = rib_z_list)
+    translate([0, 0, z + z0])
+      rotate([0, 0, rib_a0 + 5]) rotate_extrude(angle = rib_arc - 10)
+        translate([outer_dia/2 + r0, 0]) square([r1 - r0, z1 - z0]);
 }
 
 if (check=="plate_vs_shell") {
@@ -644,6 +653,22 @@ else if (check=="plinth_ribs_left")  { intersection() { stand(); plinth_side_pro
 else if (check=="plinth_ribs_right") { intersection() { stand(); plinth_side_probe("right"); } }
 else if (check=="ribs_present") {
   ribs();
+}
+
+// ---- the rings print without support (2026-10-24) ---------------------
+// Square, each ring's underside was a 4mm shelf in mid-air: supported all
+// round, and the supports welded on. Now it slopes at 45 degrees from the
+// wall to a small square lip.
+// The slope is there: just below each ring, by the wall, is solid.
+else if (check=="rib_slopes_present") {
+  intersection() { ribs(); rib_probe(0.3, 1.3, -2, -1); }
+}
+// And it stops short of the edge: under the outer half millimetre is air, the
+// shadow line that keeps the rings looking square. A full 45-degree slope
+// fills it. Fixed numbers, not rib_lip's: a lip of 0 must fail, not shrink the
+// probe to nothing.
+else if (check=="rib_lip_kept") {
+  intersection() { ribs(); rib_probe(rib_h - 0.55, rib_h - 0.05, -0.45, -0.05); }
 }
 
 
