@@ -8,7 +8,7 @@ import worker from '../src/index.js';
 import {
   latticeCentre, isLatticeCentre, latticeCols, LATTICE_ROWS, DISC_SPACING_NM, DISC_R_NM,
   DISC_TTL_S, LEASE_TTL_S, ROUTE_TTL_S, NO_ROUTE_TTL_S, OWNER_TTL_S, LIMITS, tune,
-  GRANT_TTL_S, DISC_MAX_AIRCRAFT, discLooksRight,
+  GRANT_TTL_S, DISC_MAX_AIRCRAFT, discLooksRight, nearOf,
 } from '../src/netcache.js';
 import { sha256Hex, signedMessage } from '../src/auth.js';
 import { makeD1 } from './d1-sqlite.js';
@@ -28,7 +28,8 @@ async function newUnit() {
 
 async function signed(unit, body, { ts = clock, path = '/v1/heartbeat', method = 'POST', as = 'X-FR-Unit' } = {}) {
   const bytes = new TextEncoder().encode(method === 'GET' ? '' : body);
-  const msg = signedMessage(ts, method, path, await sha256Hex(bytes));
+  // the signature covers the path, not a query (relay/src/auth.js)
+  const msg = signedMessage(ts, method, path.split('?')[0], await sha256Hex(bytes));
   const sig = new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, unit.key, new TextEncoder().encode(msg)));
   return new Request(BASE + path, {
     method,
@@ -181,6 +182,53 @@ test('a paired phone may ask; an unpaired one may not', async () => {
   assert.equal((await put(e, u, path, JSON.stringify(DISC))).status, 204);
   assert.equal((await ask(e, phone, path, 'X-FR-Phone')).status, 200);
   assert.equal((await ask(e, loner, path, 'X-FR-Phone')).status, 403);
+});
+
+// #68: phones ask for the view on their screen. They may not hand a disc up,
+// so they are never asked to fetch one, and a phone's miss must not hold up
+// the radars with a lease nobody will fill.
+test('a phone is never asked to fetch a disc, and takes no lease from the radars', async () => {
+  const e = envOf(() => DISC);
+  const u = await newUnit(), phone = await newUnit();
+  await reporting(e, u); paired(e, u, phone);
+  const c = latticeCentre(35.8, -78.8);
+  const path = `/v1/net/disc/${c.lat}/${c.lon}`;
+  const miss = await ask(e, phone, path, 'X-FR-Phone');
+  assert.equal(miss.status, 404);
+  assert.deepEqual(await miss.json(), { error: 'not cached' }, 'just "not here": it asks adsb.lol itself');
+  assert.deepEqual(await (await ask(e, u, path)).json(), { error: 'not cached', fetch: true }, 'the radar after it is asked to fetch, not told to wait');
+  assert.equal((await put(e, phone, path, JSON.stringify(DISC), 'X-FR-Phone')).status, 403, 'and a phone still may not hand one up');
+  assert.equal(e.fetch.calls.length, 0);
+});
+
+test('near: a phone gets only the aircraft in its view, from the whole disc the radars share', async () => {
+  const e = envOf(() => DISC);
+  const u = await newUnit(), phone = await newUnit();
+  await reporting(e, u); paired(e, u, phone);
+  const c = latticeCentre(35.8, -78.8);
+  const path = `/v1/net/disc/${c.lat}/${c.lon}`;
+  const disc = { now: 5, total: 4, ac: [
+    { hex: 'aaaaaa', lat: 35.88, lon: -78.79 },           // over the airport
+    { hex: 'bbbbbb', lat: 36.10, lon: -78.79 },           // 13 nm north
+    { hex: 'cccccc', lat: 34.0, lon: -78.0 },             // a long way off
+    { hex: 'dddddd' },                                    // no position
+  ] };
+  assert.equal((await ask(e, u, path)).status, 404);
+  assert.equal((await put(e, u, path, JSON.stringify(disc))).status, 204);
+  const view = await ask(e, phone, `${path}?near=35.9,-78.8,26`, 'X-FR-Phone');
+  assert.equal(view.status, 200);
+  assert.equal(view.headers.get('X-Net-Cache'), 'hit');
+  const got = await view.json();
+  assert.deepEqual(got.ac.map(a => a.hex), ['aaaaaa', 'bbbbbb'], 'within 26 nm of the middle, and only with a position');
+  assert.equal(got.total, 2);
+  assert.equal(got.now, 5, 'the rest of adsb.lol\'s answer as it was');
+  assert.deepEqual((await (await ask(e, phone, `${path}?near=35.9,-78.8,5`, 'X-FR-Phone')).json()).ac.map(a => a.hex), ['aaaaaa']);
+  assert.deepEqual(await (await ask(e, u, path)).json(), disc, 'the shared disc itself is untouched');
+  for (const bad of ['35.875,-78.8,26', '35.9,-78.8', '35.9,-78.8,0', '35.9,-78.8,251', '95,-78.8,26', 'x', '35.9,-78.8,26,1']) {
+    assert.equal((await ask(e, phone, `${path}?near=${bad}`, 'X-FR-Phone')).status, 400, `near=${bad} refused`);
+  }
+  assert.deepEqual(nearOf('-33.85,151.2,250'), { lat: -33.85, lon: 151.2, nm: 250 });
+  assert.equal(nearOf(null), null);
 });
 
 test('routes: misses go to adsb.im in one batch, hits come from the cache, "no route" is kept shorter', async () => {

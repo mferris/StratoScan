@@ -3,7 +3,14 @@ import Foundation
 /// The StratoScan relay (relay/ in this repository): pairing now, notifications
 /// from roadmap 2.1. Someone running their own relay changes `baseURL`.
 struct RelayClient {
+    #if DEBUG
+    /// A development build can be pointed at a local relay (`wrangler dev`)
+    /// from the simulator: `SIMCTL_CHILD_STRATOSCAN_RELAY=http://127.0.0.1:8787`.
+    static let baseURL = ProcessInfo.processInfo.environment["STRATOSCAN_RELAY"].flatMap(URL.init(string:))
+        ?? URL(string: "https://relay.stratoscan.io")!
+    #else
     static let baseURL = URL(string: "https://relay.stratoscan.io")!
+    #endif
 
     struct Failure: LocalizedError {
         let message: String
@@ -56,6 +63,41 @@ struct RelayClient {
 
     func testPush() async throws {
         _ = try await send("POST", "/v1/phone/test", [:])
+    }
+
+    // ---- the shared cache (#68): what the radars fetch, for a paired phone ----
+
+    /// One lattice disc, only the aircraft within `nm` of `near` (the view's
+    /// middle, already rounded to 0.05 degrees): adsb.lol's answer when the
+    /// relay has it, nil on a miss or any failure.
+    func netDisc(_ disc: NetLattice.Centre, near: Coordinate, nm: Int) async -> Data? {
+        await ask("GET", String(format: "/v1/net/disc/%.4f/%.4f", disc.lat, disc.lon),
+                  query: String(format: "near=%.2f,%.2f,%d", near.lat, near.lon, nm), body: Data())
+    }
+
+    /// Flights' routes, asked for as adsb.im takes them ({"planes": [...]})
+    /// and answered as it does; nil on any failure.
+    func netRoutes(_ body: Data) async -> Data? {
+        await ask("POST", "/v1/net/routes", query: nil, body: body)
+    }
+
+    /// A signed request whose failure is only "no": the caller then asks the
+    /// public service itself. The signature covers the path, not the query.
+    private func ask(_ method: String, _ path: String, query: String?, body: Data) async -> Data? {
+        guard var parts = URLComponents(url: Self.baseURL, resolvingAgainstBaseURL: false) else { return nil }
+        parts.path = path
+        parts.percentEncodedQuery = query
+        guard let url = parts.url, let headers = try? RelayIdentity.headers(method: method, path: path, body: body) else { return nil }
+        var req = URLRequest(url: url, timeoutInterval: 6)
+        req.httpMethod = method
+        if method != "GET" {
+            req.httpBody = body
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return data
     }
 
     private func send(_ method: String, _ path: String, _ payload: [String: Any]?) async throws -> Data {
