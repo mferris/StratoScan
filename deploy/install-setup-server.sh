@@ -296,6 +296,12 @@ if command -v nmcli >/dev/null 2>&1; then
       /run/NetworkManager/system-connections/netplan-*)
         if nmcli connection migrate --plugin keyfile "$uuid" >/dev/null 2>&1; then
           echo "  moved a netplan-backed network profile to a keyfile"
+          # Left behind, its YAML would have netplan bring the old copy back
+          # at the next boot; once the keyfile holds the profile, it goes.
+          if nmcli -t -f UUID,FILENAME connection show 2>/dev/null \
+              | grep -q "^$uuid:/etc/NetworkManager/system-connections/"; then
+            rm -f "/etc/netplan/90-NM-$uuid.yaml"
+          fi
         fi ;;
     esac
   done
