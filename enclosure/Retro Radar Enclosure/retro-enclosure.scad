@@ -189,7 +189,14 @@ back_key_clear = 0.5;               // per side, between the block and the notch
 // style of part; part="usbc_gauge" (this window plus four neighbours) is
 // still the quick way to re-fit a different connector.
 usbc_cut_w       = 11.0;
-usbc_cut_h       = 6.5;
+// 8.0 tall, from 6.5 (2026-10-23). The trigger board's socket face sits at
+// the plate's inner face, 1 mm behind the pocket floor, so a plug only seats
+// if its moulding goes through the web to the socket. At 6.5 mm tall the
+// owner's cable's moulding stopped on the web: no solid connection until
+// the window was cut taller. The width stays 11.0, held by the screw holes
+// beside it (with M3 button heads in the pocket, about 10.8 mm clear between
+// them).
+usbc_cut_h       = 8.0;
 usbc_cut_r       = 1.2;
 usbc_screw_pitch = 16.5;   // centre-to-centre of the two mounting screws
 // ...and up to this: each screw hole is a short slot, so a connector with
