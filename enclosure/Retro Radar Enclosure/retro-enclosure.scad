@@ -239,9 +239,18 @@ rivet_z       = shell_depth - lip_height - 6;
 rib_h    = 4.0;      // how far each rib stands proud of the wall.
 // 2.2 -> 4.0: at 2.2 the underside was too small an overhang for
 // BambuStudio to generate support for, so it printed rough. A wider
-// overhang trips the detector. A chamfered underside would remove
-// the need for support altogether, at the cost of the square profile.
+// overhang trips the detector.
 rib_w    = 5;         // width (in Z) of each rib band
+// The underside -- the face toward the back plate, which is down when the
+// shell prints -- slopes at 45 degrees from the wall, so the rings print with
+// no support at all (2026-10-24). Square, they needed supports all round, and
+// those welded on: the band below the first ring and the top of the first
+// ring (where the second ring's supports stood) came off torn. The slope
+// stops rib_lip short of the outer edge, a small square step that keeps the
+// crisp shadow line under each ring, which a plain slope loses. A step that
+// small is too little for the slicer to support and prints clean on its own.
+// From the front nothing changes: the front face is square and 4mm deep.
+rib_lip  = 0.8;
 rib_z_list = [10, 22]; // Z positions of the two ribs
 // The ribs stand 2.2mm proud but the cradle bore only clears the case by
 // cradle_clearance (1mm), so a full ring would jam against the arms/keel
@@ -617,12 +626,16 @@ module rivets() {
 }
 
 module ribs() {
+    // The profile starts 0.3mm inside the wall so it overlaps it rather than
+    // touching it; the slope still meets the outer face 4mm - rib_lip below
+    // the ring.
     for (z = rib_z_list) {
         translate([0,0,z])
             rotate([0,0,rib_a0])
                 rotate_extrude(angle=rib_arc)
                     translate([outer_dia/2, 0])
-                        square([rib_h, rib_w]);
+                        polygon([[-0.3, -(rib_h - rib_lip) - 0.3], [rib_h - rib_lip, 0],
+                                 [rib_h, 0], [rib_h, rib_w], [-0.3, rib_w]]);
     }
 }
 
@@ -1981,6 +1994,17 @@ else if (part == "power_trigger_mount") power_trigger_mount();
 else if (part == "power_regulator_tray") power_regulator_tray();
 else if (part == "antenna_socket_gauge") antenna_socket_gauge();
 else if (part == "stand") stand();
+else if (part == "test_rings") {
+    // A 40-degree slice of the shell's back 29mm: both rings, the band below
+    // them and the back rim, real shell() geometry. Prints back-down like the
+    // shell, in about half an hour, to see how a material does the rings'
+    // slope and lip before a seven-hour shell (2026-10-24).
+    intersection() {
+        shell();
+        rotate([0, 0, 45]) rotate_extrude(angle = 40)
+            translate([outer_dia/2 - 12, -1]) square([20, 30]);
+    }
+}
 else if (part == "test_antenna") {
     // small coupon around the antenna turret -- real shell() geometry,
     // just clipped to a local box so it prints in minutes, not hours

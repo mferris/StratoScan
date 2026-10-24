@@ -23,8 +23,10 @@ the rest follows.
 | `power_trigger_mount` | the power fix's 12 V trigger board, held behind the USB-C window on the window's own two screws, so the charger plugs straight into it ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)) |
 | `power_regulator_tray` | a tray for the power fix's 5 V regulator, stuck to the plate's inner face |
 
-Two extra targets, `test_antenna` and `test_speaker`, clip the real shell
-geometry to a small box so a fit test prints in minutes instead of hours.
+Three extra targets, `test_antenna`, `test_speaker` and `test_rings`, clip
+the real shell geometry to a small piece so a test prints in minutes instead
+of hours. `test_rings` is a 40° slice of both rings, for trying a new material
+on the rings' slope and lip.
 
 ## Rendering and exporting
 
@@ -232,6 +234,27 @@ Each speaker's grille is now only the rows in front of the ribs: five rows of 21
 These checks hold the change:
 - `grille_in_front_of_ribs` and `rivets_clear_of_grilles` must come out empty. Both find the old geometry when run against it.
 - `grille_present` and `rivets_present` are their positive controls.
+
+### The rings print without support
+
+The two rings round the body were square bands, 4 mm proud and 5 mm wide. The
+shell prints back-down, so each ring's underside was a 4 mm shelf in mid-air,
+and the slicer supported it all round: the first ring from the plate, the
+second from the top of the first. Those supports welded on. On an ASA shell
+(2026-10-24) they came off leaving the band below the first ring, and the top
+of the first ring, torn.
+
+Now each underside slopes at 45° from the wall to a 0.8 mm square lip at the
+outer edge (`rib_lip`). The slope prints on its own, and a lip that small is
+too little for the slicer to support and prints clean. The lip keeps the sharp
+shadow line under each ring; a plain slope loses it, and the rings read as
+moulded bands. From the front nothing changes: each ring's front face is
+square and 4 mm deep.
+
+- `rib_slopes_present` finds the slope just below each ring. It finds nothing
+  against the square rings.
+- `rib_lip_kept` must come out empty: under the outer half millimetre of each
+  ring is air. A full 45° slope fills it.
 
 ### Speakers: a hollow sleeve, not a solid block
 
