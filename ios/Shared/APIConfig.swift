@@ -70,6 +70,7 @@ final class Endpoint {
     private var chosenWhere: Where = .home
     private var checkedAt = Date.distantPast
     private var onLocalNetwork = false
+    private var pathKnown = false       // until the monitor's first report, assume it may be local
     private var foundAt = Date.distantPast
     private let monitor = NWPathMonitor()
 
@@ -86,7 +87,7 @@ final class Endpoint {
     private init() {
         monitor.pathUpdateHandler = { [weak self] path in
             let local = path.status == .satisfied && (path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet))
-            self?.lock.withLock { self?.onLocalNetwork = local; self?.foundAt = .distantPast }
+            self?.lock.withLock { self?.onLocalNetwork = local; self?.pathKnown = true; self?.foundAt = .distantPast }
             self?.invalidate()
         }
         monitor.start(queue: DispatchQueue(label: "stratoscan.endpoint.path"))
@@ -108,7 +109,12 @@ final class Endpoint {
             return home
         }
         let look: (@Sendable () async -> String?)? = lock.withLock {
-            guard let f = finderHook, onLocalNetwork, Date().timeIntervalSince(foundAt) > Self.findEvery else { return nil }
+            // Before the path monitor's first report (the app has just opened)
+            // the network is unknown: look anyway, or the first look-up after
+            // launch skipped the finder and the radar was found only a minute
+            // later (owner's phone, 2026-10-23).
+            guard let f = finderHook, onLocalNetwork || !pathKnown,
+                  Date().timeIntervalSince(foundAt) > Self.findEvery else { return nil }
             foundAt = Date()
             return f
         }

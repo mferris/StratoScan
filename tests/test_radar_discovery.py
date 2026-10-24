@@ -57,8 +57,8 @@ api = (ROOT / "ios" / "Shared" / "APIConfig.swift").read_text()
 resolve = api[api.index("func resolve("):api.index("private func set(")]
 check(resolve.index("Self.answers(home") < resolve.index("look()") < resolve.index("APIConfig.awayURL"),
       "Endpoint tries home first, then the finder, then the public address")
-check("onLocalNetwork" in resolve and "findEvery" in resolve,
-      "the finder runs only on a local network, and at most every couple of minutes")
+check("onLocalNetwork || !pathKnown" in resolve and "findEvery" in resolve,
+      "the finder runs only on a local network (or before the network is known, just after launch), at most every couple of minutes")
 check("APIConfig.baseURL = found" in resolve, "a radar it finds becomes the home address")
 m = re.search(r"static let findEvery: TimeInterval = (\d+)", api)
 check(m is not None and 60 <= int(m.group(1)) <= 300, "it looks again after no less than a minute and no more than five")
