@@ -560,9 +560,15 @@ def wifi_confirm():
     pend = read_pending()
     if not pend or pend.get("kind") != "wifi":
         raise Err("nothing_pending")
+    # One modify, so a power cut can't leave the profile half promoted:
+    # autoconnect on but still named the candidate, which net-watchdog doesn't
+    # count as a saved network. autoconnect-retries 0: NetworkManager never
+    # runs out of reconnect attempts after a router outage (#83). By default
+    # it tries four times and then blocks the network for a while; on
+    # 2026-10-25 RDU's router re-keyed at 3 a.m., the first attempt failed,
+    # and the second, two minutes later, got back.
     run([NMCLI, "connection", "modify", CANDIDATE_PROFILE,
-         "connection.autoconnect", "yes"], timeout=20)
-    run([NMCLI, "connection", "modify", CANDIDATE_PROFILE,
+         "connection.autoconnect", "yes", "connection.autoconnect-retries", "0",
          "connection.id", f"fr-{pend['ssid'][:24]}"], timeout=20)
     clear_pending()
     return {"state": "ok", "ssid": pend.get("ssid")}
