@@ -123,6 +123,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 2.28 | An alert opens the app on that aircraft, on the phone and the Watch | Tap a real alert on a real iPhone and Watch |
 
 | 2.29 | The app through the relay's shared cache: the network's aircraft and routes (#68) | A view away from home loads from the cache on the owner's iPhone |
+| 2.30 | The app opens with the radar's trails: the core feed keeps a short trail per aircraft (antenna and network) and serves it once to a screen that has just opened (#84) | On a real iPhone, an aircraft in range for ten minutes shows ten minutes of trail at once |
 ## Phase 3: the wrist
 
 | # | Item | Done when |

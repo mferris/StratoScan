@@ -84,6 +84,18 @@ final class PlaneState: Identifiable {
     var labelH: CGFloat = 0
     var labelSide: LabelSide = .right
 
+    /// Where it was before this phone saw it, from the radar's own trail
+    /// (#84): fixes older than the first one here go in front, within
+    /// historySeconds, so the trail starts where the radar's does.
+    func seedHistory(_ older: [Fix]) {
+        let now = Date()
+        let first = history.first?.at ?? now
+        let add = older.filter { $0.at < first && now.timeIntervalSince($0.at) <= Self.historySeconds }
+        guard !add.isEmpty else { return }
+        history = add + history
+        if history.count > Self.historyPoints { history.removeFirst(history.count - Self.historyPoints) }
+    }
+
     init(hex: String, from n: NormalizedAircraft) {
         self.hex = hex
         apply(n)

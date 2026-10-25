@@ -68,6 +68,24 @@ enum AircraftFeedClient {
         return try JSONDecoder().decode(AircraftFeedResponse.self, from: data).aircraft
     }
 
+    /// Where each aircraft has already been, from the radar (#84), for a screen
+    /// that has just opened: points as [seconds ago, lat, lon, altitude in
+    /// feet or null], oldest first. Nil from a radar without it yet, or on any
+    /// failure: the trails then start from now, as they always did.
+    struct Trails: Decodable { let trails: [String: [[Double?]]] }
+
+    static func fetchTrails() async -> Trails? {
+        if DemoFeed.isOn { return nil }
+        await Endpoint.shared.resolve()
+        var req = URLRequest(url: APIConfig.url("/api/trails"))
+        req.setValue("1", forHTTPHeaderField: Self.appHeader)
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        req.timeoutInterval = 10
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return try? JSONDecoder().decode(Trails.self, from: data)
+    }
+
     static func fetchReceiver() async throws -> Coordinate? {
         if DemoFeed.isOn { return DemoFeed.home }
         await Endpoint.shared.resolve()

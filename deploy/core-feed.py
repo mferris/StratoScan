@@ -349,8 +349,97 @@ def band_of(a, hex_, uat):
     return "1090"
 
 
+# ---- trails (roadmap 2.30, #84) -------------------------------------------------
+# Where each aircraft has been, for a screen that has just opened. The app's
+# trails started from the moment it opened while the kiosk's ran back a quarter
+# of an hour (the owner's ask, 2026-10-25), so the feed keeps one per aircraft,
+# from the antenna and from the network, in memory only, and serves them at
+# /api/trails. Straight stretches are collapsed as they are recorded, so a long
+# leg costs two points, not one every few seconds.
+TRAIL_KEEP_S = 900           # as long as the app keeps one (PlaneState.historySeconds)
+TRAIL_EVERY_S = 5.0          # the antenna's aircraft are sampled this often
+TRAIL_STRAIGHT_NM = 0.05     # a point this close to the line through its neighbours goes,
+TRAIL_LEVEL_FT = 300         # if all three are level within this: the screens colour a
+                             # trail by altitude, so a climb keeps its points
+TRAIL_MAX_POINTS = 400       # per aircraft, whatever it does
+TRAIL_MAX_AIRCRAFT = 3000
+
+
+def _straight(a, b, c):
+    """Whether point b lies on the way from a to c, level: within
+    TRAIL_STRAIGHT_NM of the line, and all three within TRAIL_LEVEL_FT."""
+    k = math.cos(math.radians(a[1]))
+    bx, by = (b[2] - a[2]) * 60 * k, (b[1] - a[1]) * 60
+    cx, cy = (c[2] - a[2]) * 60 * k, (c[1] - a[1]) * 60
+    span = math.hypot(cx, cy)
+    if span < 1e-6:
+        return False
+    if abs(cx * by - cy * bx) / span > TRAIL_STRAIGHT_NM:
+        return False
+    along = (bx * cx + by * cy) / (span * span)
+    if not 0 <= along <= 1:
+        return False
+    alts = (a[3], b[3], c[3])
+    if None in alts:
+        return a[3] == b[3] == c[3]
+    return max(alts) - min(alts) <= TRAIL_LEVEL_FT
+
+
+def _trail_point(a, now):
+    """[time, lat, lon, altitude in feet or None] for a readsb or network
+    record with a position, else None."""
+    lat, lon = a.get("lat"), a.get("lon")
+    if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+        return None
+    seen = a.get("seen_pos")
+    t = now - (seen if isinstance(seen, (int, float)) and seen >= 0 else 0)
+    alt = a.get("alt_baro", a.get("alt"))
+    alt = 0 if alt == "ground" else (alt if isinstance(alt, (int, float)) else None)
+    return [round(t, 1), round(lat, 5), round(lon, 5), alt]
+
+
+class Trails:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.d = {}           # hex -> [[t, lat, lon, alt], ...], oldest first
+
+    def note(self, hex_, p):
+        with self.lock:
+            pts = self.d.get(hex_)
+            if pts is None:
+                if len(self.d) >= TRAIL_MAX_AIRCRAFT:
+                    return
+                pts = self.d[hex_] = []
+            if pts:
+                last = pts[-1]
+                if p[0] <= last[0] or (p[1] == last[1] and p[2] == last[2]):
+                    return                     # nothing new
+                if len(pts) >= 2 and _straight(pts[-2], last, p):
+                    pts[-1] = p                # still on the same straight line
+                    return
+            pts.append(p)
+            if len(pts) > TRAIL_MAX_POINTS:
+                del pts[0]
+
+    def payload(self, now):
+        """{"now", "trails": {hex: [[seconds ago, lat, lon, alt], ...]}} for the
+        last TRAIL_KEEP_S. Ages, not times, so a screen with a different clock
+        reads them right."""
+        out = {}
+        with self.lock:
+            for h in list(self.d):
+                pts = [q for q in self.d[h] if now - q[0] <= TRAIL_KEEP_S]
+                if not pts:
+                    del self.d[h]
+                    continue
+                self.d[h] = pts
+                if len(pts) >= 2:
+                    out[h] = [[round(now - q[0], 1), q[1], q[2], q[3]] for q in pts]
+        return {"now": round(now, 1), "keepS": TRAIL_KEEP_S, "trails": out}
+
+
 class Feed:
-    def __init__(self, lookups=None, uat=None, sightings=None):
+    def __init__(self, lookups=None, uat=None, sightings=None, trails=True):
         self.types = labels.TypeDb()
         self.notable = labels.NotableDb()
         self.lookups = lookups or Lookups()
@@ -359,6 +448,27 @@ class Feed:
         self._antenna = (0.0, [])
         self._network = (0.0, [])
         self.lock = threading.Lock()
+        self.trails = Trails()
+        if trails:
+            threading.Thread(target=self._trail_loop, daemon=True).start()
+
+    def _trail_loop(self):
+        """The antenna's aircraft into the trails every TRAIL_EVERY_S, whether
+        or not a screen is asking: a trail is for the one that opens next."""
+        while True:
+            time.sleep(TRAIL_EVERY_S)
+            try:
+                self._note_trails(self._antenna_raw())
+            except Exception as e:      # never the end of the feed
+                print(f"core: trail sample failed: {e}", flush=True)
+
+    def _note_trails(self, records):
+        now = _now()
+        for a in records:
+            if isinstance(a, dict) and a.get("hex"):
+                p = _trail_point(a, now)
+                if p:
+                    self.trails.note(a["hex"].lower().lstrip("~"), p)
 
     def _receiver(self):
         r = _read_json(RECEIVER_JSON) or {}
@@ -389,6 +499,9 @@ class Feed:
             ac = []
         with self.lock:
             self._network = (_now(), ac)
+        # The network's aircraft are fetched only while a screen shows them
+        # (privacy.md), so their trails grow only then, a point per fetch.
+        self._note_trails(ac)
         return ac
 
     def label(self, a, source, counts=None):
@@ -490,6 +603,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         url = urllib.parse.urlsplit(self.path)
+        if url.path == "/api/trails":
+            return self._send(200, FEED.trails.payload(_now()))
         if url.path != "/api/aircraft":
             return self._send(404, {"error": "not found"})
         q = urllib.parse.parse_qs(url.query)
@@ -514,7 +629,7 @@ def main():
     global FEED
     FEED = Feed()
     srv = http.server.ThreadingHTTPServer(LISTEN, Handler)
-    print(f"core: serving /api/aircraft on {LISTEN[0]}:{LISTEN[1]}", flush=True)
+    print(f"core: serving /api/aircraft and /api/trails on {LISTEN[0]}:{LISTEN[1]}", flush=True)
     srv.serve_forever()
 
 

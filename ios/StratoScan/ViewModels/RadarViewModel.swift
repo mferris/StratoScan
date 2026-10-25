@@ -231,7 +231,34 @@ final class RadarViewModel: ObservableObject {
         if Date().timeIntervalSince(lastGoodFetch) > staleInterval {
             connecting = true
             connectingSince = Date()
+            needTrails = true       // back after a while: the radar's trails again
         }
+    }
+
+    /// The radar's trails (#84), asked for once when the app opens or comes
+    /// back after a while, so each aircraft's trail starts where the radar's
+    /// does rather than when the app opened (the owner's ask, 2026-10-25).
+    /// Kept a few minutes for aircraft that show up just after.
+    private var needTrails = true
+    private var radarTrails: (at: Date, points: [String: [[Double?]]])?
+
+    private func seedTrails() async {
+        guard let t = await AircraftFeedClient.fetchTrails() else { return }
+        radarTrails = (Date(), t.trails)
+        for p in planes.values { applyRadarTrail(to: p) }
+        for p in viewNetwork.values { applyRadarTrail(to: p) }
+    }
+
+    private func applyRadarTrail(to p: PlaneState) {
+        guard let rt = radarTrails, Date().timeIntervalSince(rt.at) < 300,
+              let pts = rt.points[p.hex] else { return }
+        var known = p.alt == .ground ? 0 : (p.alt.feetValue ?? 0)
+        let fixes = pts.compactMap { q -> PlaneState.Fix? in
+            guard q.count >= 4, let age = q[0], let lat = q[1], let lon = q[2] else { return nil }
+            if let a = q[3] { known = a }       // an unknown altitude carries the last one
+            return PlaneState.Fix(lat: lat, lon: lon, altFt: known, at: rt.at.addingTimeInterval(-age))
+        }
+        p.seedHistory(fixes)
     }
 
     func start() {
@@ -368,6 +395,10 @@ final class RadarViewModel: ObservableObject {
             let away = !DemoFeed.isOn && Endpoint.shared.whereNow == .away
             if away != viaAway { viaAway = away }
             applyUpdate(raw)
+            if needTrails && !DemoFeed.isOn {
+                needTrails = false
+                Task { await seedTrails() }
+            }
         } catch {
             connected = false
             if Date().timeIntervalSince(connectingSince) > connectGrace { connecting = false }
@@ -422,7 +453,7 @@ final class RadarViewModel: ObservableObject {
         for (raw, extra) in list {
             guard planes[raw.hex] == nil,
                   let n = NormalizedAircraft.normalize(raw, home: origin, trustPrecomputed: false) else { continue }
-            let p = viewNetwork[raw.hex] ?? PlaneState(hex: raw.hex, from: n)
+            let p = viewNetwork[raw.hex] ?? { let q = PlaneState(hex: raw.hex, from: n); applyRadarTrail(to: q); return q }()
             p.apply(n)
             p.isNetwork = true
             p.fromView = true
@@ -450,7 +481,9 @@ final class RadarViewModel: ObservableObject {
                 fromNetwork.fromView = false
                 planes[n.hex] = fromNetwork
             } else {
-                planes[n.hex] = PlaneState(hex: n.hex, from: n)
+                let p = PlaneState(hex: n.hex, from: n)
+                applyRadarTrail(to: p)
+                planes[n.hex] = p
             }
 
             // The core feed has already looked these up, once, on the radar.
