@@ -55,8 +55,20 @@ check("ip.version = .v4" in finder, "IPv4 only (a link-local IPv6 address needs 
 
 api = (ROOT / "ios" / "Shared" / "APIConfig.swift").read_text()
 resolve = api[api.index("func resolve("):api.index("private func set(")]
-check(resolve.index("Self.answers(home") < resolve.index("look()") < resolve.index("APIConfig.awayURL"),
-      "Endpoint tries home first, then the finder, then the public address")
+# 2026-10-25: home and the public address are asked at once; one after the
+# other, away from home the app waited 1.5 s on home and up to 4 s on the
+# finder before asking the public address, which answers in a third of a second.
+ask_home, ask_away = resolve.index("async let homeAnswers = Self.answers(home"), resolve.index("async let awayAnswers")
+check(max(ask_home, ask_away) < resolve.index("if await homeAnswers"),
+      "Endpoint asks home and the public address at once")
+check(resolve.index("if await homeAnswers") < resolve.index("await awayAnswers"),
+      "and home wins whenever it answers")
+away_branch = resolve[resolve.index("if let away, await awayAnswers"):resolve.index("if let look, let found = await found(by: look")]
+check("Task { if await self.found(by: look, home: home) != nil { self.invalidate() } }" in away_branch,
+      "when only the public address answers, the finder runs behind it, not in front")
+check(resolve.index("if let away, await awayAnswers") < resolve.index("if let look, let found = await found(by: look"),
+      "and runs in front only when the public address doesn't answer either")
+check("Task { await self.learnAway(from: home) }" in resolve, "learning the public address at home no longer holds up the first look")
 check("onLocalNetwork || !pathKnown" in resolve and "findEvery" in resolve,
       "the finder runs only on a local network (or before the network is known, just after launch), at most every couple of minutes")
 check("APIConfig.baseURL = found" in resolve, "a radar it finds becomes the home address")
@@ -64,6 +76,8 @@ m = re.search(r"static let findEvery: TimeInterval = (\d+)", api)
 check(m is not None and 60 <= int(m.group(1)) <= 300, "it looks again after no less than a minute and no more than five")
 
 app = (ROOT / "ios" / "StratoScan" / "App" / "StratoScanApp.swift").read_text()
+check("_ = Endpoint.shared" in app[app.index("init()"):app.index("var body")],
+      "the network watch starts at launch, so the first look-up knows whether the phone is on WiFi")
 check("Endpoint.shared.finder = { await RadarFinder.find(pairing: pairing) }" in app,
       "the app (not the widget or the Watch) sets the finder")
 
