@@ -86,6 +86,9 @@ phone ──(pairing, notification rules)──▶ relay
 | 1.20 | Fewer questions per radar: the ring comparison every 60 s or by feeding adsb.lol, the location poll only while a phone shares, a slower away poll in the app (#67) | Requests per day measured on RDU before and after |
 | 1.21 | Boot straight to StratoScan: the StratoScan picture from power-on to the radar, with no Raspberry Pi splash, kernel text or desktop (#72) | A power-on on RDU shows only the StratoScan picture, then the radar |
 | 1.22 | OS updates: Chromium, the kernel and firmware (held from automatic updates) updated on a tested path through the release rings; a quiet weekly restart after patches; each radar's patch state in its heartbeat (#73) | RDU takes a Chromium and a kernel update through ring 0 and still paints; the heartbeat shows its patch state |
+| 1.24 | Quieter logs: the routine chatter (relay connections, the screensaver's start and stop lines, Chromium's errors, a line per alert) kept out of the journal (#78) | A day's journal lines on RDU roughly halved |
+| 1.25 | WiFi settings that survive a power cut: keyfiles, not netplan YAML; the setup hotspot at once when no network is saved (#80) | A power cut soon after boot leaves the radar on its WiFi, or offering its hotspot |
+| 1.26 | The radar notices when its public web address stops working: a check from outside now and then, a warning on its screen, in the app and on the fleet page, and a Repair beside it (#82) | With the public name made to disappear on a test unit, the warning shows within one check, and Repair clears it |
 ## Phase 2: the pocket
 
 | # | Item | Done when |
