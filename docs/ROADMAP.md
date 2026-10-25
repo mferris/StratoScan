@@ -89,6 +89,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 1.24 | Quieter logs: the routine chatter (relay connections, the screensaver's start and stop lines, Chromium's errors, a line per alert) kept out of the journal (#78) | A day's journal lines on RDU roughly halved |
 | 1.25 | WiFi settings that survive a power cut: keyfiles, not netplan YAML; the setup hotspot at once when no network is saved (#80) | A power cut soon after boot leaves the radar on its WiFi, or offering its hotspot |
 | 1.26 | The radar notices when its public web address stops working: a check from outside now and then, a warning on its screen, in the app and on the fleet page, and a Repair beside it (#82) | With the public name made to disappear on a test unit, the warning shows within one check, and Repair clears it |
+| 1.27 | WiFi keeps trying after a router outage: the radar's network profiles never run out of NetworkManager's reconnect attempts (`autoconnect-retries 0`), set by setupd and the installer (#83) | With the router off 15 minutes or more, the radar rejoins by itself within a few minutes of it coming back |
 ## Phase 2: the pocket
 
 | # | Item | Done when |
