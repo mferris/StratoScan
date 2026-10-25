@@ -8,7 +8,12 @@ struct StratoScanApp: App {
     @StateObject private var push = PushManager.shared
     @StateObject private var setup = RadarSetup()
 
-    init() { WatchSync.shared.start() }   // tells the Watch app which radar to read
+    init() {
+        WatchSync.shared.start()   // tells the Watch app which radar to read
+        // Start watching the network now, so the first look-up for the radar
+        // knows whether the phone is on WiFi rather than guessing (2026-10-25).
+        _ = Endpoint.shared
+    }
 
     var body: some Scene {
         WindowGroup {
