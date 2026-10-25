@@ -35,6 +35,17 @@ check("-name '90-NM-*.yaml' -size 0 -delete" in block, "and removes the empty YA
 check(block.index('grep -q "^$uuid:/etc/NetworkManager/system-connections/"') < block.index('rm -f "/etc/netplan/90-NM-$uuid.yaml"'),
       "a moved profile's YAML goes too, but only once its keyfile is confirmed (or netplan would bring the old copy back at boot)")
 
+retries = inst[inst.index("# Never out of reconnect attempts (#83)"):inst.index("# The phone app finds the radar")]
+check("connection.autoconnect-retries 0" in retries and "802-11-wireless" in retries,
+      "the installer gives every saved WiFi network unlimited reconnect attempts (#83)")
+check("fr-hotspot|fr-candidate) continue" in retries, "but not the setup hotspot or an unconfirmed candidate")
+setupd = (ROOT / "deploy" / "setupd.py").read_text()
+confirm = setupd[setupd.index("def wifi_confirm("):setupd.index("def wifi_rollback(")]
+modifies = [l for l in confirm.splitlines() if '"connection", "modify"' in l]
+check(len(modifies) == 1 and '"connection.autoconnect-retries", "0"' in confirm
+      and '"connection.autoconnect", "yes"' in confirm and '"connection.id"' in confirm,
+      "confirming a network sets autoconnect, unlimited retries and the name in one modify")
+
 spec = importlib.util.spec_from_file_location("netwatchdog", ROOT / "deploy" / "net-watchdog.py")
 w = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(w)

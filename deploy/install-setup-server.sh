@@ -307,6 +307,21 @@ if command -v nmcli >/dev/null 2>&1; then
   done
 fi
 find /etc/netplan -maxdepth 1 -name '90-NM-*.yaml' -size 0 -delete 2>/dev/null || true
+# Never out of reconnect attempts (#83). By default NetworkManager tries a
+# network four times after a drop and then blocks it for a while, so a router
+# that is down longer leaves the radar off it for longer than it needs to be.
+# setupd sets this when it confirms a network; this catches the ones saved
+# before. Only the saved profile changes, so the live connection isn't dropped.
+if command -v nmcli >/dev/null 2>&1; then
+  nmcli -t -f UUID,TYPE,NAME connection show 2>/dev/null | while IFS=: read -r uuid kind name; do
+    [ "$kind" = "802-11-wireless" ] || continue
+    case "$name" in fr-hotspot|fr-candidate) continue ;; esac
+    [ "$(nmcli -g connection.autoconnect-retries connection show "$uuid" 2>/dev/null)" = "0" ] && continue
+    if nmcli connection modify "$uuid" connection.autoconnect-retries 0 >/dev/null 2>&1; then
+      echo "  a saved WiFi network now never runs out of reconnect attempts"
+    fi
+  done
+fi
 # The phone app finds the radar on the home network by Bonjour after the
 # router gives it a new address (#76); avahi is kept on every unit.
 install -d -m 0755 /etc/avahi/services
