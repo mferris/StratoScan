@@ -110,6 +110,27 @@ MIN_REBOOT_INTERVAL_S = 6 * 3600
 # The long-running form (security review 2026-10-04, item 4): one process
 # with its own cadence instead of a systemd timer, which logged three lines
 # per run -- about 2,000 a day -- for a job that mostly has nothing to say.
+# The public web address (#82). Tailscale can stop publishing the radar's
+# public name while the radar still has Funnel on and sees nothing wrong: on
+# 2026-10-23 it happened during a run of restarts, and the owner found out a
+# day later, away from home, when the app said the radar was out of reach.
+# So every PUBLIC_CHECK_S the radar asks public DNS -- over HTTPS, so a
+# router or ISP can't answer for it -- whether its name still resolves, and
+# fetches a harmless path of its own public page through Funnel. Once that
+# has failed for PUBLIC_REPAIR_AFTER_S (Tailscale's DNS took 40 minutes to
+# come back on 10-24, so a slow name is not yet a broken one), it repairs it
+# the way the setup page's switch does: setupd's funnel_repair, which only
+# touches a public address the owner turned on and checks the gateway first.
+# At most one repair every PUBLIC_REPAIR_GAP_S and PUBLIC_REPAIRS_PER_DAY a
+# day, so a fault a repair doesn't clear never turns into a loop. The state
+# lives in RAM for the panel and the app; a reboot starts it over.
+PUBLIC_STATE = "/run/stratoscan-net/public-address.json"
+PUBLIC_CHECK_S = 600
+PUBLIC_REPAIR_AFTER_S = 1800
+PUBLIC_REPAIR_GAP_S = 3600
+PUBLIC_REPAIRS_PER_DAY = 4
+PUBLIC_DOH = ("https://cloudflare-dns.com/dns-query", "https://dns.google/resolve")
+PUBLIC_PATH = "/tar1090/data/receiver.json"    # not a page view: never counted as a visit
 LOOP_S = 120                       # the old timer's OnUnitActiveSec
 BOOT_DELAY_S = 45                  # and its OnBootSec: NetworkManager's chance first
 
@@ -606,6 +627,125 @@ def maybe_refresh_notable_db():
          "/usr/bin/python3", NOTABLE_DB, "ensure"], timeout=30)
 
 
+def public_name_lookup(name):
+    """The IPv4 addresses public DNS gives for `name`: a list, empty when the
+    name doesn't exist (the 2026-10-23 failure), None when no DNS-over-HTTPS
+    service answered (not the address's fault, so not counted against it)."""
+    import urllib.parse
+    import urllib.request
+    q = urllib.parse.urlencode({"name": name, "type": "A"})
+    for base in PUBLIC_DOH:
+        try:
+            req = urllib.request.Request(f"{base}?{q}", headers={
+                "Accept": "application/dns-json", "User-Agent": "StratoScan-self-check"})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                d = json.loads(r.read(65536))
+        except Exception:
+            continue
+        status = d.get("Status")
+        if status == 3:                             # NXDOMAIN
+            return []
+        if status == 0:
+            return [a["data"] for a in d.get("Answer") or []
+                    if isinstance(a, dict) and a.get("type") == 1 and isinstance(a.get("data"), str)]
+    return None
+
+
+def public_page_answers(name, ip):
+    """Whether the public page answers through Funnel at `ip`, asked for by
+    name (the certificate's) without the local resolver, which may be a
+    router still holding an old "no such name"."""
+    import http.client
+    import socket
+    import ssl
+    try:
+        ctx = ssl.create_default_context()
+        raw = socket.create_connection((ip, 443), timeout=10)
+        conn = http.client.HTTPSConnection(name, 443, timeout=10, context=ctx)
+        conn.sock = ctx.wrap_socket(raw, server_hostname=name)
+        conn.request("GET", PUBLIC_PATH, headers={"User-Agent": "StratoScan-self-check"})
+        r = conn.getresponse()
+        r.read(65536)
+        conn.close()
+        return r.status == 200
+    except Exception:
+        return False
+
+
+def _read_public_state():
+    try:
+        with open(PUBLIC_STATE) as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_public_state(d):
+    try:
+        os.makedirs(os.path.dirname(PUBLIC_STATE), exist_ok=True)
+        tmp = PUBLIC_STATE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(d, f)
+        os.replace(tmp, PUBLIC_STATE)
+    except Exception as e:
+        print(f"net-watchdog: could not record the public address check: {e}", flush=True)
+
+
+def maybe_check_public_address(now=None):
+    """Check the public web address when one is due, and repair it once it has
+    been down long enough (see PUBLIC_STATE). One log line per change, not
+    per check: the journal is the card's biggest writer (#78)."""
+    now = time.time() if now is None else now
+    prev = _read_public_state()
+    if now - prev.get("checkedAt", 0) < PUBLIC_CHECK_S:
+        return
+    r = call_setupd("tailscale_status", timeout=60)
+    ts = (r.get("result") or {}) if r.get("ok") else {}
+    name = ts.get("magicDnsName")
+    if not ts.get("funnel") or not name:
+        # Off, or Tailscale not up: nothing of the owner's to check or repair.
+        _write_public_state({"checkedAt": now, "ok": None})
+        return
+    ips = public_name_lookup(name)
+    if ips is None:
+        # Neither DNS service answered: say nothing either way.
+        _write_public_state(dict(prev, checkedAt=now))
+        return
+    if not ips:
+        ok, why = False, "its name is not in public DNS"
+    elif public_page_answers(name, ips[0]):
+        ok, why = True, ""
+    else:
+        ok, why = False, "it does not answer through Funnel"
+    repairs = [t for t in prev.get("repairs") or [] if now - t < 86400]
+    if ok:
+        if prev.get("ok") is False:
+            print("net-watchdog: the public web address works again", flush=True)
+        _write_public_state({"checkedAt": now, "ok": True, "repairs": repairs})
+        return
+    since = prev.get("failingSince") if prev.get("ok") is False else None
+    if since is None:
+        since = now
+        print(f"net-watchdog: the public web address is down: {why} (#82)", flush=True)
+    state = {"checkedAt": now, "ok": False, "reason": why, "failingSince": since,
+             "repairs": repairs, "lastRepair": prev.get("lastRepair")}
+    due = (now - since >= PUBLIC_REPAIR_AFTER_S
+           and (not repairs or now - repairs[-1] >= PUBLIC_REPAIR_GAP_S)
+           and len(repairs) < PUBLIC_REPAIRS_PER_DAY)
+    if due:
+        res = call_setupd("funnel_repair", timeout=150)
+        state["repairs"] = repairs + [now]
+        state["lastRepair"] = now
+        if res.get("ok"):
+            print("net-watchdog: repaired the public web address (Funnel re-applied); "
+                  "its name can take a while to come back", flush=True)
+        else:
+            print(f"net-watchdog: could not repair the public web address: {res.get('code')}",
+                  flush=True)
+    _write_public_state(state)
+
+
 def maybe_send_health_report():
     """Opt-in health report to the maintainer's relay, when one is due.
 
@@ -656,6 +796,11 @@ def main():
             maybe_send_health_report()
         except Exception as e:
             print(f"health: health report failed ({type(e).__name__}: {e})",
+                  flush=True)
+        try:
+            maybe_check_public_address()
+        except Exception as e:
+            print(f"net-watchdog: public address check failed ({type(e).__name__}: {e})",
                   flush=True)
         # An UNCLAIMED unit keeps its setup network up even when it has
         # connectivity by some other route. Plugging in an ethernet cable

@@ -5226,7 +5226,19 @@ function netStatusState() {
                detail: `On ${n.ssid || 'the network'} (${n.ipv4}) but it is not reaching the internet` };
     }
     if (dataDead) return { cls: 'bad', text: 'NO RECEIVER', detail: `Online via ${n.ssid || 'network'} (${n.ipv4}), but no aircraft data` };
-    const pub = netInfo.remote && netInfo.remote.funnelUrl;
+    // The public web address down (#82): the radar checks it every ten
+    // minutes and repairs it itself once it has stayed down a while.
+    const pa = netInfo.publicAddress;
+    if (pa && pa.ok === false) {
+      const at = t => new Date(t * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const next = pa.lastRepair
+        ? ` Repaired at ${at(pa.lastRepair)}; its name can take a while to come back.`
+        : ' The radar repairs it itself if it stays down.';
+      return { cls: 'warn', text: 'PUBLIC PAGE DOWN',
+               detail: `Online, but its public web address is not reachable from the internet${pa.reason ? ': ' + pa.reason : ''}.${next}` };
+    }
+    // (This read funnelUrl, which nothing sends: "public page live" never showed.)
+    const pub = netInfo.remote && netInfo.remote.publicUrl;
     return { cls: 'ok', text: 'ONLINE',
              detail: `${n.ssid ? n.ssid + ' · ' : ''}${n.ipv4}${pub ? ' · public page live' : ''}` };
   }

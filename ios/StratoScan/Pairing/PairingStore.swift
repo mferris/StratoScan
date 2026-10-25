@@ -188,13 +188,33 @@ final class PairingStore: ObservableObject {
     /// for its name (its setup server's hello, which is LAN-only, so this
     /// only works at home; away, the last name stays). A name set on this
     /// phone wins.
+    /// Radars whose own check last found their public web address down (#82),
+    /// from their hello at home, so the app says so before the owner leaves
+    /// and needs it. The radar repairs it itself; this only tells.
+    @Published private(set) var publicAddressDown: [String: PublicAddressIssue] = [:]
+    struct PublicAddressIssue: Equatable { let reason: String?; let lastRepair: Date? }
+
+    /// At home: each radar's hello, for a rename made on the radar (2.17) and
+    /// whether its public web address works (#82).
     func refreshNames() async {
-        struct Hello: Decodable { let name: String? }
-        for radar in radars where radar.ownName != true {
+        struct Hello: Decodable {
+            struct Public: Decodable { let ok: Bool?; let reason: String?; let lastRepair: Double? }
+            let name: String?
+            let publicAddress: Public?
+        }
+        for radar in radars {
             guard let host = radar.host, let url = URL(string: "http://\(host)/setup/api/hello"),
                   let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 3)),
                   (resp as? HTTPURLResponse)?.statusCode == 200,
-                  let name = (try? JSONDecoder().decode(Hello.self, from: data))?.name.flatMap(Self.cleanName),
+                  let hello = try? JSONDecoder().decode(Hello.self, from: data)
+            else { continue }
+            if let pa = hello.publicAddress, pa.ok == false {
+                publicAddressDown[radar.unit] = PublicAddressIssue(
+                    reason: pa.reason, lastRepair: pa.lastRepair.map { Date(timeIntervalSince1970: $0) })
+            } else {
+                publicAddressDown[radar.unit] = nil
+            }
+            guard let name = hello.name.flatMap(Self.cleanName),
                   let i = radars.firstIndex(where: { $0.unit == radar.unit }),
                   radars[i].name != name, radars[i].ownName != true
             else { continue }

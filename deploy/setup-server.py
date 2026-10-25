@@ -358,6 +358,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 # uses it away from home. Already public by definition, and
                 # this route is refused on the Funnel itself.
                 "publicUrl": public_url(),
+                # Whether that address works from the internet, as the radar
+                # last found it, so the app can say so at home (#82).
+                "publicAddress": public_address_check(),
                 # The radar's name, so a paired phone at home follows a rename.
                 "name": radar_name(st),
                 # Who this is, so the app setting it up finds the same radar
@@ -800,6 +803,30 @@ def qr_cached(text):
     return _qr_cache["svg"]
 
 
+# net-watchdog's check of the public web address (#82): RAM, written by root,
+# readable by this service.
+PUBLIC_CHECK_STATE = "/run/stratoscan-net/public-address.json"
+
+
+def public_address_check():
+    """net-watchdog's latest check of the public web address (#82): whether it
+    works (None until checked, or when it is off), and, while it is down, why,
+    since when, and the radar's repairs. For the panel and the owner's app."""
+    try:
+        with open(PUBLIC_CHECK_STATE) as f:
+            d = json.load(f)
+    except (OSError, ValueError):
+        return {"ok": None}
+    if not isinstance(d, dict):
+        return {"ok": None}
+    ok = d.get("ok") if d.get("ok") in (True, False) else None
+    out = {"ok": ok, "checkedAt": d.get("checkedAt")}
+    if ok is False:
+        out.update(reason=d.get("reason"), since=d.get("failingSince"),
+                   lastRepair=d.get("lastRepair"), repairsToday=len(d.get("repairs") or []))
+    return out
+
+
 def public_url():
     """The unit's public HTTPS address when its Funnel is on, else None."""
     ts = _onboard_probe()[2] or {}
@@ -1240,6 +1267,7 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             "nameIsOwn": "name" in st,
             "network": net,
             "remote": rem,
+            "publicAddress": public_address_check(),
             "boot": boot_info(),
         }).encode()
         self.send_response(200)

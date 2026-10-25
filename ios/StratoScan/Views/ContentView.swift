@@ -358,6 +358,17 @@ struct ContentView: View {
                 .tracking(1)
                 .foregroundColor(pal.text)
                 .shadow(color: pal.bg.opacity(0.9), radius: 2)
+            // At home, while the radar's own check finds its public web
+            // address down (#82): said before the owner leaves and needs it.
+            if !pairing.publicAddressDown.isEmpty, viewModel.connected, Endpoint.shared.whereNow == .home {
+                Text("PUBLIC ADDRESS DOWN · REPAIRING")
+                    .font(.system(size: 10 * ui, weight: .semibold, design: .monospaced))
+                    .tracking(1.2)
+                    .foregroundColor(.orange)
+                    .shadow(color: pal.bg.opacity(0.9), radius: 2)
+                    .padding(.top, 2)
+                    .accessibilityLabel("Your radar's public web address is down. The radar is repairing it; away from home it can't be reached until then.")
+            }
         }
         .padding(.horizontal, 12)
     }
