@@ -301,7 +301,7 @@ final class RadarViewModel: ObservableObject {
     private func loadHome() async {
         if let override = Self.homeOverride {
             home = override
-            await loadRunways()
+            loadRunways()
             return
         }
         guard hasRadar || DemoFeed.isOn else { return }
@@ -309,16 +309,32 @@ final class RadarViewModel: ObservableObject {
             if let coord = try await AircraftFeedClient.fetchReceiver() {
                 home = coord
                 if !DemoFeed.isOn { Self.cachedHome = coord }
-                await loadRunways()
+                loadRunways()
             }
         } catch {
             // retried on the next poll cycle below
         }
     }
 
-    private func loadRunways() async {
+    private var runwaysTask: Task<Void, Never>?
+
+    /// The runway outlines: the phone's copy at once, and Overpass behind,
+    /// only when that copy is old or missing. Never in the way of the first
+    /// look at the radar, which used to wait on Overpass (over a minute of
+    /// "connecting" when it was overloaded, 2026-10-25).
+    private func loadRunways() {
         guard let home else { return }
-        runwayGeoJSON = await RunwayClient.fetchRunwayGeoJSON(center: home, rangeNm: ringNm)
+        let ring = ringNm
+        if let kept = RunwayClient.cachedRunwayGeoJSON(center: home, rangeNm: ring) {
+            runwayGeoJSON = kept.data
+            if kept.fresh { return }
+        }
+        runwaysTask?.cancel()
+        runwaysTask = Task { [weak self] in
+            guard let data = await RunwayClient.fetchRunwayGeoJSON(center: home, rangeNm: ring),
+                  let self, self.home == home else { return }
+            self.runwayGeoJSON = data
+        }
     }
 
     private func pollOnce() async {

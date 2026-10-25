@@ -158,6 +158,11 @@ every radar and phone (the app sends each flight's callsign and position
 rounded to 0.1°, about 10 km); otherwise from adsb.im directly. It is the
 aircraft's position, never yours.
 
+**Runway outlines** on the map come from OpenStreetMap's Overpass service.
+The app asks for the area round your radar, with its middle rounded to about
+5 km, keeps the outlines on the phone, and asks again at most once a month.
+Overpass sees that area and your IP address, like any web request.
+
 **Airline logos** (since 2026-10-08). To show an airline's mark beside its
 name, the app (and the small extension that dresses an alert before it is
 shown) fetches that airline's own site icon the first time the airline is
