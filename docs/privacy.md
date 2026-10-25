@@ -1,6 +1,6 @@
 # StratoScan privacy policy
 
-*Last updated 2026-10-23.*
+*Last updated 2026-10-25.*
 
 StratoScan is an open-source radar for the aircraft flying over your home,
 built around a receiver you own. This page covers the StratoScan radar, the
@@ -65,6 +65,14 @@ turn on:
   rounded to about 1 km, whenever a screen that shows the network's aircraft
   is open: its own, the public page, or the app with the public network on.
   Asked at most once every few seconds however many screens are open.
+- **Its public web address, checked** (only while the public address is on):
+  every ten minutes the radar asks a public DNS service whether its public
+  name still resolves. It asks over HTTPS (DNS over HTTPS), Cloudflare's
+  service with Google's as the fallback, so a router can't answer for it.
+  Then it fetches a small file from its own public page. The question names
+  the radar's public address, which is public anyway; nothing else is sent.
+  If the address stays down for half an hour, the radar puts it back the
+  way the setup page's switch does (since 2026-10-25, #82).
 - **Share with FlightAware** (off unless you turn it on): runs FlightAware's
   own feeder software, which sends them what the antenna hears and the
   antenna's exact location, which their multilateration needs. FlightAware

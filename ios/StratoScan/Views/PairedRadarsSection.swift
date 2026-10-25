@@ -19,6 +19,11 @@ struct PairedRadarsSection: View {
                         Text(radar.name)
                         Text("Paired \(radar.pairedAt.formatted(date: .abbreviated, time: .omitted))")
                             .font(.caption).foregroundColor(.secondary)
+                        if let issue = pairing.publicAddressDown[radar.unit] {
+                            Text(issue.lastRepair.map { "Public address down; repaired at \($0.formatted(date: .omitted, time: .shortened)), coming back" }
+                                 ?? "Public address down; the radar will repair it")
+                                .font(.caption).foregroundColor(.orange)
+                        }
                     }
                 }
             }

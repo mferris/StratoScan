@@ -1362,6 +1362,19 @@ def tailscale_funnel(enabled):
             "publicUrl": st.get("publicUrl")}
 
 
+def funnel_repair():
+    """Put back the public address the owner turned on (#82): the same steps
+    as the setup page's Public web address switch off and on, gateway guard
+    first. On 2026-10-23 Tailscale stopped publishing RDU's public name during
+    a run of restarts, while the radar still had Funnel on and saw nothing
+    wrong; re-applying Funnel brought it back. Refused when the public address
+    is off: this never turns one on. net-watchdog calls it when the radar's
+    own check has found the address down for a while."""
+    if not tailscale_status().get("funnel"):
+        raise Err("funnel_off", "the public address is not turned on")
+    return tailscale_funnel(True)
+
+
 # ------------------------------------------------------------------- reset
 
 def reset_settings():
@@ -1537,6 +1550,7 @@ VERBS = {
     "tailscale_up": lambda p: tailscale_up(p.get("authKey"), p.get("hostname"),
                                            bool(p.get("enableFunnel"))),
     "tailscale_funnel": lambda p: tailscale_funnel(bool(p.get("enabled"))),
+    "funnel_repair": lambda p: funnel_repair(),
     "reboot": lambda p: (run([SYSTEMCTL, "reboot"], timeout=10), {"rebooting": True})[1],
     "pending": lambda p: read_pending(),
     "net_status": lambda p: net_status(),
