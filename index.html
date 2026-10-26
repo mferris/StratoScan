@@ -2959,11 +2959,11 @@ function createMap(style, offline) {
   // geometry at this low a zoom (confirmed via queryRenderedFeatures — the
   // tiles are generated without that detail below ~z11, independent of the
   // style's minzoom setting), so raising the zoom gate there does nothing.
-  // Runway outlines instead come from an OpenStreetMap Overpass query
-  // (retried a few times on failure), added as our own GeoJSON layer — see
-  // loadRunways(). loadCachedRunways() renders a previous successful
-  // result immediately, if one exists, while loadRunways() still runs
-  // regardless to refresh it in the background.
+  // Runway outlines instead come from the radar's copy of OpenStreetMap's
+  // (asked again every few minutes until it has one), added as our own
+  // GeoJSON layer — see loadRunways(). loadCachedRunways() renders a
+  // previous successful result immediately, if one exists, while
+  // loadRunways() still runs regardless to refresh it in the background.
   map.once('idle', hideSplash);
   map.on('load', loadCachedRunways);
   map.on('load', loadRunways);
@@ -3092,8 +3092,8 @@ setInterval(async () => {
   createMap(online, false);
 }, ONLINE_RECHECK_MS);
 
-// Registered before loadRunways() resolves (that one waits on a network
-// round-trip to Overpass; this doesn't, so it always finishes first),
+// Registered before loadRunways() resolves (that one waits on a round trip
+// to the radar; this doesn't, so it always finishes first),
 // meaning the real runway/taxiway layers loadRunways() adds later paint on
 // top of this automatically -- no explicit layer ordering needed.
 function initApproachLayer() {
@@ -3354,38 +3354,18 @@ function viewRangeText() {
 }
 
 // ---- Runway outlines --------------------------------------------------
-// Fetch (home location never changes at runtime, so this only needs to
-// truly succeed once) of real runway/taxiway geometry from OSM's public
-// Overpass API, covering the same RANGE_NM box the radar shows. Purely
-// additive — if every attempt fails (offline, Overpass rate-limited, etc.)
-// the map/radar keep working without runway outlines.
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
-const OVERPASS_MAX_ATTEMPTS = 4;
-const OVERPASS_RETRY_MS = 20000; // generous backoff -- shared public API, and this only needs to eventually land once per (rare) kiosk reload, not be fast
-
-function rangeBBox(lat, lon, rangeNm) {
-  const rangeM = rangeNm * 1852;
-  const latDelta = rangeM / 111320;
-  const lonDelta = rangeM / (111320 * Math.cos(lat * Math.PI / 180));
-  return { south: lat - latDelta, west: lon - lonDelta, north: lat + latDelta, east: lon + lonDelta };
-}
-
-function overpassToGeoJSON(elements) {
-  const nodes = new Map();
-  for (const el of elements) {
-    if (el.type === 'node') nodes.set(el.id, [el.lon, el.lat]);
-  }
-  const features = [];
-  for (const el of elements) {
-    if (el.type !== 'way' || !el.tags) continue;
-    const aeroway = el.tags.aeroway;
-    if (aeroway !== 'runway' && aeroway !== 'taxiway') continue;
-    const coords = el.nodes.map(id => nodes.get(id)).filter(Boolean);
-    if (coords.length < 2) continue;
-    features.push({ type: 'Feature', properties: { aeroway, ref: el.tags.ref || '' }, geometry: { type: 'LineString', coordinates: coords } });
-  }
-  return { type: 'FeatureCollection', features };
-}
+// Real runway and taxiway geometry from OpenStreetMap, as the radar keeps it
+// (#87, 2026-10-26): deploy/offline-map.py asks Overpass for the area round
+// the radar about once a month, by its position rounded to 0.05 degrees, and
+// core-feed.py serves that copy at /api/runways. This page used to ask
+// Overpass itself, from the kiosk at every start and from every visitor's
+// browser on the public page, with the antenna's exact position in the
+// query. Purely additive: with no copy anywhere, the map and radar work
+// without runway outlines.
+const RUNWAYS_URL = '/api/runways';
+// Not built yet (a new location, or Overpass was down when the radar asked),
+// or the radar not answering: asked again this often while the page is open.
+const RUNWAYS_RETRY_MS = 5 * 60 * 1000;
 
 // A rough, immediate approximation of final approach corridors, derived
 // entirely from runway geometry we already have -- no new data source
@@ -3422,14 +3402,21 @@ function extendedApproachLines(runwayGeojson) {
 // Runway geometry for a fixed home location never changes at runtime, so a
 // successful fetch is worth remembering across reloads, not just within one
 // -- a kiosk restart used to mean waiting out the full Overpass retry cycle
-// (up to OVERPASS_MAX_ATTEMPTS attempts, OVERPASS_RETRY_MS apart, each with
-// its own network timeout -- a couple of minutes in the worst case) before
-// runways reappeared, every single time. Caching the last successful result
-// means a restart shows real runways immediately; loadRunways() still runs
-// in the background regardless to self-heal the cache if OSM data ever
-// changes, and a failed refresh just leaves the already-displayed cached
-// copy alone.
+// (a couple of minutes in the worst case) before runways reappeared, every
+// single time. Caching the last successful result means a restart shows real
+// runways immediately; loadRunways() still runs in the background regardless
+// to pick up the radar's newer copy, and a failed refresh just leaves the
+// already-displayed cached copy alone.
 const RUNWAY_CACHE_KEY = 'stratoscan_runways_v1';
+
+// The radar's copy says where it was built for (its "centre"). One built for
+// somewhere else -- the radar has moved and has not built the new one yet --
+// is not drawn. A copy from before #87 says nothing and is drawn as before.
+function runwaysAreHere(geojson) {
+  const c = geojson && geojson.centre;
+  if (!Array.isArray(c) || !home) return true;
+  return Math.abs(c[0] - home.lat) < 0.1 && Math.abs(c[1] - home.lon) < 0.1;
+}
 
 // Shared by both the cache-hit path (synchronous, fires before the other
 // map.on('load', ...) handlers below get their turn) and the network-fetch
@@ -3477,46 +3464,39 @@ function applyRunwayData(geojson) {
 function loadCachedRunways() {
   try {
     const cached = localStorage.getItem(RUNWAY_CACHE_KEY);
-    if (cached) applyRunwayData(JSON.parse(cached));
+    const geojson = cached && JSON.parse(cached);
+    if (geojson && runwaysAreHere(geojson)) applyRunwayData(geojson);
   } catch (e) {
     // corrupt/unavailable cache entry -- ignore, loadRunways() below repopulates it
   }
 }
 
-async function loadRunways(attempt = 1) {
-  const bb = rangeBBox(home.lat, home.lon, RANGE_NM);
-  const query = `[out:json][timeout:25];(way["aeroway"="runway"](${bb.south},${bb.west},${bb.north},${bb.east});way["aeroway"="taxiway"](${bb.south},${bb.west},${bb.north},${bb.east}););out body;>;out skel qt;`;
-
-  // A single failed/empty attempt used to mean no runways for the rest of
-  // the kiosk's uptime (this only ever ran once, on map load, with no
-  // retry) -- a transient Overpass hiccup or rate-limit at exactly the
-  // wrong moment (e.g. right as the kiosk boots) silently lost runways for
-  // a session that can run for days before the next reload. Retrying a
-  // bounded number of times with a generous backoff fixes that without
-  // hammering a shared public API.
-  const retry = () => { if (attempt < OVERPASS_MAX_ATTEMPTS) setTimeout(() => loadRunways(attempt + 1), OVERPASS_RETRY_MS); };
+let runwaysRetry = null;
+async function loadRunways() {
+  clearTimeout(runwaysRetry);
+  const forMap = map;
+  const retry = () => { runwaysRetry = setTimeout(loadRunways, RUNWAYS_RETRY_MS); };
 
   let geojson;
   try {
-    const res = await fetch(OVERPASS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'data=' + encodeURIComponent(query),
-      // The query's own [timeout:25] plus the trip: one that never answered
-      // ended the retries for the life of the page (#86).
-      signal: AbortSignal.timeout(30 * 1000),
-    });
-    if (!res.ok) { retry(); return; }
-    const data = await res.json();
-    geojson = overpassToGeoJSON(data.elements || []);
+    // no-cache: the browser keeps the answer but asks the radar whether it
+    // has changed (its ETag), so a copy rebuilt for a new place is never
+    // read from a cache older than it.
+    const res = await fetch(RUNWAYS_URL, { cache: 'no-cache', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+    if (!res.ok) { drain(res); retry(); return; }   // 404: not built yet
+    geojson = await res.json();
   } catch (e) {
-    retry(); // offline or Overpass unavailable this attempt -- map/radar work fine without runways meanwhile
+    retry(); // the radar not answering -- map/radar work fine without runways meanwhile
     return;
   }
-  if (geojson.features.length === 0) { retry(); return; }
+  if (!geojson || !Array.isArray(geojson.features) || !geojson.features.length || !runwaysAreHere(geojson)) {
+    retry();
+    return;
+  }
 
   try { localStorage.setItem(RUNWAY_CACHE_KEY, JSON.stringify(geojson)); } catch (e) {} // storage full/unavailable -- non-fatal, just skip caching this time
-  applyRunwayData(geojson);
+  // A map built since the request went out asks again when it loads.
+  if (map && map === forMap) applyRunwayData(geojson);
 }
 
 // ---- Storm radar overlay -----------------------------------------------
