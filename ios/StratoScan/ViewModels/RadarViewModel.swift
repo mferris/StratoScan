@@ -400,6 +400,16 @@ final class RadarViewModel: ObservableObject {
 
     private var networkTask: Task<Void, Never>?
     private var wantsViewNetwork: Bool { networkOn && !DemoFeed.isOn && (!hasRadar || beyondRadar || !connected) }
+    /// The radar, for a view of the network near it (#88, 2026-10-26): its
+    /// place while its polling answers, so that view comes from the copy
+    /// the radar keeps for its own screen. Not while the view is on the
+    /// phone: the phone's position never goes to the radar, and around it
+    /// the relay and adsb.lol are asked, rounded, as before.
+    private var radarForView: Coordinate? {
+        guard hasRadar, !DemoFeed.isOn, connected, Date().timeIntervalSince(lastGoodFetch) < staleInterval,
+              !(centreOnMe && me != nil) else { return nil }
+        return home
+    }
 
     private func pollRadar() async {
         do {
@@ -439,6 +449,7 @@ final class RadarViewModel: ObservableObject {
     /// seconds while it rests there; at once when it has moved.
     private func pollNetworkAroundView() async {
         let centre = viewCentre
+        let radar = radarForView
         let tiled = rangeNm > NetworkFeed.singleUpToNm
         // One disc follows the middle closely; a tiled view only once the middle
         // has moved a good way (a quarter of a disc), or the time is up.
@@ -456,7 +467,7 @@ final class RadarViewModel: ObservableObject {
         guard moved || Date().timeIntervalSince(viewNetworkFetchedAt) >= (tiled ? networkTiledInterval : networkInterval) else { return }
         viewNetworkFetchedAt = Date()
         viewNetworkCentre = centre
-        guard let list = await NetworkFeed.fetchView(around: centre, halfNm: rangeNm) else {
+        guard let list = await NetworkFeed.fetchView(around: centre, halfNm: rangeNm, radar: radar) else {
             if Date().timeIntervalSince(connectingSince) > connectGrace { connecting = false }
             return
         }

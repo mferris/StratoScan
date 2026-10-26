@@ -12,6 +12,11 @@ import Foundation
 /// the radars' discs of the world, of which it gets only the aircraft in its
 /// view. A phone may only take what a radar has fetched, so on a miss it
 /// asks adsb.lol itself, as before, and leaves that disc alone for a while.
+///
+/// A view near the owner's radar is asked of the radar before either (#88,
+/// 2026-10-26): it keeps the discs it fetched for its own screen, and asks
+/// adsb.lol for everyone who looks, so a phone looking where the kiosk looks
+/// costs adsb.lol nothing more. Only the view's rounded middle goes to it.
 enum NetworkFeed {
     /// adsb.lol answers point queries up to this radius.
     static let maxRadiusNm = 250
@@ -61,10 +66,15 @@ enum NetworkFeed {
     /// left out of this look.
     static let viewBudgetSeconds = 25.0
 
-    /// The aircraft over a view: every disc of `discs`, one after another,
-    /// merged by hex. A disc that is refused twice is left out; nil only when
-    /// none answered.
-    static func fetchView(around centre: Coordinate, halfNm: Double) async -> [(RawAircraft, Extra?)]? {
+    /// The aircraft over a view: from the owner's radar when `radar` (its
+    /// place, while it answers) is near enough and it has them (#88); else
+    /// every disc of `discs`, one after another, merged by hex. A disc that
+    /// is refused twice is left out; nil only when none answered.
+    static func fetchView(around centre: Coordinate, halfNm: Double, radar: Coordinate?) async -> [(RawAircraft, Extra?)]? {
+        if let radar, nearRadar(centre, halfNm: halfNm, radar: radar),
+           let got = await fromRadar(around: centre, halfNm: halfNm) {
+            return got
+        }
         let (discs, _) = self.discs(around: centre, halfNm: halfNm)
         if discs.count == 1 { return await fetch(around: discs[0].0, radiusNm: discs[0].1) }
         let deadline = Date().addingTimeInterval(viewBudgetSeconds)
@@ -106,9 +116,10 @@ enum NetworkFeed {
         return decode(data, within: nil)
     }
 
-    /// adsb.lol's answer, with each aircraft's registration and type; only
-    /// those within `within` (a relay that sent a whole disc).
-    private static func decode(_ data: Data, within: (Coordinate, Double)?) -> [(RawAircraft, Extra?)]? {
+    /// adsb.lol's answer, with each aircraft's registration and type (its
+    /// own, or `extras` from an answer that names them otherwise); only those
+    /// within `within` (a relay or a radar that sent more than the view).
+    private static func decode(_ data: Data, within: (Coordinate, Double)?, extras: [Extra]? = nil) -> [(RawAircraft, Extra?)]? {
         guard var list = try? JSONDecoder().decode(Response.self, from: data).ac else { return nil }
         if let (at, nm) = within {
             list = list.filter { a in
@@ -116,7 +127,7 @@ enum NetworkFeed {
                 return NetLattice.nm(at.lat, at.lon, lat, lon) <= nm
             }
         }
-        let extras = (try? JSONDecoder().decode(ExtraResponse.self, from: data).ac) ?? []
+        let extras = extras ?? (try? JSONDecoder().decode(ExtraResponse.self, from: data).ac) ?? []
         let byHex = Dictionary(extras.map { ($0.hex, $0) }, uniquingKeysWith: { a, _ in a })
         return list.map { ($0, byHex[$0.hex]) }
     }
@@ -154,5 +165,57 @@ enum NetworkFeed {
             missedAt[key] = Date()
         }
         return nil
+    }
+
+    // ---- the owner's radar (#88) ----
+
+    /// A view whose middle is this near the radar, and narrow enough for one
+    /// disc, is asked of the radar first: the discs it fetches for its own
+    /// screen are the ones round it.
+    static let radarNearNm = 100.0
+    /// The radar answers within 3 s with whatever it has (AROUND_WAIT_S): an
+    /// answer later than this isn't coming, and the relay is asked instead.
+    static let radarSeconds: TimeInterval = 5
+    /// An answer the radar has kept longer than this is not taken (as long as
+    /// it shows a disc's last answer, TILE_KEEP_S): the network's aircraft
+    /// are never old ones passed off as live (#86).
+    static let radarKeepSeconds = 120.0
+
+    /// The view is near enough to the radar at `radar` to ask it.
+    static func nearRadar(_ centre: Coordinate, halfNm: Double, radar: Coordinate) -> Bool {
+        halfNm <= singleUpToNm && NetLattice.nm(radar.lat, radar.lon, centre.lat, centre.lon) <= radarNearNm
+    }
+
+    /// network-compare.py's /network/around: adsb.lol's aircraft as the kiosk
+    /// draws them, the registration and type under names of their own, and
+    /// "pending" while more is on its way.
+    private struct RadarAnswer: Decodable {
+        struct Names: Decodable { let hex: String; let reg: String?; let type: String? }
+        let ac: [Names]?
+        let pending: Int?
+        let fetched: Double?
+    }
+
+    /// The view from the owner's radar, at the address its polling is using
+    /// (home, or its public one away): no look-up of its own, so a radar that
+    /// has gone quiet costs the view `radarSeconds` and no more. It gets the
+    /// middle rounded to 0.05°, as the relay and adsb.lol do, and the
+    /// half-size in whole nm. Whatever it has is taken, partial or still
+    /// filling in, kept to the disc the phone would have asked for; nil when
+    /// it has nothing to give: refused (429, 503), late, not its answer, too
+    /// old, or nothing yet with more on its way.
+    static func fromRadar(around centre: Coordinate, halfNm: Double) async -> [(RawAircraft, Extra?)]? {
+        let at = rounded(centre)
+        let path = String(format: "/network/around?lat=%.2f&lon=%.2f&half=%d", at.lat, at.lon, max(1, Int(halfNm.rounded())))
+        var req = URLRequest(url: APIConfig.url(path), timeoutInterval: radarSeconds)
+        req.setValue("1", forHTTPHeaderField: AircraftFeedClient.appHeader)
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        guard let (data, resp) = try? await URLSession.radar.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let answer = try? JSONDecoder().decode(RadarAnswer.self, from: data), let names = answer.ac,
+              !(names.isEmpty && (answer.pending ?? 0) > 0),
+              (answer.fetched ?? 0) <= radarKeepSeconds else { return nil }
+        return decode(data, within: (at, discs(around: centre, halfNm: halfNm).coveredNm),
+                      extras: names.map { Extra(hex: $0.hex, r: $0.reg, t: $0.type) })
     }
 }
