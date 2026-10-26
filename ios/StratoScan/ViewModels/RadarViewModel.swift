@@ -349,10 +349,11 @@ final class RadarViewModel: ObservableObject {
 
     private var runwaysTask: Task<Void, Never>?
 
-    /// The runway outlines: the phone's copy at once, and Overpass behind,
-    /// only when that copy is old or missing. Never in the way of the first
-    /// look at the radar, which used to wait on Overpass (over a minute of
-    /// "connecting" when it was overloaded, 2026-10-25).
+    /// The runway outlines: the phone's copy at once, and the radar's (or,
+    /// with neither, Overpass's) behind, only when that copy is old or
+    /// missing (#87). Never in the way of the first look at the radar, which
+    /// used to wait on Overpass (over a minute of "connecting" when it was
+    /// overloaded, 2026-10-25).
     private func loadRunways() {
         guard let home else { return }
         let ring = ringNm
