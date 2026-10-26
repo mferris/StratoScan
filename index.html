@@ -4245,6 +4245,9 @@ const WEB_FONTS_URL = 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:w
 {
   const link = document.createElement('link');
   link.rel = 'stylesheet';
+  // Google is not told whose page asked (2026-10-26): from the public page
+  // the referrer was the radar's public address, beside each visitor's IP.
+  link.referrerPolicy = 'no-referrer';
   link.href = WEB_FONTS_URL;
   link.addEventListener('load', () => {
     if (!document.fonts) return;
