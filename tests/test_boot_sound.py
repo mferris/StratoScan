@@ -33,9 +33,14 @@ spec = importlib.util.spec_from_file_location("setup_server", ROOT / "deploy" / 
 ss = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ss)
 tmp = pathlib.Path(tempfile.mkdtemp())
+# Read off RDU: 0x1000 after a replug (2026-10-23), 0x1020 after the weekly
+# patch restart (2026-10-26). HADPOR stays set through a reboot, so the reboot
+# bits beside it are what tell the two apart; an earlier version took HADPOR
+# alone as a power-on and would have played after that restart.
 for label, raw, want in (("power-on (0x1000, RDU after a replug)", b"\x00\x00\x10\x00", True),
-                         ("a watchdog or software reset", b"\x00\x00\x00\x20", False),
-                         ("power-on with other bits too", b"\x00\x00\x10\x05", True)):
+                         ("RDU's weekly patch restart (0x1020)", b"\x00\x00\x10\x20", False),
+                         ("a watchdog or software reset alone", b"\x00\x00\x00\x20", False),
+                         ("HADPOR with any other reset bit", b"\x00\x00\x10\x05", False)):
     (tmp / "rsts").write_bytes(raw)
     ss.RSTS_PATH = str(tmp / "rsts")
     check(ss.boot_info()["powerOn"] is want, f"boot_info reads {label} as powerOn={want}")

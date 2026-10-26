@@ -1384,10 +1384,15 @@ def set_name(v):
 
 
 # The Pi's reset flags at boot (the bootloader's copy of PM_RSTS). HADPOR, bit
-# 12, is set when the power came on; a reboot or a watchdog reset sets other
-# bits instead. RDU, 2026-10-23: 0x1000 after the owner replugged it.
+# 12, is set when the power came on, and it STAYS set through later reboots:
+# a reboot adds its own bit beside it. RDU read 0x1000 after the owner
+# replugged it (2026-10-23) and 0x1020 after the weekly patch restart
+# (2026-10-26, HADWRF, bit 5). So a power-on is HADPOR with none of the reset
+# bits below it; anything unexpected there counts as a restart, and the
+# take-off sound stays quiet rather than playing after one.
 RSTS_PATH = "/proc/device-tree/chosen/bootloader/rsts"
 RSTS_HADPOR = 0x1000
+RSTS_RESET_BITS = 0x0FFF
 
 
 def boot_info():
@@ -1403,7 +1408,8 @@ def boot_info():
             info["uptimeS"] = int(float(f.read().split()[0]))
     with contextlib.suppress(OSError, ValueError):
         with open(RSTS_PATH, "rb") as f:
-            info["powerOn"] = bool(int.from_bytes(f.read()[:4], "big") & RSTS_HADPOR)
+            rsts = int.from_bytes(f.read()[:4], "big")
+            info["powerOn"] = bool(rsts & RSTS_HADPOR) and not rsts & RSTS_RESET_BITS
     return info
 
 
