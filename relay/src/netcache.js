@@ -77,7 +77,12 @@ export const ROUTES_PER_ASK = 50;
 export const OWNER_TTL_S = 7 * 86400;
 export const LIMITS = { disc: 120, routes: 30, owner: 90 };   // per asker, per minute
 export const MEMBER_TTL_MS = 60_000;               // how long "is a member" is remembered
-export const tune = { upstreamGapMs: 250 };        // tests set it to 0
+// How long adsb.im and adsbdb are waited on (#86, 2026-10-26): less than the
+// askers wait for the relay (a phone 6 s for routes, a radar 8 s for owners),
+// so a slow answer still reaches the asker and the cache. At 9 s it could
+// arrive after the asker had hung up, which also stops the Worker before it
+// is cached, and the asker then went to the service itself anyway.
+export const tune = { upstreamGapMs: 250, routesMs: 5000, ownerMs: 6000 };   // tests shorten them
 
 const ADSB_IM = 'https://adsb.im/api/0/routeset';
 const ADSBDB = 'https://api.adsbdb.com/v0/aircraft/';
@@ -350,7 +355,7 @@ export function netRoutes({ json, readBody, nowS }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'User-Agent': USER_AGENT },
         body: JSON.stringify({ planes: misses }),
-        signal: AbortSignal.timeout(9000),
+        signal: AbortSignal.timeout(tune.routesMs),
       })).catch(() => null);
       if (!got || !got.ok) return upstreamDown(got ? got.status : 0, got ? await snippet(got) : 'unreachable');
       let list;
@@ -382,7 +387,7 @@ export function netRoutes({ json, readBody, nowS }) {
     const answer = v => (v === null ? json(404, { response: 'unknown aircraft' }) : json(200, v));
     if (hit) return answer(parse(hit.body));
     const got = await paced(() => fetchOf(env)(ADSBDB + hex, {
-      headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json' }, signal: AbortSignal.timeout(9000),
+      headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json' }, signal: AbortSignal.timeout(tune.ownerMs),
     })).catch(() => null);
     if (!got) return upstreamDown(0);
     let value;

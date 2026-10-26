@@ -177,67 +177,83 @@ async function deliver(env, unit, evs) {
   // Most important first, so a busy batch never crowds out an emergency.
   const rank = e => (e.kind === 'emergency' ? 0 : e.kind === 'test' ? 1 : 2);
   const ordered = [...evs].sort((a, b) => rank(a) - rank(b));
-  for (const phone of results || []) {
-    let wants = [];
-    try { wants = JSON.parse(phone.kinds); } catch { /* none */ }
-    // Approaches start and end Live Activities, handled apart from alerts. An
-    // approach to a phone's own location (roadmap 2.7) goes to that phone only.
-    // A phone near its radar can get both for the same aircraft in one batch
-    // (the radar's approach and its own); one countdown per aircraft is
-    // enough, so the first that it wants wins.
-    const seenHex = new Set();
-    const approaches = ordered.filter(x => {
-      if (x.kind !== 'approach' && x.kind !== 'approach_end') return false;
-      if (x.phone && x.phone !== phone.id) return false;
-      if (x.kind === 'approach' && !wants.includes(x.phone ? 'approach_me' : 'approach')) return false;
-      const k = x.kind + ':' + x.hex;
-      if (seenHex.has(k)) return false;
-      seenHex.add(k);
-      return true;
-    });
-    for (const e of approaches.slice(0, 2)) {
-      await liveActivity(env, phone, unit, e, wants);
-    }
-    // Nearby alerts by where the owner wants them about (#44): the radar's
-    // (no phone named), this phone's own (named), or both -- once each per
-    // aircraft. A phone that hasn't chosen gets the radar's, as before.
-    const aboutRadar = wants.includes('near_radar') || !wants.includes('near_me');
-    const aboutMe = wants.includes('near_me');
-    const seenNearby = new Set();
-    const mine = ordered.filter(e => {
-      if (e.kind === 'approach' || e.kind === 'approach_end') return false;
-      if (e.kind === 'test') return true;
-      if (!wants.includes(e.kind)) return false;
-      if (!NEARBY_KINDS.includes(e.kind)) return !e.phone;          // emergencies: about the aircraft
-      if (e.phone ? (e.phone !== phone.id || !aboutMe) : !aboutRadar) return false;
-      const k = e.kind + ':' + e.hex;
-      if (seenNearby.has(k)) return false;
-      seenNearby.add(k);
-      return true;
-    });
-    let dead = false;
-    for (const e of mine.slice(0, PUSHES_PER_BATCH)) {
-      const r = await pushTo(env, phone, apns.notificationFor(e, unit), e.kind === 'emergency' || e.kind === 'test');
-      if (r.dead) { dead = true; break; }
-    }
-    const rest = mine.length - PUSHES_PER_BATCH;
-    if (!dead && rest > 0) {
-      await pushTo(env, phone, apns.summaryFor(rest, unit), false);
-    }
-    // One write per phone per request: the free plan also caps D1 queries.
-    await db.prepare(
-      `UPDATE phones SET window_start = ?, window_count = ?${phone.dead ? ', token = NULL' : ''} WHERE id = ?`
-    ).bind(phone.window_start, phone.window_count, phone.id).run();
-  }
+  // Every phone at once, and the whole delivery within its time (#86,
+  // 2026-10-26): one phone after another, a phone whose pushes Apple sat on
+  // held back the alerts of every phone after it, and could use up the time
+  // Cloudflare allows before the later phones were reached at all.
+  const deadline = Date.now() + apns.tune.deliveryMs;
+  await Promise.allSettled((results || []).map(phone => deliverTo(env, unit, phone, ordered, deadline)));
 }
 
-async function liveActivity(env, phone, unit, e, wants) {
+async function deliverTo(env, unit, phone, ordered, deadline) {
+  const db = env.DB;
+  let wants = [];
+  try { wants = JSON.parse(phone.kinds); } catch { /* none */ }
+  // Approaches start and end Live Activities, handled apart from alerts. An
+  // approach to a phone's own location (roadmap 2.7) goes to that phone only.
+  // A phone near its radar can get both for the same aircraft in one batch
+  // (the radar's approach and its own); one countdown per aircraft is
+  // enough, so the first that it wants wins.
+  const seenHex = new Set();
+  const approaches = ordered.filter(x => {
+    if (x.kind !== 'approach' && x.kind !== 'approach_end') return false;
+    if (x.phone && x.phone !== phone.id) return false;
+    if (x.kind === 'approach' && !wants.includes(x.phone ? 'approach_me' : 'approach')) return false;
+    const k = x.kind + ':' + x.hex;
+    if (seenHex.has(k)) return false;
+    seenHex.add(k);
+    return true;
+  });
+  // Nearby alerts by where the owner wants them about (#44): the radar's
+  // (no phone named), this phone's own (named), or both -- once each per
+  // aircraft. A phone that hasn't chosen gets the radar's, as before.
+  const aboutRadar = wants.includes('near_radar') || !wants.includes('near_me');
+  const aboutMe = wants.includes('near_me');
+  const seenNearby = new Set();
+  const mine = ordered.filter(e => {
+    if (e.kind === 'approach' || e.kind === 'approach_end') return false;
+    if (e.kind === 'test') return true;
+    if (!wants.includes(e.kind)) return false;
+    if (!NEARBY_KINDS.includes(e.kind)) return !e.phone;          // emergencies: about the aircraft
+    if (e.phone ? (e.phone !== phone.id || !aboutMe) : !aboutRadar) return false;
+    const k = e.kind + ':' + e.hex;
+    if (seenNearby.has(k)) return false;
+    seenNearby.add(k);
+    return true;
+  });
+  // Live Activities and alerts go side by side (#86): a countdown push Apple
+  // sits on no longer holds back this phone's emergency. Each push takes its
+  // place in the hourly allowance before it waits, so the count stays right,
+  // and the row is written back once both are done.
+  await Promise.allSettled([
+    (async () => {
+      for (const e of approaches.slice(0, 2)) await liveActivity(env, phone, unit, e, wants, deadline);
+    })(),
+    (async () => {
+      let dead = false;
+      for (const e of mine.slice(0, PUSHES_PER_BATCH)) {
+        const r = await pushTo(env, phone, apns.notificationFor(e, unit), e.kind === 'emergency' || e.kind === 'test', deadline);
+        if (r.dead) { dead = true; break; }
+      }
+      const rest = mine.length - PUSHES_PER_BATCH;
+      if (!dead && rest > 0) {
+        await pushTo(env, phone, apns.summaryFor(rest, unit), false, deadline);
+      }
+    })(),
+  ]);
+  // One write per phone per request: the free plan also caps D1 queries.
+  await db.prepare(
+    `UPDATE phones SET window_start = ?, window_count = ?${phone.dead ? ', token = NULL' : ''} WHERE id = ?`
+  ).bind(phone.window_start, phone.window_count, phone.id).run();
+}
+
+async function liveActivity(env, phone, unit, e, wants, deadline) {
   const db = env.DB, now = nowS();
   if (e.kind === 'approach') {
     if (!wants.includes(e.phone ? 'approach_me' : 'approach')) return;
     const la = await db.prepare('SELECT start_token FROM live_activity_phones WHERE phone = ?').bind(phone.id).first();
     if (!la) return;                                    // this phone cannot start one (older iOS, or not allowed)
-    const r = await pushTo(env, phone, apns.approachStart(e, unit, la.start_token, now), false);
+    const r = await pushTo(env, phone, apns.approachStart(e, unit, la.start_token, now), false, deadline);
     if (r.dead) await db.prepare('DELETE FROM live_activity_phones WHERE phone = ?').bind(phone.id).run();
     return;
   }
@@ -254,19 +270,22 @@ async function liveActivity(env, phone, unit, e, wants) {
     }
     return;
   }
-  await pushTo(env, phone, apns.approachEnd(e, act.token, now), true);
+  await pushTo(env, phone, apns.approachEnd(e, act.token, now), true, deadline);
   await db.prepare('DELETE FROM live_activities WHERE phone = ? AND hex = ?').bind(phone.id, e.hex).run();
 }
 
 // One push to one phone, within its hourly allowance. Updates the in-memory
 // row only; the caller writes it back. Marks a token Apple calls dead.
-async function pushTo(env, phone, notification, exempt) {
+// With its delivery's time all but gone (#86), nothing is sent or counted.
+async function pushTo(env, phone, notification, exempt, deadline = Infinity) {
   const now = nowS();
+  const timeoutMs = Math.min(apns.tune.sendMs, deadline - Date.now());
+  if (timeoutMs < apns.tune.sendMs / 10) return { ok: false, reason: 'out of time' };
   if (now - phone.window_start >= 3600) { phone.window_start = now; phone.window_count = 0; }
   const cap = exempt ? PUSHES_PER_HOUR_HARD : PUSHES_PER_HOUR;
   if (phone.window_count >= cap) return { ok: false, reason: 'rate limited' };
   phone.window_count += 1;
-  const r = await apns.send(env, phone, notification, now, env.APNS_FETCH || fetch);
+  const r = await apns.send(env, phone, notification, now, env.APNS_FETCH || fetch, timeoutMs);
   // A dead Live Activity token says nothing about the phone's alert token.
   if (r.dead && !notification.token) phone.dead = true;
   return r;
@@ -318,7 +337,7 @@ async function phoneRegister(request, env) {
 
 // The phone reports the update token of a Live Activity it just started, so
 // the relay can end it after the aircraft has passed.
-async function phoneActivity(request, env) {
+async function phoneActivity(request, env, ctx) {
   const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env);
   if (error) return error;
   const { unit, hex, token } = payload;
@@ -336,9 +355,14 @@ async function phoneActivity(request, env) {
   if (ended && apns.configured(env)) {
     const phone = await db.prepare('SELECT * FROM phones WHERE id = ?').bind(auth.unit).first();
     if (phone) {
-      await pushTo(env, phone, apns.approachEnd({ hex }, token, now), true);
-      await db.prepare('UPDATE phones SET window_start = ?, window_count = ? WHERE id = ?')
-        .bind(phone.window_start, phone.window_count, phone.id).run();
+      // Sent after the reply, as events' pushes are (#86, 2026-10-26): the
+      // phone's report never waits on Apple.
+      const ending = (async () => {
+        await pushTo(env, phone, apns.approachEnd({ hex }, token, now), true);
+        await db.prepare('UPDATE phones SET window_start = ?, window_count = ? WHERE id = ?')
+          .bind(phone.window_start, phone.window_count, phone.id).run();
+      })().catch(() => {});
+      if (ctx && ctx.waitUntil) ctx.waitUntil(ending); else await ending;
     }
     await db.batch([
       db.prepare('DELETE FROM live_activity_ends WHERE phone = ? AND hex = ?').bind(auth.unit, hex),
@@ -368,6 +392,9 @@ async function phoneTest(request, env) {
   await env.DB.prepare(
     `UPDATE phones SET window_start = ?, window_count = ?${phone.dead ? ', token = NULL' : ''} WHERE id = ?`
   ).bind(phone.window_start, phone.window_count, phone.id).run();
+  // Apple not answering is said as that, and well before the phone gives up
+  // (15 s) and blames its own connection (#86, 2026-10-26).
+  if (r.reason === 'timed out') return json(504, { error: 'Apple’s notification service did not answer in time. Try again in a few minutes.' });
   if (!r.ok) return json(r.reason === 'rate limited' ? 429 : 502, {
     error: r.reason === 'rate limited' ? 'Too many notifications this hour; try again later.'
                                        : `Apple did not accept it (${r.reason || r.status}).` });
@@ -775,7 +802,7 @@ async function route(request, env, ctx) {
   if (pathname === '/v1/phone/unpair' && m === 'POST') return phoneUnpair(request, env);
   if (pathname === '/v1/phone/register' && m === 'POST') return phoneRegister(request, env);
   if (pathname === '/v1/phone/test' && m === 'POST') return phoneTest(request, env);
-  if (pathname === '/v1/phone/activity' && m === 'POST') return phoneActivity(request, env);
+  if (pathname === '/v1/phone/activity' && m === 'POST') return phoneActivity(request, env, ctx);
   if (pathname === '/v1/unit/boxkey' && m === 'POST') return unitBoxKey(request, env);
   if (pathname === '/v1/unit/locations' && m === 'GET') return unitLocations(request, env);
   if (pathname === '/v1/phone/boxkey' && m === 'POST') return phoneBoxKey(request, env);
