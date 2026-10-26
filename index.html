@@ -3955,7 +3955,7 @@ async function refreshOnboarding() {
   if (hs.active && hs.ssid) {
     steps.push(`On your phone, join the WiFi network <b>${esc(hs.ssid)}</b>` +
                (hs.psk ? ` using password <b>${esc(hs.psk)}</b>` : ''));
-    // Never hardcode this address. The first version printed 192.168.4.1,
+    // Never hardcode this address. The first version printed a fixed one,
     // which was just the development network's router -- anyone following it
     // reached nothing at all. Use whatever the hotspot is really serving on.
     const hsAddr = hs.address || addr;
