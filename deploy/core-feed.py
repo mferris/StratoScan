@@ -20,6 +20,10 @@ alerts use -- and the lookups are made once and cached.
                                   network-compare.py only because a client
                                   asked -- that service's promise that nothing
                                   contacts the network on its own still holds
+    GET /api/trails               where each aircraft has been (#84)
+    GET /api/runways              the runway outlines round the radar, as
+                                  offline-map.py keeps them (#87): from disk,
+                                  never fetched while a screen waits
 
 Safe to publish: no antenna-relative field (r_dst, r_dir) and no receiver
 position leaves this service, so the feed can't locate the receiver; the
@@ -31,6 +35,7 @@ aircraft) run in a background thread, batched and cached in memory the way
 the page did them; the feed never waits on them, it carries whatever is
 known so far. Nothing is written to disk, so no SD-card wear.
 """
+import hashlib
 import http.server
 import json
 import math
@@ -54,6 +59,7 @@ except Exception:                   # an image without it, or a test
 LISTEN = ("127.0.0.1", int(os.environ.get("STRATOSCAN_CORE_PORT", "8088")))
 AIRCRAFT_JSON = os.environ.get("STRATOSCAN_AIRCRAFT_JSON", "/run/readsb/aircraft.json")
 RECEIVER_JSON = os.environ.get("STRATOSCAN_RECEIVER_JSON", "/run/readsb/receiver.json")
+RUNWAYS_FILE = os.environ.get("STRATOSCAN_RUNWAYS_FILE", "/var/www/html/offline-map/runways.geojson")
 NETWORK_URL = os.environ.get("STRATOSCAN_NETWORK_URL", "http://127.0.0.1:8087/network")
 ROUTE_API = os.environ.get("STRATOSCAN_ROUTE_API", "https://adsb.im/api/0/routeset")
 OWNER_API = os.environ.get("STRATOSCAN_OWNER_API", "https://api.adsbdb.com/v0/aircraft/{hex}")
@@ -463,6 +469,62 @@ class Trails:
         return {"now": round(now, 1), "keepS": TRAIL_KEEP_S, "trails": out}
 
 
+# ---- runway outlines (#87) ---------------------------------------------------
+# offline-map.py fetches them from Overpass about once a month, for a box
+# round the receiver rounded to 0.05 degrees, and keeps them on disk; the
+# kiosk, the public page and the app read them here instead of each asking
+# Overpass. Read from the file, never fetched while a screen waits: missing,
+# or for another place (the radar has moved and the new ones aren't in yet),
+# it is 404, and a screen keeps the copy it has.
+RUNWAYS_MAX_AGE_S = 3600     # how long a screen may keep an answer without asking
+RUNWAYS_MAX_BYTES = 32 << 20
+
+
+def runway_centre(lat, lon):
+    """offline-map.py's: the receiver rounded to 0.05 degrees."""
+    return round(round(float(lat) * 20) / 20, 2), round(round(float(lon) * 20) / 20, 2)
+
+
+class Runways:
+    """The outlines file, kept in memory while it is unchanged on disk."""
+
+    def __init__(self, path=None):
+        self.path = path or RUNWAYS_FILE
+        self.lock = threading.Lock()
+        self.key = self.got = None
+
+    def get(self):
+        """(bytes, etag, centre) as the file has them, or None."""
+        try:
+            st = os.stat(self.path)
+        except OSError:
+            return None
+        key = (st.st_mtime_ns, st.st_size, st.st_ino)
+        with self.lock:
+            if key != self.key:
+                try:
+                    with open(self.path, "rb") as f:
+                        raw = f.read(RUNWAYS_MAX_BYTES + 1)
+                    if len(raw) > RUNWAYS_MAX_BYTES:
+                        raise ValueError("too big")
+                    lat, lon = json.loads(raw)["centre"]
+                    self.got = (raw, '"%s"' % hashlib.sha256(raw).hexdigest()[:32], (float(lat), float(lon)))
+                except (OSError, ValueError, KeyError, TypeError):
+                    self.got = None
+                self.key = key
+            return self.got
+
+    def for_place(self, home):
+        """The outlines if they are for this receiver position, else None."""
+        got = self.get()
+        if not got or not home:
+            return None
+        want = runway_centre(*home)
+        if abs(got[2][0] - want[0]) > 1e-6 or abs(got[2][1] - want[1]) > 1e-6:
+            return None
+        return got
+
+
 class Feed:
     def __init__(self, lookups=None, uat=None, sightings=None, trails=True):
         self.types = labels.TypeDb()
@@ -475,6 +537,7 @@ class Feed:
         self._network_worker = None     # the one refresh of the network's aircraft running, if any
         self.lock = threading.Lock()
         self.trails = Trails()
+        self.runways = Runways()
         if trails:
             threading.Thread(target=self._trail_loop, daemon=True).start()
 
@@ -629,20 +692,39 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def version_string(self):
         return "StratoScan"
 
-    def _send(self, code, body, ctype="application/json"):
+    def _send(self, code, body, ctype="application/json", cache="no-store", etag=None):
         raw = json.dumps(body, separators=(",", ":")).encode() if not isinstance(body, bytes) else body
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(raw)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", cache)
+        if etag:
+            self.send_header("ETag", etag)
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(raw)
+
+    def _runways(self):
+        got = FEED.runways.for_place(FEED._receiver())
+        if not got:
+            return self._send(404, {"error": "not built"})
+        raw, etag, _ = got
+        cache = f"max-age={RUNWAYS_MAX_AGE_S}"
+        asked = [t.strip() for t in (self.headers.get("If-None-Match") or "").split(",")]
+        if etag in asked or "*" in asked:
+            self.send_response(304)       # the copy the screen has is this one
+            self.send_header("Cache-Control", cache)
+            self.send_header("ETag", etag)
+            self.end_headers()
+            return
+        return self._send(200, raw, cache=cache, etag=etag)
 
     def do_GET(self):
         url = urllib.parse.urlsplit(self.path)
         if url.path == "/api/trails":
             return self._send(200, FEED.trails.payload(_now()))
+        if url.path == "/api/runways":
+            return self._runways()
         if url.path != "/api/aircraft":
             return self._send(404, {"error": "not found"})
         q = urllib.parse.parse_qs(url.query)
@@ -667,7 +749,7 @@ def main():
     global FEED
     FEED = Feed()
     srv = http.server.ThreadingHTTPServer(LISTEN, Handler)
-    print(f"core: serving /api/aircraft and /api/trails on {LISTEN[0]}:{LISTEN[1]}", flush=True)
+    print(f"core: serving /api/aircraft, /api/trails and /api/runways on {LISTEN[0]}:{LISTEN[1]}", flush=True)
     srv.serve_forever()
 
 

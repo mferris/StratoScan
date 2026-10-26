@@ -600,9 +600,12 @@ def maybe_build_offline_map():
     spec = importlib.util.spec_from_file_location("offline_map", OFFLINE_MAP)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    if mod.needs_build() is None:
+    # The runway outlines are kept with it (#87): fetched when missing, a
+    # month old or for somewhere else, without rebuilding a current map.
+    runways = getattr(mod, "needs_runways", lambda: None)()
+    if mod.needs_build() is None and runways is None:
         return
-    print("health: offline map missing or out of date; building", flush=True)
+    print("health: offline map or runway outlines missing or out of date; fetching", flush=True)
     # --no-block: systemd-run otherwise waits for a oneshot to finish, which
     # held this loop for its 30 s whenever a build began (#86, 2026-10-26).
     # A oneshot has no start limit of its own, so it gets one.

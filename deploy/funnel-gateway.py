@@ -211,9 +211,11 @@ CSP_DIRECTIVES = (
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' data: https://fonts.gstatic.com",
     "img-src 'self' data: blob: https:",    # map tiles and sprites, overlay tiles, the aircraft photos
+    # No Overpass since #87 (2026-10-26): the page reads the radar's runway
+    # outlines from /api/runways.
     "connect-src 'self' https://tiles.openfreemap.org https://api.open-meteo.com "
     "https://api.rainviewer.com https://tilecache.rainviewer.com https://*.rainviewer.com "
-    "https://realearth.ssec.wisc.edu https://overpass-api.de https://fonts.googleapis.com "
+    "https://realearth.ssec.wisc.edu https://fonts.googleapis.com "
     "https://api.planespotters.net",   # the public page asks planespotters itself (their terms)
     "media-src 'self' blob:",
     "manifest-src 'self'",

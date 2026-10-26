@@ -1,6 +1,6 @@
 # StratoScan privacy policy
 
-*Last updated 2026-10-25.*
+*Last updated 2026-10-26.*
 
 StratoScan is an open-source radar for the aircraft flying over your home,
 built around a receiver you own. This page covers the StratoScan radar, the
@@ -81,6 +81,12 @@ turn on:
 - **Map tiles, routes, photos and weather** are fetched from the public
   services credited on the radar and in the app. Like any web request,
   they see an IP address and the area or aircraft being looked up.
+- **Runway outlines** (since 2026-10-26): about once a month the radar asks
+  OpenStreetMap's Overpass service for the runways and taxiways in a box
+  about 45 nm across, centred on its location rounded to about 5 km. It
+  keeps them and hands them to its own screen, its public page and the app,
+  so none of those asks Overpass. Overpass sees that area and the radar's
+  IP address, like any web request.
 - **Aircraft photos.** The radar's screen gets a photo through the radar,
   which asks planespotters.net; a browser looking at the radar's page, and the
   app, ask planespotters.net directly, so planespotters sees that browser's
@@ -158,10 +164,12 @@ every radar and phone (the app sends each flight's callsign and position
 rounded to 0.1°, about 10 km); otherwise from adsb.im directly. It is the
 aircraft's position, never yours.
 
-**Runway outlines** on the map come from OpenStreetMap's Overpass service.
-The app asks for the area round your radar, with its middle rounded to about
-5 km, keeps the outlines on the phone, and asks again at most once a month.
-Overpass sees that area and your IP address, like any web request.
+**Runway outlines** on the map come from your radar, which keeps a copy from
+OpenStreetMap's Overpass service (above). Only when the app can't reach your
+radar and has no copy of its own does it ask Overpass itself: for the area
+round your radar, with its middle rounded to about 5 km. It keeps the
+outlines on the phone and asks again at most once a month. Overpass then
+sees that area and your IP address, like any web request.
 
 **Airline logos** (since 2026-10-08). To show an airline's mark beside its
 name, the app (and the small extension that dresses an alert before it is
