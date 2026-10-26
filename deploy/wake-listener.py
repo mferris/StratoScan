@@ -586,16 +586,52 @@ def _is_input(ev_type):
     return ev_type in (EV_KEY, EV_REL, EV_ABS)
 
 
+_input_file_lock = threading.Lock()   # a touch noted mustn't be dated back by _note_watching
+
+
 def _note_input(path=None, now=None):
     global _input_at
     _input_at = time.monotonic() if now is None else now
     path = path or LAST_INPUT
-    try:
-        with open(path, "a"):
+    with _input_file_lock:
+        try:
+            with open(path, "a"):
+                pass
+            os.utime(path, None)
+        except OSError:
             pass
-        os.utime(path, None)
+
+
+def _note_watching(path=None):
+    """Tell screen-resume.sh that input is being watched, before anyone has
+    touched anything: LAST_INPUT, dated 1970, unless it is there already.
+
+    A boot empties XDG_RUNTIME_DIR, and with no LAST_INPUT the script wakes
+    the panel for any activity. So after RDU's weekly restart (2026-10-26),
+    with nobody home to touch it, the quiet chimes that don't light the
+    panel by design (a take-off or landing at the airport, an aircraft
+    first seen here, lightning) lit it for 20 minutes each. Only a listener
+    that can read a device able to report input says so; one that can read
+    nothing leaves the file missing, and activity still wakes the panel."""
+    path = path or LAST_INPUT
+    with _input_file_lock:
+        if os.path.exists(path):
+            return
+        try:
+            with open(path, "a"):
+                pass
+            os.utime(path, (0, 0))
+        except OSError:
+            pass
+
+
+def _reports_input(d):
+    """The device can report real input (a touchscreen, keys, the dials),
+    not only switches like an HDMI jack."""
+    try:
+        return any(_is_input(t) for t in d.capabilities())
     except OSError:
-        pass
+        return False
 
 
 def _input_watch(evdev=None, rounds=None):
@@ -625,6 +661,8 @@ def _input_watch(evdev=None, rounds=None):
                 except OSError:
                     continue
                 devices[d.fd] = d
+                if _reports_input(d):
+                    _note_watching()
         if not devices:
             time.sleep(INPUT_RESCAN_S if rounds is None else 0)
             continue
