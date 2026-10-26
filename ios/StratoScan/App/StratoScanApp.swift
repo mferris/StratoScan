@@ -13,6 +13,9 @@ struct StratoScanApp: App {
         // Start watching the network now, so the first look-up for the radar
         // knows whether the phone is on WiFi rather than guessing (2026-10-25).
         _ = Endpoint.shared
+        // The public address is learned at home only from a radar paired here
+        // (2026-10-26); the widget and the Watch don't learn it themselves.
+        Endpoint.shared.pairedUnits = { PairingStore.savedUnits() }
     }
 
     var body: some Scene {

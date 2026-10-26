@@ -50,9 +50,9 @@ final class PairingStore: ObservableObject {
     }
 
     /// The radars paired on this phone, by unit id, as saved: for the
-    /// location report, which may run in the background with no store about
-    /// (2026-10-26). The relay never adds to this list; refresh() only takes
-    /// from it.
+    /// location report, which may run in the background with no store about,
+    /// and for the public address learned at home (2026-10-26). The relay
+    /// never adds to this list; refresh() only takes from it.
     nonisolated static func savedUnits() -> Set<String> {
         struct Saved: Decodable { let unit: String }
         guard let data = UserDefaults.standard.data(forKey: storeKey),

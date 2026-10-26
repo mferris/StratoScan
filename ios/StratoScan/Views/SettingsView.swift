@@ -37,11 +37,16 @@ struct SettingsView: View {
                             .multilineTextAlignment(.trailing)
                             .keyboardType(.URL).autocapitalization(.none).disableAutocorrection(true)
                     }
+                    // A different public address from the radar at home is
+                    // only offered, never swapped in (2026-10-26).
+                    if let offered = APIConfig.awayOffered, awayURL != offered {
+                        Button("Use the address your radar gives (\(URL(string: offered)?.host ?? offered))") { awayURL = offered }
+                    }
                     LabeledContent("Using now", value: viewModel.isDemo ? "Demo" : (viewModel.viaAway ? "Away address" : "Home address"))
                 } header: {
                     Text("Radar view")
                 } footer: {
-                    Text("The app reads your radar at its home address on your WiFi, and through its public HTTPS page (the away address) from anywhere else. The away address is filled in by itself when the radar has one: turn on its public page in the radar's setup under Remote access. Alerts don't depend on either; they arrive wherever you are.")
+                    Text("The app reads your radar at its home address on your WiFi, and through its public HTTPS page (the away address) from anywhere else. The away address is filled in by itself when a radar paired with this phone has one: turn on its public page in the radar's setup under Remote access. If the radar later gives a different one, it is offered here, and used only once you choose it. Alerts don't depend on either; they arrive wherever you are.")
                 }
 
                 Section {

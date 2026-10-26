@@ -14,7 +14,9 @@ enum RadarFinder {
     static func find(pairing: PairingStore, timeout: TimeInterval = 4) async -> String? {
         let units = await MainActor.run { Set(pairing.radars.map(\.unit)) }
         guard !units.isEmpty else { return nil }
-        for host in await browse(timeout: timeout) {
+        // Only a home-network address (2026-10-26): the one found becomes the
+        // radar view's home address, and anything on the network may answer.
+        for host in await browse(timeout: timeout) where RadarSetup.isPrivateHost(host) {
             if let unit = await helloUnit(host), units.contains(unit) {
                 await MainActor.run { pairing.setHost(host, unit: unit) }
                 return "http://\(host)"
