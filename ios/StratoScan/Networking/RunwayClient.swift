@@ -66,7 +66,7 @@ enum RunwayClient {
         req.httpBody = "data=\(query)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed).map { Data($0.utf8) }
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: req)
+            let (data, response) = try await URLSession.bounded.data(for: req)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
             let parsed = try JSONDecoder().decode(OverpassResponse.self, from: data)
             let geojson = buildGeoJSON(parsed.elements)

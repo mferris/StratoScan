@@ -32,7 +32,8 @@ struct Provider: TimelineProvider {
     }
 
     private func load() async -> Entry {
-        let nearby = try? await Nearby.load()
+        // inside WidgetKit's time (#86): "not reachable" beats an old entry
+        let nearby = await Nearby.load(within: Nearby.widgetSeconds)
         return Entry(date: .now, nearby: nearby, demo: DemoFeed.isOn)
     }
 }

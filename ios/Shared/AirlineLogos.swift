@@ -45,7 +45,7 @@ enum AirlineLogos {
         for url in urls(for: domain) {
             var req = URLRequest(url: url, timeoutInterval: 8)
             req.setValue("StratoScan/1.0 (iOS app)", forHTTPHeaderField: "User-Agent")
-            guard let (data, resp) = try? await URLSession.shared.data(for: req),
+            guard let (data, resp) = try? await URLSession.bounded.data(for: req),
                   (resp as? HTTPURLResponse)?.statusCode == 200,
                   let img = UIImage(data: data), img.size.width >= 32 else { continue }
             // Google answers a generic globe for a site it has no icon for;

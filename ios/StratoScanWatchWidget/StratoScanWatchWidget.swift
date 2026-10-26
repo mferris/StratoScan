@@ -11,11 +11,11 @@ struct WatchEntry: TimelineEntry {
 struct WatchProvider: TimelineProvider {
     func placeholder(in context: Context) -> WatchEntry { WatchEntry(date: .now, nearby: nil) }
     func getSnapshot(in context: Context, completion: @escaping (WatchEntry) -> Void) {
-        Task { completion(WatchEntry(date: .now, nearby: try? await Nearby.load())) }
+        Task { completion(WatchEntry(date: .now, nearby: await Nearby.load(within: Nearby.widgetSeconds))) }
     }
     func getTimeline(in context: Context, completion: @escaping (Timeline<WatchEntry>) -> Void) {
         Task {
-            let entry = WatchEntry(date: .now, nearby: try? await Nearby.load())
+            let entry = WatchEntry(date: .now, nearby: await Nearby.load(within: Nearby.widgetSeconds))
             // The Watch budgets complication refreshes; every 15 minutes is its norm.
             completion(Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(15 * 60))))
         }

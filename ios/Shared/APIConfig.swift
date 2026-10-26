@@ -54,6 +54,26 @@ enum APIConfig {
     }
 }
 
+/// Every request the apps make goes through one of these (#86, 2026-10-26),
+/// never URLSession.shared. A request's own timeoutInterval is only how long
+/// it may go quiet, and .shared gives a request that keeps trickling 7 days
+/// in all; these give up on it, however it is going, after a set time.
+extension URLSession {
+    /// The radar's answers, which the radar view, a widget, the Watch or a
+    /// setting waits on: 12 s in all (its public gateway gives up on the
+    /// radar itself after 10).
+    static let radar = capped(at: 12)
+    /// Everything else (the relay, adsb.lol, Overpass, airline marks, photos,
+    /// weather, the radar's larger files): 30 s in all.
+    static let bounded = capped(at: 30)
+
+    private static func capped(at seconds: TimeInterval) -> URLSession {
+        let c = URLSessionConfiguration.default
+        c.timeoutIntervalForResource = seconds
+        return URLSession(configuration: c)
+    }
+}
+
 /// Chooses home or away: home when it answers quickly, else away. The choice
 /// is kept for a minute, and dropped at once when the phone's network changes
 /// (WiFi to cellular and back) or a fetch fails. When home doesn't answer and
@@ -72,6 +92,7 @@ final class Endpoint: @unchecked Sendable {     // its state is behind `lock`
     private var onLocalNetwork = false
     private var pathKnown = false       // until the monitor's first report, assume it may be local
     private var foundAt = Date.distantPast
+    private var inFlight: Task<String, Never>?
     private let monitor = NWPathMonitor()
 
     /// Set by the app (not the widget or the Watch): finds a paired radar on
@@ -102,6 +123,23 @@ final class Endpoint: @unchecked Sendable {     // its state is behind `lock`
     @discardableResult
     func resolve(maxAge: TimeInterval = 60) async -> String {
         if let b = lock.withLock({ Date().timeIntervalSince(checkedAt) < maxAge ? chosen : nil }) { return b }
+        // One look-up at a time (#86, 2026-10-26): the radar view, its trails,
+        // the logbook and the notable names all ask as the app opens, and each
+        // used to ask both addresses for itself.
+        let pending: Task<String, Never> = lock.withLock {
+            if let t = inFlight { return t }
+            let t = Task {
+                let b = await self.lookUp()
+                self.lock.withLock { self.inFlight = nil }
+                return b
+            }
+            inFlight = t
+            return t
+        }
+        return await pending.value
+    }
+
+    private func lookUp() async -> String {
         let home = APIConfig.baseURL
         let away = APIConfig.awayURL
         // Home and the public address are asked at once (2026-10-25). One after
@@ -166,7 +204,7 @@ final class Endpoint: @unchecked Sendable {     // its state is behind `lock`
         guard let url = URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/tar1090/data/receiver.json") else { return false }
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout)
         req.httpMethod = "GET"
-        guard let (_, resp) = try? await URLSession.shared.data(for: req) else { return false }
+        guard let (_, resp) = try? await URLSession.radar.data(for: req) else { return false }
         return (resp as? HTTPURLResponse)?.statusCode == 200
     }
 
@@ -175,7 +213,7 @@ final class Endpoint: @unchecked Sendable {     // its state is behind `lock`
     private func learnAway(from home: String) async {
         struct Hello: Decodable { let publicUrl: String? }
         guard let url = URL(string: home.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/setup/api/hello"),
-              let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 3)),
+              let (data, resp) = try? await URLSession.radar.data(for: URLRequest(url: url, timeoutInterval: 3)),
               (resp as? HTTPURLResponse)?.statusCode == 200,
               let hello = try? JSONDecoder().decode(Hello.self, from: data) else { return }
         if let pub = hello.publicUrl, pub.hasPrefix("https://"), pub != APIConfig.awayURL {

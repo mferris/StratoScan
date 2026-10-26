@@ -204,7 +204,7 @@ final class PairingStore: ObservableObject {
         }
         for radar in radars {
             guard let host = radar.host, let url = URL(string: "http://\(host)/setup/api/hello"),
-                  let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 3)),
+                  let (data, resp) = try? await URLSession.radar.data(for: URLRequest(url: url, timeoutInterval: 3)),
                   (resp as? HTTPURLResponse)?.statusCode == 200,
                   let hello = try? JSONDecoder().decode(Hello.self, from: data)
             else { continue }

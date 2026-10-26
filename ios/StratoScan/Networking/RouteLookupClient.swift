@@ -78,9 +78,10 @@ final class RouteLookupClient {
             if data == nil {
                 var req = URLRequest(url: routeAPIURL)
                 req.httpMethod = "POST"
+                req.timeoutInterval = 10      // not iOS's 60 s: the batch's callsigns wait on it (#86)
                 req.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 req.httpBody = try JSONEncoder().encode(RequestBody(planes: batch.map { PlaneQuery(callsign: $0.callsign, lat: $0.lat, lng: $0.lon) }))
-                let (direct, response) = try await URLSession.shared.data(for: req)
+                let (direct, response) = try await URLSession.bounded.data(for: req)
                 guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
                 data = direct
             }

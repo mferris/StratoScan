@@ -12,15 +12,28 @@ actor AircraftTypeClient {
     private var typeCodeTable: [String: String] = [:]
     private var shardCache: [String: Task<[String: JSONValue]?, Never>] = [:]
     private var hexTypeCache: [String: String?] = [:]
+    private var warmedAt = Date.distantPast
 
     func warmUp() async {
+        warmedAt = Date()
         await discoverDatabaseFolder()
         await loadTypeCodeTable()
     }
 
+    /// Each of the radar's files with a time limit of its own (#86,
+    /// 2026-10-26): they were asked with iOS's 60 s default and no limit in
+    /// all, and every untyped aircraft's look-up waited on the same shard.
+    private static func get(_ path: String) async throws -> Data {
+        let (data, resp) = try await URLSession.bounded.data(for: URLRequest(url: APIConfig.url(path), timeoutInterval: 8))
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+        return data
+    }
+
     private func discoverDatabaseFolder() async {
+        // on the address the radar answers at, not whatever was last chosen
+        await Endpoint.shared.resolve()
         do {
-            let (data, _) = try await URLSession.shared.data(from: APIConfig.url("/tar1090/index.html"))
+            let data = try await Self.get("/tar1090/index.html")
             guard let html = String(data: data, encoding: .utf8) else { return }
             if let range = html.range(of: #"databaseFolder\s*=\s*"([^"]+)""#, options: .regularExpression) {
                 let match = String(html[range])
@@ -36,7 +49,7 @@ actor AircraftTypeClient {
     private func loadTypeCodeTable() async {
         guard let databaseFolder else { return }
         do {
-            let (data, _) = try await URLSession.shared.data(from: APIConfig.url("/tar1090/\(databaseFolder)/icao_aircraft_types2.js"))
+            let data = try await Self.get("/tar1090/\(databaseFolder)/icao_aircraft_types2.js")
             guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: [Any]] else { return }
             for (code, entry) in dict {
                 if let typeLong = entry.first as? String {
@@ -63,14 +76,16 @@ actor AircraftTypeClient {
         guard let databaseFolder else { return nil }
         let task = Task<[String: JSONValue]?, Never> {
             do {
-                let (data, _) = try await URLSession.shared.data(from: APIConfig.url("/tar1090/\(databaseFolder)/\(bkey).js"))
+                let data = try await Self.get("/tar1090/\(databaseFolder)/\(bkey).js")
                 return try JSONDecoder().decode([String: JSONValue].self, from: data)
             } catch {
                 return nil
             }
         }
         shardCache[bkey] = task
-        return await task.value
+        let shard = await task.value
+        if shard == nil { shardCache[bkey] = nil }      // asked again for the next aircraft
+        return shard
     }
 
     /// Walks the same prefix-trie structure tar1090 stores its hex database
@@ -78,6 +93,9 @@ actor AircraftTypeClient {
     /// or a "children" list naming deeper shards to descend into.
     func lookupType(hex: String) async -> String? {
         if let cached = hexTypeCache[hex] { return cached }
+        // Not found at launch (the radar out of reach then): looked for again
+        // a minute later, not left off for the rest of the session.
+        if databaseFolder == nil, Date().timeIntervalSince(warmedAt) > 60 { await warmUp() }
         guard databaseFolder != nil else { return nil }
 
         let icao = hex.uppercased()

@@ -28,7 +28,19 @@ struct MapBackgroundView: UIViewRepresentable {
 
     private static let styleURL = URL(string: "https://tiles.openfreemap.org/styles/liberty")!
 
+    /// MapLibre's own requests (the map's style, tiles, glyphs and sprites,
+    /// and the weather tiles) with their limits set here, not left to the
+    /// library's defaults (#86, 2026-10-26): 15 s quiet, 30 s in all. Set once,
+    /// before the first map is made, as MapLibre asks.
+    private static let mapRequestLimits: Void = {
+        let c = (MLNNetworkConfiguration.sharedManager.sessionConfiguration.copy() as? URLSessionConfiguration) ?? .default
+        c.timeoutIntervalForRequest = 15
+        c.timeoutIntervalForResource = 30
+        MLNNetworkConfiguration.sharedManager.sessionConfiguration = c
+    }()
+
     func makeUIView(context: Context) -> MLNMapView {
+        _ = Self.mapRequestLimits
         let map = MLNMapView(frame: .zero, styleURL: Self.styleURL)
         map.setCenter(CLLocationCoordinate2D(latitude: center.lat, longitude: center.lon), zoomLevel: zoom, animated: false)
         map.isUserInteractionEnabled = false
@@ -111,7 +123,7 @@ struct MapBackgroundView: UIViewRepresentable {
                 let host: String
                 let radar: Radar
             }
-            guard let (data, _) = try? await URLSession.shared.data(from: Self.rainViewerAPI),
+            guard let (data, _) = try? await URLSession.bounded.data(for: URLRequest(url: Self.rainViewerAPI, timeoutInterval: 8)),
                   let maps = try? JSONDecoder().decode(Maps.self, from: data),
                   let latest = maps.radar.past.last else { return }
             // colour scheme 6 (NEXRAD's green-yellow-red), smoothed, snow shown
