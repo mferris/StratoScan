@@ -24,11 +24,21 @@ When it runs:
                  build that failed, e.g. set up before WiFi worked), is over a
                  year old, and has not failed in the last few hours.
 
+Runway outlines (#87, 2026-10-26) are kept here too, in runways.geojson,
+and core-feed.py hands them to the kiosk, the public page and the app at
+/api/runways. Each of those used to ask OpenStreetMap's Overpass service
+itself, the kiosk with the antenna's exact position, and the app waited on
+it. Both commands fetch them as well, when there are none, they are a
+month old, or they are for somewhere else; an ensure whose map is current
+fetches only them.
+
 Privacy: the tiles cover an area around the house, and the directory is
 reachable through the public Funnel like the rest of the web root. So the
 centre is rounded to 2 decimal places (~1 km) before anything is built or
 stored -- the same precision funnel-gateway.py already publishes -- and
-setupd's "Erase everything" deletes the directory.
+setupd's "Erase everything" deletes the directory. The runways' box is
+centred on the receiver rounded to 0.05 degrees (~5 km), as the app's is,
+and widened to cover the ring anyway.
 """
 import concurrent.futures
 import datetime
@@ -40,6 +50,7 @@ import shutil
 import struct
 import sys
 import time
+import urllib.parse
 import urllib.request
 
 WEB_ROOT = os.environ.get("STRATOSCAN_WEB_ROOT", "/var/www/html")
@@ -70,6 +81,24 @@ MAX_TILES = 4000            # a sanity bound, far above any real area
 REBUILD_AFTER_S = 365 * 86400
 RETRY_AFTER_FAILURE_S = 6 * 3600
 PRECISION = 2               # decimal places; see "Privacy" above
+
+# Runway outlines (see the docstring). The query is the one the kiosk made,
+# for a box 22.5 nm each way: the 20 nm ring and 2.5 nm for the rounding, as
+# the app's RunwayClient.roundingPadNm.
+RUNWAYS_FILE = os.path.join(OUT_DIR, "runways.geojson")
+RUNWAYS_FAILED_STAMP = os.path.join(STATE_DIR, "runways-last-failure")
+OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+OVERPASS_USER_AGENT = ("StratoScan/1.0 (+https://github.com/mferris/StratoScan; "
+                       "runway outlines for a home ADS-B display, once a month)")
+RUNWAY_RADIUS_NM = 22.5
+RUNWAY_STEP = 20            # the centre is rounded to 1/20 degree (0.05, ~5 km)
+RUNWAYS_REFRESH_S = 30 * 86400
+RUNWAYS_RETRY_S = 3600      # after Overpass failed: a shared, often busy service
+RUNWAYS_EMPTY_RETRY_S = 86400   # after it found none: there may truly be none
+RUNWAYS_TIMEOUT_S = 30      # the whole question, answer and all
+RUNWAYS_MAX_BYTES = 32 << 20
+RUNWAYS_SOURCE = "OpenStreetMap via Overpass"
+RUNWAYS_LICENCE = "ODbL 1.0, © OpenStreetMap contributors"
 
 
 def log(msg):
@@ -454,6 +483,8 @@ def build(lat, lon):
             os.chmod(os.path.join(root, n), 0o644)
     os.chmod(staging, 0o755)
 
+    carry_runways(staging)
+
     # Swap whole directories, so a viewer never sees half of one area and
     # half of another, and a failed build leaves the previous map in place.
     old = OUT_DIR + ".old"
@@ -503,29 +534,208 @@ def needs_build(now=None):
     return lat, lon
 
 
+# ---- runway outlines (#87) -------------------------------------------------
+
+def runway_centre(lat, lon):
+    """The receiver rounded to 0.05 degrees: all that leaves the radar."""
+    return (round(round(float(lat) * RUNWAY_STEP) / RUNWAY_STEP, 2),
+            round(round(float(lon) * RUNWAY_STEP) / RUNWAY_STEP, 2))
+
+
+def runway_bbox(centre, radius_nm=RUNWAY_RADIUS_NM):
+    """(south, west, north, east) radius_nm round centre: index.html's rangeBBox."""
+    lat, lon = centre
+    m = radius_nm * 1852
+    dlat = m / 111320
+    dlon = m / (111320 * math.cos(math.radians(lat)))
+    return lat - dlat, lon - dlon, lat + dlat, lon + dlon
+
+
+def overpass_query(centre):
+    bb = ",".join(f"{v:.5f}" for v in runway_bbox(centre))
+    return (f'[out:json][timeout:25];(way["aeroway"="runway"]({bb});'
+            f'way["aeroway"="taxiway"]({bb}););out body;>;out skel qt;')
+
+
+def ask_overpass(centre):
+    """Overpass's answer for the box round centre, within RUNWAYS_TIMEOUT_S
+    in all: the socket's limit is per read, so the read has a deadline too."""
+    body = urllib.parse.urlencode({"data": overpass_query(centre)}).encode()
+    req = urllib.request.Request(OVERPASS_URL, data=body, method="POST", headers={
+        "User-Agent": OVERPASS_USER_AGENT, "Content-Type": "application/x-www-form-urlencoded"})
+    end = time.monotonic() + RUNWAYS_TIMEOUT_S
+    raw = bytearray()
+    with urllib.request.urlopen(req, timeout=RUNWAYS_TIMEOUT_S) as r:
+        while len(raw) <= RUNWAYS_MAX_BYTES:
+            if time.monotonic() > end:
+                raise IOError(f"Overpass took longer than {RUNWAYS_TIMEOUT_S} s")
+            chunk = r.read1(1 << 16)
+            if not chunk:
+                break
+            raw += chunk
+    if len(raw) > RUNWAYS_MAX_BYTES:
+        raise IOError("Overpass answered more than expected")
+    return json.loads(bytes(raw).decode("utf-8", "replace"))
+
+
+def overpass_to_geojson(elements):
+    """index.html's overpassToGeoJSON: each runway and taxiway as a line,
+    a way with fewer than two of its points known left out."""
+    nodes = {el.get("id"): [el["lon"], el["lat"]] for el in elements
+             if isinstance(el, dict) and el.get("type") == "node" and "lat" in el and "lon" in el}
+    features = []
+    for el in elements:
+        if not isinstance(el, dict) or el.get("type") != "way" or not el.get("tags"):
+            continue
+        aeroway = el["tags"].get("aeroway")
+        if aeroway not in ("runway", "taxiway"):
+            continue
+        coords = [nodes[i] for i in el.get("nodes") or [] if i in nodes]
+        if len(coords) < 2:
+            continue
+        features.append({"type": "Feature", "properties": {"aeroway": aeroway, "ref": el["tags"].get("ref") or ""},
+                         "geometry": {"type": "LineString", "coordinates": coords}})
+    return {"type": "FeatureCollection", "features": features}
+
+
+def current_runways():
+    try:
+        with open(RUNWAYS_FILE, encoding="utf-8") as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def runways_due(centre, now=None):
+    """Whether the stored outlines need fetching for centre: there are none,
+    they are a month old, or they are for somewhere else."""
+    now = now or time.time()
+    cur = current_runways()
+    try:
+        same = [round(float(x), 2) for x in cur["centre"]] == list(centre)
+        age = now - os.path.getmtime(RUNWAYS_FILE)
+    except (OSError, TypeError, KeyError, ValueError):
+        return True
+    return not same or age >= RUNWAYS_REFRESH_S
+
+
+def needs_runways(now=None):
+    """The rounded centre to fetch outlines for, or None: none due, no
+    location yet, or a recent failure (an hour; a day after an empty answer)."""
+    now = now or time.time()
+    try:
+        centre = runway_centre(*receiver_location())
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if not runways_due(centre, now):
+        return None
+    try:
+        with open(RUNWAYS_FAILED_STAMP) as f:
+            wait = int(f.read().strip() or RUNWAYS_RETRY_S)
+        if now - os.path.getmtime(RUNWAYS_FAILED_STAMP) < wait:
+            return None
+    except (OSError, ValueError):
+        pass
+    return centre
+
+
+def write_runways(doc):
+    """runways.geojson, whole or not at all: a temporary file, then renamed."""
+    os.makedirs(OUT_DIR, exist_ok=True)
+    os.chmod(OUT_DIR, 0o755)
+    tmp = RUNWAYS_FILE + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(doc, f, separators=(",", ":"), ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, RUNWAYS_FILE)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def build_runways(centre):
+    """Fetch and store the outlines round centre (already rounded). An
+    empty answer is not stored: it is asked again a day later."""
+    answer = ask_overpass(centre)
+    # A busy Overpass can answer 200 with what it managed before giving up,
+    # saying so in a remark; that is kept a month, so it is a failure here.
+    if "error" in str(answer.get("remark") or "").lower():
+        raise IOError(f"Overpass: {str(answer['remark'])[:120]}")
+    geo = overpass_to_geojson(answer.get("elements") or [])
+    if not geo["features"]:
+        _runways_failed(RUNWAYS_EMPTY_RETRY_S)
+        log(f"no runways found round {centre[0]},{centre[1]}; asking again in a day")
+        return None
+    geo.update(centre=list(centre), radiusNm=RUNWAY_RADIUS_NM,
+               built=datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+               source=RUNWAYS_SOURCE, licence=RUNWAYS_LICENCE)
+    write_runways(geo)
+    try:
+        os.unlink(RUNWAYS_FAILED_STAMP)
+    except OSError:
+        pass
+    log(f"runways: {len(geo['features'])} outlines round {centre[0]},{centre[1]}")
+    return geo
+
+
+def _runways_failed(wait_s):
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with open(RUNWAYS_FAILED_STAMP, "w") as f:
+            f.write(str(int(wait_s)))
+    except OSError:
+        pass
+
+
+def carry_runways(staging):
+    """A rebuilt map's directory replaces the old one whole: the outlines
+    go with it, rather than vanishing until the next fetch."""
+    if os.path.exists(RUNWAYS_FILE):
+        shutil.copy2(RUNWAYS_FILE, os.path.join(staging, os.path.basename(RUNWAYS_FILE)))
+
+
 def main(argv):
     cmd = argv[1] if len(argv) > 1 else "ensure"
     if cmd == "build" and len(argv) == 4:
         target = (float(argv[2]), float(argv[3]))
+        # A new location: its outlines now, whatever an earlier failure said.
+        runways = runway_centre(*target)
+        if not runways_due(runways):
+            runways = None
     elif cmd == "ensure":
         target = needs_build()
-        if target is None:
-            return 0
+        runways = needs_runways()
     else:
         print("usage: offline-map.py build LAT LON | ensure", file=sys.stderr)
         return 2
-    try:
-        build(*target)
-        return 0
-    except Exception as e:
-        log(f"build failed: {type(e).__name__}: {e}")
-        shutil.rmtree(OUT_DIR + ".new", ignore_errors=True)
+    ok = True
+    if target is not None:
         try:
-            os.makedirs(STATE_DIR, exist_ok=True)
-            open(FAILED_STAMP, "w").close()
-        except OSError:
-            pass
-        return 1
+            build(*target)
+        except Exception as e:
+            log(f"build failed: {type(e).__name__}: {e}")
+            shutil.rmtree(OUT_DIR + ".new", ignore_errors=True)
+            try:
+                os.makedirs(STATE_DIR, exist_ok=True)
+                open(FAILED_STAMP, "w").close()
+            except OSError:
+                pass
+            ok = False
+    # Independent of the map: either may work while the other's service is down.
+    if runways is not None:
+        try:
+            build_runways(runways)
+        except Exception as e:
+            log(f"runways failed: {type(e).__name__}: {e}; asking again in an hour")
+            _runways_failed(RUNWAYS_RETRY_S)
+            ok = False
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
