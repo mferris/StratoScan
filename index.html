@@ -1503,6 +1503,13 @@ const RECEIVER_URL = '/tar1090/data/receiver.json';
 // refuse on the kiosk; it's unrestricted on a normal browser tab (laptop,
 // phone, the Funnel URL), where a second tab is just a second tab.
 const IS_KIOSK = new URLSearchParams(location.search).get('kiosk') === '1';
+// The radar's public page: its Tailscale Funnel name, whose every answer
+// comes through deploy/funnel-gateway.py. What the radar measures from the
+// antenna's exact position -- passes within 2 miles, the closest and
+// farthest contacts -- is left out of those answers, so those rows are left
+// out of the page there, not shown as dashes or worked out again from the
+// rounded position the page is given (2026-10-26).
+const PUBLIC_PAGE = /\.ts\.net\.?$/i.test(location.hostname);
 // Overrides the receiver's actual configured position for DISPLAY purposes
 // only (readsb keeps using its own real antenna position internally for
 // signal-range/MLAT math — this only changes what StratoScan centers on).
@@ -5287,8 +5294,8 @@ function showGhostPanel(g) {
       <div class="dp-field"><div class="dp-label">Range / Brg</div><div class="dp-value">${g.range.toFixed(1)} nm · ${Math.round(g.bearing)}°</div></div>
       <div class="dp-field"><div class="dp-label">Heard on</div><div class="dp-value">The internet (${esc(src)})</div></div>
       ${!rare ? '' : `<div class="dp-field dp-rare"><div class="dp-label">Notable</div><div class="dp-value">${esc(rare.label)}</div></div>`}
-      <div class="dp-field"><div class="dp-label">Sightings</div><div class="dp-value">${counts.total}</div></div>
-      <div class="dp-field"><div class="dp-label">Within 2mi</div><div class="dp-value">${counts.nearby}</div></div>
+      <div class="dp-field"><div class="dp-label">Sightings</div><div class="dp-value">${esc(String(counts.total ?? 0))}</div></div>
+      ${PUBLIC_PAGE ? '' : `<div class="dp-field"><div class="dp-label">Within 2mi</div><div class="dp-value">${esc(String(counts.nearby ?? 0))}</div></div>`}
       <div class="dp-field"><div class="dp-label">Their fix</div><div class="dp-value">${esc(age)}</div></div>
     </div>
   `;
@@ -6717,8 +6724,8 @@ function showDetailPanel(p, isAlert = false, alertLabel = 'WITHIN 2 MILES', aler
       <div class="dp-field"><div class="dp-label">Distance</div><div class="dp-value">${rangeTxt}</div></div>
       ${p.band ? `<div class="dp-field"><div class="dp-label">Heard on</div><div class="dp-value">${esc(p.band === '1090' ? '1090 MHz' : p.band === '978' ? '978 MHz (UAT)' : '978 MHz, re-sent on 1090')}</div></div>` : ''}
       ${!p.rareReason ? '' : `<div class="dp-field dp-rare"><div class="dp-label">Notable</div><div class="dp-value">${esc(p.rareReason.label)}${p.rareReason.operator ? ' · ' + esc(p.rareReason.operator) : ''}</div></div>`}
-      <div class="dp-field"><div class="dp-label">Sightings</div><div class="dp-value">${counts.total}</div></div>
-      <div class="dp-field"><div class="dp-label">Within 2 mi</div><div class="dp-value">${counts.nearby}</div></div>
+      <div class="dp-field"><div class="dp-label">Sightings</div><div class="dp-value">${esc(String(counts.total ?? 0))}</div></div>
+      ${PUBLIC_PAGE ? '' : `<div class="dp-field"><div class="dp-label">Within 2 mi</div><div class="dp-value">${esc(String(counts.nearby ?? 0))}</div></div>`}
     </div>
     <div class="dp-icao">ICAO ${esc(p.hex.toUpperCase())}</div>
     ${p.rareReason && p.rareReason.kind === 'notable' ? '<div class="dp-photo-credit" style="position:static;padding-top:6px">Notable list: plane-alert-db (ODbL)</div>' : ''}
@@ -7616,11 +7623,13 @@ function scorecardSubtitle() {
 
 const STATS_SCREENS = [
   { key: 'year',      label: `${new Date().getFullYear()} in review`, sub: () => 'Your year overhead: busiest times and most-seen aircraft' },
-  { key: 'overview',  label: 'Overview',      sub: () => 'Everything seen here, and how much came close' },
+  // Close encounters, and the closest and farthest records, are measured from
+  // the antenna's exact position: the radar's own screens only (PUBLIC_PAGE).
+  { key: 'overview',  label: 'Overview',      sub: () => PUBLIC_PAGE ? 'Everything seen here' : 'Everything seen here, and how much came close' },
   { key: 'operators', label: 'Who flies over', sub: () => 'Commercial, private and military' },
   { key: 'kinds',     label: 'What flies over', sub: () => 'Jets, propeller aircraft, helicopters' },
-  { key: 'nearby',    label: 'Close encounters', sub: () => `Everything that came within ${ALERT_RADIUS_MI} miles` },
-  { key: 'records',   label: 'Records',       sub: () => 'Farthest, closest, highest, fastest, busiest times' },
+  ...(PUBLIC_PAGE ? [] : [{ key: 'nearby', label: 'Close encounters', sub: () => `Everything that came within ${ALERT_RADIUS_MI} miles` }]),
+  { key: 'records',   label: 'Records',       sub: () => PUBLIC_PAGE ? 'Highest, fastest, busiest times' : 'Farthest, closest, highest, fastest, busiest times' },
   { key: 'scorecard', label: 'Receiver scorecard', sub: scorecardSubtitle },
   // The public page's visitor counts (1.12): the owner's, so only on the
   // radar's own screen, never offered to someone viewing the public page.
@@ -7699,12 +7708,13 @@ function renderYearInReview(back, title) {
     ? `<div class="sp-sub" style="padding:6px 0">Counting since ${esc(new Date(y.countingSince * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'long' }))}</div>` : '';
   const monthsSoFar = y.year === new Date().getFullYear() ? new Date().getMonth() + 1 : 12;
   const rec = y.records || {};
-  const recRow = (key, label, fmt) => rec[key]
+  // The farthest and closest are measured from the exact position (PUBLIC_PAGE).
+  const recRow = (key, label, fmt) => rec[key] && !(PUBLIC_PAGE && (key === 'far' || key === 'near'))
     ? statRow(label, fmt(rec[key].v), rec[key].cs || (rec[key].hex || '').toUpperCase()) : '';
   return `${back}${title}${since}
     ${statRow('Visits overhead', statNum(y.visits), `By ${statNum(y.aircraft)} different aircraft`)}
     ${statRow('New to this radar', statNum(y.newAircraft), 'Heard here for the very first time this year')}
-    ${statRow(`Came within ${ALERT_RADIUS_MI} miles`, statNum(y.nearby), 'Passes close enough to set off the nearby alert')}
+    ${PUBLIC_PAGE ? '' : statRow(`Came within ${ALERT_RADIUS_MI} miles`, statNum(y.nearby), 'Passes close enough to set off the nearby alert')}
     ${y.busiestMonth !== null ? statRow('Busiest month', MONTHS_SHORT[y.busiestMonth], `${statNum(y.months[y.busiestMonth])} visits`) : ''}
     ${y.busiestHour !== null ? statRow('Busiest hour', hourLabel(y.busiestHour), 'When the sky over you is fullest') : ''}
     <div class="sp-section-title">Most-seen aircraft</div>
@@ -7744,7 +7754,7 @@ function renderStatsScreen(key, st) {
     return `${back}${title}${statsDateLine(st)}
       ${statRow('Aircraft heard here', statNum(st.heard), 'Distinct aircraft this antenna has decoded')}
       ${statRow('Visits', statNum(st.visits), 'Separate passes overhead, not one per aircraft')}
-      ${statRow(`Came within ${ALERT_RADIUS_MI} miles`, statNum(st.nearby), 'Passes that triggered the nearby alert')}
+      ${PUBLIC_PAGE ? '' : statRow(`Came within ${ALERT_RADIUS_MI} miles`, statNum(st.nearby), 'Passes that triggered the nearby alert')}
       <div class="sp-section-title">With the network comparison</div>
       ${statRow('Seen but not heard', statNum(st.networkOnly), 'Aircraft only ever seen because adsb.lol reported them')}
       ${statRow('Aircraft in range, all sources', statNum(inRing), inRing ? `This antenna accounted for ${sharePct(st.heard, inRing)} of them` : '')}
@@ -7839,8 +7849,8 @@ function renderStatsScreen(key, st) {
       : '';
     return `${back}${title}
       ${recNote ? `<div class="sp-sub" style="padding:6px 0;line-height:1.6">${esc(recNote)}</div>` : ''}
-      ${statRow('Farthest contact', r.far ? `${r.far.v} nm` : '—', who('far'))}
-      ${statRow('Closest approach', r.near ? `${r.near.v} nm` : '—', who('near'))}
+      ${PUBLIC_PAGE ? '' : statRow('Farthest contact', r.far ? `${r.far.v} nm` : '—', who('far'))}
+      ${PUBLIC_PAGE ? '' : statRow('Closest approach', r.near ? `${r.near.v} nm` : '—', who('near'))}
       ${statRow('Highest', r.high ? `${statNum(r.high.v)} ft` : '—', who('high'))}
       ${statRow('Fastest', r.fast ? `${statNum(r.fast.v)} kt` : '—', who('fast'))}
       <div class="sp-section-title">Busiest time of day</div>
