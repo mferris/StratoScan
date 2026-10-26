@@ -78,8 +78,8 @@ check(cv.in_range("1.0.0", "weird"), "an unreadable range is assumed to apply")
 html = (ROOT / "index.html").read_text()
 check("import('./vendor/maplibre-gl.mjs')" in html and 'src="vendor/maplibre-gl.js"' not in html,
       "the page loads MapLibre 6 with import(), not the old classic script")
-check("await loadMapLibre();" in html.split("async function initMap()")[1][:600],
-      "and waits for it before building the first map")
+check("await withinTime(loadMapLibre(), MAPLIBRE_LOAD_TIMEOUT_MS);" in html.split("async function initMap()")[1][:600],
+      "and waits for it, for a limited time (#86), before building the first map")
 check((ROOT / "vendor" / "maplibre-gl-worker.mjs").exists(), "its worker ships beside it")
 check(not (ROOT / "vendor" / "maplibre-gl.js").exists(), "the 5.x file is gone")
 

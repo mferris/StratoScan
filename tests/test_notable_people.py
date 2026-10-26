@@ -93,7 +93,7 @@ check("NotablePeople" not in core and "notable-people" not in core, "the core fe
 # the page: names on by default, said and shown, never fetched into the public feed
 html = (ROOT / "index.html").read_text()
 check("notableNames: true" in html, "naming is on by default")
-check("fetch('/data/notable-people.json')" in html, "the page loads the names (refused on the public page)")
+check("fetch('/data/notable-people.json'," in html, "the page loads the names (refused on the public page)")
 check("alertSettings.notableNames && notablePeople" in html, "and uses them only while the setting is on")
 check("const who = why.operator ? `${why.label}, ${why.operator}` : why.label;" in html
       and "speech: () => announcementFor(pl, who)" in html, "the spoken alert says who it is")
