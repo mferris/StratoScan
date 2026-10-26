@@ -309,13 +309,35 @@ const $ = id => document.getElementById(id);
 const show = (el, cls, text) => { el.className = 'msg show ' + cls; el.textContent = text; };
 const hide = el => { el.className = 'msg'; };
 
+// Every call has a limit (#86, 2026-10-26), set past the setup service's own
+// for that kind of call (up to 3 minutes for one that restarts or
+// reconfigures something), so a slow success still reads as one. What ends
+// here is a page that has lost the radar -- most often because the radar has
+// just moved to another network, and the answer has nowhere to go -- which
+// used to leave the button disabled on "Joining…" for good.
+const API_TIMEOUT_MS = 40 * 1000;
+const API_SLOW_MS = 200 * 1000;
+const NO_ANSWER = 'The radar did not answer in time. Check this phone or computer is on the same network as the radar, then try again.';
+
 async function api(path, opts = {}) {
+  const { timeoutMs = API_TIMEOUT_MS, ...rest } = opts;
   const h = { 'Content-Type': 'application/json' };
   if (TOKEN) h['Authorization'] = 'Bearer ' + TOKEN;
-  const r = await fetch('/setup/api/' + path, { ...opts, headers: h });
-  let body = {};
-  try { body = await r.json(); } catch (e) {}
-  if (!r.ok) throw new Error(body?.error?.message || 'That did not work.');
+  let r, body = {};
+  try {
+    r = await fetch('/setup/api/' + path, { ...rest, headers: h, signal: AbortSignal.timeout(timeoutMs) });
+    try { body = await r.json(); } catch (e) { if (e.name === 'TimeoutError') throw e; }
+  } catch (e) {
+    if (e.name !== 'TimeoutError') throw e;
+    const late = new Error(NO_ANSWER);
+    late.timedOut = true;
+    throw late;
+  }
+  if (!r.ok) {
+    const refused = new Error(body?.error?.message || 'That did not work.');
+    refused.status = r.status;
+    throw refused;
+  }
   return body;
 }
 
@@ -334,7 +356,10 @@ async function boot() {
         'The device could not show a setup code on its screen. Check the display is connected.');
     }
     $('sub').textContent = h.claimed ? 'Signed out.' : 'First-time setup.';
-  } catch (e) { show($('authMsg'), 'err', e.message); }
+  } catch (e) {
+    // Without this answer the card cannot know whether to ask for a claim code.
+    show($('authMsg'), 'err', e.timedOut ? 'The radar did not answer. Reload this page to try again.' : e.message);
+  }
 }
 
 $('authBtn').onclick = async () => {
@@ -377,7 +402,7 @@ $('scanBtn').onclick = async () => {
   hide($('wifiMsg'));
   $('scanBtn').disabled = true; $('scanBtn').textContent = 'Scanning…';
   try {
-    const r = await api('wifi/scan');
+    const r = await api('wifi/scan', { timeoutMs: API_SLOW_MS });
     const list = $('netList'); list.textContent = '';
     (r.result || []).forEach(n => {
       const d = document.createElement('div');
@@ -405,12 +430,24 @@ $('joinBtn').onclick = async () => {
   hide($('wifiMsg'));
   $('joinBtn').disabled = true; $('joinBtn').textContent = 'Joining…';
   try {
-    await api('wifi/connect', { method: 'POST',
+    // A join takes the radar a minute at most. No answer by 90 s means it is
+    // most likely on the new network, where this page cannot hear it, and it
+    // keeps that network only if someone confirms from there within three
+    // minutes of starting -- so say how, with time left to do it.
+    await api('wifi/connect', { timeoutMs: 90 * 1000, method: 'POST',
       body: JSON.stringify({ ssid: CHOSEN.ssid, psk: $('psk').value }) });
     await api('wifi/confirm', { method: 'POST' });
     show($('wifiMsg'), 'ok', 'Connected to ' + CHOSEN.ssid + '.');
     $('tickWifi').classList.remove('hide');
-  } catch (e) { show($('wifiMsg'), 'err', e.message); }
+  } catch (e) {
+    // No answer at all, late or cut off, rather than a refusal (wrong password, network not found).
+    const lost = !e.status;
+    show($('wifiMsg'), lost ? 'warn' : 'err', lost
+      ? `No answer from the radar. It may have joined ${CHOSEN.ssid}: connect this phone or computer to ` +
+        `${CHOSEN.ssid} too, open this page again there and press Join to keep it. Otherwise the radar ` +
+        'goes back to its old network by itself within three minutes.'
+      : e.message);
+  }
   $('joinBtn').disabled = false; $('joinBtn').textContent = 'Join network';
 };
 
@@ -455,7 +492,7 @@ $('locBtn').onclick = async () => {
     return show($('locMsg'), 'err', '0, 0 is in the Gulf of Guinea — check the numbers.');
   }
   try {
-    const r = await api('location', { method: 'POST',
+    const r = await api('location', { timeoutMs: API_SLOW_MS, method: 'POST',
       body: JSON.stringify({ lat, lon }) });
     show($('locMsg'), 'ok', 'Saved. Receiver restarted.' +
       ` (${Math.abs(lat).toFixed(4)}°${lat < 0 ? 'S' : 'N'}, ${Math.abs(lon).toFixed(4)}°${lon < 0 ? 'W' : 'E'})`);
@@ -498,7 +535,7 @@ $('airBtn').onclick = async () => {
   const code = $('airSel').value;
   if (!code) return show($('airMsg'), 'err', 'Pick an airport from the list first.');
   try {
-    await api('airport', { method: 'POST',
+    await api('airport', { timeoutMs: API_SLOW_MS, method: 'POST',
       body: JSON.stringify({ code }) });
     show($('airMsg'), 'ok', 'Home airport set to ' + code + '.');
     // Seed the time-zone step from where that airport actually is.
@@ -525,7 +562,7 @@ async function fleetLoad() {
 $('fleetJoinBtn').onclick = async () => {
   hide($('fleetMsg'));
   try {
-    const r = await api('fleet', { method: 'POST', body: JSON.stringify({ action: 'join', code: $('fleetCode').value }) });
+    const r = await api('fleet', { timeoutMs: API_SLOW_MS, method: 'POST', body: JSON.stringify({ action: 'join', code: $('fleetCode').value }) });
     show($('fleetMsg'), 'ok', `Joined "${r.result.fleet.name}".`);
     $('fleetCode').value = '';
     fleetLoad(); healthLoad();
@@ -535,7 +572,7 @@ $('fleetJoinBtn').onclick = async () => {
 $('fleetLeaveBtn').onclick = async () => {
   hide($('fleetMsg'));
   try {
-    await api('fleet', { method: 'POST', body: JSON.stringify({ action: 'leave' }) });
+    await api('fleet', { timeoutMs: API_SLOW_MS, method: 'POST', body: JSON.stringify({ action: 'leave' }) });
     show($('fleetMsg'), 'ok', 'Left the fleet. Health reports are back the way they were.');
     fleetLoad(); healthLoad();
   } catch (e) { show($('fleetMsg'), 'err', e.message); }
@@ -571,7 +608,7 @@ $('remBtn').onclick = async () => {
   hide($('remMsg'));
   $('remBtn').disabled = true; $('remBtn').textContent = 'Connecting…';
   try {
-    const r = await api('tailscale/up', { method: 'POST', body: JSON.stringify({
+    const r = await api('tailscale/up', { timeoutMs: API_SLOW_MS, method: 'POST', body: JSON.stringify({
       authKey: $('authKey').value.trim(), hostname: $('tsHost').value.trim(),
       enableFunnel: $('funnel').checked }) });
     const url = r.result?.funnel?.publicUrl;
@@ -614,7 +651,7 @@ $('rsBtn').onclick = async () => {
     return show($('rsMsg'), 'err', `Type ${want} to confirm.`);
   $('rsBtn').disabled = true;
   try {
-    await api('reset', { method: 'POST', body: JSON.stringify({
+    await api('reset', { timeoutMs: API_SLOW_MS, method: 'POST', body: JSON.stringify({
       scope: full ? 'full' : 'settings',
       confirm: want,
       currentPassword: $('rsPw').value }) });
@@ -640,7 +677,7 @@ boot();
 let LOCALE = { forCountry: [], all: [], current: {} };
 async function loadLocale(country) {
   try {
-    LOCALE = await api('locale' + (country ? '?country=' + encodeURIComponent(country) : ''));
+    LOCALE = await api('locale' + (country ? '?country=' + encodeURIComponent(country) : ''), { timeoutMs: API_SLOW_MS });
     if (LOCALE.current) {
       $('localeNow').textContent =
         `Currently ${LOCALE.current.timezone || 'unset'}, WiFi region ${LOCALE.current.wifiCountry || 'unset'}.`;
@@ -679,7 +716,7 @@ $('localeBtn').onclick = async () => {
   if (!body.timezone && !body.country) return show($('localeMsg'), 'err', 'Pick a time zone.');
   $('localeBtn').disabled = true;
   try {
-    const r = await api('locale', { method: 'POST', body: JSON.stringify(body) });
+    const r = await api('locale', { timeoutMs: API_SLOW_MS, method: 'POST', body: JSON.stringify(body) });
     show($('localeMsg'), 'ok', `Set to ${r.timezone || body.timezone}` +
       (r.wifiCountry ? `, WiFi region ${r.wifiCountry}` : '') + '.');
     // Only prompt when the region genuinely changed: re-saving the same one
@@ -788,20 +825,23 @@ async function otaLoad() {
 $('otaCheckBtn').onclick = async () => {
   hide($('otaMsg')); $('otaCheckBtn').disabled = true;
   $('otaCheckBtn').textContent = 'Checking…';
-  try { await api('ota', { method: 'POST', body: JSON.stringify({ action: 'check' }) }); await otaLoad(); }
+  try { await api('ota', { timeoutMs: API_SLOW_MS, method: 'POST', body: JSON.stringify({ action: 'check' }) }); await otaLoad(); }
   catch (e) { show($('otaMsg'), 'err', e.message); }
   $('otaCheckBtn').disabled = false; $('otaCheckBtn').textContent = 'Check for updates';
 };
 $('otaApplyBtn').onclick = async () => {
   hide($('otaMsg')); $('otaApplyBtn').disabled = true;
   try {
-    await api('ota', { method: 'POST', body: JSON.stringify({ action: 'apply' }) });
+    await api('ota', { timeoutMs: API_SLOW_MS, method: 'POST', body: JSON.stringify({ action: 'apply' }) });
     show($('otaMsg'), 'ok', 'Installing. The device restarts to verify the new '
        + 'version; if it does not come up, the old one is restored by itself.');
     // Poll across the restart -- the interesting answer arrives after the
-    // device comes back, and a rollback is only visible here.
-    clearInterval(otaTimer);
-    otaTimer = setInterval(otaLoad, 5000);
+    // device comes back, and a rollback is only visible here. Each ask waits
+    // for the last to finish (#86): on an interval they piled up while the
+    // radar was away.
+    clearTimeout(otaTimer);
+    const poll = async () => { await otaLoad(); otaTimer = setTimeout(poll, 5000); };
+    otaTimer = setTimeout(poll, 5000);
   } catch (e) { show($('otaMsg'), 'err', e.message); $('otaApplyBtn').disabled = false; }
 };
 
@@ -809,7 +849,9 @@ $('otaApplyBtn').onclick = async () => {
 // on anything else the same one-time code is shown as a QR to scan.
 const ON_PHONE = /iPhone|iPad|iPod/.test(navigator.userAgent);
 let pairTimer = null;
+let pairWatching = false;   // a code is showing: asked again every 3 s until it is used or runs out
 function pairRender(st) {
+  pairWatching = !!(st && st.available !== false && st.offer);
   const list = $('pairList'), btn = $('pairBtn');
   if (!st || st.available === false) { btn.disabled = true; list.textContent = 'Not available on this version.'; return; }
   const phones = st.phones || [];
@@ -840,7 +882,11 @@ function pairRender(st) {
   if (o) pairTimer = setTimeout(pairLoad, 3000);
 }
 async function pairLoad() {
-  try { pairRender((await api('pair')).result); } catch (e) { show($('pairMsg'), 'err', e.message); }
+  try { pairRender((await api('pair')).result); } catch (e) {
+    show($('pairMsg'), 'err', e.message);
+    // An answer that never came ends nothing (#86): only a refusal stops the watch.
+    if (pairWatching && !e.status) { clearTimeout(pairTimer); pairTimer = setTimeout(pairLoad, 3000); }
+  }
 }
 async function pairAction(body) {
   hide($('pairMsg'));
@@ -874,7 +920,9 @@ $('healthOn').onchange = async () => {
 };
 
 let faTimer = null;
+let faWatching = false;     // setting up: asked again every 5 s until it is done
 function faRender(st) {
+  faWatching = false;
   const box = $('faOn'), now = $('faNow');
   const fa = st && st.flightaware;
   if (!st || !st.available || !fa) { box.disabled = true; now.textContent = 'Not available on this version.'; return; }
@@ -892,15 +940,21 @@ function faRender(st) {
   else if (fa.active) now.textContent = 'Sharing. The feeder ID appears here within a few minutes.';
   else now.textContent = 'Off.';
   clearTimeout(faTimer);
-  if (busy || (fa.active && !fa.feederId)) faTimer = setTimeout(faLoad, 5000);
+  faWatching = busy || (fa.active && !fa.feederId);
+  if (faWatching) faTimer = setTimeout(faLoad, 5000);
 }
 async function faLoad() {
-  try { faRender((await api('feeding')).result); } catch (e) { faRender(null); }
+  try { faRender((await api('feeding')).result); } catch (e) {
+    // While it sets up, an answer that never came changes nothing on the card
+    // and ends nothing (#86); it used to read "Not available on this version".
+    if (faWatching && !e.status) { clearTimeout(faTimer); faTimer = setTimeout(faLoad, 5000); return; }
+    faRender(null);
+  }
 }
 $('faOn').onchange = async () => {
   hide($('faMsg'));
   try {
-    faRender((await api('feeding', { method: 'POST', body: JSON.stringify({ flightaware: $('faOn').checked }) })).result);
+    faRender((await api('feeding', { timeoutMs: API_SLOW_MS, method: 'POST', body: JSON.stringify({ flightaware: $('faOn').checked }) })).result);
     faTimer = setTimeout(faLoad, 3000);
   } catch (e) { show($('faMsg'), 'err', e.message); faLoad(); }
 };

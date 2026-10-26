@@ -6,8 +6,6 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%230a1a3a%22/><circle cx=%2250%22 cy=%2250%22 r=%2238%22 fill=%22none%22 stroke=%22%23274a86%22 stroke-width=%227%22/><path d=%22M50 50 L50 12 A38 38 0 0 1 82.9 31 Z%22 fill=%22%235ee7ff%22 opacity=%220.35%22/><line x1=%2250%22 y1=%2250%22 x2=%2282.9%22 y2=%2231%22 stroke=%22%235ee7ff%22 stroke-width=%228%22 stroke-linecap=%22round%22/><circle cx=%2230%22 cy=%2264%22 r=%227%22 fill=%22%233ddc97%22/><circle cx=%2245%22 cy=%2236%22 r=%228.5%22 fill=%22%23ffffff%22/></svg>">
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
-
   /* Color theme -- three options, selected in the settings panel (see
      THEMES/applyTheme in the main script below) and applied via
      [data-theme] on <html>. :root itself is "classic", the original/default
@@ -1418,6 +1416,26 @@ function drain(res) {
   try { if (res && res.body && !res.bodyUsed) res.body.cancel().catch(() => {}); } catch (e) {}
   return res;
 }
+// ---- Nothing waits without a time limit (#86, 2026-10-26) --------------------
+// A request with no limit waits as long as the network lets it, and on a
+// server that has stopped answering that is for ever; whatever was waiting on
+// it waits too. Every request in this page passes
+// signal: AbortSignal.timeout(...) with one of these, and its own failure
+// handling takes over when the time is up. tests/test_page_timeouts.py keeps
+// it so.
+const LOCAL_TIMEOUT_MS = 5 * 1000;        // the radar's own quick answers: small files, the core feed, the pings
+const LOCAL_SLOW_TIMEOUT_MS = 20 * 1000;  // its bigger answers, and those it asks someone else for
+const REMOTE_TIMEOUT_MS = 10 * 1000;      // another service, asked from this browser
+// For a wait that no request's signal reaches (a module import, or a start-up
+// step made of several requests): settles as `p` does if `p` is in time, and
+// rejects with a TimeoutError if not.
+function withinTime(p, ms) {
+  let timer;
+  const late = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new DOMException('No answer in time', 'TimeoutError')), ms);
+  });
+  return Promise.race([p, late]).finally(() => clearTimeout(timer));
+}
 // ---- Saved settings from before the rename -----------------------------
 // Everything this page keeps in localStorage was stored under 'flightradar'
 // keys until the project became StratoScan. Copy each one across once, before
@@ -1955,7 +1973,7 @@ function applyPerfFlags() {
   if (PERF.noNetwork) { ghosts = []; ghostTracks.clear(); }
   console.log('perf experiment flags:', JSON.stringify(PERF));
 }
-fetch('/data/perf-debug.json', { cache: 'no-store' })
+fetch('/data/perf-debug.json', { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) })
   .then(r => (r.ok ? r.json() : null))
   .then(f => { if (f && typeof f === 'object') { Object.assign(PERF, f); applyPerfFlags(); } })
   .catch(() => {});
@@ -2263,7 +2281,7 @@ let AIRPORT = {
 
 async function loadAirportConfig() {
   try {
-    const res = await fetch('/config.json', { cache: 'no-store' });
+    const res = await fetch('/config.json', { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) });
     if (!res.ok) return; // no config deployed -- defaults stand
     const cfg = await res.json();
     const a = cfg && cfg.airport;
@@ -2354,7 +2372,8 @@ function onApproachLeg(pl, lat, lon, airportRange) {
 let storeWritesRefused = false;
 function storeWrite(url, body) {
   if (storeWritesRefused) return Promise.resolve(null);
-  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+                      signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) })
     .then(res => { if (res.status === 403) storeWritesRefused = true; return res; });
 }
 const APPROACH_STORE_URL = '/approaches';
@@ -2380,7 +2399,7 @@ function countApproachCell(key, n) {
 
 async function loadApproachPoints() {
   try {
-    const res = await fetch(APPROACH_STORE_URL, { cache: 'no-store' });
+    const res = await fetch(APPROACH_STORE_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
     const data = await res.json();
     if (Array.isArray(data)) {
       approachCells = new Map();
@@ -2484,7 +2503,7 @@ function recordSightingOnce(hex, kind) {
 
 async function loadSightingCounts() {
   try {
-    const res = await fetch(SIGHTING_STORE_URL, { cache: 'no-store' });
+    const res = await fetch(SIGHTING_STORE_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
     const data = await res.json();
     if (data && typeof data === 'object') {
       for (const [hex, counts] of Object.entries(data)) sightingCounts.set(hex, counts);
@@ -2526,7 +2545,7 @@ let flightStats = null;      // last aggregate; null until the first load
 
 async function loadFlightStats() {
   try {
-    const res = await fetch(FLIGHT_STATS_URL, { cache: 'no-store' });
+    const res = await fetch(FLIGHT_STATS_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
     if (res.ok) flightStats = await res.json();
   } catch (e) {
     // store unavailable -- the Statistics screens say so rather than
@@ -2554,7 +2573,7 @@ async function backfillClassifications() {
   for (let round = 0; round < BACKFILL_MAX_ROUNDS; round++) {
     let list;
     try {
-      const res = await fetch('/sightings/unclassified', { cache: 'no-store' });
+      const res = await fetch('/sightings/unclassified', { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
       if (!res.ok) return;
       list = await res.json();
     } catch (e) {
@@ -2565,6 +2584,9 @@ async function backfillClassifications() {
     const batch = [];
     for (const hex of hexes) {
       const info = await lookupType(hex);
+      // The database did not answer in time (#86): left for a later load,
+      // never recorded as an aircraft it has not heard of.
+      if (!hexTypeCache.has(hex)) continue;
       batch.push({ hex, class: {
         // An aircraft the database has never heard of resolves to 'unknown',
         // which is itself a recorded answer -- so it leaves the backlog
@@ -2575,6 +2597,7 @@ async function backfillClassifications() {
         op: militaryOperator(hex) ? 'mil' : null,
       } });
     }
+    if (!batch.length) return;   // none answered: the store would only hand back the same list
     try {
       const res = drain(await storeWrite(SIGHTING_STORE_URL, { batch }));
       if (!res) return;   // read-only here
@@ -2863,19 +2886,31 @@ loadMapLibre().catch(() => {});
 // Picks the style, then builds the map. Async (both checks are network
 // round trips), so a second call while one is in flight is ignored rather
 // than building two maps into the same container.
+//
+// The wait for MapLibre has a limit too (#86, 2026-10-26). An import that
+// never finished kept mapStarting set for the life of the page, so every
+// later call returned here at once and the map never came; one that failed
+// armed no retry at all. Either now tries again after the same backoff as a
+// map that never loaded. A slow import is not thrown away: the next try waits
+// on the same one.
+const MAPLIBRE_LOAD_TIMEOUT_MS = 30 * 1000;
 async function initMap() {
   if (!home || map || mapStarting) return;
   mapStarting = true;
   try {
     const online = await fetchOnlineStyle();
     const meta = online ? null : await fetchOfflineMeta();
-    await loadMapLibre();
+    await withinTime(loadMapLibre(), MAPLIBRE_LOAD_TIMEOUT_MS);
     if (!home || map) return;
     if (online) createMap(online, false);
     else if (meta) createMap(offlineStyle(meta), true);
     // Neither: try the online URL anyway, and let the load timeout below
     // retry with backoff -- there is nothing better to show.
     else createMap(MAP_STYLE_URL, false);
+  } catch (e) {
+    clearTimeout(mapRetryTimer);
+    mapRetryTimer = setTimeout(initMap, mapRetryMs);
+    mapRetryMs = Math.min(mapRetryMs * 2, MAP_RETRY_MAX_MS);
   } finally {
     mapStarting = false;
   }
@@ -2942,7 +2977,9 @@ function createMap(style, offline) {
   // permanent until the next page reload: after a power cut the kiosk often
   // starts before WiFi is up, leaving a blank disc for hours.
   const thisMap = map;
-  map.on('load', () => { clearTimeout(mapLoadTimer); mapRetryMs = MAP_RETRY_MIN_MS; });
+  mapLoadedOnce = false;
+  mapBaseTiles = 0;
+  map.on('load', () => { clearTimeout(mapLoadTimer); mapRetryMs = MAP_RETRY_MIN_MS; mapLoadedOnce = true; });
   clearTimeout(mapLoadTimer);
   armMapLoadTimer(thisMap);
 
@@ -2954,11 +2991,11 @@ function createMap(style, offline) {
   // into the same map and would otherwise mask a dead basemap.
   if (!offline && typeof style === 'object') {
     const baseSources = new Set(Object.keys(style.sources || {}));
-    let tilesOk = 0, tileErrors = 0;
-    map.on('sourcedata', e => { if (e.tile && baseSources.has(e.sourceId)) tilesOk++; });
+    let tileErrors = 0;
+    map.on('sourcedata', e => { if (e.tile && baseSources.has(e.sourceId)) mapBaseTiles++; });
     map.on('error', e => { if (baseSources.has(e.sourceId)) tileErrors++; });
     setTimeout(async () => {
-      if (map !== thisMap || tilesOk > 0 || tileErrors === 0) return;
+      if (map !== thisMap || mapBaseTiles > 0 || tileErrors === 0) return;
       const meta = await fetchOfflineMeta();
       if (!meta || map !== thisMap) return;
       replaceMap();
@@ -2972,6 +3009,8 @@ const MAP_RETRY_MAX_MS = 10 * 60 * 1000;
 let mapRetryMs = MAP_RETRY_MIN_MS;
 let mapLoadTimer = null;
 let mapRetryTimer = null;
+let mapLoadedOnce = false;   // this map has fired 'load'
+let mapBaseTiles = 0;        // basemap tiles this online map has received
 
 // A hidden page gets no animation frames, and MapLibre cannot finish loading
 // without them -- which is the kiosk's normal state whenever the screensaver
@@ -2980,12 +3019,21 @@ let mapRetryTimer = null;
 // retry off to 10 minutes, so whoever woke the screen could wait that long
 // for a map. Hidden time is not failure: re-arm and wait, and let becoming
 // visible (below) restart the clock.
+//
+// An online map whose tiles never come -- stalled rather than refused, so the
+// tile check in createMap sees no error -- goes to the map on the device
+// instead of online again, where the style still answers and the tiles still
+// don't, for as long as the stall lasts (#86, 2026-10-26). The 20-minute check
+// below brings the online map back once its tiles download.
 function armMapLoadTimer(thisMap) {
   clearTimeout(mapLoadTimer);
-  mapLoadTimer = setTimeout(() => {
+  mapLoadTimer = setTimeout(async () => {
     if (map !== thisMap || thisMap.loaded()) return;
     if (document.visibilityState === 'hidden') { armMapLoadTimer(thisMap); return; }
+    const meta = !mapIsOffline && mapBaseTiles === 0 ? await fetchOfflineMeta() : null;
+    if (map !== thisMap || thisMap.loaded()) return;
     replaceMap();
+    if (meta) { createMap(offlineStyle(meta), true); return; }
     clearTimeout(mapRetryTimer);
     mapRetryTimer = setTimeout(initMap, mapRetryMs);
     mapRetryMs = Math.min(mapRetryMs * 2, MAP_RETRY_MAX_MS);
@@ -2994,7 +3042,10 @@ function armMapLoadTimer(thisMap) {
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible' || !home) return;
-  if (map && !map.loaded()) {
+  // Only a map that has never loaded. A loaded one reads loaded() false
+  // whenever any tile is still coming, a storm tile included, and was torn
+  // down a minute after a wake for one that had stalled.
+  if (map && !mapLoadedOnce) {
     armMapLoadTimer(map);                 // a full timeout now that it can load
   } else if (!map && !mapStarting) {
     // Waiting out a retry backoff: someone is looking, so try now.
@@ -3219,6 +3270,7 @@ let viewFeedOn = false;
 let viewFeedCount = 0;
 let viewFeedCovered = 0;               // how far round the middle the last answer reached, nm
 let viewFeedLast = { at: -1e9, key: '' };
+let viewFeedAsking = false;              // one request at a time, however the view moves (#86)
 function viewLooksBeyondRing() {
   return !!home && (view.scale < 0.66 || Math.hypot(view.ox, view.oy) > R * view.scale);
 }
@@ -3238,9 +3290,12 @@ async function refreshViewFeed() {
   const key = tiled ? `${Math.round(c.lat * 2)}|${Math.round(c.lon * 2)}|${Math.round(half / 100)}` : `${c.lat.toFixed(2)}|${c.lon.toFixed(2)}|${Math.round(half)}`;
   const now0 = performance.now();
   if (key === viewFeedLast.key && now0 - viewFeedLast.at < (tiled ? VIEW_FEED_TILED_MS : VIEW_FEED_MS) - 500) return;
+  if (viewFeedAsking) return;
   viewFeedLast = { at: now0, key };
+  viewFeedAsking = true;
   try {
-    const res = await fetch(`${VIEW_FEED_URL}?lat=${c.lat.toFixed(3)}&lon=${c.lon.toFixed(3)}&half=${Math.round(half)}`, { cache: 'no-store' });
+    const res = await fetch(`${VIEW_FEED_URL}?lat=${c.lat.toFixed(3)}&lon=${c.lon.toFixed(3)}&half=${Math.round(half)}`,
+                            { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
     if (!res.ok) return;              // asked too soon, or the network is away: keep what we have
     const d = await res.json();
     viewFeedCovered = typeof d.covered === 'number' ? d.covered : 0;
@@ -3270,7 +3325,11 @@ async function refreshViewFeed() {
       n++;
     }
     viewFeedCount = n;
-  } catch (e) { /* keep what we have */ }
+  } catch (e) {
+    /* keep what we have */
+  } finally {
+    viewFeedAsking = false;
+  }
 }
 setInterval(refreshViewFeed, VIEW_FEED_MS);
 
@@ -3443,6 +3502,9 @@ async function loadRunways(attempt = 1) {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'data=' + encodeURIComponent(query),
+      // The query's own [timeout:25] plus the trip: one that never answered
+      // ended the retries for the life of the page (#86).
+      signal: AbortSignal.timeout(30 * 1000),
     });
     if (!res.ok) { retry(); return; }
     const data = await res.json();
@@ -3503,7 +3565,7 @@ async function refreshStorms() {
   // radar mosaic every five minutes and throwing it away.
   if (!map || !alertSettings.storms || PERF.noWeather) return;
   try {
-    const res = await fetch(RAINVIEWER_API_URL, { cache: 'no-store' });
+    const res = await fetch(RAINVIEWER_API_URL, { cache: 'no-store', signal: AbortSignal.timeout(REMOTE_TIMEOUT_MS) });
     if (!res.ok) return;
     const data = await res.json();
     const frames = data.radar && data.radar.past;
@@ -3655,10 +3717,12 @@ const LIGHTNING_ALERT_CHECK_MS = 2 * 60 * 1000; // matches the overlay's own ref
 const LIGHTNING_PROBE_RING_POINTS = 8;
 
 let lightningAlerted = false; // survives across checks, not per-plane -- there's no single "object" a storm alert is about; and across a reload (carryAlerts)
+let lightningChecking = false; // a check still waiting on its probes: the next one is skipped, not piled on (#86)
 
 async function probeLightningValue(lat, lon) {
   try {
-    const res = await fetch(`https://realearth.ssec.wisc.edu/api/probe?products=${LIGHTNING_PROBE_PRODUCT}&lat=${lat}&lon=${lon}`);
+    const res = await fetch(`https://realearth.ssec.wisc.edu/api/probe?products=${LIGHTNING_PROBE_PRODUCT}&lat=${lat}&lon=${lon}`,
+                            { signal: AbortSignal.timeout(REMOTE_TIMEOUT_MS) });
     if (!res.ok) return null;
     const html = await res.text();
     const m = html.match(/Data value:\s*<b>([^<]+)<\/b>/);
@@ -3671,7 +3735,7 @@ async function probeLightningValue(lat, lon) {
 }
 
 async function checkLightningNearby() {
-  if (!home || !alertSettings.lightningAlert) return;
+  if (!home || !alertSettings.lightningAlert || lightningChecking) return;
   const radius = lightningAlerted ? LIGHTNING_ALERT_CLEAR_RADIUS_NM : LIGHTNING_ALERT_RADIUS_NM;
   const points = [[home.lat, home.lon]];
   for (const r of [radius / 2, radius]) {
@@ -3682,7 +3746,12 @@ async function checkLightningNearby() {
     }
   }
 
+  lightningChecking = true;
   const values = await Promise.all(points.map(([lat, lon]) => probeLightningValue(lat.toFixed(4), lon.toFixed(4))));
+  lightningChecking = false;   // probeLightningValue never throws
+  // Not one probe answered in time: nothing is known, so nothing changes --
+  // an alert standing is not cleared, to sound again at the next answer.
+  if (values.every(v => v === null)) return;
   const nearby = values.some(v => v !== null && v > 0);
 
   if (nearby && !lightningAlerted) {
@@ -3810,20 +3879,29 @@ const ON_DEVICE = location.hostname === 'localhost' || location.hostname === '12
 // on, the splash is on screen, so the cover can go: the picture beneath is
 // the same.
 if (ON_DEVICE) requestAnimationFrame(() => requestAnimationFrame(() => {
-  fetch('/wake/painted', { method: 'POST' }).then(drain).catch(() => {});
+  fetch('/wake/painted', { method: 'POST', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});
 }));
 let radarName = '';   // this radar's name, once the setup service has said it
 const ONBOARD_POLL_MS = 5000;
+// The listener's answer shells out to nmcli and tailscale, and has taken
+// over a minute when one of them was slow; the polls queued up behind it and
+// filled the browser's few connections to it (#86, 2026-10-26). One at a
+// time, each with a limit, and a slow answer changes nothing on screen.
+let onboardAsking = false;
 
 async function refreshOnboarding() {
   const el = document.getElementById('onboard');
-  if (!el || !ON_DEVICE) return;
+  if (!el || !ON_DEVICE || onboardAsking) return;
   let d = null;
+  onboardAsking = true;
   try {
-    const res = await fetch(ONBOARD_URL, { cache: 'no-store' });
+    const res = await fetch(ONBOARD_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
     if (res.ok) d = await res.json();
   } catch (e) {
     // no setup service on this unit -- nothing to show, ever
+    if (e.name === 'TimeoutError') return;
+  } finally {
+    onboardAsking = false;
   }
   // The radar's name (roadmap 2.17), from the loopback-only endpoint, so it
   // shows on this screen and never on the public page.
@@ -3964,7 +4042,7 @@ function wakeScreenForAlert(why = 'alert') {
   applyNightDim();
   // The reason goes in the journal (wake-listener.py): the panel was found
   // never to blank, and nothing said which alert kept waking it (2026-10-10).
-  if (ON_DEVICE) fetch('/wake?why=' + encodeURIComponent(why), { method: 'POST' }).then(drain).catch(() => {});   // the panel only (#67)
+  if (ON_DEVICE) fetch('/wake?why=' + encodeURIComponent(why), { method: 'POST', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});   // the panel only (#67)
 }
 
 // ---- Nearby-aircraft alert ---------------------------------------------
@@ -4118,6 +4196,28 @@ function redrawStaticLayers() {
 }
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawStaticLayers);
 
+// ---- Web fonts, without waiting for them (#86, 2026-10-26) -------------------
+// The two typefaces came in through an @import at the top of the page's style,
+// and the browser holds a page's script until such a stylesheet arrives or
+// fails. With the WiFi joined but no way out -- after a power cut, while the
+// router finds its feet -- the panel drew nothing for ten seconds to two
+// minutes. Added from here instead, the stylesheet holds up nothing: the page
+// shows in the fallback fonts every font stack already names until the web
+// fonts come, and the canvas text (ring labels, compass letters) is drawn
+// again once they have.
+const WEB_FONTS_URL = 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap';
+{
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = WEB_FONTS_URL;
+  link.addEventListener('load', () => {
+    if (!document.fonts) return;
+    Promise.all(['15px "JetBrains Mono"', '600 20px Inter'].map(f => document.fonts.load(f)))
+      .then(redrawStaticLayers, () => {});
+  });
+  document.head.appendChild(link);
+}
+
 function applyTheme(theme, chosen = false) {
   uiTheme = theme;
   document.documentElement.setAttribute('data-theme', theme);
@@ -4192,7 +4292,7 @@ let powerVolumeCap = POWER_VOLUME_CAP;   // the unit may set it (power.json "cap
 async function checkPowerLimit() {
   if (!ON_DEVICE) return;
   try {
-    const r = await fetch('/data/power.json', { cache: 'no-store' });
+    const r = await fetch('/data/power.json', { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) });
     if (r.ok) {
       const doc = await r.json();
       const was = [powerLimited, powerVolumeCap];
@@ -4280,7 +4380,7 @@ function applyScreenPolicy() {
   const now = Date.now();
   if (mode === screenModeSent.mode && now - screenModeSent.at < 5 * 60 * 1000) return;
   screenModeSent = { mode, at: now };
-  fetch('/wake/mode?m=' + encodeURIComponent(mode), { method: 'POST' }).then(drain).catch(() => {});
+  fetch('/wake/mode?m=' + encodeURIComponent(mode), { method: 'POST', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});
 }
 
 // Opens a short window in which quiet hours step aside, then closes it on its
@@ -4318,7 +4418,7 @@ document.addEventListener('pointerdown', () => {
   const now = performance.now();
   if (now - lastTouchReport < 5000) return;
   lastTouchReport = now;
-  fetch('/wake/touch', { method: 'POST' }).then(drain).catch(() => {});
+  fetch('/wake/touch', { method: 'POST', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});
 }, { capture: true, passive: true });
 
 // Shared tone-sequence player -- each note is [freq, startOffset, dur, peakGain].
@@ -4364,12 +4464,15 @@ function playTones(notes) {
 // playback goes through the same getMasterGain() node as playTones -- one
 // volume/mute path for every sound in the app, sample or synthesized, rather
 // than a second one with its own .volume property to keep in sync.
+// A load that failed or ran out of time is forgotten (#86), so the next alert
+// asks again: kept, it silenced that sound for the life of the page.
 const sampleBuffers = {};
 function loadSample(url) {
   if (!sampleBuffers[url]) {
-    sampleBuffers[url] = fetch(url)
+    sampleBuffers[url] = fetch(url, { signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) })
       .then((r) => r.arrayBuffer())
-      .then((buf) => getAudioCtx().decodeAudioData(buf));
+      .then((buf) => getAudioCtx().decodeAudioData(buf))
+      .catch((e) => { delete sampleBuffers[url]; throw e; });
   }
   return sampleBuffers[url];
 }
@@ -4848,7 +4951,7 @@ let networkError = null;
 async function refreshNetworkCompare() {
   if (!alertSettings.networkCompare || PERF.noNetwork) { ghosts = []; ghostTracks.clear(); return; }
   try {
-    const res = await fetch(NETWORK_URL, { cache: 'no-store' });
+    const res = await fetch(NETWORK_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const d = await res.json();
     networkStats = d.stats || null;
@@ -5201,13 +5304,14 @@ let netInfoReachable = false;
 async function refreshNetStatus() {
   if (!ON_DEVICE) return;    // the listener is on the radar's own loopback
   try {
-    const res = await fetch(ONBOARD_URL, { cache: 'no-store' });
+    const res = await fetch(ONBOARD_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
     if (res.ok) { netInfo = await res.json(); netInfoReachable = true; maybePlayBootSound(); }
   } catch (e) {
     // Not on the device (a laptop, or the public URL). Not an error: the
     // receiver half below still works, and claiming the network is down
-    // because we cannot ask would be worse than saying less.
-    netInfoReachable = false;
+    // because we cannot ask would be worse than saying less. A slow answer
+    // (#86) is not an absent listener: the last one stands.
+    if (e.name !== 'TimeoutError') netInfoReachable = false;
   }
   renderNetStatus();
 }
@@ -5372,11 +5476,11 @@ let notableDb = null;   // hex -> [category, kind, operator, type]
 let notablePeople = null;   // hex -> name
 async function loadNotableDb() {
   try {
-    const res = await fetch('/data/notable.json');
+    const res = await fetch('/data/notable.json', { signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
     if (res.ok) notableDb = (await res.json()).ac || null;
   } catch (e) { /* absent until the unit's first weekly fetch; the rest still works */ }
   try {
-    const res = await fetch('/data/notable-people.json');
+    const res = await fetch('/data/notable-people.json', { signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) });
     if (res.ok) notablePeople = (await res.json()).names || null;
   } catch (e) { /* refused on the public page, by design */ }
 }
@@ -5519,7 +5623,7 @@ function humanizeType(s) {
 
 async function discoverDatabaseFolder() {
   try {
-    const res = await fetch('/tar1090/index.html', { cache: 'force-cache' });
+    const res = await fetch('/tar1090/index.html', { cache: 'force-cache', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
     const html = await res.text();
     const m = /databaseFolder\s*=\s*"([^"]+)"/.exec(html);
     if (m) databaseFolder = m[1];
@@ -5535,7 +5639,7 @@ async function discoverDatabaseFolder() {
 async function loadTypeCodeTable() {
   if (!databaseFolder) return;
   try {
-    const res = await fetch(`/tar1090/${databaseFolder}/icao_aircraft_types2.js`, { cache: 'force-cache' });
+    const res = await fetch(`/tar1090/${databaseFolder}/icao_aircraft_types2.js`, { cache: 'force-cache', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
     const data = await res.json();
     for (const code in data) {
       const entry = data[code];
@@ -5548,6 +5652,7 @@ async function loadTypeCodeTable() {
   }
 }
 
+const SHARD_RETRY_MS = 60 * 1000;
 function fetchShard(bkey) {
   // cache the in-flight promise itself, not just the resolved value — several
   // aircraft sharing a hex prefix (e.g. all US-registered "A...") otherwise
@@ -5555,10 +5660,15 @@ function fetchShard(bkey) {
   if (shardCache.has(bkey)) return shardCache.get(bkey);
   const promise = (async () => {
     try {
-      const res = await fetch(`/tar1090/${databaseFolder}/${bkey}.js`, { cache: 'force-cache' });
+      const res = await fetch(`/tar1090/${databaseFolder}/${bkey}.js`, { cache: 'force-cache', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
       return res.ok ? await res.json() : null;
     } catch (e) {
-      return null;
+      // Unanswered, cut off or unreadable (#86): undefined rather than null,
+      // so lookupType remembers nothing, and the shard is asked for again in
+      // a minute. Kept, one stalled shard had every aircraft under its prefix
+      // unlabelled for the life of the page.
+      setTimeout(() => shardCache.delete(bkey), SHARD_RETRY_MS);
+      return undefined;
     }
   })();
   shardCache.set(bkey, promise);
@@ -5579,6 +5689,7 @@ async function lookupType(hex) {
   while (level <= icao.length) {
     const bkey = icao.substring(0, level);
     const data = await fetchShard(bkey);
+    if (data === undefined) { hexTypePending.delete(hex); return empty; }   // asked again on a later poll
     if (!data) break;
     const dkey = icao.substring(level);
     if (dkey in data) { entry = data[dkey]; break; }
@@ -5643,7 +5754,7 @@ async function loadHome() {
     return;
   }
   try {
-    const res = await fetch(RECEIVER_URL, { cache: 'no-store' });
+    const res = await fetch(RECEIVER_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) });
     const data = await res.json();
     if (typeof data.lat === 'number' && typeof data.lon === 'number') {
       const real = { lat: data.lat, lon: data.lon };
@@ -5743,16 +5854,27 @@ function normalizeAircraft(a) {
   };
 }
 
+// One poll at a time, each with a limit (#86, 2026-10-26). Polled every second
+// with neither, a feed that stopped answering gathered a new request a second,
+// and on the panel those filled the browser's six connections to the radar,
+// so the heartbeat, the wake pings and every other call to it waited too.
+let aircraftAsking = false;
 async function fetchAircraft() {
+  if (aircraftAsking) return;
+  aircraftAsking = true;
   try {
-    const res = await fetch(CORE_URL, { cache: 'no-store' });
+    const res = await fetch(CORE_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     lastGoodFetch = performance.now();
     connected = true;
     applyUpdate((data.aircraft || []).map(fromCore));
   } catch (e) {
-    connected = false;   // the feed didn't answer: NO SIGNAL until it does
+    // The feed didn't answer: NO SIGNAL until it does. One slow answer is
+    // left to STALE_MS, as it was before polls had a limit.
+    if (e.name !== 'TimeoutError') connected = false;
+  } finally {
+    aircraftAsking = false;
   }
 }
 
@@ -6458,7 +6580,7 @@ function reportPainted(now) {
   // reloading -- sightings, statistics and the approach heatmap all live in
   // the server-side stores -- beyond trails and ghost tracks, which rebuild
   // within a sweep.
-  fetch('/wake/alive', { method: 'POST' })
+  fetch('/wake/alive', { method: 'POST', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) })
     .then(r => (r.status === 200 ? r.json() : (drain(r), null)))
     .then(d => { if (d && d.reload && !reloadWantedAt) reloadWhenQuiet(); })
     .catch(() => {});  // absent off-device; harmless
@@ -6669,7 +6791,7 @@ async function lookupStockPhoto(typeLabel) {
   stockPhotoPending.add(typeLabel);
   let result = null;
   try {
-    const res = await fetch(`/photo/type?q=${encodeURIComponent(typeLabel)}`);
+    const res = await fetch(`/photo/type?q=${encodeURIComponent(typeLabel)}`, { signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
     const data = await res.json();
     if (data.found && /^https:\/\//.test(data.thumb || '')) {
       result = { thumb: data.thumb, artist: data.artist, license: data.license, page: data.page };
@@ -6726,12 +6848,12 @@ const PLANESPOTTERS_API = 'https://api.planespotters.net/pub/photos/hex/';
 const planespottersCache = new Map();   // hex -> { at, data }; their terms allow 24 h
 async function fetchPhoto(hex) {
   if (ON_DEVICE) {
-    const res = await fetch(`/photo/${hex}`, { cache: 'no-store' });
+    const res = await fetch(`/photo/${hex}`, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
     return res.json();
   }
   const hit = planespottersCache.get(hex);
   if (hit && Date.now() - hit.at < 24 * 3600 * 1000) return hit.data;
-  const res = await fetch(PLANESPOTTERS_API + encodeURIComponent(hex), { cache: 'no-store' });
+  const res = await fetch(PLANESPOTTERS_API + encodeURIComponent(hex), { cache: 'no-store', signal: AbortSignal.timeout(REMOTE_TIMEOUT_MS) });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const p = ((await res.json()).photos || [])[0];
   const data = p ? { found: true, thumb: p.thumbnail?.src, thumbLarge: p.thumbnail_large?.src,
@@ -6977,15 +7099,28 @@ function renderSettingsPanel() {
 // so no credential is needed -- and none can be required, since this is the
 // only way back in for someone who has forgotten the admin password.
 const DEVICE_API = 'http://127.0.0.1:8090';
+// Every call has a limit (#86, 2026-10-26), set past the listener's own for
+// that kind of call (setup-server.py: 10-30 s for a status or a quick change,
+// up to 3 minutes for one that restarts or reconfigures something), so a slow
+// success still reads as one and only a listener that has stopped answering
+// ends here, instead of "Working…" for good.
+const DEVICE_API_TIMEOUT_MS = 40 * 1000;
+const DEVICE_API_SLOW_MS = 200 * 1000;
 
 async function deviceApi(path, opts = {}) {
   if (!ON_DEVICE) throw new Error('Only on the radar itself.');
-  const r = await fetch(DEVICE_API + path, {
-    ...opts, headers: { 'Content-Type': 'application/json' } });
-  let b = {};
-  try { b = await r.json(); } catch (e) {}
-  if (!r.ok) throw new Error(b?.error?.message || 'That did not work.');
-  return b;
+  const { timeoutMs = DEVICE_API_TIMEOUT_MS, ...rest } = opts;
+  try {
+    const r = await fetch(DEVICE_API + path, {
+      ...rest, headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(timeoutMs) });
+    let b = {};
+    try { b = await r.json(); } catch (e) { if (e.name === 'TimeoutError') throw e; }
+    if (!r.ok) throw new Error(b?.error?.message || 'That did not work.');
+    return b;
+  } catch (e) {
+    if (e.name === 'TimeoutError') throw new Error("The radar's setup service did not answer in time. Try again in a moment.");
+    throw e;
+  }
 }
 
 // ---- Phone & Watch: pairing the StratoScan app (roadmap 2.3) -------------------
@@ -7018,6 +7153,7 @@ function stopPhonePolling() {
   if (phonePoll) { clearInterval(phonePoll); phonePoll = null; }
 }
 
+let phonePollAsking = false;   // the last poll is still waiting: no second one behind it (#86)
 function startPhonePolling() {
   stopPhonePolling();
   phonePoll = setInterval(async () => {
@@ -7025,7 +7161,9 @@ function startPhonePolling() {
       stopPhonePolling();
       return;
     }
-    await loadPhoneStatus();
+    if (phonePollAsking) return;
+    phonePollAsking = true;
+    try { await loadPhoneStatus(); } finally { phonePollAsking = false; }
     if (settingsSection === 'phone') renderSettingsPanel();
     if (!phoneState || !phoneState.offer) stopPhonePolling();
   }, PHONE_POLL_MS);
@@ -7237,7 +7375,7 @@ async function refreshWeather() {
 async function refreshToday() {
   todayAt = performance.now();
   try {
-    const st = await (await fetch('/sightings/stats', { cache: 'no-store' })).json();
+    const st = await (await fetch('/sightings/stats', { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) })).json();
     const n = st && st.today ? st.today.total : null;
     if (typeof n === 'number') todayText = n === 1 ? '1 aircraft heard today' : `${n.toLocaleString()} aircraft heard today`;
   } catch (e) { /* the store is optional; show without it */ }
@@ -7293,7 +7431,7 @@ let rewindSelected = null;             // hex whose track is drawn
 let rewindLoadSeq = 0;
 
 async function fetchChunk(name, fresh) {
-  const res = await fetch(`/tar1090/chunks/${name}`, { cache: fresh ? 'no-store' : 'default' });
+  const res = await fetch(`/tar1090/chunks/${name}`, { cache: fresh ? 'no-store' : 'default', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`history unavailable (${res.status})`);
   const data = await res.json();
   return Array.isArray(data.files) ? data.files : [];
@@ -7303,7 +7441,7 @@ async function loadRewind() {
   const seq = ++rewindLoadSeq;
   rewindError = '';
   try {
-    const list = await (await fetch('/tar1090/chunks/chunks.json', { cache: 'no-store' })).json();
+    const list = await (await fetch('/tar1090/chunks/chunks.json', { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) })).json();
     const names = Array.isArray(list.chunks) ? list.chunks : [];
     for (const k of rewindChunkCache.keys()) if (!names.includes(k)) rewindChunkCache.delete(k);
     await Promise.all(names.filter(n => !rewindChunkCache.has(n)).map(async n => {
@@ -7515,7 +7653,7 @@ function statsDateLine(st) {
 // Year in review, from the store's per-year counters (/sightings/year).
 let yearStats = null;
 async function loadYearStats() {
-  try { yearStats = await (await fetch('/sightings/year', { cache: 'no-store' })).json(); }
+  try { yearStats = await (await fetch('/sightings/year', { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) })).json(); }
   catch (e) { yearStats = null; }
 }
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -7830,10 +7968,13 @@ async function loadOtaStatus() {
 // and reloaded, so the polling exists mainly for the moment AFTER it comes
 // back: the fresh page reads status.json and reports what happened, including
 // a rollback that nobody was present to see.
+let otaPollAsking = false;     // as the phone poll above (#86)
 function startOtaPolling() {
   if (otaPoll) return;
   otaPoll = setInterval(async () => {
-    await loadOtaStatus();
+    if (otaPollAsking) return;
+    otaPollAsking = true;
+    try { await loadOtaStatus(); } finally { otaPollAsking = false; }
     if (!otaState || otaState.state !== 'applying') {
       clearInterval(otaPoll); otaPoll = null;
     }
@@ -8094,7 +8235,7 @@ async function handleDeviceTap(row) {
     if (!m) return;
     deviceBusy = true; renderSettingsPanel();
     try {
-      await deviceApi('/onboard/location', { method: 'POST',
+      await deviceApi('/onboard/location', { timeoutMs: DEVICE_API_SLOW_MS, method: 'POST',
         body: JSON.stringify({ lat: m.lat, lon: m.lon }) });
       deviceMsg = `Location set to ${m.lat.toFixed(4)}, ${m.lon.toFixed(4)}.`;
       deviceView = null;
@@ -8110,7 +8251,7 @@ async function handleDeviceTap(row) {
       // is -- getting it wrong is a radio-compliance problem, not a
       // preference.
       const cc = (AIRPORT.country || '').toUpperCase();
-      const r = await deviceApi('/onboard/locale', { method: 'POST',
+      const r = await deviceApi('/onboard/locale', { timeoutMs: DEVICE_API_SLOW_MS, method: 'POST',
         body: JSON.stringify({ timezone: tz, country: cc || undefined }) });
       tzCurrent = tz;
       // Only when the region actually changed -- re-saving the same one must
@@ -8155,7 +8296,7 @@ async function handleDeviceTap(row) {
 
   if (act === 'wifi-scan') {
     deviceBusy = true; renderSettingsPanel();
-    try { wifiNets = (await deviceApi('/onboard/wifi/scan', { method: 'POST' })).result || []; }
+    try { wifiNets = (await deviceApi('/onboard/wifi/scan', { timeoutMs: DEVICE_API_SLOW_MS, method: 'POST' })).result || []; }
     catch (e) { deviceMsg = e.message; }
     deviceBusy = false; return renderSettingsPanel();
   }
@@ -8165,7 +8306,8 @@ async function handleDeviceTap(row) {
     if (psk === null) return;
     deviceBusy = true; renderSettingsPanel();
     try {
-      await deviceApi('/onboard/wifi/connect', { method: 'POST',
+      // the listener allows the join 150 s and then its confirm 120 s
+      await deviceApi('/onboard/wifi/connect', { timeoutMs: 5 * 60 * 1000, method: 'POST',
         body: JSON.stringify({ ssid: wifi, psk }) });
       deviceMsg = `Connected to ${wifi}.`;
     } catch (e) { deviceMsg = e.message; }
@@ -8178,7 +8320,7 @@ async function handleDeviceTap(row) {
       // Seeded from the configured airport's country, so the list is the one
       // or two zones that country uses rather than all 485.
       const cc = act === 'tz-all' ? '' : (AIRPORT.country || '');
-      const res = await deviceApi('/onboard/locale?country=' + encodeURIComponent(cc)) || {};
+      const res = await deviceApi('/onboard/locale?country=' + encodeURIComponent(cc), { timeoutMs: DEVICE_API_SLOW_MS }) || {};
       tzCurrent = res.current?.timezone || '';
       tzRows = (act === 'tz-all' || !(res.forCountry || []).length)
         ? (res.all || []) : res.forCountry;
@@ -8195,7 +8337,7 @@ async function handleDeviceTap(row) {
     if (st.state === 'checked' && st.update_available) {
       deviceBusy = true; deviceMsg = ''; renderSettingsPanel();
       try {
-        await deviceApi('/onboard/ota', { method: 'POST',
+        await deviceApi('/onboard/ota', { timeoutMs: DEVICE_API_SLOW_MS, method: 'POST',
           body: JSON.stringify({ action: 'apply' }) });
         deviceMsg = 'Installing. The screen will restart; if the new version '
                   + 'does not come up, the old one is put back automatically.';
@@ -8206,7 +8348,7 @@ async function handleDeviceTap(row) {
     }
     deviceBusy = true; deviceMsg = ''; renderSettingsPanel();
     try {
-      await deviceApi('/onboard/ota', { method: 'POST',
+      await deviceApi('/onboard/ota', { timeoutMs: DEVICE_API_SLOW_MS, method: 'POST',
         body: JSON.stringify({ action: 'check' }) });
       await loadOtaStatus();
       deviceMsg = (otaState && otaState.update_available)
@@ -8266,7 +8408,7 @@ async function handleDeviceTap(row) {
     }
     deviceBusy = true; renderSettingsPanel();
     try {
-      await deviceApi('/onboard/location', { method: 'POST',
+      await deviceApi('/onboard/location', { timeoutMs: DEVICE_API_SLOW_MS, method: 'POST',
         body: JSON.stringify({ lat, lon }) });
       deviceMsg = `Location set to ${lat.toFixed(4)}, ${lon.toFixed(4)}.`;
     } catch (e) { deviceMsg = e.message; }
@@ -8288,7 +8430,7 @@ async function handleDeviceTap(row) {
   if (airport) {
     deviceBusy = true; renderSettingsPanel();
     try {
-      await deviceApi('/onboard/airport', { method: 'POST',
+      await deviceApi('/onboard/airport', { timeoutMs: DEVICE_API_SLOW_MS, method: 'POST',
         body: JSON.stringify({ code: airport }) });
       await loadAirportConfig();           // pick the change up immediately
       loadApproachPoints();                // a new airport's heatmap starts empty (setupd.clear_approach_store)
@@ -8303,7 +8445,7 @@ async function handleDeviceTap(row) {
     const was = ((radiosState || {})[band] || {}).on !== false;
     deviceBusy = true; deviceMsg = ''; renderSettingsPanel();
     try {
-      radiosState = (await deviceApi('/onboard/radios', { method: 'POST',
+      radiosState = (await deviceApi('/onboard/radios', { timeoutMs: DEVICE_API_SLOW_MS, method: 'POST',
         body: JSON.stringify({ [band]: !was }) })).result;
       deviceMsg = `${band} MHz receiver ${was ? 'off' : 'on'}. The radar's receiver restarts, so aircraft disappear for a few seconds.`;
     } catch (e) { deviceMsg = e.message; await loadRadios(); }
@@ -8314,7 +8456,7 @@ async function handleDeviceTap(row) {
     const on = !((deviceStatus && deviceStatus.hotspot) || {}).active;
     deviceBusy = true; renderSettingsPanel();
     try {
-      await deviceApi('/onboard/hotspot', { method: 'POST',
+      await deviceApi('/onboard/hotspot', { timeoutMs: DEVICE_API_SLOW_MS, method: 'POST',
         body: JSON.stringify({ on }) });
       await loadDeviceStatus();
       const h = (deviceStatus && deviceStatus.hotspot) || {};
@@ -8330,7 +8472,7 @@ async function handleDeviceTap(row) {
     if (name === null) return;
     deviceBusy = true; renderSettingsPanel();
     try {
-      const r = await deviceApi('/onboard/remote/start', { method: 'POST',
+      const r = await deviceApi('/onboard/remote/start', { timeoutMs: DEVICE_API_SLOW_MS, method: 'POST',
         body: JSON.stringify({ hostname: name.trim().toLowerCase() }) });
       deviceStatus = deviceStatus || {};
       deviceStatus.remote = { ...(deviceStatus.remote || {}),
@@ -8356,7 +8498,7 @@ async function handleDeviceTap(row) {
     const on = act.endsWith('-on');
     deviceBusy = true; renderSettingsPanel();
     try {
-      const r = await deviceApi('/onboard/remote/funnel', { method: 'POST',
+      const r = await deviceApi('/onboard/remote/funnel', { timeoutMs: DEVICE_API_SLOW_MS, method: 'POST',
         body: JSON.stringify({ enabled: on }) });
       deviceStatus.remote = { ...(deviceStatus.remote || {}),
                               publicUrl: r.result.publicUrl };
@@ -8398,7 +8540,7 @@ async function handleDeviceTap(row) {
     }
     deviceBusy = true; renderSettingsPanel();
     try {
-      await deviceApi('/onboard/reset', { method: 'POST',
+      await deviceApi('/onboard/reset', { timeoutMs: DEVICE_API_SLOW_MS, method: 'POST',
         body: JSON.stringify({ confirm: 'ERASE' }) });
       hideSettingsPanel();
       refreshOnboarding();                 // the setup screen takes over
@@ -8914,7 +9056,7 @@ document.addEventListener('keydown', (e) => {
   const fn = CONTROL_KEYS[e.code];
   if (!fn) return;
   e.preventDefault();
-  if (ON_DEVICE) fetch('/wake/touch', { method: 'POST' }).then(drain).catch(() => {});   // using the dials counts as using the screen
+  if (ON_DEVICE) fetch('/wake/touch', { method: 'POST', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});   // using the dials counts as using the screen
   fn();
 }, { capture: true });
 document.addEventListener('keydown', (e) => {   // a laptop: + and - zoom, 0 goes home, l holds
@@ -9016,10 +9158,20 @@ stage.addEventListener('pointerup', (e) => {
   // to throw the settings panel over the radar.
 });
 
+// How long start() waits for /config.json, and then for receiver.json, before
+// going on without them (#86, 2026-10-26). Both are files the radar serves
+// itself and normally answer in milliseconds, so then nothing is different.
+// Awaited with no limit, a radar or a connection that had stalled left the
+// panel with no draw loop, no aircraft poll and no heartbeat for as long as
+// it lasted. A late answer still lands: the airport when it comes, the home
+// as the receiver's retry below.
+const START_WAIT_MS = 2000;
+
 async function start() {
   // Must complete before the settings panel renders or any approach/phase
-  // logic runs, so a relocated unit never briefly uses RDU's coordinates.
-  await loadAirportConfig();
+  // logic runs, so a relocated unit never briefly uses RDU's coordinates --
+  // unless the radar is too slow to say, when RDU stands until it does.
+  await withinTime(loadAirportConfig(), START_WAIT_MS).catch(() => {});
   discoverDatabaseFolder().then(loadTypeCodeTable); // non-blocking; type labels fill in once ready
   loadApproachPoints(); // non-blocking; heatmap fills in once ready (or once initApproachLayer adds the source, whichever comes second)
   loadSightingCounts(); // non-blocking; counts fill in once ready, same reasoning
@@ -9040,13 +9192,17 @@ async function start() {
   setInterval(refreshNetStatus, NET_STATUS_POLL_MS);
   refreshNetworkCompare();
   setInterval(refreshNetworkCompare, NETWORK_POLL_MS);
-  await loadHome();
+  // The last known home stands in when the receiver is slow as well as when
+  // it is down, and one request at a time: the retries used to pile up behind
+  // one that hung.
+  let homeAsk = loadHome().finally(() => { homeAsk = null; });
+  await withinTime(homeAsk, START_WAIT_MS).catch(() => {});
   if (!home) useCachedHome();
   if (!home || homeFromCache) {
     // keep retrying receiver info in the background until it succeeds
-    const retryHome = setInterval(async () => {
+    const retryHome = setInterval(() => {
       if (home && !homeFromCache) { clearInterval(retryHome); return; }
-      await loadHome();
+      if (!homeAsk) homeAsk = loadHome().finally(() => { homeAsk = null; });
     }, FETCH_INTERVAL_MS);
   }
   fetchAircraft();
