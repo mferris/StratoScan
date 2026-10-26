@@ -39,6 +39,11 @@ struct AlertsSection: View {
                     }
                 }
             }
+            if push.needsLocation && !reporter.strangers.isEmpty {
+                // the tripwire (2026-10-26): see Paired radars above
+                Text("Your location isn't being sent: the StratoScan service lists a radar this phone didn't pair with (see Paired radars).")
+                    .font(.callout).foregroundColor(.orange)
+            }
             if push.needsLocation && reporter.needsAlways {
                 // Without Always, iOS won't wake the app when the phone moves.
                 Button("Set location to Always for “Approaching me”") {

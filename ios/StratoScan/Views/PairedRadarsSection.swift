@@ -3,6 +3,7 @@ import SwiftUI
 /// Settings section: the radars this phone gets alerts from.
 struct PairedRadarsSection: View {
     @EnvironmentObject private var pairing: PairingStore
+    @ObservedObject private var reporter = ApproachReporter.shared
     /// Owned by SettingsView, which presents the scanner. Presented from
     /// here, inside the Form, it was dismissed as soon as it appeared: a
     /// list redraws its rows (Settings follows the live radar), and a sheet
@@ -25,6 +26,17 @@ struct PairedRadarsSection: View {
                                 .font(.caption).foregroundColor(.orange)
                         }
                     }
+                }
+            }
+            // Listed by the relay but never paired here (2026-10-26): no
+            // radar gets this phone's location until it is settled.
+            ForEach(reporter.strangers, id: \.self) { unit in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("A radar this phone didn't pair with").foregroundColor(.orange)
+                    Text("The StratoScan service lists it for this phone (its id begins \(unit.prefix(8))). Until that's settled, no radar gets this phone's location. If it's yours, pair with it again from its screen; if not, unpair it.")
+                        .font(.caption).foregroundColor(.secondary)
+                    Button("Unpair it", role: .destructive) { Task { await pairing.unpair(stranger: unit) } }
+                        .disabled(pairing.busy)
                 }
             }
             if PairingScannerView.isAvailable {

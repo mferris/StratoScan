@@ -267,10 +267,22 @@ struct ContentView: View {
 
     // The two dialogs' messages, built step by step: as one expression they
     // took GitHub's Swift compiler past its type-checking limit (CodeQL).
+    // Pairing's says what the radar gets, and whether the radar view moves
+    // to it (2026-10-26): a link can come from any page or message.
     private var pairingMessage: String {
+        guard let link = pairing.pendingLink else { return "" }
         var text = "Only pair with a code shown on your own radar's screen. This phone will get that radar's alerts."
-        if let name = pairing.pendingLink?.name { text += "\nIt calls itself “\(name)”." }
-        if let host = pairing.pendingLink?.host { text += "\nRadar at \(host)" }
+        text += " While Approaching me, or nearby alerts about where you are, is on, that radar also gets this phone's location."
+        if let name = link.name {
+            text += "\nIt calls itself “\(name)”."
+            if pairing.radars.contains(where: { $0.name == name && $0.unit != link.unit }) {
+                text += " You already have a radar by that name: this is a different one."
+            }
+        }
+        if let host = link.host { text += "\nRadar at \(host)" }
+        if link.host != nil || link.publicURL != nil {
+            text += PairingStore.radarViewUnset ? "\nThe radar view will read it." : "\nThe radar view stays on the radar it reads now."
+        }
         return text
     }
 
