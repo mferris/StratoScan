@@ -591,16 +591,19 @@ test('a burst of alerts stays within Cloudflare limits: a few pushes, then one s
   const { e, a } = await pushEnv();
   const u = await newUnit();
   clock += 1000;
-  await pairedPhone(e, u);
-  await pairedPhone(e, u);
+  // Phones are sent to side by side (#86), so each is followed by its own token.
+  const tokens = ['a1'.repeat(32), 'b2'.repeat(32)];
+  for (const token of tokens) await pairedPhone(e, u, { token });
   clock += 1;
   const burst = Array.from({ length: 8 }, (_, i) => evt({ kind: 'low_overhead', hex: (0x200000 + i).toString(16) }));
   burst.push(evt({ kind: 'emergency', hex: 'aaaaa9', squawk: '7700' }));
   await postEvents(e, u, burst);
   assert.equal(a.sent.length, 2 * (PUSHES_PER_BATCH + 1), 'per phone: PUSHES_PER_BATCH alerts and one summary');
-  const first = a.sent[0].body.aps.alert.title;
-  assert.ok(first.startsWith('Emergency'), 'the emergency goes first, not crowded out');
-  assert.equal(a.sent[PUSHES_PER_BATCH].body.aps.alert.body, `${9 - PUSHES_PER_BATCH} more alerts from this radar`);
+  for (const token of tokens) {
+    const to = a.sent.filter(p => p.url.endsWith(token));
+    assert.ok(to[0].body.aps.alert.title.startsWith('Emergency'), 'the emergency goes first, not crowded out');
+    assert.equal(to[PUSHES_PER_BATCH].body.aps.alert.body, `${9 - PUSHES_PER_BATCH} more alerts from this radar`);
+  }
 });
 
 test('emergencies pass the ordinary cap, but not the hard one', async () => {

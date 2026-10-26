@@ -33,10 +33,17 @@ export async function providerToken(env, nowS) {
 
 export const configured = env => !!(env.APNS_KEY && env.APNS_KEY_ID && env.APNS_TEAM_ID && env.APNS_TOPIC);
 
+// How long Apple is waited on (#86, 2026-10-26). A push had no limit: a
+// stalled api.push.apple.com held the app's test button until the phone gave
+// up and blamed its own connection, and held every later phone's alerts. One
+// push now gives up after sendMs; one delivery, all its phones together,
+// after deliveryMs, well inside the 30 s Cloudflare allows after a reply.
+export const tune = { sendMs: 10_000, deliveryMs: 20_000 };   // tests shorten them
+
 // Sends one notification. Returns { ok, status, reason, dead } -- dead means
 // the token will never work again (the app was deleted, or the token is
 // for the other environment) and should be forgotten.
-export async function send(env, phone, notification, nowS, fetchImpl = fetch) {
+export async function send(env, phone, notification, nowS, fetchImpl = fetch, timeoutMs = tune.sendMs) {
   const host = phone.env === 'sandbox' ? 'api.sandbox.push.apple.com' : 'api.push.apple.com';
   const live = notification.liveActivity === true;
   const headers = {
@@ -51,15 +58,17 @@ export async function send(env, phone, notification, nowS, fetchImpl = fetch) {
   if (notification.collapseId) headers['apns-collapse-id'] = notification.collapseId.slice(0, 64);
   let r;
   try {
+    // The signal covers Apple's reply body too, read below.
     r = await fetchImpl(`https://${host}/3/device/${notification.token || phone.token}`, {
-      method: 'POST', headers, body: JSON.stringify(notification.payload),
+      method: 'POST', headers, body: JSON.stringify(notification.payload), signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
-    return { ok: false, status: 0, reason: 'unreachable', dead: false };
+    const late = e && (e.name === 'TimeoutError' || e.name === 'AbortError');
+    return { ok: false, status: 0, reason: late ? 'timed out' : 'unreachable', dead: false };
   }
   if (r.status === 200) return { ok: true, status: 200 };
   let reason = '';
-  try { reason = (await r.json()).reason || ''; } catch { /* no body */ }
+  try { reason = (await r.json()).reason || ''; } catch { /* no body, or it never came */ }
   const dead = r.status === 410 || (r.status === 400 && ['BadDeviceToken', 'DeviceTokenNotForTopic'].includes(reason));
   return { ok: false, status: r.status, reason, dead };
 }
