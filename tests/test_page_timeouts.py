@@ -12,7 +12,8 @@ once the radar had moved to another network.
 
 This scans both pages for any request without a signal, and runs the page's
 own start(), withinTime(), deviceApi() and the setup page's api() under node
-with stand-in requests that never answer.
+with stand-in requests that never answer -- also as iOS 15 has them, with no
+AbortSignal.timeout, and as older Safari ends them, with a plain AbortError.
 
 Run: python3 tests/test_page_timeouts.py
 """
@@ -67,11 +68,13 @@ page_js, setup_js = script(html), script(setup)
 # ---- every request has a limit --------------------------------------------------------
 for name, code in (("index.html", page_js), ("deploy/setup-ui.html", setup_js)):
     found = calls(code, "fetch")
-    bare = [c for c in found if "signal:" not in c]
+    bare = [c for c in found if "signal: timeLimit(" not in c]
     check(len(found) >= (40 if name == "index.html" else 1) and not bare,
-          f"{name}: all {len(found)} requests pass a time limit (signal: AbortSignal.timeout)")
+          f"{name}: all {len(found)} requests pass a time limit (signal: timeLimit(...))")
     for c in bare:
-        check(False, f"{name}: no limit on {' '.join(c.split())[:100]}")
+        check(False, f"{name}: no limit through timeLimit() on {' '.join(c.split())[:100]}")
+    check(calls(code, "AbortSignal.timeout") == ["AbortSignal.timeout(ms)"] and "function timeLimit(ms)" in code,
+          f"{name}: AbortSignal.timeout only inside timeLimit(), which works without it (Safari before 16)")
     check("XMLHttpRequest" not in code and "EventSource" not in code and "WebSocket" not in code,
           f"{name}: and nothing asks the network any other way")
 imports = calls(page_js, "import")
@@ -97,8 +100,16 @@ for fn, flag in (("async function fetchAircraft()", "aircraftAsking"), ("async f
                  ("async function refreshViewFeed()", "viewFeedAsking"), ("async function checkLightningNearby()", "lightningChecking")):
     body = function(page_js, fn)
     check(f"if ({flag}) return;" in body or f"|| {flag}) return;" in body, f"{fn.split()[2][:-2]}: one at a time")
-check("if (e.name !== 'TimeoutError') connected = false;" in function(page_js, "async function fetchAircraft()"),
+check("if (!isTimeout(e)) connected = false;" in function(page_js, "async function fetchAircraft()"),
       "one slow aircraft poll is left to STALE_MS rather than flashing NO SIGNAL")
+onboard_limit = re.search(r"^const ONBOARD_TIMEOUT_MS = (\d+) \* 60 \* 1000;", page_js, re.M)
+check(bool(onboard_limit) and int(onboard_limit.group(1)) * 60 >= 150
+      and "signal: timeLimit(ONBOARD_TIMEOUT_MS)" in function(page_js, "function askOnboard()"),
+      "/onboard is given past the listener's worst case (about 2.5 minutes), so a slow answer still arrives")
+check(page_js.count("fetch(ONBOARD_URL,") == 1
+      and "await askOnboard()" in function(page_js, "async function refreshOnboarding()")
+      and "await askOnboard()" in function(page_js, "async function refreshNetStatus()"),
+      "and its two readers, the setup screen and the network pill, share the one request")
 check("if (phonePollAsking) return;" in page_js and "if (otaPollAsking) return;" in page_js,
       "the Phone & Watch and update polls too")
 check("setInterval(otaLoad" not in setup_js and "const poll = async () => { await otaLoad(); otaTimer = setTimeout(poll, 5000); };" in setup_js,
@@ -136,6 +147,8 @@ def node(js):
 
 
 within = function(page_js, "function withinTime(p, ms)")
+helpers = "\n".join([function(page_js, "function drain(res)"), function(page_js, "function timeLimit(ms)"),
+                     function(page_js, "function isTimeout(e)")])
 wait = (re.search(r"^const START_WAIT_MS = .*$", page_js, re.M) or [""])[0]
 start = function(page_js, "async function start()")
 
@@ -222,23 +235,37 @@ check(o.get("fastRafAt") == 0 and o.get("fastOrder") is True and o.get("fastHome
       "answers in time: the same as before, config first, then home, then the polls, with no wait")
 check(o.get("fastNoCache") is True and o.get("fastHomeAsks") == 1, "and no cached home and no retries when the receiver answered")
 
-# withinTime, deviceApi and the setup page's api(), with real timers and requests that never answer.
+# withinTime, deviceApi and the setup page's api(), with real timers and requests that never answer:
+# as Chromium has them, as iOS 15 has them (no AbortSignal.timeout) and as older Safari ends them
+# (a plain AbortError, whatever the reason).
 device = page_js[page_js.index("const DEVICE_API = "):]
 device = device[:device.index("\n}\n", device.index("async function deviceApi(")) + 3]
+onboard = "\n".join([(re.search(r"^const ONBOARD_URL = .*$", page_js, re.M) or [""])[0],
+                     (re.search(r"^let onboardAsk = .*$", page_js, re.M) or [""])[0],
+                     "const ONBOARD_TIMEOUT_MS = 60 * 1000;", function(page_js, "function askOnboard()")])
 api = setup_js[setup_js.index("let TOKEN = null"):]
 api = api[:api.index("\n}\n", api.index("async function api(")) + 3]
 js = r"""
+if (MODE !== 'chromium') AbortSignal.timeout = undefined;
 const hang = (url, opts = {}) => new Promise((resolve, reject) => {
-  opts.signal.addEventListener('abort', () => reject(opts.signal.reason));
+  opts.signal.addEventListener('abort', () =>
+    reject(MODE === 'old-safari' ? new DOMException('Fetch is aborted', 'AbortError') : opts.signal.reason));
 });
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const settle = (p) => Promise.race([p.then(v => ({ v }), e => ({ e })), sleep(3000).then(() => ({ hung: true }))]);
 const document = { getElementById: () => null };
 const ON_DEVICE = true;
 let fetch = hang;
-""" + within + "\n" + device + "\n" + api + r"""
+""" + helpers + "\n" + within + "\n" + device + "\n" + onboard + r"""
+const api = (function () {
+""" + api + r"""
+return api;
+})();
 (async () => {
   const out = {};
+  const sig = timeLimit(30);
+  await sleep(80);
+  out.limitFires = sig.aborted && isTimeout(sig.reason) && sig.reason.name === 'TimeoutError';
   let r = await settle(withinTime(new Promise(() => {}), 30));
   out.withinLate = !!r.e && r.e.name === 'TimeoutError';
   r = await settle(withinTime(Promise.resolve(7), 1000));
@@ -250,22 +277,79 @@ let fetch = hang;
   fetch = async () => ({ ok: false, status: 400, json: async () => ({ error: { message: 'Wrong password.' } }) });
   r = await settle(api('wifi/connect', { method: 'POST' }));
   out.apiRefusal = !!r.e && r.e.message === 'Wrong password.' && r.e.status === 400 && !r.e.timedOut;
-  let seen = null;
+  fetch = async () => { throw new TypeError('Load failed'); };
+  r = await settle(api('status'));
+  out.apiNetworkError = !!r.e && r.e.message === 'Load failed' && !r.e.timedOut;
+  let seen = null, asks = 0;
   fetch = async (url, opts) => { seen = opts; return { ok: true, status: 200, json: async () => ({ fine: 1 }) }; };
   r = await settle(api('status'));
   out.apiDefault = r.v && r.v.fine === 1 && seen.signal instanceof AbortSignal && !('timeoutMs' in seen);
   r = await settle(deviceApi('/onboard'));
   out.deviceDefault = r.v && r.v.fine === 1 && seen.signal instanceof AbortSignal && !('timeoutMs' in seen);
+  fetch = (url, opts) => { asks++; seen = opts;
+    return sleep(20).then(() => ({ ok: true, status: 200, json: async () => ({ claimed: true }) })); };
+  const both = await Promise.all([askOnboard(), askOnboard()]);
+  out.onboardShared = asks === 1 && both[0] === both[1] && both[0].claimed === true && seen.signal instanceof AbortSignal;
+  await askOnboard();
+  out.onboardAgain = asks === 2;
+  console.log(JSON.stringify(out));
+  process.exit(0);   // the stand-in limits' own timers (iOS 15) would hold node for their full length
+})();
+"""
+for mode in ("chromium", "ios-15", "old-safari"):
+    o = node("const MODE = " + json.dumps(mode) + ";\n" + js)
+    tag = "" if mode == "chromium" else f" ({mode})"
+    check(o.get("limitFires") is True, "timeLimit() ends a request with a TimeoutError" + tag)
+    check(o.get("deviceGivesUp") is True, "the panel's setup calls give up with a plain message when the listener never answers" + tag)
+    check(o.get("apiGivesUp") is True, "the setup page's calls give up too, marked as no answer rather than a refusal" + tag)
+    check(o.get("apiDefault") is True and o.get("deviceDefault") is True,
+          "every call has a limit even when the caller names none, and the option never reaches the request" + tag)
+    if mode != "chromium":
+        continue
+    check(o.get("withinLate") is True and o.get("withinInTime") is True, "withinTime gives up when late, and passes an answer in time through")
+    check(o.get("apiRefusal") is True and o.get("apiNetworkError") is True,
+          "while a refusal still says what the radar said, and a failed request is not called slow")
+    check(o.get("onboardShared") is True and o.get("onboardAgain") is True,
+          "the two /onboard readers asking at once send one request, and the next ask a new one")
+
+# The lightning alert, with RealEarth stood in for: no answer leaves a standing alert alone,
+# while an answer -- with a value of 0 or with no value at all -- clears it.
+light = "\n".join([(re.search(r"^const LIGHTNING_ALERT_RADIUS_NM = .*$", page_js, re.M) or [""])[0],
+                   (re.search(r"^const LIGHTNING_ALERT_CLEAR_RADIUS_NM = .*$", page_js, re.M) or [""])[0],
+                   (re.search(r"^const LIGHTNING_PROBE_RING_POINTS = .*$", page_js, re.M) or [""])[0],
+                   (re.search(r"^const LIGHTNING_PROBE_PRODUCT = .*$", page_js, re.M) or [""])[0],
+                   function(page_js, "async function probeLightningValue("),
+                   function(page_js, "async function checkLightningNearby(")])
+js = r"""
+let lightningAlerted = false, lightningChecking = false, sounds = 0;
+const home = { lat: 35.8776, lon: -78.7875 }, alertSettings = { lightningAlert: true };
+const REMOTE_TIMEOUT_MS = 50;
+const destinationPoint = (lat, lon, b, nm) => [lon + nm / 60 * Math.sin(b * Math.PI / 180), lat + nm / 60 * Math.cos(b * Math.PI / 180)];
+const playLightningAlertSound = () => { sounds++; }, showToast = () => {};
+let answer = null;
+const fetch = async () => { const a = answer(); if (a instanceof Error) throw a; return a; };
+const page = (text, status = 200) => ({ ok: status === 200, status, text: async () => text, body: null });
+""" + helpers + "\n" + light + r"""
+async function run(alerted, a) { lightningAlerted = alerted; sounds = 0; answer = a; await checkLightningNearby(); return lightningAlerted; }
+(async () => {
+  const out = {};
+  out.timeoutKeeps = await run(true, () => new DOMException('No answer in time', 'TimeoutError')) === true;
+  out.downKeeps = await run(true, () => page('busy', 503)) === true;
+  out.zeroClears = await run(true, () => page('Data value: <b>0</b>')) === false;
+  out.noValueClears = await run(true, () => page('No data here')) === false;
+  let n = 0;
+  out.mixedClears = await run(true, () => n++ % 2 ? page('Data value: <b>0</b>') : new TypeError('Load failed')) === false;
+  n = 0;
+  out.strikeAlerts = await run(false, () => page(n++ === 3 ? 'Data value: <b>2.5</b>' : 'Data value: <b>0</b>')) === true && sounds === 1;
   console.log(JSON.stringify(out));
 })();
 """
 o = node(js)
-check(o.get("withinLate") is True and o.get("withinInTime") is True, "withinTime gives up when late, and passes an answer in time through")
-check(o.get("deviceGivesUp") is True, "the panel's setup calls give up with a plain message when the listener never answers")
-check(o.get("apiGivesUp") is True, "the setup page's calls give up too, marked as no answer rather than a refusal")
-check(o.get("apiRefusal") is True, "while a refusal still says what the radar said")
-check(o.get("apiDefault") is True and o.get("deviceDefault") is True,
-      "every call has a limit even when the caller names none, and the option never reaches the request")
+check(o.get("timeoutKeeps") is True and o.get("downKeeps") is True,
+      "lightning: no probe answering leaves a standing alert alone, to sound again at the next answer")
+check(o.get("zeroClears") is True and o.get("noValueClears") is True and o.get("mixedClears") is True,
+      "and any answer for a clear sky clears it, a value of 0 or no value at all")
+check(o.get("strikeAlerts") is True, "while one probe with lightning sounds the alert")
 
 print("page timeout checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)

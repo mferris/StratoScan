@@ -318,6 +318,18 @@ const hide = el => { el.className = 'msg'; };
 const API_TIMEOUT_MS = 40 * 1000;
 const API_SLOW_MS = 200 * 1000;
 const NO_ANSWER = 'The radar did not answer in time. Check this phone or computer is on the same network as the radar, then try again.';
+// AbortSignal.timeout came only with Safari 16, and this page is opened from
+// phones that stop at iOS 15, where calling it throws and every button would
+// fail (2026-10-26); there a timer and an AbortController do the same. Older
+// Safari rejects with a plain AbortError whatever the reason, so isTimeout()
+// takes either name.
+function timeLimit(ms) {
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  const c = new AbortController();
+  setTimeout(() => c.abort(new DOMException('No answer in time', 'TimeoutError')), ms);
+  return c.signal;
+}
+const isTimeout = e => !!e && (e.name === 'TimeoutError' || e.name === 'AbortError');
 
 async function api(path, opts = {}) {
   const { timeoutMs = API_TIMEOUT_MS, ...rest } = opts;
@@ -325,10 +337,10 @@ async function api(path, opts = {}) {
   if (TOKEN) h['Authorization'] = 'Bearer ' + TOKEN;
   let r, body = {};
   try {
-    r = await fetch('/setup/api/' + path, { ...rest, headers: h, signal: AbortSignal.timeout(timeoutMs) });
-    try { body = await r.json(); } catch (e) { if (e.name === 'TimeoutError') throw e; }
+    r = await fetch('/setup/api/' + path, { ...rest, headers: h, signal: timeLimit(timeoutMs) });
+    try { body = await r.json(); } catch (e) { if (isTimeout(e)) throw e; }
   } catch (e) {
-    if (e.name !== 'TimeoutError') throw e;
+    if (!isTimeout(e)) throw e;
     const late = new Error(NO_ANSWER);
     late.timedOut = true;
     throw late;
