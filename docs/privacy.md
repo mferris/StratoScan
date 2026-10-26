@@ -97,10 +97,10 @@ turn on:
   disc or discs of the world that cover the view, from the StratoScan
   relay's shared cache (above); with them off, from adsb.lol, round the
   middle of the view rounded to about 5 km, a place on a map, not anyone's
-  location. The public page can do the same, so the radar answers at most
-  one such question every five seconds (a view wider than one disc is up
-  to nine questions, a second apart, nine in any twenty seconds in all),
-  and nothing about these aircraft is recorded or counted.
+  location. The public page and the app (below) can do the same, so the
+  radar answers at most one such question every five seconds (a view wider
+  than one disc is up to nine questions, a second apart, nine in any twenty
+  seconds in all), and nothing about these aircraft is recorded or counted.
 
 ## The iPhone app
 
@@ -153,7 +153,16 @@ sees that place and which phone asked (by the phone's random key), keeps
 neither, and refuses a place given more precisely than 0.05°. When no radar
 has fetched that disc in the last few seconds, which today is most of the
 world, the app asks adsb.lol as above and leaves the relay alone for half a
-minute. The map is centred on your exact position on the phone only. Turning the switch off
+minute. When you look at the map near your radar (the middle of the view
+within 100 nm of it, and the view no wider than one disc) and the app can
+reach the radar, it asks your radar for the network's aircraft in that view
+instead (since 2026-10-26), at home or through its public address: it sends
+your own radar only the middle of the view, rounded to 0.05°, and how far
+the view reaches, and the radar answers from the copy it keeps for its own
+screen (above). Elsewhere, or when the radar can't answer, the app asks the
+StratoScan relay, then adsb.lol, as before. Your phone's position never goes
+to the radar: a view centred on you is asked of the relay and adsb.lol
+only. The map is centred on your exact position on the phone only. Turning the switch off
 stops all of it: the view then shows your radar's aircraft, and nothing
 beyond its ring.
 
