@@ -12,10 +12,12 @@
 #
 # wake-listener.py records each real input (a touch, a key, a button, the
 # dials) in $XDG_RUNTIME_DIR/stratoscan-last-input. Activity with no input in
-# the last few seconds is a sound, and changes nothing. Until that file
-# exists (a fresh boot before the first touch, or a listener that cannot read
-# the input devices), any activity wakes the panel, as it always did: a
-# finger must never fail to wake the screen.
+# the last few seconds is a sound, and changes nothing. The listener makes
+# the file, dated 1970, as soon as it can read a touchscreen or keys, so this
+# holds from boot, before anyone has touched anything (2026-10-26). Until that
+# file exists (a listener that cannot read the input devices, or one not yet
+# started), any activity wakes the panel, as it always did: a finger must
+# never fail to wake the screen.
 F="$XDG_RUNTIME_DIR/stratoscan-alert-wake"
 L="$XDG_RUNTIME_DIR/stratoscan-last-input"
 RECENT_S=5

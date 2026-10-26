@@ -88,11 +88,14 @@ class Ev:
 
 class Dev:
     """A device backed by a pipe, so select() really waits on it."""
-    def __init__(self, path, events):
+    def __init__(self, path, events, caps=None, pending=True):
         self.path = path
         self.fd, self._w = os.pipe()
         self.events = events
-        os.write(self._w, b"x")
+        self.caps = caps if caps is not None else sorted(set(events))
+        if pending:
+            os.write(self._w, b"x")
+    def capabilities(self): return {t: [] for t in self.caps}
     def read(self):
         os.read(self.fd, 1)
         return [Ev(t) for t in self.events]
@@ -113,6 +116,30 @@ t0 = time.time()
 wl._input_watch(FakeEvdev({"/dev/input/event5": Dev("/dev/input/event5", [3, 3, 0])}), rounds=2)
 check(os.path.exists(wl.LAST_INPUT) and os.path.getmtime(wl.LAST_INPUT) >= t0 - 1, "a touch is noted, for the screensaver")
 check(wl._input_watch(None, rounds=0) is None, "and the watcher runs without python3-evdev (it just notes nothing)")
+
+# After a boot, before anyone touches it (RDU, 2026-10-26): the weekly restart
+# emptied XDG_RUNTIME_DIR, and with nobody home the airport's take-off chime
+# lit the panel for 20 minutes, twice in an hour. A listener that can read the
+# touchscreen now says so at once, and a sound is a sound from the start.
+wl.LAST_INPUT = str(tmp / "last-input-c")
+wl._input_watch(FakeEvdev({"/dev/input/event4": Dev("/dev/input/event4", [], caps=[0, 1, 3], pending=False)}), rounds=1)
+check(os.path.exists(wl.LAST_INPUT) and os.path.getmtime(wl.LAST_INPUT) < 86400,
+      "with the touchscreen readable, the input file is there from the start, dated long ago")
+run = tmp / "boot"; run.mkdir()
+(run / "state").write_text("off\n")
+(run / "stratoscan-last-input").write_bytes(b"")
+os.utime(run / "stratoscan-last-input", (0, 0))
+subprocess.run(["sh", str(D / "screen-resume.sh")], timeout=20, check=True,
+               env=dict(os.environ, XDG_RUNTIME_DIR=str(run), PATH=f"{bin_}:{os.environ['PATH']}"))
+check(not (run / "calls").exists(), "so a quiet chime after a boot leaves the dark panel dark")
+wl.LAST_INPUT = str(tmp / "last-input-d")
+wl._input_watch(FakeEvdev({"/dev/input/event1": Dev("/dev/input/event1", [], caps=[0, 5], pending=False)}), rounds=1)
+check(not os.path.exists(wl.LAST_INPUT), "an HDMI jack alone says nothing: activity still wakes the panel")
+wl.LAST_INPUT = str(tmp / "last-input-e")
+wl._note_input()
+noted = os.path.getmtime(wl.LAST_INPUT)
+wl._input_watch(FakeEvdev({"/dev/input/event4": Dev("/dev/input/event4", [], caps=[0, 1, 3], pending=False)}), rounds=1)
+check(os.path.getmtime(wl.LAST_INPUT) == noted, "and a touch already noted is never dated back")
 
 # ---- wiring ---------------------------------------------------------------------------
 unit = (D / "stratoscan-screensaver.service").read_text()
