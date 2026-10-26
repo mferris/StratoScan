@@ -356,8 +356,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "tls": tls_fingerprint() is not None,
                 # The public (Funnel) address, if one is live: the phone app
                 # uses it away from home. Already public by definition, and
-                # this route is refused on the Funnel itself.
-                "publicUrl": public_url(),
+                # this route is refused on the Funnel itself. From the last
+                # probe, never waiting for one (#86).
+                "publicUrl": public_url(_probe_cached()),
                 # Whether that address works from the internet, as the radar
                 # last found it, so the app can say so at home (#82).
                 "publicAddress": public_address_check(),
@@ -413,7 +414,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/setup/api/geocode":
             from urllib.parse import parse_qs, urlparse
             q = (parse_qs(urlparse(self.path).query).get("q") or [""])[0]
-            return self._send(200, call_setupd("geocode", {"query": q})["result"])
+            # 30 s in all: setupd's question to Nominatim is limited only per
+            # read (#86), and a failure is said, not a KeyError here.
+            r = call_setupd("geocode", {"query": q}, timeout=30)
+            if not r.get("ok"):
+                return self._err(502, r.get("code", "failed"), friendly(r.get("code", ""), r.get("detail", "")))
+            return self._send(200, r["result"])
         if path == "/setup/api/wifi/scan":
             return self._proxy_verb("wifi_scan")
         if path == "/setup/api/wifi/connect" and self.command == "POST":
@@ -827,9 +833,10 @@ def public_address_check():
     return out
 
 
-def public_url():
-    """The unit's public HTTPS address when its Funnel is on, else None."""
-    ts = _onboard_probe()[2] or {}
+def public_url(probe=None):
+    """The unit's public HTTPS address when its Funnel is on, else None: from
+    `probe` when given (the hello passes the last one), else a probe now."""
+    ts = (probe or _onboard_probe())[2] or {}
     u = ts.get("publicUrl") if ts.get("funnel") else None
     return u if isinstance(u, str) and u.startswith("https://") else None
 
@@ -1202,7 +1209,7 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
         if p == "/onboard/geocode":
             from urllib.parse import parse_qs, urlparse
             q = (parse_qs(urlparse(self.path).query).get("q") or [""])[0]
-            r = call_setupd("geocode", {"query": q})
+            r = call_setupd("geocode", {"query": q}, timeout=30)     # as the setup page's (#86)
             if not r.get("ok"):
                 return self._json(502, {"error": {"message": FRIENDLY.get(
                     r.get("code"), "Address lookup failed.")}})
@@ -1302,6 +1309,19 @@ def _onboard_probe():
                  unwrap(call_setupd("tailscale_status")))
         _probe_cache.update(at=now, value=value)
         return value
+
+
+def _probe_cached():
+    """The last probe, without waiting for one (#86, 2026-10-26).
+
+    The app's hello took a probe -- about seven nmcli calls, one of them a
+    WiFi scan, and three of tailscale -- and gives up after 2-3 s, so while
+    one ran it missed the radar or its public address. A stale or missing
+    probe is refreshed behind the answer; until the first lands, nothing."""
+    v = _probe_cache["value"]
+    if (v is None or time.monotonic() - _probe_cache["at"] >= _PROBE_TTL_S) and not _probe_lock.locked():
+        threading.Thread(target=_onboard_probe, daemon=True).start()
+    return v or ({}, None, None)
 
 
 def actual_location():
@@ -1452,6 +1472,7 @@ class Server(http.server.ThreadingHTTPServer):
 
 
 if __name__ == "__main__":
+    threading.Thread(target=_onboard_probe, daemon=True).start()     # so the first hello has one
     threading.Thread(
         target=lambda: Server(ONBOARD_LISTEN, OnboardHandler).serve_forever(),
         daemon=True,

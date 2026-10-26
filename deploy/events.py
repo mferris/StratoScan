@@ -782,15 +782,17 @@ class Service:
                     self.sender.add(new)
             except (OSError, ValueError):
                 pass    # readsb mid-write or restarting; next poll
+            # The alerts go first: they used to wait behind the phones'
+            # locations, a relay call each minute (#86, 2026-10-26).
+            line = self.sender.flush()
+            if line:
+                print(f"events: {line}", flush=True)
             try:
                 said = self.locations.tick(self.detector)
                 if said:
                     print(f"events: {said}", flush=True)
             except Exception:
                 pass    # approaches to phones are extra; never let them stop the alerts
-            line = self.sender.flush()
-            if line:
-                print(f"events: {line}", flush=True)
             if self.sender.unpaired:
                 self.sender.unpaired = False
                 self.sender.queue.clear()

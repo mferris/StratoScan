@@ -32,6 +32,7 @@ import fcntl
 import json
 import os
 import re
+import select
 import shutil
 import shlex
 import socket
@@ -51,6 +52,7 @@ READSB_BACKUP = os.path.join(STATE_DIR, "readsb.fr-backup")
 CONFIG_JSON = "/var/www/html/config.json"
 OFFLINE_MAP_DIR = "/var/www/html/offline-map"
 OFFLINE_MAP = "/opt/stratoscan/offline-map.py"
+OFFLINE_MAP_LIMIT = "30min"     # the map and runway downloads, in all (net-watchdog's too)
 AIRPORTS_JSON = "/opt/stratoscan/airports.json"
 
 CANDIDATE_PROFILE = "fr-candidate"
@@ -373,7 +375,11 @@ def net_status():
     to guess whether a screen has been filled in before.
     """
     ssid = None
-    p = run([NMCLI, "-t", "-f", "ACTIVE,SSID", "device", "wifi"], timeout=20)
+    # --rescan no: the list NetworkManager already has. `device wifi` alone
+    # rescans when its list is half a minute old, so every few probes took
+    # the radio off-channel for a scan, and the answer waited for it (#86,
+    # 2026-10-26).
+    p = run([NMCLI, "-t", "-f", "ACTIVE,SSID", "device", "wifi", "list", "--rescan", "no"], timeout=20)
     for line in p.stdout.decode("utf-8", "replace").splitlines():
         parts = re.split(r"(?<!\\):", line)
         if len(parts) >= 2 and parts[0] == "yes":
@@ -819,6 +825,7 @@ def geocode(query):
 # verbs that take no arguments at all, so there is nothing here for a caller to
 # steer.
 OTA = "/opt/stratoscan/ota.py"
+OTA_UNIT = "stratoscan-ota-apply"
 
 
 def ota_status():
@@ -846,12 +853,17 @@ def ota_apply():
     So it runs as a transient unit, outside this process's control group and
     outside the kiosk's. The caller polls ota_status() instead; ota.py writes
     every state transition to status.json as it goes.
+
+    --no-block (#86, 2026-10-26): systemd-run waits for a oneshot to finish
+    unless told not to, so this held the state lock and answered "That took
+    too long" after 30 s, every time, while the update went on. A oneshot
+    has no start limit of its own, so it gets one.
     """
-    if ota_status().get("state") == "applying":
+    if ota_status().get("state") == "applying" or _unit_word("is-active", OTA_UNIT) in ("active", "activating"):
         raise Err("ota_busy", "an update is already running")
-    run(["systemd-run", "--quiet", "--collect",
-         "--unit", "stratoscan-ota-apply",
-         "--property=Type=oneshot",
+    run(["systemd-run", "--quiet", "--collect", "--no-block",
+         "--unit", OTA_UNIT,
+         "--property=Type=oneshot", "--property=TimeoutStartSec=30min",
          OTA, "apply"], timeout=30, check=True)
     return {"state": "applying", "started": True}
 
@@ -1097,8 +1109,12 @@ def set_feeding(flightaware):
         raise Err("unavailable", "feeding is not installed on this unit")
     if flightaware:
         run([SYSTEMCTL, "stop", "stratoscan-feeding.service"], timeout=30)
-        run(["systemd-run", "--quiet", "--collect", "--unit", "stratoscan-feeding",
-             "--property=Type=oneshot", "/usr/bin/python3", FEEDING, "enable-flightaware"],
+        # --no-block, as ota_apply (#86): the switch got "That took too long"
+        # after 30 s while the install went on. Its steps have their own
+        # limits (feeding.py), about half an hour in all; this is the backstop.
+        run(["systemd-run", "--quiet", "--collect", "--no-block", "--unit", "stratoscan-feeding",
+             "--property=Type=oneshot", "--property=TimeoutStartSec=40min",
+             "/usr/bin/python3", FEEDING, "enable-flightaware"],
             timeout=30, check=True)
     else:
         run(["/usr/bin/python3", FEEDING, "disable-flightaware"], timeout=90)
@@ -1136,9 +1152,14 @@ def start_offline_map_build(lat, lon):
         # A build still running for the PREVIOUS location is now building the
         # wrong area; stop it so this one can take the unit name.
         run([SYSTEMCTL, "stop", "stratoscan-offline-map.service"], timeout=30)
-        r = run(["systemd-run", "--quiet", "--collect",
+        # --no-block (#86, 2026-10-26): without it systemd-run waited for the
+        # whole oneshot, so every location change, from the setup page, the
+        # panel or the app, waited 30 s more, holding the state lock, and
+        # then reported the map not started though it was building.
+        r = run(["systemd-run", "--quiet", "--collect", "--no-block",
                  "--unit", "stratoscan-offline-map",
                  "--property=Type=oneshot", "--property=Nice=10",
+                 f"--property=TimeoutStartSec={OFFLINE_MAP_LIMIT}",
                  "/usr/bin/python3", OFFLINE_MAP, "build", f"{lat:.5f}", f"{lon:.5f}"],
                 timeout=30)
         return r.returncode == 0
@@ -1275,18 +1296,64 @@ def tailscale_up(authkey, hostname, enable_funnel=False):
 # and blocks; we capture that URL, leave the process running, and let the
 # owner open it on a phone. The device polls until the backend goes Running.
 _login_proc = {"p": None, "url": None, "started": 0.0}
+LOGIN_URL_WAIT_S = 30           # for `tailscale up` to print its login URL
+LOGIN_REUSE_S = 600             # a login URL handed out again for this long
+LOGIN_URL_RE = re.compile(rb"https://login\.tailscale\.com/\S+")
+
+
+def _read_login_url(proc, wait_s):
+    """The login URL `tailscale up` prints, read for at most wait_s, or None.
+
+    A real deadline (#86, 2026-10-26): this read a line at a time, and a
+    readline() waits for a whole line however long that takes, so a `tailscale
+    up` that printed nothing held this verb, and the state lock with it, with
+    no limit: every later change -- joining WiFi, the hotspot, the location --
+    answered "busy" meanwhile, and so did another try at signing in."""
+    deadline = time.monotonic() + wait_s
+    fd, buf = proc.stdout.fileno(), b""
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0 or not select.select([fd], [], [], left)[0]:
+            return None
+        chunk = os.read(fd, 4096)
+        if chunk:
+            buf += chunk
+        # Whole once whitespace follows it, or the output has ended.
+        m = LOGIN_URL_RE.search(buf)
+        if m and (m.end() < len(buf) or not chunk):
+            return m.group(0).decode("ascii", "replace").rstrip(".,)")
+        if not chunk:
+            return None                  # it exited without one
+
+
+def _stop_login():
+    """Retire the login process, if there is one, and reap it."""
+    p = _login_proc["p"]
+    _login_proc.update(p=None, url=None)
+    if p is None:
+        return
+    with contextlib.suppress(Exception):
+        p.terminate()
+        try:
+            p.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.wait(timeout=5)
+    with contextlib.suppress(Exception):
+        p.stdout.close()
 
 
 def tailscale_login_start(hostname):
     hostname = v_ts_hostname(hostname)
     # A login already in flight: hand back the same URL rather than starting
-    # a second one, which would invalidate the first.
-    if _login_proc["p"] and _login_proc["p"].poll() is None and _login_proc["url"]:
+    # a second one, which would invalidate the first. Not one from long ago:
+    # an owner who came back to it hours later was shown a link that no
+    # longer worked; that one is retired and a fresh login started (#86).
+    p = _login_proc["p"]
+    if p and p.poll() is None and _login_proc["url"] and time.time() - _login_proc["started"] < LOGIN_REUSE_S:
         return {"url": _login_proc["url"], "state": tailscale_status().get("state")}
 
-    with contextlib.suppress(Exception):
-        if _login_proc["p"]:
-            _login_proc["p"].terminate()
+    _stop_login()
 
     proc = subprocess.Popen(
         [TAILSCALE, "up", f"--hostname={hostname}", "--accept-dns=false",
@@ -1296,18 +1363,10 @@ def tailscale_login_start(hostname):
 
     # Read only until the URL appears; the process keeps running afterwards,
     # waiting for the owner to complete the login in a browser.
-    deadline = time.time() + 30
-    url = None
-    while time.time() < deadline and proc.poll() is None:
-        line = proc.stdout.readline()
-        if not line:
-            break
-        text = line.decode("utf-8", "replace")
-        m = re.search(r"https://login\.tailscale\.com/\S+", text)
-        if m:
-            url = m.group(0).rstrip(".,)")
-            break
+    url = _read_login_url(proc, LOGIN_URL_WAIT_S)
     if not url:
+        # No URL in time: stopped, so a later try starts afresh.
+        _stop_login()
         # Already logged in: `up` returns immediately with no URL.
         st = tailscale_status()
         if st.get("state") == "Running":

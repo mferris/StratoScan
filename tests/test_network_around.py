@@ -186,6 +186,7 @@ class FakeRelay:
     asked = []               # (method, path)
     answer = None            # (status, bytes), an exception to raise, a list of them in turn, or None for the sample
     shared = []              # discs handed up
+    delay = 0                # how long a GET takes
     @staticmethod
     def relay_on():
         return FakeRelay.on
@@ -195,6 +196,7 @@ class FakeRelay:
         if method == "PUT":
             FakeRelay.shared.append(_json.loads(body))
             return 204, b""
+        _t.sleep(FakeRelay.delay)
         a = FakeRelay.answer
         if isinstance(a, list):
             a = a.pop(0) if a else None
@@ -212,10 +214,19 @@ nc.RELAY = True
 nc.TILE_IN_THREAD = True; nc.TILE_RETRY_S = 0
 check(nc.relay_on() is True, "with reports on, the discs come through the relay")
 reset()
-out = nc.tiles_payload(c[0], c[1], 100, now=6000.0)
+FakeRelay.delay = 0.5
+t0 = _t.monotonic()
+first = nc.tiles_payload(c[0], c[1], 100, now=6000.0)
+check(first is not None and first["answered"] == 0 and first["pending"] == 1 and _t.monotonic() - t0 < 0.4,
+      "a single lattice disc is fetched behind the answer too, which says it is pending, so the page asks again (#86)")
+FakeRelay.delay = 0
+for _ in range(100):
+    if not nc._tiles["fetching"]: break
+    _t.sleep(0.02)
 check(FakeRelay.asked == [("GET", "/v1/net/disc/%s/%s" % (c[0], c[1]))] and not asked, "the one disc is asked of the relay, not adsb.lol")
+out = nc.tiles_payload(c[0], c[1], 100, now=6000.5)
 check(out is not None and out["via"] == "relay" and out["answered"] == 1 and out["pending"] == 0 and out["covered"] == 130,
-      "a single lattice disc is fetched before answering, like a disc round the view was")
+      "and the next look has it")
 check([a["hex"] for a in out["ac"]] == ["a1b2c3", "abcdef"], "both aircraft are within 130 nm of the view")
 near = nc.tiles_payload(c[0], c[1], 25, now=6001.0)
 check(near["ac"] == [] and near["answered"] == 1 and len(FakeRelay.asked) == 1,

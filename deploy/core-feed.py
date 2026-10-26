@@ -91,6 +91,12 @@ UAT_IDLE_S = 3600
 STALE_S = 60            # readsb keeps an aircraft this long after its last message
 AIRCRAFT_CACHE_S = 1.0  # one read of aircraft.json per second, however many clients
 NETWORK_CACHE_S = 60.0  # network-compare caches upstream for 60 s itself (#67)
+# How long an answer waits for a refresh of the network's aircraft before it
+# goes out with the last list (#86, 2026-10-26). The list is refreshed behind
+# the feed, one refresh at a time: the app's poll used to wait on adsb.lol
+# through network-compare, and a slow answer there failed the whole poll,
+# the antenna's aircraft too.
+NETWORK_WAIT_S = 2.0
 ROUTE_BATCH_S, ROUTE_BATCH_MAX = 4.0, 50
 OWNER_RETRY_S = 300
 CACHE_MAX = 20000       # routes/owners kept; the oldest go first
@@ -312,31 +318,50 @@ RARE_FIRST_MIN_CATALOGUE = 2000
 
 class SightingCounts:
     """hex -> (total, nearby) from the sighting store, refreshed at most once
-    a minute; the last good answer is kept through a failure."""
+    a minute; the last good answer is kept through a failure.
+
+    Refreshed behind the feed (#86, 2026-10-26): reading the whole store held
+    up one feed answer a minute, the app's poll and the kiosk's included, by
+    up to its time limit. Only the first answer after a start waits for it,
+    and briefly, so its counts are not all zero."""
+
+    FIRST_WAIT_S = 1.0
 
     def __init__(self, url=SIGHTINGS_URL):
         self.url = url
         self.counts = {}
         self.at = -1e9
+        self.busy = False
         self.lock = threading.Lock()
 
     def get(self):
         if not LOOKUPS and self.url == SIGHTINGS_URL:
             return self.counts                # tests: no store to ask
         with self.lock:
-            if _now() - self.at < SIGHTINGS_CACHE_S:
+            if self.busy or _now() - self.at < SIGHTINGS_CACHE_S:
                 return self.counts
+            first = self.at < 0
             self.at = _now()              # one try a minute, answered or not
+            self.busy = True
+        t = threading.Thread(target=self._refresh, daemon=True)
+        t.start()
+        if first:
+            t.join(self.FIRST_WAIT_S)
+        with self.lock:
+            return self.counts
+
+    def _refresh(self):
         try:
             with urllib.request.urlopen(self.url, timeout=3) as r:
                 doc = json.load(r)
             counts = {h.lower(): (int(v.get("total") or 0), int(v.get("nearby") or 0))
                       for h, v in doc.items() if isinstance(h, str) and isinstance(v, dict)}
         except (OSError, ValueError, AttributeError, TypeError):
-            return self.counts
+            counts = None
         with self.lock:
-            self.counts = counts
-        return counts
+            if counts is not None:
+                self.counts = counts
+            self.busy = False
 
 
 def band_of(a, hex_, uat):
@@ -447,6 +472,7 @@ class Feed:
         self.sightings = sightings if sightings is not None else SightingCounts()
         self._antenna = (0.0, [])
         self._network = (0.0, [])
+        self._network_worker = None     # the one refresh of the network's aircraft running, if any
         self.lock = threading.Lock()
         self.trails = Trails()
         if trails:
@@ -487,10 +513,22 @@ class Feed:
             return ac
 
     def _network_raw(self):
+        """The network's aircraft: the last list, refreshed behind the feed
+        once it is older than NETWORK_CACHE_S. An answer waits at most
+        NETWORK_WAIT_S for a refresh, then goes out with what is known."""
         with self.lock:
             at, ac = self._network
             if _now() - at < NETWORK_CACHE_S:
                 return ac
+            worker = self._network_worker
+            if worker is None:
+                worker = self._network_worker = threading.Thread(target=self._refresh_network, daemon=True)
+                worker.start()
+        worker.join(NETWORK_WAIT_S)
+        with self.lock:
+            return self._network[1]
+
+    def _refresh_network(self):
         try:
             req = urllib.request.Request(NETWORK_URL, headers={"User-Agent": USER_AGENT})
             with urllib.request.urlopen(req, timeout=12) as r:
@@ -499,10 +537,10 @@ class Feed:
             ac = []
         with self.lock:
             self._network = (_now(), ac)
+            self._network_worker = None
         # The network's aircraft are fetched only while a screen shows them
         # (privacy.md), so their trails grow only then, a point per fetch.
         self._note_trails(ac)
-        return ac
 
     def label(self, a, source, counts=None):
         hex_ = a["hex"].lower().lstrip("~")

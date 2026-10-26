@@ -77,6 +77,14 @@ USER_AGENT = "StratoScan/1.0 (+https://github.com/mferris/StratoScan; coverage s
 # questions a day with a screen open all day, instead of about 5,760.
 MIN_UPSTREAM_S = 60
 UPSTREAM_TIMEOUT = 8
+# Nothing a screen asks waits on adsb.lol for longer than this (#86,
+# 2026-10-26). The comparison is refreshed behind the answer, one refresh at
+# a time: a viewer gets the fresh one when it lands within NETWORK_WAIT_S,
+# else the last one, and the next poll the new one. adsb.lol slow used to
+# hold the core feed's ?network=1, so the app's whole poll, for 8 s and more.
+NETWORK_WAIT_S = 3
+UPSTREAM_RETRY_S = 15           # after a failed refresh, not asked again sooner
+UPSTREAM_DEADLINE_S = 30        # one answer, however slowly it trickles in
 RADIUS_NM = 25          # a little beyond the 20nm ring the radar draws
 RING_NM = 20            # what the radar actually shows; stats use this
 
@@ -88,6 +96,7 @@ MAX_BODY = 400_000
 AROUND_MIN_NM, AROUND_MAX_NM = 25, 250
 AROUND_CACHE_S = 10
 AROUND_UPSTREAM_GAP_S = 5
+AROUND_WAIT_S = 3               # an answer waits this long for adsb.lol, then says pending (#86)
 AROUND_MAX_BODY = 3_000_000     # a busy 250 nm disc is well over MAX_BODY
 AROUND_PLACES = 8               # answers kept at once
 _around = {"cache": {}, "last_upstream": 0.0}
@@ -107,6 +116,7 @@ TILE_RETRY_S = 2.5              # one more try after a refusal
 TILE_DISC_FRESH_S = 45          # a disc is asked for again after this (nine take the Pi ~25 s)
 TILE_KEEP_S = 120               # a disc's last answer is shown this long while a fresh one is fetched
 TILE_IN_THREAD = True           # the discs are fetched in the background (tests set False)
+TILE_DEADLINE_S = 30            # one stream of questions, all its discs, at most this long
 _tiles = {"cache": {}, "discs": {}, "calls": [], "busy": set(), "fetching": False}
 # The relay's shared cache, and the lattice its discs are on (see the module
 # docstring). The lattice is rows of 250 nm discs every 180/LATTICE_ROWS
@@ -136,7 +146,9 @@ BRG_BINS = 12           # 30-degree sectors
 WINDOW_S = 24 * 3600    # scorecard covers a rolling day
 
 lock = threading.Lock()
-_cache = {"at": 0.0, "payload": None}
+# The ring comparison: the last answer and when it came, and the refresh
+# running behind it (worker), with the time and reason of the last failure.
+_cache = {"at": 0.0, "payload": None, "worker": None, "failed_at": 0.0, "error": None}
 # The scorecard lives in memory and is written at most every FLUSH_INTERVAL,
 # plus on shutdown. It used to be rewritten on every upstream fetch (every
 # ~15 s, ~4,300 times a day) -- steady SD-card wear for a rolling one-day
@@ -224,10 +236,22 @@ def fresh_store():
     }
 
 
-def get_json(url, timeout=6, limit=MAX_BODY):
+def get_json(url, timeout=6, limit=MAX_BODY, deadline_s=UPSTREAM_DEADLINE_S):
+    """JSON from url, at most `limit` bytes. `timeout` bounds each wait on
+    the socket; `deadline_s` the whole answer, which a server trickling a
+    few bytes at a time could otherwise drag out for good (#86)."""
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    end = time.monotonic() + deadline_s
+    body = b""
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read(limit).decode("utf-8", "replace"))
+        while len(body) < limit:
+            if time.monotonic() > end:
+                raise TimeoutError(f"no whole answer in {deadline_s} s")
+            chunk = r.read1(min(1 << 16, limit - len(body)))
+            if not chunk:
+                break
+            body += chunk
+    return json.loads(body.decode("utf-8", "replace"))
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -539,7 +563,8 @@ def _relay_disc(d):
             continue
         net = _direct_disc(d)
         if why.get("fetch") and isinstance(net, dict):
-            _share_disc(path, net)
+            # Handed up behind the answer: sharing it never delays showing it (#86).
+            threading.Thread(target=_share_disc, args=(path, net), daemon=True).start()
         return net
     return _direct_disc(d)
 
@@ -593,8 +618,10 @@ def tiles_payload(lat, lon, half, now=None, lattice=None):
     everyday zoomed-out view), shown TILE_KEEP_S meanwhile. Questions stay
     within the window; when the window is used up and nothing is known yet,
     None (429). On the lattice, the answer is what falls within the reach.
-    The one disc a lattice view needs is fetched before answering, like a
-    disc round the view used to be; several are fetched behind."""
+    Every disc is fetched behind the answer, the one disc a lattice view
+    needs too (#86, 2026-10-26): fetched before answering, it held the kiosk
+    and the public page for the relay's and adsb.lol's time limits in turn,
+    and the page asks again in a few seconds while one is pending."""
     now = time.time() if now is None else now
     lattice = relay_on() if lattice is None else lattice
     discs, covered = plan_discs(lat, lon, half, lattice)
@@ -622,7 +649,7 @@ def tiles_payload(lat, lon, half, now=None, lattice=None):
             _tiles["fetching"] = True
         pending = [d for d in discs if d in _tiles["busy"]]
     if need:
-        if TILE_IN_THREAD and not (lattice and len(need) == 1 and len(discs) == 1):
+        if TILE_IN_THREAD:
             threading.Thread(target=_fetch_discs, args=(need, now, lattice), daemon=True).start()
         else:
             _fetch_discs(need, now, lattice)
@@ -655,7 +682,12 @@ def tiles_payload(lat, lon, half, now=None, lattice=None):
 
 
 def _fetch_discs_inner(need, now, lattice=False):
+    # A deadline for the whole stream (#86): discs not asked by then stay
+    # missing, the answer says partial, and the next look asks for them.
+    deadline = time.monotonic() + TILE_DEADLINE_S
     for i, d in enumerate(need):
+        if time.monotonic() > deadline:
+            break
         if i:
             time.sleep(RELAY_PACE_S if lattice else TILE_PACE_S)
         entries = fetch_disc(d, lattice)
@@ -677,7 +709,11 @@ def around_payload(lat, lon, radius, now=None):
     serves. One answer is kept per place for AROUND_CACHE_S, and adsb.lol is
     asked at most every AROUND_UPSTREAM_GAP_S, whoever asks: a question that
     can't be asked yet gets that place's last answer, marked stale, or None
-    (429 to the caller)."""
+    (429 to the caller).
+
+    The question is asked behind the answer (#86, 2026-10-26), which waits
+    for it at most AROUND_WAIT_S: past that, the place's last answer marked
+    stale, or none yet, and either way "pending", so the page asks again."""
     now = time.time() if now is None else now
     key = (round(round(lat * 20) / 20, 2), round(round(lon * 20) / 20, 2),
            int(max(AROUND_MIN_NM, min(AROUND_MAX_NM, radius))))
@@ -692,24 +728,48 @@ def around_payload(lat, lon, radius, now=None):
                 return out
             return None
         _around["last_upstream"] = now
-    net = get_json(SOURCE_URL.format(lat=key[0], lon=key[1], radius=key[2]),
-                   timeout=UPSTREAM_TIMEOUT, limit=AROUND_MAX_BODY)
-    ghosts = []
-    for a in net.get("ac", []):
-        if a.get("lat") is None or a.get("lon") is None:
-            continue
-        hexid = str(a.get("hex", "")).strip().lower()
-        if not ICAO_HEX.fullmatch(hexid):
-            continue
-        ghosts.append(ghost_entry(hexid, a))
+    box = {}
+    worker = threading.Thread(target=_around_fetch, args=(key, now, box), daemon=True)
+    worker.start()
+    worker.join(AROUND_WAIT_S)
+    if "error" in box:
+        raise box["error"]
+    if "payload" in box:
+        out = dict(box["payload"]); out["fetched"] = 0.0
+        return out
+    if hit:
+        out = dict(hit[1]); out["fetched"] = round(now - hit[0], 1); out["stale"] = True
+    else:
+        out = {"ac": [], "centre": {"lat": key[0], "lon": key[1]}, "radius": key[2],
+               "source": SOURCE_NAME, "at": now, "fetched": None}
+    out["pending"] = 1
+    return out
+
+
+def _around_fetch(key, now, box):
+    """adsb.lol round one place, into the place's cache and `box`: the
+    payload, or the error to answer with if the asker is still waiting."""
+    try:
+        net = get_json(SOURCE_URL.format(lat=key[0], lon=key[1], radius=key[2]),
+                       timeout=UPSTREAM_TIMEOUT, limit=AROUND_MAX_BODY)
+        ghosts = []
+        for a in net.get("ac", []):
+            if a.get("lat") is None or a.get("lon") is None:
+                continue
+            hexid = str(a.get("hex", "")).strip().lower()
+            if not ICAO_HEX.fullmatch(hexid):
+                continue
+            ghosts.append(ghost_entry(hexid, a))
+    except Exception as e:       # the handler answers 503 for these, as before
+        box["error"] = e
+        return
     payload = {"ac": ghosts, "centre": {"lat": key[0], "lon": key[1]}, "radius": key[2],
                "source": SOURCE_NAME, "at": now}
     with lock:
         if len(_around["cache"]) >= AROUND_PLACES:
             _around["cache"].clear()
         _around["cache"][key] = (now, payload)
-    out = dict(payload); out["fetched"] = 0.0
-    return out
+    box["payload"] = payload
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -770,35 +830,44 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         now = time.time()
         with lock:
-            cached = _cache["payload"]
-            fresh = cached is not None and now - _cache["at"] < MIN_UPSTREAM_S
-        if fresh:
-            out = dict(cached)
-            out["fetched"] = round(now - _cache["at"], 1)
-            return self._json(200, out)
-
-        note_ring_question(now)
-        try:
-            payload = build_payload()
-        except (urllib.error.URLError, OSError, ValueError, KeyError) as e:
-            # Upstream down, offline, or malformed. Serve the last good answer
-            # if there is one -- a stale comparison is still useful, and the
-            # radar's own data is unaffected either way.
-            with lock:
-                cached = _cache["payload"]
-            if cached:
-                out = dict(cached)
-                out["stale"] = True
-                out["error"] = type(e).__name__
-                return self._json(200, out)
-            return self._json(503, {"error": "upstream unavailable",
-                                    "detail": type(e).__name__})
+            fresh = _cache["payload"] is not None and now - _cache["at"] < MIN_UPSTREAM_S
+            worker = _cache["worker"]
+            if not fresh and worker is None and now - _cache["failed_at"] >= UPSTREAM_RETRY_S:
+                note_ring_question(now)
+                worker = _cache["worker"] = threading.Thread(target=_refresh_network, daemon=True)
+                worker.start()
+        if not fresh and worker is not None:
+            worker.join(NETWORK_WAIT_S)
         with lock:
-            _cache["at"] = time.time()
-            _cache["payload"] = payload
-        out = dict(payload)
-        out["fetched"] = 0.0
+            cached, at, error = _cache["payload"], _cache["at"], _cache["error"]
+        if cached is None:
+            return self._json(503, {"error": "upstream unavailable",
+                                    "detail": error or "still asking"})
+        out = dict(cached)
+        out["fetched"] = round(time.time() - at, 1)
+        if error:
+            # Upstream down, offline, or malformed: the last good answer -- a
+            # stale comparison is still useful, and the radar's own data is
+            # unaffected either way.
+            out["stale"] = True
+            out["error"] = error
         return self._json(200, out)
+
+
+def _refresh_network():
+    """One refresh of the ring comparison, behind the answers (#86): stored
+    when it lands, or the failure noted so the next waits UPSTREAM_RETRY_S."""
+    payload = error = None
+    try:
+        payload = build_payload()
+    except Exception as e:       # upstream down, offline or malformed; never the end of refreshing
+        error = type(e).__name__
+    with lock:
+        if payload is not None:
+            _cache.update(at=time.time(), payload=payload, error=None)
+        else:
+            _cache.update(failed_at=time.time(), error=error)
+        _cache["worker"] = None
 
 
 def main():

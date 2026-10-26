@@ -31,7 +31,9 @@ if [ -e "$L" ]; then
     fi
 fi
 rm -f "$F"
-if wlopm | grep -q " off"; then
-    wlopm --on '*'
+# Each wlopm call is limited: a compositor that stops answering held this,
+# and swayidle with it, so the panel neither blanked nor woke (#86, 2026-10-26).
+if timeout 5 wlopm | grep -q " off"; then
+    timeout 5 wlopm --on '*'
     logger -t stratoscan-screen on-touch
 fi
