@@ -7,7 +7,9 @@ import Foundation
 ///
 /// The radar publishes an X25519 "box" key, signed by its Ed25519 identity:
 /// the radar id the phone scanned when pairing. The phone checks that
-/// signature before using the key, so the relay can't substitute its own.
+/// signature before using the key, so the relay can't substitute its own,
+/// and seals only to ids it recorded itself (`recipients`), so the relay
+/// can't add a radar of its own either.
 ///
 /// A blob is base64url(ephemeral X25519 public key (32) | ChaCha20-Poly1305
 /// combined box: nonce (12), ciphertext, tag (16)). The key is HKDF-SHA256 of
@@ -25,6 +27,15 @@ enum LocationBox {
               identity.isValidSignature(sigRaw, for: Data((boxKeyContext + key).utf8))
         else { return nil }
         return try? Curve25519.KeyAgreement.PublicKey(rawRepresentation: keyRaw)
+    }
+
+    /// Of the radars the relay lists for this phone, those that may have its
+    /// location: every one, when each is a radar this phone paired itself
+    /// (`paired`); none (nil) when the relay lists one it didn't (2026-10-26).
+    /// The box key check proves a key belongs to the id it is checked
+    /// against, not that the id is a radar this phone chose.
+    static func recipients(listed: [String], paired: Set<String>) -> [String]? {
+        listed.allSatisfy(paired.contains) ? listed : nil
     }
 
     /// `lat`/`lon` sealed to one radar, for one phone (its relay id).

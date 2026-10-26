@@ -5,8 +5,8 @@ import UIKit
 /// holding `stratoscan://pair?u=<unit>&s=<one-time secret>&h=<LAN address>`
 /// (`radome://` from units before 2026.10.01.2, still accepted);
 /// scanning it (Camera app or in-app) lands here. The secret goes to the
-/// relay once and is never stored; the LAN address, when present, points the
-/// radar view at this radar if it has not been pointed anywhere yet.
+/// relay once and is never stored; the LAN and public addresses, when
+/// present, point the radar view at this radar if it reads none yet.
 @MainActor
 final class PairingStore: ObservableObject {
     struct Radar: Codable, Identifiable, Equatable {
@@ -25,11 +25,11 @@ final class PairingStore: ObservableObject {
     @Published var busy = false
     @Published var message: String?
 
-    private let storeKey = "radome.pairedRadars"
+    private nonisolated static let storeKey = "radome.pairedRadars"
     private let relay = RelayClient()
 
     init() {
-        if let data = UserDefaults.standard.data(forKey: storeKey),
+        if let data = UserDefaults.standard.data(forKey: Self.storeKey),
            let saved = try? JSONDecoder().decode([Radar].self, from: data) {
             radars = saved
             // Paired before 2.17, nothing recorded whether the owner named it.
@@ -45,8 +45,28 @@ final class PairingStore: ObservableObject {
 
     private func save() {
         if let data = try? JSONEncoder().encode(radars) {
-            UserDefaults.standard.set(data, forKey: storeKey)
+            UserDefaults.standard.set(data, forKey: Self.storeKey)
         }
+    }
+
+    /// The radars paired on this phone, by unit id, as saved: for the
+    /// location report, which may run in the background with no store about
+    /// (2026-10-26). The relay never adds to this list; refresh() only takes
+    /// from it.
+    nonisolated static func savedUnits() -> Set<String> {
+        struct Saved: Decodable { let unit: String }
+        guard let data = UserDefaults.standard.data(forKey: storeKey),
+              let saved = try? JSONDecoder().decode([Saved].self, from: data) else { return [] }
+        return Set(saved.map(\.unit))
+    }
+
+    /// The radar view isn't reading a radar of its own yet: the home address
+    /// is still the factory default and there is no away address. Only then
+    /// does a pairing link set them (2026-10-26). A link can come from any
+    /// page or message, so it never moves the radar view off the radar it
+    /// reads now, nor replaces its away address.
+    nonisolated static var radarViewUnset: Bool {
+        APIConfig.baseURL == APIConfig.defaultBaseURL && APIConfig.awayURL == nil
     }
 
     struct Link: Equatable {
@@ -68,8 +88,9 @@ final class PairingStore: ObservableObject {
         guard let u = q("u"), u.count == 43, u.unicodeScalars.allSatisfy(b64url.contains),
               let s = q("s"), (16...64).contains(s.count), s.unicodeScalars.allSatisfy(b64url.contains)
         else { return nil }
-        let hostChars = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
-        let h = q("h").flatMap { $0.count <= 253 && $0.unicodeScalars.allSatisfy(hostChars.contains) ? $0 : nil }
+        // The radar's home address: a home-network one only, as a setup link's
+        // (2026-10-26); radars put their private IPv4 address here.
+        let h = q("h").flatMap { RadarSetup.isPrivateHost($0) ? $0 : nil }
         // The radar's public address (its Tailscale Funnel), HTTPS only.
         let p = q("p").flatMap { v -> String? in
             guard v.count <= 200, let u = URL(string: v), u.scheme == "https", u.host != nil else { return nil }
@@ -120,11 +141,15 @@ final class PairingStore: ObservableObject {
                 radars.append(Radar(unit: link.unit, name: name, host: link.host, pairedAt: Date(), ownName: false))
             }
             save()
-            if let h = link.host, APIConfig.baseURL == APIConfig.defaultBaseURL {
-                APIConfig.baseURL = "http://\(h)"
+            ApproachReporter.shared.forgetStranger(link.unit)
+            var said = "Paired. Alerts from this radar will come to this phone."
+            if Self.radarViewUnset {
+                if let h = link.host { APIConfig.baseURL = "http://\(h)" }
+                if let p = link.publicURL { APIConfig.awayURL = p }
+            } else if link.host != nil || link.publicURL != nil {
+                said += " The radar view's addresses are as they were; Settings › Radar view has them."
             }
-            if let p = link.publicURL { APIConfig.awayURL = p }
-            message = "Paired. Alerts from this radar will come to this phone."
+            message = said
             // Now the reason for notifications is obvious; ask (once) and register.
             await PushManager.shared.enable()
         } catch {
@@ -142,6 +167,7 @@ final class PairingStore: ObservableObject {
             radars.append(Radar(unit: unit, name: name, host: host, pairedAt: Date(), ownName: false))
         }
         save()
+        ApproachReporter.shared.forgetStranger(unit)
         message = "Set up and paired. Alerts from \(name) will come to this phone."
         Task { await PushManager.shared.enable() }
     }
@@ -151,6 +177,20 @@ final class PairingStore: ObservableObject {
         guard let i = radars.firstIndex(where: { $0.unit == unit }) else { return }
         radars[i].host = host
         save()
+    }
+
+    /// A radar the relay lists for this phone that was never paired here
+    /// (ApproachReporter.strangers): unpaired at the relay.
+    func unpair(stranger unit: String) async {
+        busy = true
+        defer { busy = false }
+        do {
+            try await relay.unpair(unit: unit)
+            ApproachReporter.shared.forgetStranger(unit)
+            message = "Unpaired from that radar."
+        } catch {
+            message = error.localizedDescription
+        }
     }
 
     func unpair(_ radar: Radar) async {
@@ -223,14 +263,18 @@ final class PairingStore: ObservableObject {
         }
     }
 
-    /// The relay is the authority: a radar that unpaired this phone from its
-    /// own screen (or was factory reset) disappears here too.
+    /// The relay is the authority for what it no longer lists: a radar that
+    /// unpaired this phone from its own screen (or was factory reset)
+    /// disappears here too. It is not for what it adds: a radar it lists
+    /// that was never paired here is not taken on, only noted (2026-10-26).
     func refresh() async {
         do {
-            let live = Set(try await relay.units().map(\.unit))
+            let listed = try await relay.units().map(\.unit)
+            let live = Set(listed)
             let before = radars.count
             radars.removeAll { !live.contains($0.unit) }
             if radars.count != before { save() }
+            ApproachReporter.shared.vet(listed)
         } catch {
             // Offline: keep what we know; the next refresh settles it.
         }
