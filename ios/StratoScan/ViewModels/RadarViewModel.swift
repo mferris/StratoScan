@@ -402,14 +402,23 @@ final class RadarViewModel: ObservableObject {
     private var wantsViewNetwork: Bool { networkOn && !DemoFeed.isOn && (!hasRadar || beyondRadar || !connected) }
     /// The radar, for a view of the network near it (#88, 2026-10-26): its
     /// place while its polling answers, so that view comes from the copy
-    /// the radar keeps for its own screen. Not while the view is on the
-    /// phone: the phone's position never goes to the radar, and around it
-    /// the relay and adsb.lol are asked, rounded, as before.
-    private var radarForView: Coordinate? {
+    /// the radar keeps for its own screen. Not for a view that would say
+    /// where the phone is: the phone's position never goes to the radar, and
+    /// around it the relay and adsb.lol are asked, rounded, as before. That
+    /// is a view centred on the phone, and, with the phone away from home,
+    /// any view it is inside: a small drag clears centreOnMe and leaves the
+    /// middle beside the phone (review, 2026-10-26). At home the phone is
+    /// where the radar is, which the radar knows already.
+    private func radarForView(centre: Coordinate) -> Coordinate? {
         guard hasRadar, !DemoFeed.isOn, connected, Date().timeIntervalSince(lastGoodFetch) < staleInterval,
-              !(centreOnMe && me != nil) else { return nil }
+              !(centreOnMe && me != nil), let home else { return nil }
+        if let me, NetLattice.nm(home.lat, home.lon, me.lat, me.lon) > Self.phoneAwayNm,
+           NetLattice.nm(me.lat, me.lon, centre.lat, centre.lon) <= rangeNm { return nil }
         return home
     }
+    /// Further than this from the radar, the phone is away from home, as
+    /// Sky view counts it.
+    private static let phoneAwayNm = 3.0
 
     private func pollRadar() async {
         do {
@@ -449,7 +458,7 @@ final class RadarViewModel: ObservableObject {
     /// seconds while it rests there; at once when it has moved.
     private func pollNetworkAroundView() async {
         let centre = viewCentre
-        let radar = radarForView
+        let radar = radarForView(centre: centre)
         let tiled = rangeNm > NetworkFeed.singleUpToNm
         // One disc follows the middle closely; a tiled view only once the middle
         // has moved a good way (a quarter of a disc), or the time is up.
