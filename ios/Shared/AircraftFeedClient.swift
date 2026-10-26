@@ -89,6 +89,7 @@ enum AircraftFeedClient {
     static func fetchReceiver() async throws -> Coordinate? {
         if DemoFeed.isOn { return DemoFeed.home }
         await Endpoint.shared.resolve()
+        let radar = radarNow        // whose position this is, as asked
         var req = URLRequest(url: APIConfig.url("/tar1090/data/receiver.json"))
         req.setValue("1", forHTTPHeaderField: Self.appHeader)
         req.cachePolicy = .reloadIgnoringLocalCacheData
@@ -110,7 +111,7 @@ enum AircraftFeedClient {
         let r = try JSONDecoder().decode(ReceiverResponse.self, from: data)
         guard let lat = r.lat, let lon = r.lon else { return nil }
         let c = Coordinate(lat: lat, lon: lon)
-        keepHome(c)
+        keepHome(c, of: radar)
         return c
     }
 
@@ -121,21 +122,32 @@ enum AircraftFeedClient {
     // reads the app's copy (2026-10-26).
     private static let homeCacheKey = "stratoscan.homeCache"
 
-    /// The radar's position as last read, and when (nil from before that was kept).
+    /// Which radar a kept position is for: the addresses it is read from.
+    /// Changed in Settings (an owner with a second radar), or paired with
+    /// another radar's public address, and the copy is not this radar's: the
+    /// widgets and the Watch measured its aircraft from the other radar's
+    /// place for up to a day (#86, 2026-10-26).
+    private static var radarNow: String { APIConfig.baseURL + " " + (APIConfig.awayURL ?? "") }
+
+    /// The radar's position as last read, and when (nil from before that was
+    /// kept); none when it was read from another radar. One kept before that
+    /// was noted is taken, as it always was, until the radar is read again.
     static var cachedHome: (home: Coordinate, at: Date?)? {
         guard let d = APIConfig.shared.dictionary(forKey: homeCacheKey),
               let lat = d["lat"] as? Double, let lon = d["lon"] as? Double else { return nil }
+        if let radar = d["radar"] as? String, radar != radarNow { return nil }
         return (Coordinate(lat: lat, lon: lon), (d["at"] as? Double).map(Date.init(timeIntervalSince1970:)))
     }
 
-    private static func keepHome(_ c: Coordinate) {
-        APIConfig.shared.set(["lat": c.lat, "lon": c.lon, "at": Date().timeIntervalSince1970], forKey: homeCacheKey)
+    private static func keepHome(_ c: Coordinate, of radar: String) {
+        APIConfig.shared.set(["lat": c.lat, "lon": c.lon, "at": Date().timeIntervalSince1970, "radar": radar],
+                             forKey: homeCacheKey)
     }
 
     /// The radar's position for a widget or the Watch: the copy kept, while
-    /// it is under a day old, else the radar's own (#86, 2026-10-26). A radar
-    /// doesn't move, and every look used to ask for it first, in series with
-    /// the aircraft.
+    /// it is under a day old and this radar's, else the radar's own (#86,
+    /// 2026-10-26). A radar doesn't move, and every look used to ask for it
+    /// first, in series with the aircraft.
     static func home() async throws -> Coordinate? {
         if DemoFeed.isOn { return DemoFeed.home }
         if let kept = cachedHome, let at = kept.at, Date().timeIntervalSince(at) < 86400 { return kept.home }
