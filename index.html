@@ -1419,13 +1419,26 @@ function drain(res) {
 // ---- Nothing waits without a time limit (#86, 2026-10-26) --------------------
 // A request with no limit waits as long as the network lets it, and on a
 // server that has stopped answering that is for ever; whatever was waiting on
-// it waits too. Every request in this page passes
-// signal: AbortSignal.timeout(...) with one of these, and its own failure
-// handling takes over when the time is up. tests/test_page_timeouts.py keeps
-// it so.
+// it waits too. Every request in this page passes signal: timeLimit(...)
+// with one of these, and its own failure handling takes over when the time is
+// up. tests/test_page_timeouts.py keeps it so.
 const LOCAL_TIMEOUT_MS = 5 * 1000;        // the radar's own quick answers: small files, the core feed, the pings
 const LOCAL_SLOW_TIMEOUT_MS = 20 * 1000;  // its bigger answers, and those it asks someone else for
 const REMOTE_TIMEOUT_MS = 10 * 1000;      // another service, asked from this browser
+// AbortSignal.timeout came only with Safari 16, and the public page is
+// opened from phones that stop at iOS 15, where calling it throws and every
+// request would fail (2026-10-26); there a timer and an AbortController do the
+// same. Older Safari rejects with a plain AbortError whatever the reason, so
+// isTimeout() takes either name.
+function timeLimit(ms) {
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  const c = new AbortController();
+  setTimeout(() => c.abort(new DOMException('No answer in time', 'TimeoutError')), ms);
+  return c.signal;
+}
+function isTimeout(e) {
+  return !!e && (e.name === 'TimeoutError' || e.name === 'AbortError');
+}
 // For a wait that no request's signal reaches (a module import, or a start-up
 // step made of several requests): settles as `p` does if `p` is in time, and
 // rejects with a TimeoutError if not.
@@ -1973,7 +1986,7 @@ function applyPerfFlags() {
   if (PERF.noNetwork) { ghosts = []; ghostTracks.clear(); }
   console.log('perf experiment flags:', JSON.stringify(PERF));
 }
-fetch('/data/perf-debug.json', { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) })
+fetch('/data/perf-debug.json', { cache: 'no-store', signal: timeLimit(LOCAL_TIMEOUT_MS) })
   .then(r => (r.ok ? r.json() : null))
   .then(f => { if (f && typeof f === 'object') { Object.assign(PERF, f); applyPerfFlags(); } })
   .catch(() => {});
@@ -2281,7 +2294,7 @@ let AIRPORT = {
 
 async function loadAirportConfig() {
   try {
-    const res = await fetch('/config.json', { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) });
+    const res = await fetch('/config.json', { cache: 'no-store', signal: timeLimit(LOCAL_TIMEOUT_MS) });
     if (!res.ok) return; // no config deployed -- defaults stand
     const cfg = await res.json();
     const a = cfg && cfg.airport;
@@ -2373,7 +2386,7 @@ let storeWritesRefused = false;
 function storeWrite(url, body) {
   if (storeWritesRefused) return Promise.resolve(null);
   return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-                      signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) })
+                      signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) })
     .then(res => { if (res.status === 403) storeWritesRefused = true; return res; });
 }
 const APPROACH_STORE_URL = '/approaches';
@@ -2399,7 +2412,7 @@ function countApproachCell(key, n) {
 
 async function loadApproachPoints() {
   try {
-    const res = await fetch(APPROACH_STORE_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+    const res = await fetch(APPROACH_STORE_URL, { cache: 'no-store', signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) });
     const data = await res.json();
     if (Array.isArray(data)) {
       approachCells = new Map();
@@ -2503,7 +2516,7 @@ function recordSightingOnce(hex, kind) {
 
 async function loadSightingCounts() {
   try {
-    const res = await fetch(SIGHTING_STORE_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+    const res = await fetch(SIGHTING_STORE_URL, { cache: 'no-store', signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) });
     const data = await res.json();
     if (data && typeof data === 'object') {
       for (const [hex, counts] of Object.entries(data)) sightingCounts.set(hex, counts);
@@ -2545,7 +2558,7 @@ let flightStats = null;      // last aggregate; null until the first load
 
 async function loadFlightStats() {
   try {
-    const res = await fetch(FLIGHT_STATS_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+    const res = await fetch(FLIGHT_STATS_URL, { cache: 'no-store', signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) });
     if (res.ok) flightStats = await res.json();
   } catch (e) {
     // store unavailable -- the Statistics screens say so rather than
@@ -2573,7 +2586,7 @@ async function backfillClassifications() {
   for (let round = 0; round < BACKFILL_MAX_ROUNDS; round++) {
     let list;
     try {
-      const res = await fetch('/sightings/unclassified', { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+      const res = await fetch('/sightings/unclassified', { cache: 'no-store', signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) });
       if (!res.ok) return;
       list = await res.json();
     } catch (e) {
@@ -2775,7 +2788,7 @@ let mapStarting = false;
 
 async function fetchOnlineStyle() {
   try {
-    const res = await fetch(MAP_STYLE_URL, { signal: AbortSignal.timeout(ONLINE_STYLE_TIMEOUT_MS) });
+    const res = await fetch(MAP_STYLE_URL, { signal: timeLimit(ONLINE_STYLE_TIMEOUT_MS) });
     if (!res.ok) return null;
     const style = await res.json();
     return style && style.version && style.sources ? style : null;
@@ -2786,7 +2799,7 @@ async function fetchOnlineStyle() {
 
 async function fetchOfflineMeta() {
   try {
-    const res = await fetch(OFFLINE_MAP_BASE + 'meta.json', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+    const res = await fetch(OFFLINE_MAP_BASE + 'meta.json', { cache: 'no-store', signal: timeLimit(5000) });
     return res.ok ? await res.json() : null;
   } catch (e) {
     return null;
@@ -3065,7 +3078,7 @@ async function onlineTilesReachable(style) {
     if (!src) return false;
     let tiles = src.tiles;
     if (!tiles && src.url) {
-      const res = await fetch(src.url, { signal: AbortSignal.timeout(ONLINE_STYLE_TIMEOUT_MS) });
+      const res = await fetch(src.url, { signal: timeLimit(ONLINE_STYLE_TIMEOUT_MS) });
       if (!res.ok) return false;
       tiles = (await res.json()).tiles;
     }
@@ -3075,7 +3088,7 @@ async function onlineTilesReachable(style) {
     const latR = home.lat * Math.PI / 180;
     const y = Math.floor((1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2 * n);
     const url = tiles[0].replace('{z}', z).replace('{x}', x).replace('{y}', y);
-    const res = await fetch(url, { signal: AbortSignal.timeout(ONLINE_STYLE_TIMEOUT_MS) });
+    const res = await fetch(url, { signal: timeLimit(ONLINE_STYLE_TIMEOUT_MS) });
     return res.ok;
   } catch (e) {
     return false;
@@ -3295,7 +3308,7 @@ async function refreshViewFeed() {
   viewFeedAsking = true;
   try {
     const res = await fetch(`${VIEW_FEED_URL}?lat=${c.lat.toFixed(3)}&lon=${c.lon.toFixed(3)}&half=${Math.round(half)}`,
-                            { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+                            { cache: 'no-store', signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) });
     if (!res.ok) return;              // asked too soon, or the network is away: keep what we have
     const d = await res.json();
     viewFeedCovered = typeof d.covered === 'number' ? d.covered : 0;
@@ -3482,7 +3495,7 @@ async function loadRunways() {
     // no-cache: the browser keeps the answer but asks the radar whether it
     // has changed (its ETag), so a copy rebuilt for a new place is never
     // read from a cache older than it.
-    const res = await fetch(RUNWAYS_URL, { cache: 'no-cache', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+    const res = await fetch(RUNWAYS_URL, { cache: 'no-cache', signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) });
     if (!res.ok) { drain(res); retry(); return; }   // 404: not built yet
     geojson = await res.json();
   } catch (e) {
@@ -3545,7 +3558,7 @@ async function refreshStorms() {
   // radar mosaic every five minutes and throwing it away.
   if (!map || !alertSettings.storms || PERF.noWeather) return;
   try {
-    const res = await fetch(RAINVIEWER_API_URL, { cache: 'no-store', signal: AbortSignal.timeout(REMOTE_TIMEOUT_MS) });
+    const res = await fetch(RAINVIEWER_API_URL, { cache: 'no-store', signal: timeLimit(REMOTE_TIMEOUT_MS) });
     if (!res.ok) return;
     const data = await res.json();
     const frames = data.radar && data.radar.past;
@@ -3699,18 +3712,20 @@ const LIGHTNING_PROBE_RING_POINTS = 8;
 let lightningAlerted = false; // survives across checks, not per-plane -- there's no single "object" a storm alert is about; and across a reload (carryAlerts)
 let lightningChecking = false; // a check still waiting on its probes: the next one is skipped, not piled on (#86)
 
+// A number, or null for an answer with no value at that point, or undefined
+// for no answer at all: only the last says nothing about the sky (#86).
 async function probeLightningValue(lat, lon) {
   try {
     const res = await fetch(`https://realearth.ssec.wisc.edu/api/probe?products=${LIGHTNING_PROBE_PRODUCT}&lat=${lat}&lon=${lon}`,
-                            { signal: AbortSignal.timeout(REMOTE_TIMEOUT_MS) });
-    if (!res.ok) return null;
+                            { signal: timeLimit(REMOTE_TIMEOUT_MS) });
+    if (!res.ok) { drain(res); return undefined; }
     const html = await res.text();
     const m = html.match(/Data value:\s*<b>([^<]+)<\/b>/);
     if (!m) return null;
     const val = parseFloat(m[1]);
     return Number.isFinite(val) ? val : null;
   } catch (e) {
-    return null; // offline or RealEarth unavailable -- this check just tries again next cycle
+    return undefined; // offline, RealEarth unavailable or too slow -- this check just tries again next cycle
   }
 }
 
@@ -3730,9 +3745,10 @@ async function checkLightningNearby() {
   const values = await Promise.all(points.map(([lat, lon]) => probeLightningValue(lat.toFixed(4), lon.toFixed(4))));
   lightningChecking = false;   // probeLightningValue never throws
   // Not one probe answered in time: nothing is known, so nothing changes --
-  // an alert standing is not cleared, to sound again at the next answer.
-  if (values.every(v => v === null)) return;
-  const nearby = values.some(v => v !== null && v > 0);
+  // an alert standing is not cleared, to sound again at the next answer. An
+  // answer with no value in it is an answer, and a clear sky clears the alert.
+  if (values.every(v => v === undefined)) return;
+  const nearby = values.some(v => typeof v === 'number' && v > 0);
 
   if (nearby && !lightningAlerted) {
     lightningAlerted = true;
@@ -3859,15 +3875,31 @@ const ON_DEVICE = location.hostname === 'localhost' || location.hostname === '12
 // on, the splash is on screen, so the cover can go: the picture beneath is
 // the same.
 if (ON_DEVICE) requestAnimationFrame(() => requestAnimationFrame(() => {
-  fetch('/wake/painted', { method: 'POST', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});
+  fetch('/wake/painted', { method: 'POST', signal: timeLimit(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});
 }));
 let radarName = '';   // this radar's name, once the setup service has said it
 const ONBOARD_POLL_MS = 5000;
 // The listener's answer shells out to nmcli and tailscale, and has taken
 // over a minute when one of them was slow; the polls queued up behind it and
-// filled the browser's few connections to it (#86, 2026-10-26). One at a
-// time, each with a limit, and a slow answer changes nothing on screen.
+// filled the browser's few connections to it (#86, 2026-10-26). One request
+// at a time, shared by this poll and the network pill's (refreshNetStatus),
+// and a slow answer changes nothing on screen. Its limit is past the
+// listener's worst case, every nmcli and tailscale call behind it running to
+// its own limit (about two and a half minutes): a shorter one would cut off
+// every answer for as long as such a fault lasted, and the claim code, the
+// radar's name and the take-off sound would never come.
+const ONBOARD_TIMEOUT_MS = 3 * 60 * 1000;
+let onboardAsk = null;     // the request in flight, if any
 let onboardAsking = false;
+
+function askOnboard() {
+  if (!onboardAsk) {
+    onboardAsk = fetch(ONBOARD_URL, { cache: 'no-store', signal: timeLimit(ONBOARD_TIMEOUT_MS) })
+      .then(res => res.ok ? res.json() : (drain(res), null))
+      .finally(() => { onboardAsk = null; });
+  }
+  return onboardAsk;
+}
 
 async function refreshOnboarding() {
   const el = document.getElementById('onboard');
@@ -3875,11 +3907,10 @@ async function refreshOnboarding() {
   let d = null;
   onboardAsking = true;
   try {
-    const res = await fetch(ONBOARD_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
-    if (res.ok) d = await res.json();
+    d = await askOnboard();
   } catch (e) {
     // no setup service on this unit -- nothing to show, ever
-    if (e.name === 'TimeoutError') return;
+    if (isTimeout(e)) return;
   } finally {
     onboardAsking = false;
   }
@@ -4022,7 +4053,7 @@ function wakeScreenForAlert(why = 'alert') {
   applyNightDim();
   // The reason goes in the journal (wake-listener.py): the panel was found
   // never to blank, and nothing said which alert kept waking it (2026-10-10).
-  if (ON_DEVICE) fetch('/wake?why=' + encodeURIComponent(why), { method: 'POST', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});   // the panel only (#67)
+  if (ON_DEVICE) fetch('/wake?why=' + encodeURIComponent(why), { method: 'POST', signal: timeLimit(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});   // the panel only (#67)
 }
 
 // ---- Nearby-aircraft alert ---------------------------------------------
@@ -4272,7 +4303,7 @@ let powerVolumeCap = POWER_VOLUME_CAP;   // the unit may set it (power.json "cap
 async function checkPowerLimit() {
   if (!ON_DEVICE) return;
   try {
-    const r = await fetch('/data/power.json', { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) });
+    const r = await fetch('/data/power.json', { cache: 'no-store', signal: timeLimit(LOCAL_TIMEOUT_MS) });
     if (r.ok) {
       const doc = await r.json();
       const was = [powerLimited, powerVolumeCap];
@@ -4360,7 +4391,7 @@ function applyScreenPolicy() {
   const now = Date.now();
   if (mode === screenModeSent.mode && now - screenModeSent.at < 5 * 60 * 1000) return;
   screenModeSent = { mode, at: now };
-  fetch('/wake/mode?m=' + encodeURIComponent(mode), { method: 'POST', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});
+  fetch('/wake/mode?m=' + encodeURIComponent(mode), { method: 'POST', signal: timeLimit(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});
 }
 
 // Opens a short window in which quiet hours step aside, then closes it on its
@@ -4398,7 +4429,7 @@ document.addEventListener('pointerdown', () => {
   const now = performance.now();
   if (now - lastTouchReport < 5000) return;
   lastTouchReport = now;
-  fetch('/wake/touch', { method: 'POST', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});
+  fetch('/wake/touch', { method: 'POST', signal: timeLimit(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});
 }, { capture: true, passive: true });
 
 // Shared tone-sequence player -- each note is [freq, startOffset, dur, peakGain].
@@ -4449,7 +4480,7 @@ function playTones(notes) {
 const sampleBuffers = {};
 function loadSample(url) {
   if (!sampleBuffers[url]) {
-    sampleBuffers[url] = fetch(url, { signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) })
+    sampleBuffers[url] = fetch(url, { signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) })
       .then((r) => r.arrayBuffer())
       .then((buf) => getAudioCtx().decodeAudioData(buf))
       .catch((e) => { delete sampleBuffers[url]; throw e; });
@@ -4571,7 +4602,7 @@ function speak(text, delayMs = 1100) {
   setTimeout(finished, 30000);   // never let a lost callback hold a reload for ever
   let p = spokenBuffers.get(text);
   if (!p) {
-    p = fetch('/tts?text=' + encodeURIComponent(text.slice(0, 240)), { signal: AbortSignal.timeout(15000) })
+    p = fetch('/tts?text=' + encodeURIComponent(text.slice(0, 240)), { signal: timeLimit(15000) })
       .then(r => { if (!r.ok) throw new Error('tts ' + r.status); return r.arrayBuffer(); })
       .then(buf => getAudioCtx().decodeAudioData(buf));
     p.catch(() => spokenBuffers.delete(text));
@@ -4931,7 +4962,7 @@ let networkError = null;
 async function refreshNetworkCompare() {
   if (!alertSettings.networkCompare || PERF.noNetwork) { ghosts = []; ghostTracks.clear(); return; }
   try {
-    const res = await fetch(NETWORK_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+    const res = await fetch(NETWORK_URL, { cache: 'no-store', signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const d = await res.json();
     networkStats = d.stats || null;
@@ -5284,14 +5315,14 @@ let netInfoReachable = false;
 async function refreshNetStatus() {
   if (!ON_DEVICE) return;    // the listener is on the radar's own loopback
   try {
-    const res = await fetch(ONBOARD_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
-    if (res.ok) { netInfo = await res.json(); netInfoReachable = true; maybePlayBootSound(); }
+    const d = await askOnboard();
+    if (d) { netInfo = d; netInfoReachable = true; maybePlayBootSound(); }
   } catch (e) {
     // Not on the device (a laptop, or the public URL). Not an error: the
     // receiver half below still works, and claiming the network is down
     // because we cannot ask would be worse than saying less. A slow answer
     // (#86) is not an absent listener: the last one stands.
-    if (e.name !== 'TimeoutError') netInfoReachable = false;
+    if (!isTimeout(e)) netInfoReachable = false;
   }
   renderNetStatus();
 }
@@ -5456,11 +5487,11 @@ let notableDb = null;   // hex -> [category, kind, operator, type]
 let notablePeople = null;   // hex -> name
 async function loadNotableDb() {
   try {
-    const res = await fetch('/data/notable.json', { signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+    const res = await fetch('/data/notable.json', { signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) });
     if (res.ok) notableDb = (await res.json()).ac || null;
   } catch (e) { /* absent until the unit's first weekly fetch; the rest still works */ }
   try {
-    const res = await fetch('/data/notable-people.json', { signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) });
+    const res = await fetch('/data/notable-people.json', { signal: timeLimit(LOCAL_TIMEOUT_MS) });
     if (res.ok) notablePeople = (await res.json()).names || null;
   } catch (e) { /* refused on the public page, by design */ }
 }
@@ -5603,7 +5634,7 @@ function humanizeType(s) {
 
 async function discoverDatabaseFolder() {
   try {
-    const res = await fetch('/tar1090/index.html', { cache: 'force-cache', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+    const res = await fetch('/tar1090/index.html', { cache: 'force-cache', signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) });
     const html = await res.text();
     const m = /databaseFolder\s*=\s*"([^"]+)"/.exec(html);
     if (m) databaseFolder = m[1];
@@ -5619,7 +5650,7 @@ async function discoverDatabaseFolder() {
 async function loadTypeCodeTable() {
   if (!databaseFolder) return;
   try {
-    const res = await fetch(`/tar1090/${databaseFolder}/icao_aircraft_types2.js`, { cache: 'force-cache', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+    const res = await fetch(`/tar1090/${databaseFolder}/icao_aircraft_types2.js`, { cache: 'force-cache', signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) });
     const data = await res.json();
     for (const code in data) {
       const entry = data[code];
@@ -5640,7 +5671,7 @@ function fetchShard(bkey) {
   if (shardCache.has(bkey)) return shardCache.get(bkey);
   const promise = (async () => {
     try {
-      const res = await fetch(`/tar1090/${databaseFolder}/${bkey}.js`, { cache: 'force-cache', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+      const res = await fetch(`/tar1090/${databaseFolder}/${bkey}.js`, { cache: 'force-cache', signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) });
       return res.ok ? await res.json() : null;
     } catch (e) {
       // Unanswered, cut off or unreadable (#86): undefined rather than null,
@@ -5734,7 +5765,7 @@ async function loadHome() {
     return;
   }
   try {
-    const res = await fetch(RECEIVER_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) });
+    const res = await fetch(RECEIVER_URL, { cache: 'no-store', signal: timeLimit(LOCAL_TIMEOUT_MS) });
     const data = await res.json();
     if (typeof data.lat === 'number' && typeof data.lon === 'number') {
       const real = { lat: data.lat, lon: data.lon };
@@ -5843,7 +5874,7 @@ async function fetchAircraft() {
   if (aircraftAsking) return;
   aircraftAsking = true;
   try {
-    const res = await fetch(CORE_URL, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) });
+    const res = await fetch(CORE_URL, { cache: 'no-store', signal: timeLimit(LOCAL_TIMEOUT_MS) });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     lastGoodFetch = performance.now();
@@ -5852,7 +5883,7 @@ async function fetchAircraft() {
   } catch (e) {
     // The feed didn't answer: NO SIGNAL until it does. One slow answer is
     // left to STALE_MS, as it was before polls had a limit.
-    if (e.name !== 'TimeoutError') connected = false;
+    if (!isTimeout(e)) connected = false;
   } finally {
     aircraftAsking = false;
   }
@@ -6560,7 +6591,7 @@ function reportPainted(now) {
   // reloading -- sightings, statistics and the approach heatmap all live in
   // the server-side stores -- beyond trails and ghost tracks, which rebuild
   // within a sweep.
-  fetch('/wake/alive', { method: 'POST', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) })
+  fetch('/wake/alive', { method: 'POST', signal: timeLimit(LOCAL_TIMEOUT_MS) })
     .then(r => (r.status === 200 ? r.json() : (drain(r), null)))
     .then(d => { if (d && d.reload && !reloadWantedAt) reloadWhenQuiet(); })
     .catch(() => {});  // absent off-device; harmless
@@ -6771,7 +6802,7 @@ async function lookupStockPhoto(typeLabel) {
   stockPhotoPending.add(typeLabel);
   let result = null;
   try {
-    const res = await fetch(`/photo/type?q=${encodeURIComponent(typeLabel)}`, { signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+    const res = await fetch(`/photo/type?q=${encodeURIComponent(typeLabel)}`, { signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) });
     const data = await res.json();
     if (data.found && /^https:\/\//.test(data.thumb || '')) {
       result = { thumb: data.thumb, artist: data.artist, license: data.license, page: data.page };
@@ -6828,12 +6859,12 @@ const PLANESPOTTERS_API = 'https://api.planespotters.net/pub/photos/hex/';
 const planespottersCache = new Map();   // hex -> { at, data }; their terms allow 24 h
 async function fetchPhoto(hex) {
   if (ON_DEVICE) {
-    const res = await fetch(`/photo/${hex}`, { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+    const res = await fetch(`/photo/${hex}`, { cache: 'no-store', signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) });
     return res.json();
   }
   const hit = planespottersCache.get(hex);
   if (hit && Date.now() - hit.at < 24 * 3600 * 1000) return hit.data;
-  const res = await fetch(PLANESPOTTERS_API + encodeURIComponent(hex), { cache: 'no-store', signal: AbortSignal.timeout(REMOTE_TIMEOUT_MS) });
+  const res = await fetch(PLANESPOTTERS_API + encodeURIComponent(hex), { cache: 'no-store', signal: timeLimit(REMOTE_TIMEOUT_MS) });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const p = ((await res.json()).photos || [])[0];
   const data = p ? { found: true, thumb: p.thumbnail?.src, thumbLarge: p.thumbnail_large?.src,
@@ -7092,13 +7123,13 @@ async function deviceApi(path, opts = {}) {
   const { timeoutMs = DEVICE_API_TIMEOUT_MS, ...rest } = opts;
   try {
     const r = await fetch(DEVICE_API + path, {
-      ...rest, headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(timeoutMs) });
+      ...rest, headers: { 'Content-Type': 'application/json' }, signal: timeLimit(timeoutMs) });
     let b = {};
-    try { b = await r.json(); } catch (e) { if (e.name === 'TimeoutError') throw e; }
+    try { b = await r.json(); } catch (e) { if (isTimeout(e)) throw e; }
     if (!r.ok) throw new Error(b?.error?.message || 'That did not work.');
     return b;
   } catch (e) {
-    if (e.name === 'TimeoutError') throw new Error("The radar's setup service did not answer in time. Try again in a moment.");
+    if (isTimeout(e)) throw new Error("The radar's setup service did not answer in time. Try again in a moment.");
     throw e;
   }
 }
@@ -7343,7 +7374,7 @@ async function refreshWeather() {
     + '&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min'
     + `&timezone=auto&forecast_days=1${f ? '&temperature_unit=fahrenheit' : ''}`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    const res = await fetch(url, { signal: timeLimit(10000) });
     if (!res.ok) return;
     const d = await res.json();
     const t = Math.round(d.current.temperature_2m), u = f ? '°F' : '°C';
@@ -7355,7 +7386,7 @@ async function refreshWeather() {
 async function refreshToday() {
   todayAt = performance.now();
   try {
-    const st = await (await fetch('/sightings/stats', { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) })).json();
+    const st = await (await fetch('/sightings/stats', { cache: 'no-store', signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) })).json();
     const n = st && st.today ? st.today.total : null;
     if (typeof n === 'number') todayText = n === 1 ? '1 aircraft heard today' : `${n.toLocaleString()} aircraft heard today`;
   } catch (e) { /* the store is optional; show without it */ }
@@ -7411,7 +7442,7 @@ let rewindSelected = null;             // hex whose track is drawn
 let rewindLoadSeq = 0;
 
 async function fetchChunk(name, fresh) {
-  const res = await fetch(`/tar1090/chunks/${name}`, { cache: fresh ? 'no-store' : 'default', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) });
+  const res = await fetch(`/tar1090/chunks/${name}`, { cache: fresh ? 'no-store' : 'default', signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`history unavailable (${res.status})`);
   const data = await res.json();
   return Array.isArray(data.files) ? data.files : [];
@@ -7421,7 +7452,7 @@ async function loadRewind() {
   const seq = ++rewindLoadSeq;
   rewindError = '';
   try {
-    const list = await (await fetch('/tar1090/chunks/chunks.json', { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) })).json();
+    const list = await (await fetch('/tar1090/chunks/chunks.json', { cache: 'no-store', signal: timeLimit(LOCAL_TIMEOUT_MS) })).json();
     const names = Array.isArray(list.chunks) ? list.chunks : [];
     for (const k of rewindChunkCache.keys()) if (!names.includes(k)) rewindChunkCache.delete(k);
     await Promise.all(names.filter(n => !rewindChunkCache.has(n)).map(async n => {
@@ -7633,7 +7664,7 @@ function statsDateLine(st) {
 // Year in review, from the store's per-year counters (/sightings/year).
 let yearStats = null;
 async function loadYearStats() {
-  try { yearStats = await (await fetch('/sightings/year', { cache: 'no-store', signal: AbortSignal.timeout(LOCAL_SLOW_TIMEOUT_MS) })).json(); }
+  try { yearStats = await (await fetch('/sightings/year', { cache: 'no-store', signal: timeLimit(LOCAL_SLOW_TIMEOUT_MS) })).json(); }
   catch (e) { yearStats = null; }
 }
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -9036,7 +9067,7 @@ document.addEventListener('keydown', (e) => {
   const fn = CONTROL_KEYS[e.code];
   if (!fn) return;
   e.preventDefault();
-  if (ON_DEVICE) fetch('/wake/touch', { method: 'POST', signal: AbortSignal.timeout(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});   // using the dials counts as using the screen
+  if (ON_DEVICE) fetch('/wake/touch', { method: 'POST', signal: timeLimit(LOCAL_TIMEOUT_MS) }).then(drain).catch(() => {});   // using the dials counts as using the screen
   fn();
 }, { capture: true });
 document.addEventListener('keydown', (e) => {   // a laptop: + and - zoom, 0 goes home, l holds

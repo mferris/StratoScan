@@ -54,6 +54,7 @@ def line(pattern):
 
 
 src = "\n".join([
+    function("function timeLimit("),
     line(r"^const RUNWAYS_URL = .*$"), line(r"^const RUNWAYS_RETRY_MS = .*$"), line(r"^const RUNWAY_CACHE_KEY = .*$"),
     function("function runwaysAreHere("), function("function loadCachedRunways("),
     line(r"^let runwaysRetry = .*$"), function("async function loadRunways("),
