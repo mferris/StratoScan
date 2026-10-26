@@ -33,6 +33,8 @@ it up for the others. The relay is never a single point of failure:
 unreachable, the unit asks adsb.lol itself, as before.
 
 GET /network      -> {"ac": [...], "stats": {...}, "source": ..., "fetched": age_s}
+                     plus "pending": 1 while a fresh one is on its way, and
+                     "stale": true when the last one is kept through a failure
 GET /network/stats -> just the scorecard, no upstream call
 """
 import http.server
@@ -85,6 +87,12 @@ UPSTREAM_TIMEOUT = 8
 NETWORK_WAIT_S = 3
 UPSTREAM_RETRY_S = 15           # after a failed refresh, not asked again sooner
 UPSTREAM_DEADLINE_S = 30        # one answer, however slowly it trickles in
+# While a fresh comparison is on its way, the last one goes out only if it is
+# younger than this, marked "pending" (review, 2026-10-26). With nothing
+# asking for an hour, the first question got last night's aircraft as the
+# current ones, and the core feed showed them in the app as live. Two
+# refreshes' worth: what a screen asking every minute has anyway.
+NETWORK_KEEP_S = 2 * MIN_UPSTREAM_S
 RADIUS_NM = 25          # a little beyond the 20nm ring the radar draws
 RING_NM = 20            # what the radar actually shows; stats use this
 
@@ -840,11 +848,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             worker.join(NETWORK_WAIT_S)
         with lock:
             cached, at, error = _cache["payload"], _cache["at"], _cache["error"]
-        if cached is None:
-            return self._json(503, {"error": "upstream unavailable",
-                                    "detail": error or "still asking"})
+            pending = _cache["worker"] is not None
+        age = time.time() - at
+        if cached is None or (pending and not error and age >= NETWORK_KEEP_S):
+            out = {"error": "upstream unavailable", "detail": error or "still asking"}
+            if pending:
+                out["pending"] = 1
+            return self._json(503, out)
         out = dict(cached)
-        out["fetched"] = round(time.time() - at, 1)
+        out["fetched"] = round(age, 1)
+        if pending:
+            out["pending"] = 1          # the fresh one is on its way: ask again soon
         if error:
             # Upstream down, offline, or malformed: the last good answer -- a
             # stale comparison is still useful, and the radar's own data is
