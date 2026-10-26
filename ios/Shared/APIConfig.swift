@@ -7,7 +7,8 @@ import Network
 ///   pairing, `stratoscan.local` is the factory image's own mDNS name.
 /// - away: its public HTTPS address (Tailscale Funnel), when the owner has
 ///   turned that on. Learned from the pairing QR code, or from the radar
-///   itself whenever the phone is home.
+///   itself whenever the phone is home; once there is one, a different one
+///   is only offered (`awayOffered`), never swapped in.
 ///
 /// `Endpoint` picks between them automatically.
 enum APIConfig {
@@ -17,6 +18,7 @@ enum APIConfig {
     // every owner's settings and unpair their radars. The App Group and
     // bundle IDs keep "radome" until the company name is settled.
     private static let awayKey = "radome.awayURL"
+    private static let offeredKey = "stratoscan.awayOffered"
     static let defaultBaseURL = "http://stratoscan.local"
 
     /// Shared with the widget (same App Group), so it reads the same radar.
@@ -42,7 +44,20 @@ enum APIConfig {
         set {
             if let v = newValue, v.hasPrefix("https://") { shared.set(v, forKey: awayKey) }
             else { shared.removeObject(forKey: awayKey) }
+            if newValue != nil, newValue == awayOffered { awayOffered = nil }     // taken
             Endpoint.shared.invalidate()
+        }
+    }
+
+    /// A public address a paired radar gave at home that differs from the
+    /// away address in use (2026-10-26): Settings offers it, and it is used
+    /// only once the owner takes it. Whatever answers at the home address is
+    /// taken for the radar, so its word alone never replaces the away address.
+    static var awayOffered: String? {
+        get { shared.string(forKey: offeredKey) }
+        set {
+            if let v = newValue { shared.set(v, forKey: offeredKey) }
+            else { shared.removeObject(forKey: offeredKey) }
         }
     }
 
@@ -102,6 +117,14 @@ final class Endpoint: @unchecked Sendable {     // its state is behind `lock`
         set { lock.withLock { finderHook = newValue } }
     }
     private var finderHook: (@Sendable () async -> String?)?
+    /// Set by the app (not the widget or the Watch): the radars this phone
+    /// paired with, by unit id. The public address is learned only from one
+    /// of them (2026-10-26); with none set, it isn't learned here at all.
+    var pairedUnits: (@Sendable () -> Set<String>)? {
+        get { lock.withLock { pairedHook } }
+        set { lock.withLock { pairedHook = newValue } }
+    }
+    private var pairedHook: (@Sendable () -> Set<String>)?
     /// How often the finder may look while home keeps not answering.
     private static let findEvery: TimeInterval = 120
 
@@ -210,14 +233,24 @@ final class Endpoint: @unchecked Sendable {     // its state is behind `lock`
 
     /// At home, ask the radar for its public address (the setup server's
     /// LAN-only hello), so an already-paired phone learns it with no typing.
+    /// The home address is plain http and the hello is not signed, so
+    /// whatever answers there is taken for the radar (2026-10-26): only a
+    /// hello naming a radar paired here counts, it fills in an away address
+    /// only where there is none, and a different one is offered in Settings.
     private func learnAway(from home: String) async {
-        struct Hello: Decodable { let publicUrl: String? }
-        guard let url = URL(string: home.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/setup/api/hello"),
+        struct Hello: Decodable { let publicUrl: String?; let unit: String? }
+        guard let paired = lock.withLock({ pairedHook })?(), !paired.isEmpty,
+              let url = URL(string: home.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/setup/api/hello"),
               let (data, resp) = try? await URLSession.radar.data(for: URLRequest(url: url, timeoutInterval: 3)),
               (resp as? HTTPURLResponse)?.statusCode == 200,
-              let hello = try? JSONDecoder().decode(Hello.self, from: data) else { return }
-        if let pub = hello.publicUrl, pub.hasPrefix("https://"), pub != APIConfig.awayURL {
+              let hello = try? JSONDecoder().decode(Hello.self, from: data),
+              let unit = hello.unit, paired.contains(unit),
+              let pub = hello.publicUrl, pub.hasPrefix("https://") else { return }
+        if APIConfig.awayURL == nil {
             APIConfig.shared.set(pub, forKey: "radome.awayURL")
+            APIConfig.awayOffered = nil
+        } else {
+            APIConfig.awayOffered = pub == APIConfig.awayURL ? nil : pub
         }
     }
 }
