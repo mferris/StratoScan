@@ -126,14 +126,21 @@ check(views == ["ios/StratoScan/ViewModels/RadarViewModel.swift"], "the radar vi
 check("NetworkFeed.fetch(around: me)" in sky and "fetchView" not in sky and "fromRadar" not in sky,
       "Sky view's aircraft round the phone still come from the relay and adsb.lol")
 pv = body(vm, "private func pollNetworkAroundView()")
-check("let radar = radarForView" in pv and "NetworkFeed.fetchView(around: centre, halfNm: rangeNm, radar: radar)" in pv,
+check("let radar = radarForView(centre: centre)" in pv and "NetworkFeed.fetchView(around: centre, halfNm: rangeNm, radar: radar)" in pv,
       "the radar view hands it the radar, when it may be asked")
-rf = body(vm, "private var radarForView")
+rf = body(vm, "private func radarForView(centre: Coordinate)")
 check("connected" in rf and "Date().timeIntervalSince(lastGoodFetch) < staleInterval" in rf,
       "only while the radar's polling answers")
 check("!DemoFeed.isOn" in rf and "hasRadar" in rf, "never in the demo, nor with no radar")
 check("!(centreOnMe && me != nil)" in rf, "never for a view on the phone: its position doesn't go to the radar")
 check("return home" in rf, "and it is the radar's own place the view is measured from")
+# Away from home, a view the phone is inside would say where it is: a small
+# drag clears centreOnMe and leaves the middle beside the phone (review,
+# 2026-10-26). At home the phone is where the radar is.
+check("NetLattice.nm(home.lat, home.lon, me.lat, me.lon) > Self.phoneAwayNm" in rf
+      and "NetLattice.nm(me.lat, me.lon, centre.lat, centre.lon) <= rangeNm" in rf
+      and re.search(r"private static let phoneAwayNm = 3(\.0)?\b", vm) is not None,
+      "nor, with the phone away from home, for any view the phone is inside")
 poll = body(vm, "private func pollOnce()") + body(vm, "private func pollRadar()") + body(vm, "    func start()")
 check("fromRadar" not in poll and "fetchView" not in poll, "nothing new on the way to the radar's own aircraft")
 m = re.search(r"let networkInterval: TimeInterval = (\d+)", vm)
