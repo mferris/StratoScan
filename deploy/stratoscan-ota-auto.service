@@ -11,3 +11,7 @@ StateDirectory=stratoscan-ota
 # waits for a painted frame first -- applying against a blanked panel rolls
 # back good releases and can leave Chromium windowed. See ota-auto.sh.
 ExecStart=/opt/stratoscan/ota-auto.sh
+# A oneshot has no start limit of its own: a run that hung kept the unit
+# active, so the next day's timer was skipped and the update line stayed as
+# it was (#86, 2026-10-26). Every step inside is limited; this is the backstop.
+TimeoutStartSec=30min

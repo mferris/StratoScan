@@ -38,8 +38,15 @@ CONTACT = os.environ.get("STRATOSCAN_CONTACT", "https://github.com/mferris/Strat
 USER_AGENT = f"StratoScan/1.0 (+{CONTACT}; ADS-B radar display)"
 CACHE_TTL = 24 * 3600
 HEX_RE = re.compile(r"/photo/([0-9a-fA-F]{6})$")
+# planespotters not answering is remembered this long, not as "no photo" for
+# a day: one slow answer hid an aircraft's photo until the next day (#86,
+# 2026-10-26).
+FAILED_TTL = 60
+MAX_BODY = 1_000_000        # an answer is a few KB; never read more than this
+# The three questions behind a type's photo, in all, at most this long (#86).
+TYPE_BUDGET_S = 8
 
-cache = {}  # hex -> (timestamp, response_body_bytes)
+cache = {}  # hex -> (timestamp, ttl, response_body_bytes)
 
 # The cache is keyed by a caller-supplied hex code and this service is
 # reachable from the public tunnel (/photo/<hex> is not on the gateway's
@@ -81,8 +88,8 @@ def html_text(s):
 
 def get_json(url):
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=5) as upstream:
-        return json.loads(upstream.read())
+    with urllib.request.urlopen(req, timeout=4) as upstream:
+        return json.loads(upstream.read(MAX_BODY))
 
 
 def type_label(path):
@@ -98,18 +105,26 @@ def type_label(path):
 
 def representative_photo(label, fetch=get_json):
     """Wikipedia's lead image for the type, with its Commons credit; found
-    False if there's none, it isn't on Commons, or it has no licence."""
+    False if there's none, it isn't on Commons, or it has no licence; None
+    if it couldn't ask, the three questions within TYPE_BUDGET_S in all."""
+    deadline = time.monotonic() + TYPE_BUDGET_S
+
+    def ask(url):
+        if time.monotonic() > deadline:
+            raise TimeoutError("out of time for this type")
+        return fetch(url)
+
     try:
-        hits = (fetch(WIKI_SEARCH + urllib.parse.quote(label)).get("query") or {}).get("search") or []
+        hits = (ask(WIKI_SEARCH + urllib.parse.quote(label)).get("query") or {}).get("search") or []
         if not hits:
             return {"found": False}
-        summary = fetch(WIKI_SUMMARY + urllib.parse.quote(hits[0]["title"].replace(" ", "_"), safe=""))
+        summary = ask(WIKI_SUMMARY + urllib.parse.quote(hits[0]["title"].replace(" ", "_"), safe=""))
         thumb = (summary.get("thumbnail") or {}).get("source") or ""
         m = COMMONS_FILE_RE.search(thumb)
         if not thumb.startswith("https://") or not m:
             return {"found": False}
         file = urllib.parse.unquote(m.group(1))
-        pages = (fetch(COMMONS_INFO + urllib.parse.quote("File:" + file)).get("query") or {}).get("pages") or {}
+        pages = (ask(COMMONS_INFO + urllib.parse.quote("File:" + file)).get("query") or {}).get("pages") or {}
         info = (next(iter(pages.values()), {}).get("imageinfo") or [{}])[0]
         meta = info.get("extmetadata") or {}
         licence = html_text((meta.get("LicenseShortName") or {}).get("value"))
@@ -188,18 +203,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         now = time.time()
         cached = cache.get(hexcode)
-        if cached and now - cached[0] < CACHE_TTL:
-            body = cached[1]
+        if cached and now - cached[0] < cached[1]:
+            body = cached[2]
         else:
-            body = json.dumps(self._fetch(hexcode)).encode()
-            if len(cache) >= CACHE_MAX:
-                # Drop the oldest entries rather than clearing: a full flush
-                # would let a keyspace walk also evict the aircraft the kiosk
-                # is actually showing, turning a memory bound into a way to
-                # force repeated upstream fetches.
-                for k in sorted(cache, key=lambda k: cache[k][0])[:CACHE_MAX // 4]:
-                    cache.pop(k, None)
-            cache[hexcode] = (now, body)
+            result = self._fetch(hexcode)
+            body = json.dumps(result or {"found": False}).encode()
+            # bounded_put drops the oldest entries rather than clearing: a
+            # full flush would let a keyspace walk also evict the aircraft
+            # the kiosk is actually showing, turning a memory bound into a
+            # way to force repeated upstream fetches.
+            bounded_put(cache, hexcode, (now, CACHE_TTL if result else FAILED_TTL, body))
 
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -224,16 +237,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _fetch(self, hexcode):
-        """planespotters' answer for a hex, shaped for the page (shape_photo)."""
+        """planespotters' answer for a hex, shaped for the page (shape_photo),
+        or None if it couldn't be asked."""
         try:
             req = urllib.request.Request(
                 f"https://api.planespotters.net/pub/photos/hex/{hexcode}",
                 headers={"User-Agent": USER_AGENT},
             )
             with urllib.request.urlopen(req, timeout=5) as upstream:
-                data = json.loads(upstream.read())
+                data = json.loads(upstream.read(MAX_BODY))
         except Exception:
-            return {"found": False}
+            return None
 
         return shape_photo(data)
 

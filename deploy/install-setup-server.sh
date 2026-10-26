@@ -68,7 +68,8 @@ echo "  ok"
 
 echo "== receiver: readsb $READSB_TAG =="
 if ! command -v readsb >/dev/null 2>&1; then
-  curl -fsSL "https://raw.githubusercontent.com/wiedehopf/adsb-scripts/$READSB_INSTALLER_COMMIT/readsb-install.sh" \
+  curl -fsSL --connect-timeout 15 --max-time 300 \
+    "https://raw.githubusercontent.com/wiedehopf/adsb-scripts/$READSB_INSTALLER_COMMIT/readsb-install.sh" \
     -o /tmp/readsb-install.sh
   bash /tmp/readsb-install.sh "tag=$READSB_TAG" no-tar1090 >/tmp/readsb-install.log 2>&1 \
     || { tail -30 /tmp/readsb-install.log; exit 1; }
@@ -87,7 +88,7 @@ if ! command -v dump978-fa >/dev/null 2>&1; then
   apt-get install -y -q build-essential libboost-system-dev libboost-program-options-dev \
     libboost-regex-dev libboost-filesystem-dev libsoapysdr-dev >/dev/null
   rm -rf /tmp/dump978
-  git clone -q --depth 1 --branch "$DUMP978_TAG" https://github.com/flightaware/dump978 /tmp/dump978
+  timeout 900 git clone -q --depth 1 --branch "$DUMP978_TAG" https://github.com/flightaware/dump978 /tmp/dump978
   [ "$(git -C /tmp/dump978 rev-parse HEAD)" = "$DUMP978_COMMIT" ] \
     || { echo "  dump978 $DUMP978_TAG is not the commit we pinned ($DUMP978_COMMIT); refusing to build it"; exit 1; }
   make -C /tmp/dump978 -j"$(nproc)" dump978-fa >/tmp/dump978-build.log 2>&1 \
@@ -141,7 +142,7 @@ install -m 0644 deploy/blacklist-rtlsdr.conf /etc/modprobe.d/blacklist-rtlsdr.co
 echo "== map history: tar1090 ${TAR1090_COMMIT%${TAR1090_COMMIT#???????}} =="
 if [ "$(cat /usr/local/share/tar1090/git/.stratoscan-commit 2>/dev/null)" != "$TAR1090_COMMIT" ]; then
   rm -rf /tmp/tar1090-src
-  git clone -q https://github.com/wiedehopf/tar1090.git /tmp/tar1090-src
+  timeout 900 git clone -q https://github.com/wiedehopf/tar1090.git /tmp/tar1090-src
   git -C /tmp/tar1090-src checkout -q "$TAR1090_COMMIT"
   git_source=/tmp/tar1090-src bash /tmp/tar1090-src/install.sh /run/readsb >/tmp/tar1090-install.log 2>&1 \
     || { tail -30 /tmp/tar1090-install.log; exit 1; }
@@ -274,9 +275,9 @@ lighttpd_test
 echo "== remote access: Tailscale (used only if the owner signs in from setup) =="
 if ! command -v tailscale >/dev/null 2>&1; then
   . /etc/os-release
-  curl -fsSL "https://pkgs.tailscale.com/stable/debian/$VERSION_CODENAME.noarmor.gpg" \
+  curl -fsSL --connect-timeout 15 --max-time 300 "https://pkgs.tailscale.com/stable/debian/$VERSION_CODENAME.noarmor.gpg" \
     -o /usr/share/keyrings/tailscale-archive-keyring.gpg
-  curl -fsSL "https://pkgs.tailscale.com/stable/debian/$VERSION_CODENAME.tailscale-keyring.list" \
+  curl -fsSL --connect-timeout 15 --max-time 300 "https://pkgs.tailscale.com/stable/debian/$VERSION_CODENAME.tailscale-keyring.list" \
     -o /etc/apt/sources.list.d/tailscale.list
   apt-get update -q >/dev/null
   apt-get install -y -q tailscale >/dev/null
@@ -534,11 +535,11 @@ install -d -m 0755 "$TTS" "$TTS/voices"
 # Every package pinned by version AND hash (deploy/tts-requirements.txt):
 # this runs as root, so a tampered upload of any dependency must fail the
 # install rather than run.
-"$TTS/venv/bin/pip" install -q --require-hashes -r deploy/tts-requirements.txt
+timeout 900 "$TTS/venv/bin/pip" install -q --require-hashes -r deploy/tts-requirements.txt
 grep -q "^piper-tts==$PIPER_VERSION " deploy/tts-requirements.txt \
   || { echo "  PIPER_VERSION and tts-requirements.txt disagree"; exit 1; }
 [ -f "$TTS/voices/$VOICE.onnx" ] || \
-  "$TTS/venv/bin/python" -m piper.download_voices "$VOICE" --data-dir "$TTS/voices"
+  timeout 900 "$TTS/venv/bin/python" -m piper.download_voices "$VOICE" --data-dir "$TTS/voices"
 # The voice files, against the checksums recorded when this voice was chosen.
 VOICE_SUMS="$(pwd)/deploy/tts-voice.sha256"
 if ! (cd "$TTS/voices" && sha256sum -c --quiet "$VOICE_SUMS"); then
@@ -625,9 +626,11 @@ else
 fi
 
 echo "== data (fetched now if online; otherwise net-watchdog retries) =="
-python3 /opt/stratoscan/notable-db.py ensure && echo "  notable-aircraft list: ready" \
+# Each with a limit (#86, 2026-10-26): a download that stalled held the
+# install, or an image build, with no end; net-watchdog fetches them later.
+timeout 300 python3 /opt/stratoscan/notable-db.py ensure && echo "  notable-aircraft list: ready" \
   || echo "  notable-aircraft list: will be fetched when online"
-python3 /opt/stratoscan/offline-map.py ensure \
+timeout 900 python3 /opt/stratoscan/offline-map.py ensure \
   && { [ -f /var/www/html/offline-map/meta.json ] && echo "  offline map: ready" \
          || echo "  offline map: built once a location is set"; } \
   || echo "  offline map: will be built when online"
@@ -663,7 +666,7 @@ systemctl restart systemd-journald
 echo "== verifying privileged paths are refused on the public tunnel =="
 fail=0
 for p in /setup /./setup /x/../setup /%73etup /wake /%77ake /tts; do
-  code=$(curl -s -o /dev/null -w '%{http_code}' --path-as-is -X POST \
+  code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' --path-as-is -X POST \
          -H 'Content-Length: 0' "http://127.0.0.1:8085$p")
   [ "$code" = "404" ] || { echo "  FAIL: $p returned $code via the public gateway"; fail=1; }
 done

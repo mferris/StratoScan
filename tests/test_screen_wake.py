@@ -42,6 +42,9 @@ bin_ = tmp / "bin"; bin_.mkdir()
                             'elif [ "$1" = "--off" ]; then echo off >> "$XDG_RUNTIME_DIR/calls"; echo off > "$XDG_RUNTIME_DIR/state"; '
                             'else echo "HDMI-A-1 $(cat "$XDG_RUNTIME_DIR/state")"; fi\n')
 (bin_ / "logger").write_text('#!/bin/sh\necho "$*" >> "$XDG_RUNTIME_DIR/log"\n')
+# coreutils' timeout(1), which the unit has and a Mac may not: the script
+# limits each wlopm call with it (#86).
+(bin_ / "timeout").write_text('#!/bin/sh\nshift\nexec "$@"\n')
 for f in bin_.iterdir():
     f.chmod(0o755)
 

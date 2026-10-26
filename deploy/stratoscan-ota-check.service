@@ -12,3 +12,6 @@ StateDirectory=stratoscan-ota
 # from the settings screen or the setup page -- a unit that silently replaced
 # its own software overnight would be a very different thing to give somebody.
 ExecStart=/opt/stratoscan/ota.py check
+# A oneshot has no start limit of its own (#86, 2026-10-26): a check that
+# hung kept the unit active and every later timer firing was skipped.
+TimeoutStartSec=5min

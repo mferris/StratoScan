@@ -147,6 +147,7 @@ KIOSK_UNIT = "stratoscan-kiosk.service"
 KIOSK_USER = detect_kiosk_user()
 
 HTTP_TIMEOUT_S = 30
+FETCH_DEADLINE_S = 600          # one download, the 32 MB bundle on a slow line included
 MAX_BUNDLE_BYTES = 32 * 1024 * 1024
 PAINT_TIMEOUT_S = 90
 RESTART_SETTLE_S = 8
@@ -339,13 +340,24 @@ def installed_version():
         return ""
 
 
-def fetch(url, limit=MAX_BUNDLE_BYTES):
+def fetch(url, limit=MAX_BUNDLE_BYTES, deadline_s=FETCH_DEADLINE_S):
+    """At most limit bytes from url. HTTP_TIMEOUT_S limits each wait on the
+    socket; deadline_s the whole download, which a server sending a trickle
+    could otherwise stretch with no end (#86, 2026-10-26)."""
     req = urllib.request.Request(url, headers={"User-Agent": "StratoScan-OTA"})
+    end = time.monotonic() + deadline_s
+    data = bytearray()
     with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_S) as r:
-        data = r.read(limit + 1)
+        while len(data) <= limit:
+            if time.monotonic() > end:
+                raise Fail(f"{url} took longer than {deadline_s} s")
+            chunk = r.read1(min(1 << 16, limit + 1 - len(data)))
+            if not chunk:
+                break
+            data += chunk
     if len(data) > limit:
         raise Fail(f"{url} larger than {limit} bytes")
-    return data
+    return bytes(data)
 
 
 def latest_release():

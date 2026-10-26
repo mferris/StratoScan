@@ -603,8 +603,11 @@ def maybe_build_offline_map():
     if mod.needs_build() is None:
         return
     print("health: offline map missing or out of date; building", flush=True)
-    run(["systemd-run", "--quiet", "--collect", "--unit", "stratoscan-offline-map",
-         "--property=Type=oneshot", "--property=Nice=10",
+    # --no-block: systemd-run otherwise waits for a oneshot to finish, which
+    # held this loop for its 30 s whenever a build began (#86, 2026-10-26).
+    # A oneshot has no start limit of its own, so it gets one.
+    run(["systemd-run", "--quiet", "--collect", "--no-block", "--unit", "stratoscan-offline-map",
+         "--property=Type=oneshot", "--property=Nice=10", "--property=TimeoutStartSec=30min",
          "/usr/bin/python3", OFFLINE_MAP, "ensure"], timeout=30)
 
 
@@ -622,8 +625,8 @@ def maybe_refresh_notable_db():
     spec.loader.exec_module(mod)
     if not mod.needs_refresh():
         return
-    run(["systemd-run", "--quiet", "--collect", "--unit", "stratoscan-notable-db",
-         "--property=Type=oneshot", "--property=Nice=10",
+    run(["systemd-run", "--quiet", "--collect", "--no-block", "--unit", "stratoscan-notable-db",
+         "--property=Type=oneshot", "--property=Nice=10", "--property=TimeoutStartSec=15min",
          "/usr/bin/python3", NOTABLE_DB, "ensure"], timeout=30)
 
 
