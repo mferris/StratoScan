@@ -55,6 +55,11 @@ enum NetworkFeed {
     /// refuses a burst (420 and 429, measured), and wants about one a second.
     static let paceSeconds = 1.2
     static let retrySeconds = 2.5
+    /// A view of several discs gets this long in all (#86, 2026-10-26): nine
+    /// discs answer in about 20 s, and with adsb.lol silent the nine, each
+    /// tried twice, took about three minutes. Discs not asked by then are
+    /// left out of this look.
+    static let viewBudgetSeconds = 25.0
 
     /// The aircraft over a view: every disc of `discs`, one after another,
     /// merged by hex. A disc that is refused twice is left out; nil only when
@@ -62,12 +67,14 @@ enum NetworkFeed {
     static func fetchView(around centre: Coordinate, halfNm: Double) async -> [(RawAircraft, Extra?)]? {
         let (discs, _) = self.discs(around: centre, halfNm: halfNm)
         if discs.count == 1 { return await fetch(around: discs[0].0, radiusNm: discs[0].1) }
+        let deadline = Date().addingTimeInterval(viewBudgetSeconds)
         var merged: [String: (RawAircraft, Extra?)] = [:]
         var answered = false
         for (i, d) in discs.enumerated() {
             if i > 0 { try? await Task.sleep(for: .seconds(paceSeconds)) }
+            if Date() >= deadline || Task.isCancelled { break }
             var list = await fetch(around: d.0, radiusNm: d.1)
-            if list == nil {
+            if list == nil, Date().addingTimeInterval(retrySeconds) < deadline {
                 try? await Task.sleep(for: .seconds(retrySeconds))
                 list = await fetch(around: d.0, radiusNm: d.1)
             }
@@ -94,7 +101,7 @@ enum NetworkFeed {
         guard let url = URL(string: String(format: "https://api.adsb.lol/v2/point/%.2f/%.2f/%d", at.lat, at.lon, radius)) else { return nil }
         var req = URLRequest(url: url, timeoutInterval: 8)
         req.setValue("StratoScan/1.0 (iOS app)", forHTTPHeaderField: "User-Agent")
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+        guard let (data, resp) = try? await URLSession.bounded.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         return decode(data, within: nil)
     }

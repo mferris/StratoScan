@@ -216,7 +216,7 @@ struct LogbookView: View {
     private static func get<T: Decodable>(_ path: String) async -> T? {
         var req = URLRequest(url: APIConfig.url(path), timeoutInterval: 10)
         req.cachePolicy = .reloadIgnoringLocalCacheData
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+        guard let (data, resp) = try? await URLSession.radar.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         return try? JSONDecoder().decode(T.self, from: data)
     }

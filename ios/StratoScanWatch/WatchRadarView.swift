@@ -77,7 +77,9 @@ struct WatchRadarView: View {
 
     private func refresh() async {
         do {
-            if home == nil { home = try await AircraftFeedClient.fetchReceiver() }
+            // the radar's position as kept, read again once a day (#86): its
+            // own look-up in front of every first look held the glance up
+            if home == nil { home = try await AircraftFeedClient.home() }
             let list = try await AircraftFeedClient.fetchAircraft()
             aircraft = list
             if let home { nearby = Nearby.from(list, home: home) }

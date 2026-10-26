@@ -110,7 +110,7 @@ struct RadarDetailView: View {
         .onAppear { name = radar.name }
         .task {
             guard let host = radar.host, let url = URL(string: "http://\(host)/setup/api/visits"),
-                  let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 4)),
+                  let (data, resp) = try? await URLSession.radar.data(for: URLRequest(url: url, timeoutInterval: 4)),
                   (resp as? HTTPURLResponse)?.statusCode == 200 else { return }
             visits = try? JSONDecoder().decode(Visits.self, from: data)
         }

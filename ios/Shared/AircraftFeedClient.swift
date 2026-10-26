@@ -33,7 +33,7 @@ enum AircraftFeedClient {
             let data: Data
             let response: URLResponse
             do {
-                (data, response) = try await URLSession.shared.data(for: req)
+                (data, response) = try await URLSession.radar.data(for: req)
             } catch {
                 Endpoint.shared.invalidate()   // perhaps we just left (or came) home
                 throw error
@@ -56,7 +56,7 @@ enum AircraftFeedClient {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: req)
+            (data, response) = try await URLSession.radar.data(for: req)
         } catch {
             Endpoint.shared.invalidate()   // perhaps we just left (or came) home
             throw error
@@ -81,7 +81,7 @@ enum AircraftFeedClient {
         req.setValue("1", forHTTPHeaderField: Self.appHeader)
         req.cachePolicy = .reloadIgnoringLocalCacheData
         req.timeoutInterval = 10
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+        guard let (data, resp) = try? await URLSession.bounded.data(for: req),     // nothing waits on it
               (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         return try? JSONDecoder().decode(Trails.self, from: data)
     }
@@ -93,13 +93,53 @@ enum AircraftFeedClient {
         req.setValue("1", forHTTPHeaderField: Self.appHeader)
         req.cachePolicy = .reloadIgnoringLocalCacheData
         req.timeoutInterval = 8      // not iOS's default 60 s: the widget must not hang
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.radar.data(for: req)
+        } catch {
+            // As the feed does (#86, 2026-10-26): without this the next look
+            // went to the same dead address, and the Watch never left it.
+            Endpoint.shared.invalidate()
+            throw error
+        }
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            Endpoint.shared.invalidate()
             throw URLError(.badServerResponse)
         }
         let r = try JSONDecoder().decode(ReceiverResponse.self, from: data)
         guard let lat = r.lat, let lon = r.lon else { return nil }
-        return Coordinate(lat: lat, lon: lon)
+        let c = Coordinate(lat: lat, lon: lon)
+        keepHome(c)
+        return c
+    }
+
+    // ---- the radar's position, kept --------------------------------------------
+    // A radar that cannot be reached (the phone is away and the public page
+    // is off) still has a known place: the rings, the "N nm from your radar"
+    // and the away test all need it. Kept in the App Group, so the widget
+    // reads the app's copy (2026-10-26).
+    private static let homeCacheKey = "stratoscan.homeCache"
+
+    /// The radar's position as last read, and when (nil from before that was kept).
+    static var cachedHome: (home: Coordinate, at: Date?)? {
+        guard let d = APIConfig.shared.dictionary(forKey: homeCacheKey),
+              let lat = d["lat"] as? Double, let lon = d["lon"] as? Double else { return nil }
+        return (Coordinate(lat: lat, lon: lon), (d["at"] as? Double).map(Date.init(timeIntervalSince1970:)))
+    }
+
+    private static func keepHome(_ c: Coordinate) {
+        APIConfig.shared.set(["lat": c.lat, "lon": c.lon, "at": Date().timeIntervalSince1970], forKey: homeCacheKey)
+    }
+
+    /// The radar's position for a widget or the Watch: the copy kept, while
+    /// it is under a day old, else the radar's own (#86, 2026-10-26). A radar
+    /// doesn't move, and every look used to ask for it first, in series with
+    /// the aircraft.
+    static func home() async throws -> Coordinate? {
+        if DemoFeed.isOn { return DemoFeed.home }
+        if let kept = cachedHome, let at = kept.at, Date().timeIntervalSince(at) < 86400 { return kept.home }
+        return try await fetchReceiver()
     }
 }
 
@@ -143,7 +183,22 @@ struct Nearby {
     }
 
     static func load() async throws -> Nearby {
-        guard let home = try await AircraftFeedClient.fetchReceiver() else { throw URLError(.cannotParseResponse) }
+        guard let home = try await AircraftFeedClient.home() else { throw URLError(.cannotParseResponse) }
         return from(try await AircraftFeedClient.fetchAircraft(), home: home)
     }
+
+    /// load(), given up after `seconds` (#86, 2026-10-26). WidgetKit gives a
+    /// widget little time, and one that overran was stopped with its old
+    /// entry still showing, never saying the radar can't be reached.
+    static func load(within seconds: TimeInterval) async -> Nearby? {
+        await withTaskGroup(of: Nearby?.self) { g in
+            g.addTask { try? await load() }
+            g.addTask { try? await Task.sleep(for: .seconds(seconds)); return nil }
+            let first = await g.next() ?? nil
+            g.cancelAll()
+            return first
+        }
+    }
+    /// What a widget or a complication gives it.
+    static let widgetSeconds: TimeInterval = 10
 }

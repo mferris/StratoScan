@@ -70,7 +70,7 @@ enum RadarFinder {
         struct Hello: Decodable { let unit: String? }
         guard let url = URL(string: "http://\(host)/setup/api/hello") else { return nil }
         let req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 2)
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+        guard let (data, resp) = try? await URLSession.radar.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         return (try? JSONDecoder().decode(Hello.self, from: data))?.unit
     }

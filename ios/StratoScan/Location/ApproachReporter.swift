@@ -1,6 +1,7 @@
 import CoreLocation
 import CryptoKit
 import Foundation
+import UIKit
 
 /// "Approaching me" (roadmap 2.7): keeps each paired radar told where this
 /// phone is, so the radar can warn of aircraft about to pass over it.
@@ -86,8 +87,16 @@ final class ApproachReporter: NSObject, ObservableObject, CLLocationManagerDeleg
 
     /// Seal this position to every paired radar and leave it at the relay.
     private func report(_ l: CLLocation) async {
-        guard enabled, Date().timeIntervalSince(lastSent) > 30 else { return }
+        guard enabled, Date().timeIntervalSince(lastSent) > 30, backgroundTask == .invalid else { return }
         lastSent = Date()
+        // Woken in the background for a move, the app has a few seconds before
+        // iOS suspends it, often mid-way through the relay's calls; asked, iOS
+        // gives it about half a minute to finish (#86, 2026-10-26). Each call
+        // is 30 s at most (URLSession.bounded), and one report runs at a time.
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "approach-report") { [weak self] in
+            self?.endBackgroundTask()
+        }
+        defer { endBackgroundTask() }
         guard let phone = try? RelayIdentity.id(), let units = try? await relay.units() else { return }
         let ts = Int(l.timestamp.timeIntervalSince1970)
         for u in units {
@@ -96,6 +105,13 @@ final class ApproachReporter: NSObject, ObservableObject, CLLocationManagerDeleg
                                                    ts: ts, to: box, phone: phone) else { continue }
             try? await relay.location(unit: u.unit, blob: blob)
         }
+    }
+
+    private var backgroundTask = UIBackgroundTaskIdentifier.invalid
+    private func endBackgroundTask() {
+        guard backgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
     }
 
     private func withdraw() async {

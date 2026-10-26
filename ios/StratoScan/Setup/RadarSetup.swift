@@ -75,6 +75,11 @@ final class RadarSetup: ObservableObject {
     private var hostname: String?
     private var secret: String?
     private var pairing: PairingStore?
+    /// The flow's work in hand, stopped by Cancel (#86, 2026-10-26): a
+    /// cancelled setup went on asking the relay and looking for the radar for
+    /// up to five minutes, and could still adopt it and change the radar
+    /// view's address.
+    private var work: Task<Void, Never>?
 
     var active: Bool { link != nil }
 
@@ -131,13 +136,17 @@ final class RadarSetup: ObservableObject {
     func start(_ l: Link, pairing: PairingStore) {
         self.pairing = pairing
         link = l
-        session = l.fingerprint.map { URLSession(configuration: .ephemeral, delegate: Pinned($0), delegateQueue: nil) } ?? .shared
+        session.finishTasksAndInvalidate()      // a session lets go of its delegate only then
+        session = Self.session(pinnedTo: l.fingerprint)
         token = nil; unit = nil; hostname = nil; secret = nil
         networks = []; ssid = ""; psk = ""; name = ""
-        Task { await connect() }
+        work?.cancel()
+        work = Task { await connect() }
     }
 
     func cancel() {
+        work?.cancel()
+        work = nil
         if let s = link?.ssid { NEHotspotConfigurationManager.shared.removeConfiguration(forSSID: s) }
         link = nil
     }
@@ -174,6 +183,7 @@ final class RadarSetup: ObservableObject {
         if l.fingerprint == nil && first.tls == true {
             return fail("This radar expects a secure setup, but the code didn't name its certificate. Scan the code on its screen again.")
         }
+        guard !Task.isCancelled else { return }     // never claim for a setup that was cancelled
         unit = first.unit
         hostname = first.hostname
 
@@ -192,6 +202,7 @@ final class RadarSetup: ObservableObject {
         step = .details
         await sendDetails()
         if let h = try? await hello(l.base) { name = h.name ?? "" }
+        guard !Task.isCancelled else { return }
         step = .name
     }
 
@@ -227,7 +238,9 @@ final class RadarSetup: ObservableObject {
             step = .wifi
             await scan()
         } else {
-            await offerAndPair()
+            let t = Task { await offerAndPair() }
+            work = t
+            await t.value
         }
     }
 
@@ -256,8 +269,12 @@ final class RadarSetup: ObservableObject {
         step = .switching
         detail = "The radar is joining \(ssid). Your phone goes back to its own WiFi…"
         if let w = l.ssid { NEHotspotConfigurationManager.shared.removeConfiguration(forSSID: w) }
-        try? await Task.sleep(for: .seconds(8))
-        await pair()
+        let t = Task {
+            try? await Task.sleep(for: .seconds(8))
+            await pair()
+        }
+        work = t
+        await t.value
     }
 
     /// Already online (Ethernet): offer the code now, then pair.
@@ -283,11 +300,12 @@ final class RadarSetup: ObservableObject {
         let relay = RelayClient()
         let deadline = Date().addingTimeInterval(240)
         var lastError = ""
-        while Date() < deadline {
+        while Date() < deadline, !Task.isCancelled {
             do {
                 try await relay.pair(unit: u, secret: s, name: UIDevice.current.name)
+                // paired at the relay: the phone keeps it even if cancelled now
                 store.adopt(unit: u, name: PairingStore.cleanName(name) ?? "StratoScan", host: nil)
-                await find()
+                if !Task.isCancelled { await find() }
                 return
             } catch {
                 lastError = error.localizedDescription
@@ -304,9 +322,9 @@ final class RadarSetup: ObservableObject {
         detail = "Finding the radar on your WiFi…"
         let candidates = [hostname.map { $0.hasSuffix(".local") ? $0 : "\($0).local" }, link?.lan].compactMap { $0 }
         let deadline = Date().addingTimeInterval(60)
-        while Date() < deadline {
+        while Date() < deadline, !Task.isCancelled {
             for host in candidates {
-                if let h = try? await hello("\(scheme)://\(host)", timeout: 3), h.unit == unit {
+                if let h = try? await hello("\(scheme)://\(host)", timeout: 3), h.unit == unit, !Task.isCancelled {
                     pairing?.setHost(host, unit: unit ?? "")
                     if APIConfig.baseURL == APIConfig.defaultBaseURL { APIConfig.baseURL = "http://\(host)" }
                     Endpoint.shared.invalidate()
@@ -316,6 +334,7 @@ final class RadarSetup: ObservableObject {
             }
             try? await Task.sleep(for: .seconds(3))
         }
+        guard !Task.isCancelled else { return }
         // Paired anyway: alerts work. The radar view can be pointed at it later.
         step = .done
         detail = "Paired, but your phone couldn't find the radar on this WiFi yet. Alerts will still come; the radar view finds it next time it's on the same network."
@@ -323,6 +342,7 @@ final class RadarSetup: ObservableObject {
 
     private func fail(_ why: String) {
         busy = false
+        guard !Task.isCancelled else { return }     // cancelled: nothing to say
         step = .failed(why)
     }
 
@@ -354,8 +374,16 @@ final class RadarSetup: ObservableObject {
             return got == fingerprint ? (.useCredential, URLCredential(trust: trust)) : (.cancelAuthenticationChallenge, nil)
         }
     }
-    private var session = URLSession.shared
+    private var session = RadarSetup.session(pinnedTo: nil)
     private var scheme: String { link?.fingerprint == nil ? "http" : "https" }
+
+    /// Every setup call is given up in the end (#86, 2026-10-26), not only
+    /// when it goes quiet: 75 s in all, past the slowest call's own limit.
+    nonisolated private static func session(pinnedTo fingerprint: String?) -> URLSession {
+        let c = URLSessionConfiguration.ephemeral
+        c.timeoutIntervalForResource = 75
+        return URLSession(configuration: c, delegate: fingerprint.map { Pinned($0) }, delegateQueue: nil)
+    }
 
     private func hello(_ base: String, timeout: TimeInterval = 4) async throws -> Hello {
         guard let url = URL(string: base + "/setup/api/hello") else { throw URLError(.badURL) }
@@ -366,7 +394,7 @@ final class RadarSetup: ObservableObject {
 
     private func waitForHello(_ base: String, seconds: TimeInterval) async -> Hello? {
         let deadline = Date().addingTimeInterval(seconds)
-        while Date() < deadline {
+        while Date() < deadline, !Task.isCancelled {
             if let h = try? await hello(base, timeout: 3) { return h }
             try? await Task.sleep(for: .seconds(2))
         }
@@ -381,7 +409,10 @@ final class RadarSetup: ObservableObject {
     @discardableResult
     private func apiRaw(_ method: String, _ path: String, _ body: [String: Any]) async throws -> Data {
         guard let l = link, let url = URL(string: l.base + "/setup/api/" + path) else { throw URLError(.badURL) }
-        var req = URLRequest(url: url, timeoutInterval: 60)
+        // A WiFi scan takes the radar up to about 50 s. Everything else takes
+        // a few seconds; 30 at most, or a setup network that has gone (iOS
+        // drops it when the app is put away) held each step a minute (#86).
+        var req = URLRequest(url: url, timeoutInterval: path == "wifi/scan" ? 60 : 30)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let t = token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }

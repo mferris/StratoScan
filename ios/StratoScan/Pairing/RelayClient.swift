@@ -95,7 +95,7 @@ struct RelayClient {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
         for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+        guard let (data, resp) = try? await URLSession.bounded.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         return data
     }
@@ -115,7 +115,7 @@ struct RelayClient {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: req)
+            (data, response) = try await URLSession.bounded.data(for: req)
         } catch {
             throw Failure(message: "Could not reach the StratoScan service. Check your connection.")
         }

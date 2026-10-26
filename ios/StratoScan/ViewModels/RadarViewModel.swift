@@ -232,8 +232,19 @@ final class RadarViewModel: ObservableObject {
             connecting = true
             connectingSince = Date()
             needTrails = true       // back after a while: the radar's trails again
+            // The grace is kept by the clock (#86, 2026-10-26): it was only
+            // checked when a fetch came back, so "connecting" lasted as long
+            // as the slowest look-up, half a minute with the radar down.
+            graceTask?.cancel()
+            let grace = connectGrace
+            graceTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(grace))
+                guard let self, !Task.isCancelled, !self.connected else { return }
+                self.connecting = false
+            }
         }
     }
+    private var graceTask: Task<Void, Never>?
 
     /// The radar's trails (#84), asked for once when the app opens or comes
     /// back after a while, so each aircraft's trail starts where the radar's
@@ -265,11 +276,18 @@ final class RadarViewModel: ObservableObject {
         resume()
         guard pollTask == nil else { return }
         Task { await typeClient.warmUp() }
-        if home == nil, let cached = Self.cachedHome { home = cached }
+        if home == nil, let cached = AircraftFeedClient.cachedHome?.home {
+            home = cached
+            loadRunways()
+        }
 
         pollTask = Task { [weak self] in
             guard let self else { return }
-            await self.loadHome()
+            // With the radar's position kept, the first look at the radar
+            // doesn't wait for it to be read again (#86, 2026-10-26): with the
+            // radar out of reach that was a look-up and 8 s more of
+            // "connecting" before the first try at the aircraft.
+            if self.home == nil { await self.loadHome() } else { Task { await self.loadHome() } }
             while !Task.isCancelled {
                 await self.pollOnce()
                 try? await Task.sleep(nanoseconds: UInt64(self.currentFetchInterval * 1_000_000_000))
@@ -309,21 +327,7 @@ final class RadarViewModel: ObservableObject {
     }
 
     // ---- home: the radar's position, remembered across launches -------------
-    // A radar that cannot be reached (the phone is away and the public page
-    // is off) still has a known place: the rings, the "N nm from your radar"
-    // and the away test all need it.
-    private static let homeCacheKey = "stratoscan.homeCache"
-    private static var cachedHome: Coordinate? {
-        get {
-            guard let d = APIConfig.shared.dictionary(forKey: homeCacheKey),
-                  let lat = d["lat"] as? Double, let lon = d["lon"] as? Double else { return nil }
-            return Coordinate(lat: lat, lon: lon)
-        }
-        set {
-            if let c = newValue { APIConfig.shared.set(["lat": c.lat, "lon": c.lon], forKey: homeCacheKey) }
-            else { APIConfig.shared.removeObject(forKey: homeCacheKey) }
-        }
-    }
+    // (AircraftFeedClient.cachedHome: fetchReceiver keeps each one it reads)
 
     private func loadHome() async {
         if let override = Self.homeOverride {
@@ -333,9 +337,9 @@ final class RadarViewModel: ObservableObject {
         }
         guard hasRadar || DemoFeed.isOn else { return }
         do {
-            if let coord = try await AircraftFeedClient.fetchReceiver() {
+            // the same place as the kept one: its runways are already in hand
+            if let coord = try await AircraftFeedClient.fetchReceiver(), coord != home {
                 home = coord
-                if !DemoFeed.isOn { Self.cachedHome = coord }
                 loadRunways()
             }
         } catch {
@@ -375,9 +379,16 @@ final class RadarViewModel: ObservableObject {
         }
         // The public network around the view, wherever the radar's own
         // picture does not reach: beyond its ring, when it cannot be reached,
-        // or when there is none.
-        if networkOn && !DemoFeed.isOn && (!hasRadar || beyondRadar || !connected) {
-            await pollNetworkAroundView()
+        // or when there is none. In a task of its own (#86, 2026-10-26): a wide
+        // view is up to nine questions to adsb.lol, 8-20 s, and minutes when
+        // it was silent, and the radar's own aircraft stood still meanwhile.
+        if wantsViewNetwork {
+            if networkTask == nil {
+                networkTask = Task { [weak self] in
+                    await self?.pollNetworkAroundView()
+                    self?.networkTask = nil
+                }
+            }
         } else if !viewNetwork.isEmpty {
             viewNetwork.removeAll()
             networkCount = 0
@@ -385,6 +396,9 @@ final class RadarViewModel: ObservableObject {
         autoCentre()
         checkStale()
     }
+
+    private var networkTask: Task<Void, Never>?
+    private var wantsViewNetwork: Bool { networkOn && !DemoFeed.isOn && (!hasRadar || beyondRadar || !connected) }
 
     private func pollRadar() async {
         do {
@@ -445,6 +459,8 @@ final class RadarViewModel: ObservableObject {
             if Date().timeIntervalSince(connectingSince) > connectGrace { connecting = false }
             return
         }
+        // the radar's polling went on meanwhile: the view may be back on it
+        guard wantsViewNetwork else { return }
         connecting = false
         // bearing and range are from the radar when there is one, else from
         // the phone: what the labels and the ring count read

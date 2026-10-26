@@ -10,6 +10,7 @@ struct AircraftDetailView: View {
     /// "Find in the sky": opens Sky view on this aircraft (from the radar only).
     var findInSky: (() -> Void)? = nil
     @State private var photo: Photo?
+    @State private var photoImage: UIImage?
     @State private var showCompass = false
     @Environment(\.dismiss) private var dismiss
 
@@ -117,12 +118,14 @@ struct AircraftDetailView: View {
     }
 
     @ViewBuilder private var photoView: some View {
-        if let photo, photo.found, let s = photo.thumbLarge ?? photo.thumb, let url = URL(string: s) {
+        if let photo, photo.found {
             VStack(alignment: .leading, spacing: 4) {
-                AsyncImage(url: url) { img in
-                    img.resizable().scaledToFit()
-                } placeholder: {
-                    Color.gray.opacity(0.15).frame(height: 180)
+                Group {
+                    if let photoImage {
+                        Image(uiImage: photoImage).resizable().scaledToFit()
+                    } else {
+                        Color.gray.opacity(0.15).frame(height: 180)
+                    }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 // planespotters.net requires the credit and a link back.
@@ -207,18 +210,33 @@ struct AircraftDetailView: View {
     /// kept for a day, their stated maximum.
     private static var cache: [String: (at: Date, photo: Photo)] = [:]
     private func loadPhoto() async {
-        if let hit = Self.cache[hex], Date().timeIntervalSince(hit.at) < 24 * 3600 { photo = hit.photo; return }
-        guard let url = URL(string: "https://api.planespotters.net/pub/photos/hex/\(hex)") else { return }
-        var req = URLRequest(url: url, timeoutInterval: 8)
-        req.setValue("StratoScan/1.0 (iOS app; +https://github.com/mferris/StratoScan)", forHTTPHeaderField: "User-Agent")
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200,
-              let answer = try? JSONDecoder().decode(Answer.self, from: data) else { return }
-        let p = answer.photos?.first
-        let got = Photo(found: p != nil, thumb: p?.thumbnail?.src, thumbLarge: p?.thumbnail_large?.src,
-                        photographer: p?.photographer, link: p?.link)
-        Self.cache[hex] = (Date(), got)
-        photo = got
+        photoImage = nil
+        if let hit = Self.cache[hex], Date().timeIntervalSince(hit.at) < 24 * 3600 {
+            photo = hit.photo
+        } else {
+            guard let url = URL(string: "https://api.planespotters.net/pub/photos/hex/\(hex)") else { return }
+            var req = URLRequest(url: url, timeoutInterval: 8)
+            req.setValue("StratoScan/1.0 (iOS app; +https://github.com/mferris/StratoScan)", forHTTPHeaderField: "User-Agent")
+            guard let (data, resp) = try? await URLSession.bounded.data(for: req),
+                  (resp as? HTTPURLResponse)?.statusCode == 200,
+                  let answer = try? JSONDecoder().decode(Answer.self, from: data) else { return }
+            let p = answer.photos?.first
+            let got = Photo(found: p != nil, thumb: p?.thumbnail?.src, thumbLarge: p?.thumbnail_large?.src,
+                            photographer: p?.photographer, link: p?.link)
+            Self.cache[hex] = (Date(), got)
+            photo = got
+        }
+        // The picture itself, with a time limit (#86, 2026-10-26): AsyncImage
+        // has none of its own, and the grey box could wait a minute on the
+        // CDN. One that doesn't come is the "No photo available" box.
+        guard let p = photo, p.found else { return }
+        if let s = p.thumbLarge ?? p.thumb, let url = URL(string: s),
+           let (data, resp) = try? await URLSession.bounded.data(for: URLRequest(url: url, timeoutInterval: 10)),
+           (resp as? HTTPURLResponse)?.statusCode == 200, let img = UIImage(data: data) {
+            photoImage = img
+        } else if !Task.isCancelled {
+            photo = Photo(found: false, thumb: nil, thumbLarge: nil, photographer: nil, link: nil)
+        }
     }
     private struct Answer: Decodable {
         struct Src: Decodable { let src: String? }
@@ -247,7 +265,7 @@ final class NotablePeople {
         struct Doc: Decodable { let names: [String: String]? }
         let base = await Endpoint.shared.resolve()
         guard let url = URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/data/notable-people.json"),
-              let (data, resp) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 6)),
+              let (data, resp) = try? await URLSession.radar.data(for: URLRequest(url: url, timeoutInterval: 6)),
               (resp as? HTTPURLResponse)?.statusCode == 200,
               let doc = try? JSONDecoder().decode(Doc.self, from: data) else { return }
         names = (doc.names ?? [:]).reduce(into: [:]) { $0[$1.key.lowercased()] = $1.value }
