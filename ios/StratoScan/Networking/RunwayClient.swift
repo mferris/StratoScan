@@ -1,16 +1,21 @@
 import Foundation
 
-/// Real runway/taxiway geometry from OSM's public Overpass API, covering the
-/// box the radar shows. Purely additive — if this fails the map/radar keep
-/// working without runway outlines. Mirrors the web version's
-/// loadRunways()/overpassToGeoJSON().
+/// Real runway/taxiway geometry from OpenStreetMap, covering the box the
+/// radar shows. Purely additive — if this fails the map/radar keep working
+/// without runway outlines.
 ///
 /// Runways don't move, so a copy is kept on the phone and used at once, and
-/// Overpass is asked again only once a month (2026-10-25). The public
-/// Overpass service is often overloaded (502s and refusals that day), and the
-/// app used to wait on it, with no timeout of its own, so up to iOS's 60 s
-/// default, before its first look at the radar: over a minute of
-/// "connecting" at every launch.
+/// asked for again only once a month (2026-10-25). The public Overpass
+/// service is often overloaded (502s and refusals that day), and the app used
+/// to wait on it, with no timeout of its own, so up to iOS's 60 s default,
+/// before its first look at the radar: over a minute of "connecting" at
+/// every launch.
+///
+/// The radar keeps the outlines for its ring too (#87, 2026-10-26), built
+/// once a month by deploy/offline-map.py, and hands the same file to the
+/// kiosk, its public page and the app, so the app asks it first. Overpass
+/// is asked directly, as the web version's loadRunways()/overpassToGeoJSON()
+/// did, only when the radar can't answer and the phone has no copy at all.
 enum RunwayClient {
     private static let overpassURL = URL(string: "https://overpass-api.de/api/interpreter")!
     static let keepFor: TimeInterval = 30 * 86400
@@ -49,8 +54,43 @@ enum RunwayClient {
 
     /// Returns raw GeoJSON `Data` (a FeatureCollection of LineStrings, each
     /// with an "aeroway" property of "runway" or "taxiway") ready to hand
-    /// to MLNShape(data:encoding:).
+    /// to MLNShape(data:encoding:): the radar's copy, else Overpass's
+    /// answer, but only when the phone has none (a copy past its month is
+    /// still the right runways).
     static func fetchRunwayGeoJSON(center: Coordinate, rangeNm: Double) async -> Data? {
+        if let kept = await fromRadar(center: center, rangeNm: rangeNm) { return kept }
+        guard cachedRunwayGeoJSON(center: center, rangeNm: rangeNm) == nil, !Task.isCancelled else { return nil }
+        return await fromOverpass(center: center, rangeNm: rangeNm)
+    }
+
+    /// The radar's copy (/api/runways, core-feed.py), through whichever of
+    /// its addresses answers: for its position rounded to 0.05°, and 2.5 nm
+    /// past the ring. Taken when its centre is within 0.05° of this one: the
+    /// position the app has is rounded to 0.01° away from home, and rounding
+    /// that again can land one step over. Kept on the phone as Overpass's
+    /// answer was. Nil when the radar hasn't one (a radar before #87, or one
+    /// still building it) or can't be reached.
+    private static func fromRadar(center: Coordinate, rangeNm: Double) async -> Data? {
+        if DemoFeed.isOn { return nil }     // the radar's runways are not the recording's
+        let centre = rounded(center)
+        await Endpoint.shared.resolve()
+        var req = URLRequest(url: APIConfig.url("/api/runways"), timeoutInterval: 4)
+        req.setValue("1", forHTTPHeaderField: AircraftFeedClient.appHeader)
+        guard let (data, response) = try? await URLSession.radar.data(for: req),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let doc = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              doc["type"] as? String == "FeatureCollection",
+              let c = doc["centre"] as? [Double], c.count == 2,
+              abs(c[0] - centre.lat) <= 0.05 + 1e-9, abs(c[1] - centre.lon) <= 0.05 + 1e-9,
+              let features = doc["features"] as? [[String: Any]], !features.isEmpty,
+              // only what the map needs; the radar's notes (when, the licence) stay behind
+              let geojson = try? JSONSerialization.data(withJSONObject: ["type": "FeatureCollection", "features": features])
+        else { return nil }
+        if let url = cacheFile(centre, rangeNm) { try? geojson.write(to: url, options: .atomic) }
+        return geojson
+    }
+
+    private static func fromOverpass(center: Coordinate, rangeNm: Double) async -> Data? {
         let centre = rounded(center)
         let bb = Geo.rangeBBox(lat: centre.lat, lon: centre.lon, rangeNm: rangeNm + roundingPadNm)
         let query = """

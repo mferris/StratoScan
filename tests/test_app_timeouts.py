@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Nothing in the app waits without a time limit (#86, 2026-10-26).
+"""Nothing in the app waits without a time limit (#86), and its runway
+outlines come from the radar (#87) (2026-10-26).
 
 The owner asked that nothing wait without a time limit, for the free map or
 anything else. In the app a URLRequest's timeoutInterval is only how long a
@@ -20,7 +21,8 @@ needed to be:
 
 Now every request goes through URLSession.radar (12 s in all) or
 URLSession.bounded (30 s), or the setup's own session (75 s), each request
-with its own quiet limit too, and those waits are fixed.
+with its own quiet limit too, and those waits are fixed. The radar keeps the
+runway outlines (/api/runways), and the app asks it before Overpass.
 
 The first part reads the app's Swift, so a new request without a limit fails
 here. Where swiftc is installed the second compiles the shared networking code
@@ -29,6 +31,7 @@ and runs it against a local stand-in radar.
 Run: python3 tests/test_app_timeouts.py
 """
 import http.server
+import json
 import pathlib
 import platform
 import re
@@ -198,13 +201,35 @@ check(before(disc, "Endpoint.shared.resolve()", "Self.get("), "the type database
 routes = SWIFT["ios/StratoScan/Networking/RouteLookupClient.swift"]
 check("req.timeoutInterval = 10" in body(routes, "private func flush()"), "a route asked of adsb.im directly has a limit")
 
+# ---- the runway outlines from the radar (#87) ------------------------------------
+rc = SWIFT["ios/StratoScan/Networking/RunwayClient.swift"]
+fetch = body(rc, "static func fetchRunwayGeoJSON(")
+check(before(fetch, "fromRadar(", "fromOverpass("), "the radar's copy is asked for before Overpass")
+check("guard cachedRunwayGeoJSON(center: center, rangeNm: rangeNm) == nil" in fetch,
+      "Overpass only when the radar can't answer and the phone has no copy")
+fr = body(rc, "private static func fromRadar(")
+check('APIConfig.url("/api/runways")' in fr and "Endpoint.shared.resolve()" in fr,
+      "through whichever of the radar's addresses answers")
+m = re.search(r'URLRequest\(url: APIConfig.url\("/api/runways"\), timeoutInterval: (\d+)\)', fr)
+check(m is not None and int(m.group(1)) <= 5 and "URLSession.radar.data(for: req)" in fr, "with a short limit")
+check("abs(c[0] - centre.lat) <= 0.05" in fr and "abs(c[1] - centre.lon) <= 0.05" in fr and "let centre = rounded(center)" in fr,
+      "taken when its centre is the radar's position rounded to 0.05°, give or take a step")
+check('doc["type"] as? String == "FeatureCollection"' in fr and "!features.isEmpty" in fr, "and only a set of runways")
+check("geojson.write(to: url, options: .atomic)" in fr, "kept on the phone for its month, as Overpass's answer was")
+lr = body(vm, "private func loadRunways()")
+check(before(lr, "runwaysTask = Task", "RunwayClient.fetchRunwayGeoJSON"), "and nothing waits for it")
+
 # ---- compiled, against a stand-in radar --------------------------------------------
 swiftc = shutil.which("swiftc") or (subprocess.run(["xcrun", "--find", "swiftc"], capture_output=True, text=True).stdout.strip()
                                     if shutil.which("xcrun") else "")
 if not swiftc or platform.system() != "Darwin":
     print("skip the compiled checks: no swiftc here (they run on the Mac that builds the app)")
 else:
-    hits = {"receiver": 0}
+    hits = {"receiver": 0, "runways": 0}
+    # the radar's runways for RDU, its centre as offline-map.py writes it
+    runways = {"centre": [35.9, -78.8]}
+    RUNWAY = {"type": "Feature", "properties": {"aeroway": "runway", "ref": "5L/23R"},
+              "geometry": {"type": "LineString", "coordinates": [[-78.80, 35.86], [-78.77, 35.89]]}}
 
     class Radar(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a):
@@ -219,7 +244,28 @@ else:
                 self.send_header("Content-Length", str(len(body_)))
                 self.end_headers()
                 self.wfile.write(body_)
+            elif self.path == "/api/runways":
+                hits["runways"] += 1
+                if runways["centre"] is None:
+                    body_ = b'{"error": "not built"}'
+                    self.send_response(404)
+                else:
+                    body_ = json.dumps({"type": "FeatureCollection", "features": [RUNWAY], "centre": runways["centre"],
+                                        "radiusNm": 22.5, "built": "2026-10-26T00:00:00Z",
+                                        "source": "OpenStreetMap via Overpass",
+                                        "licence": "ODbL 1.0, \u00a9 OpenStreetMap contributors"}).encode()
+                    self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body_)))
+                self.end_headers()
+                self.wfile.write(body_)
+            elif self.path.startswith("/as/"):
+                # the stand-in's runways from now on: for somewhere else, or none
+                runways["centre"] = {"/as/near": [35.85, -78.75], "/as/far": [36.0, -78.8], "/as/none": None}[self.path]
+                self.send_response(204)
+                self.end_headers()
             elif self.path == "/trickle":
+                hits.setdefault("resolving", hits["receiver"])      # those were the five callers'
                 # a byte every two seconds: never quiet for long, never done
                 self.send_response(200)
                 self.send_header("Content-Length", "1000")
@@ -279,7 +325,25 @@ do {
     print("TRICKLE", (error as? URLError)?.code == .timedOut ? "timedout" : "error", String(format: "%.1f", Date().timeIntervalSince(t)))
 }
 """)
+    # The runways (#87), only from an app that asks the radar before Overpass
+    # and keeps off Overpass while it has a copy: the test puts one on the
+    # "phone" first, so it asks no one outside.
+    radar_first = before(fetch, "fromRadar(", "fromOverpass(") and "guard cachedRunwayGeoJSON(" in fetch
+    if radar_first:
+        with open(work / "main.swift", "a") as f:
+            f.write("""APIConfig.baseURL = a[1]
+let rdu = Coordinate(lat: 35.8776, lon: -78.7875)
+for step in ["exact", "near", "far", "none"] {
+    if step != "exact" { _ = try? await URLSession.radar.data(for: URLRequest(url: URL(string: a[1] + "/as/" + step)!, timeoutInterval: 2)) }
+    guard RunwayClient.cachedRunwayGeoJSON(center: rdu, rangeNm: 20) != nil else { print("RUNWAYS", step, "nocopy"); break }
+    let got = await RunwayClient.fetchRunwayGeoJSON(center: rdu, rangeNm: 20)
+    let doc = got.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+    print("RUNWAYS", step, got == nil ? "nil" : (doc?.keys.sorted().joined(separator: ",") ?? "?"), (doc?["features"] as? [Any])?.count ?? 0)
+}
+""")
     srcs = [str(IOS / "Shared" / n) for n in ["APIConfig.swift", "Aircraft.swift", "AircraftFeedClient.swift", "DemoFeed.swift", "Geo.swift"]]
+    if radar_first:
+        srcs.append(str(IOS / "StratoScan" / "Networking" / "RunwayClient.swift"))
     arch = "arm64" if platform.machine() == "arm64" else "x86_64"
     built = subprocess.run([swiftc, "-target", arch + "-apple-macos14", "-o", str(work / "net"), *srcs, str(work / "main.swift")],
                            capture_output=True, text=True, timeout=300)
@@ -287,19 +351,35 @@ do {
     if built.returncode == 0:
         home = work / "home"
         home.mkdir()
+        # a copy of the runways already on the "phone", an old one
+        caches = home / "Library" / "Caches"
+        caches.mkdir(parents=True)
+        kept = caches / "runways-35.90_-78.80_20.geojson"
+        kept.write_text('{"type": "FeatureCollection", "features": []}')
         # its settings in a home of its own, not this Mac's
         env = {"CFFIXED_USER_HOME": str(home), "HOME": str(home), "PATH": "/usr/bin:/bin"}
         ran = subprocess.run([str(work / "net"), radar_url, silent_url], capture_output=True, text=True, timeout=120, env=env)
         out = {l.split()[0]: l.split()[1:] for l in ran.stdout.splitlines() if l.strip()}
         check(out.get("CAP") == ["12.0", "30.0"], "the sessions' limits in all are 12 s and 30 s: %s" % out.get("CAP"))
         check(out.get("RESOLVED") == ["1", radar_url], "five callers at once all get the radar's address: %s" % out.get("RESOLVED"))
-        check(hits["receiver"] == 1, "from one look-up between them (%d asked the radar)" % hits["receiver"])
+        check(hits.get("resolving") == 1, "from one look-up between them (%s asked the radar)" % hits.get("resolving"))
         nb = out.get("NEARBY", ["?", "99"])
         check(nb[0] == "nil" and float(nb[1]) < 3.5,
               "a widget's look at a radar that never answers ends at its limit (%s s, not 1.5 + 8 + 8)" % nb[1])
         tr = out.get("TRICKLE", ["?", "0"])
         check(tr[0] == "timedout" and 11 <= float(tr[1]) <= 15,
               "a radar that trickles is given up after 12 s in all (%s s), though never quiet for 8" % tr[1])
+        rw = {l.split()[1]: l.split()[2:] for l in ran.stdout.splitlines() if l.startswith("RUNWAYS ")}
+        if not radar_first:
+            print("skip the compiled runway checks: this app goes to Overpass first")
+        else:
+            check(rw.get("exact") == ["features,type", "1"],
+                  "the radar's runways are taken, without its notes: %s" % rw.get("exact"))
+            check(len(json.loads(kept.read_text())["features"]) == 1, "and kept on the phone in place of the old copy")
+            check(rw.get("near") == ["features,type", "1"], "a centre one 0.05° step over is still this radar's: %s" % rw.get("near"))
+            check(rw.get("far") == ["nil", "0"], "a copy for somewhere else is not taken: %s" % rw.get("far"))
+            check(rw.get("none") == ["nil", "0"], "nor is there anything when the radar hasn't one: %s" % rw.get("none"))
+            check(hits["runways"] == 4, "the radar was asked each time (%d), and with a copy on the phone Overpass never was" % hits["runways"])
         if ran.returncode != 0:
             check(False, "the stand-in run ended badly: " + ran.stderr[-400:])
     server.shutdown()

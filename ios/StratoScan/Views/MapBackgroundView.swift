@@ -6,7 +6,7 @@ import CoreLocation
 /// initMap()/recolorLabels()/loadRunways(): "liberty" style (the "dark"
 /// OpenFreeMap style turned out to be near-grayscale by design), place
 /// labels flipped to light-text/dark-halo, and a runway GeoJSON layer
-/// sourced from Overpass once `runwayGeoJSON` arrives.
+/// (the radar's, or Overpass's) once `runwayGeoJSON` arrives.
 ///
 /// Darkening (the equivalent of #mapbg's CSS `filter: brightness()
 /// saturate()`) is deliberately NOT done here — MLNMapView is Metal-backed,
