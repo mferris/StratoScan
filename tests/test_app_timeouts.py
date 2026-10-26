@@ -15,7 +15,9 @@ needed to be:
   aircraft, even with a copy in hand, and "connecting" lasted as long as the
   slowest look-up, since its 8 s grace was only checked when a fetch came back;
 - receiver.json failing did not drop the chosen address, so the Watch stayed
-  on a dead home address;
+  on a dead home address (and the widgets and the Watch now use the radar's
+  kept position, only while it is the radar now set: with another one chosen
+  they measured its aircraft from the first radar's place);
 - an alert waited on two icon services for its airline's mark;
 - the widgets had no limit in all, and a cancelled setup went on for minutes.
 
@@ -165,11 +167,13 @@ check("if Date() >= deadline" in fv and "Date().addingTimeInterval(retrySeconds)
 client = SWIFT["ios/Shared/AircraftFeedClient.swift"]
 rec = body(client, "static func fetchReceiver()")
 check(rec.count("Endpoint.shared.invalidate()") >= 2, "receiver.json failing drops the chosen address, as the feed does")
-check("keepHome(c)" in rec, "the radar's position is kept as read")
+check("keepHome(c, of: radar)" in rec, "the radar's position is kept as read")
 check("guard let home = try await AircraftFeedClient.home()" in body(client, "static func load() async throws"),
       "a widget uses the kept position, not a look-up every time")
 home_fn = body(client, "static func home()")
 check("86400" in home_fn and "return try await fetchReceiver()" in home_fn, "read again once a day")
+check("let radar = radarNow" in rec and "radar != radarNow" in body(client, "static var cachedHome"),
+      "and only for the radar it was read from")
 end = body(api, "func resolve(")
 check("if let t = inFlight { return t }" in end, "one look-up for the address at a time, shared by whoever asks")
 
@@ -236,7 +240,15 @@ else:
             pass
 
         def do_GET(self):
-            if self.path == "/tar1090/data/receiver.json":
+            if self.path == "/other/tar1090/data/receiver.json":
+                # another radar, a degree north (the owner chose it in Settings)
+                hits["other"] = hits.get("other", 0) + 1
+                body_ = b'{"lat": 36.8776, "lon": -78.7875}'
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body_)))
+                self.end_headers()
+                self.wfile.write(body_)
+            elif self.path == "/tar1090/data/receiver.json":
                 hits["receiver"] += 1
                 time.sleep(0.3)
                 body_ = b'{"lat": 35.8776, "lon": -78.7875}'
@@ -324,6 +336,14 @@ do {
 } catch {
     print("TRICKLE", (error as? URLError)?.code == .timedOut ? "timedout" : "error", String(format: "%.1f", Date().timeIntervalSince(t)))
 }
+// the radar's position, kept as the app reads it; then another radar chosen
+APIConfig.baseURL = a[1]
+_ = try? await AircraftFeedClient.fetchReceiver()
+let kept = try? await AircraftFeedClient.home()
+APIConfig.baseURL = a[1] + "/other"
+let other = try? await AircraftFeedClient.home()
+print("HOME", kept.map { String($0.lat) } ?? "nil", other.map { String($0.lat) } ?? "nil",
+      AircraftFeedClient.cachedHome.map { String($0.home.lat) } ?? "nil")
 """)
     # The runways (#87), only from an app that asks the radar before Overpass
     # and keeps off Overpass while it has a copy: the test puts one on the
@@ -369,6 +389,10 @@ for step in ["exact", "near", "far", "none"] {
         tr = out.get("TRICKLE", ["?", "0"])
         check(tr[0] == "timedout" and 11 <= float(tr[1]) <= 15,
               "a radar that trickles is given up after 12 s in all (%s s), though never quiet for 8" % tr[1])
+        hm = out.get("HOME")
+        check(hm is not None and hm[0] == "35.8776", "a widget takes the radar's kept position: %s" % hm)
+        check(hm is not None and hm[1] == "36.8776" and hm[2] == "36.8776" and hits.get("other", 0) >= 1,
+              "but not once another radar is chosen: that one is read, and kept (%s)" % hm)
         rw = {l.split()[1]: l.split()[2:] for l in ran.stdout.splitlines() if l.startswith("RUNWAYS ")}
         if not radar_first:
             print("skip the compiled runway checks: this app goes to Overpass first")
