@@ -559,6 +559,20 @@ echo "== unused OS services =="
 # NFS and cloud-init: a radar uses none of them (2026-10-13). See
 # deploy/trim-os.sh for what stays and why.
 if live; then sh deploy/trim-os.sh; else STRATOSCAN_LIVE=0 sh deploy/trim-os.sh; fi
+# rpcbind too (2026-10-26, #89). nfs-common brings it, and it listened on
+# port 111 on every interface: an open service on the home network, for NFS,
+# which nothing on a radar mounts. Stopped (the socket first, or it would start
+# the service again), disabled and masked; the packages stay, since nfs-common
+# depends on rpcbind. A radar without rpcbind is left alone, and an error from
+# systemctl here never fails the install.
+if systemctl list-unit-files --no-legend rpcbind.socket rpcbind.service 2>/dev/null | grep -q '^rpcbind\.'; then
+  for u in rpcbind.socket rpcbind.service; do
+    if live; then systemctl stop "$u" >/dev/null 2>&1 || true; fi
+    systemctl disable "$u" >/dev/null 2>&1 || true
+    systemctl mask "$u" >/dev/null 2>&1 || true
+  done
+  echo "  rpcbind off: nothing listens on port 111"
+fi
 
 echo "== the kiosk (desktop user: ${KIOSK_USER:-none}) =="
 # These run under the desktop user's systemd, because they need its Wayland
