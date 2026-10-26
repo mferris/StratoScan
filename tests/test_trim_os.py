@@ -25,7 +25,8 @@ def check(ok, what):
 
 units = script.split('SYSTEM_UNITS="')[1].split('"')[0].split() + script.split('USER_UNITS="')[1].split('"')[0].split()
 for u in ("bluetooth.service", "cups.service", "cups.socket", "wayvnc-control.service", "udisks2.service",
-          "upower.service", "nfs-blkmap.service", "mpris-proxy.service", "gvfs-daemon.service"):
+          "upower.service", "nfs-blkmap.service", "rpcbind.socket", "rpcbind.service", "mpris-proxy.service",
+          "gvfs-daemon.service"):
     check(u in units, f"turns off {u}")
 NEEDED = ("avahi", "pipewire", "wireplumber", "xdg-desktop-portal", "readsb", "tar1090", "lighttpd", "tailscale",
           "NetworkManager", "wpa_supplicant", "ssh", "fail2ban", "timesyncd", "unattended", "cron", "getty",
@@ -53,5 +54,12 @@ with tempfile.TemporaryDirectory() as d:
 check('sh deploy/trim-os.sh' in inst and inst.index("trim-os.sh") > inst.index("quiet-boot.sh"),
       "the installer runs it")
 check("STRATOSCAN_LIVE=0 sh deploy/trim-os.sh" in inst, "and doesn't try to stop services when building an image")
+
+# rpcbind (port 111, #89): its socket goes before its service, or stopping the
+# service leaves the socket to start it again; and nothing is uninstalled,
+# since nfs-common depends on it.
+check(units.index("rpcbind.socket") < units.index("rpcbind.service"), "rpcbind's socket is turned off before its service")
+check(not any(w in script for w in ("apt-get remove", "apt-get purge", "apt remove", "apt purge", "dpkg -r", "dpkg -P")),
+      "it removes no packages")
 print("trim os checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)

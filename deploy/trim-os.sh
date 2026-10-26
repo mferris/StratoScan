@@ -9,6 +9,12 @@
 # goes; it is fewer things to start, patch, listen and go wrong, on a device
 # in someone else's house.
 #
+# rpcbind too (2026-10-26, #89): nfs-common brings it, and it listened on
+# port 111 on every interface, an open service on the home network for NFS,
+# which nothing on a radar mounts. The packages stay (nfs-common depends on
+# it); its socket is listed before the service, so stopping the service
+# doesn't leave the socket to start it again.
+#
 # Kept on purpose: avahi (the app finds a radar by its .local name on the
 # LAN), pipewire and wireplumber (the speakers are the screen's HDMI audio),
 # the desktop portals (Chromium calls them), cron, the consoles (a way in
@@ -27,7 +33,7 @@ CONFIG_TXT="$ROOT/boot/firmware/config.txt"
 # package update or a D-Bus request cannot start them again.
 SYSTEM_UNITS="bluetooth.service cups.service cups.socket cups-browsed.service
 wayvnc-control.service wayvnc.service udisks2.service upower.service
-nfs-blkmap.service ModemManager.service"
+nfs-blkmap.service rpcbind.socket rpcbind.service ModemManager.service"
 # The kiosk user's session: Bluetooth media control and GNOME's virtual
 # filesystems.
 USER_UNITS="mpris-proxy.service gvfs-daemon.service"
