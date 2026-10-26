@@ -129,7 +129,102 @@ check(counts.get() == {"abc001": (4, 1)}, "and its counts are used once they lan
 counts.at = time.time() - cf.SIGHTINGS_CACHE_S - 1      # a minute on: due again, but not the first time
 got, took = timed(counts.get)
 check(took < 0.2 and got == {"abc001": (4, 1)}, "a later refresh never holds an answer: the last counts at once")
-net_srv.shutdown(); store_srv.shutdown()
+
+# What network-compare says about its answer decides how long the feed keeps
+# it (review, 2026-10-26): an hour-old list went out as live for a minute.
+class Answer(http.server.BaseHTTPRequestHandler):
+    """Answers `code` with `body`, or with a body cut off mid-way (`cut`)."""
+    code, body, cut = 200, b"{}", False
+
+    def do_GET(self):
+        self.send_response(type(self).code)
+        self.send_header("Content-Length", str(len(self.body) + (100 if self.cut else 0)))
+        self.end_headers()
+        self.wfile.write(self.body)
+
+    def log_message(self, *a):
+        pass
+
+
+ans_srv, ans_url = serve(Answer)
+cf.NETWORK_URL = ans_url + "/network"
+noted = []
+feed._note_trails = lambda ac: noted.append(ac)
+plane = {"hex": "c0ffee", "lat": 35.9, "lon": -78.8, "seen_pos": 1.0}
+
+
+RETRY_S = getattr(cf, "NETWORK_RETRY_S", 5.0)
+
+
+def refresh(code, doc, cut=False):
+    """One refresh against an answer, run here; the list the feed then
+    hands out, and how soon it asks again."""
+    Answer.code, Answer.cut = code, cut
+    Answer.body = doc if isinstance(doc, bytes) else json.dumps(doc).encode()
+    noted.clear()
+    feed._network_due = 0.0
+    marker = threading.Thread(target=lambda: None)          # as _network_raw marks its worker
+    marker.start(); marker.join()
+    feed._network_worker = marker
+    try:
+        feed._refresh_network()
+    except Exception:
+        pass                    # a refresh that dies, as one could before the review
+    return [a["hex"] for a in feed._network_raw()], getattr(feed, "_network_due", 0.0) - cf._now()
+
+
+hexes, due = refresh(200, {"ac": [plane], "fetched": 50.0})
+check(hexes == ["c0ffee"] and 8 <= due <= 10.5 and noted,
+      "a current answer 50 s old is kept until network-compare's copy is due again (%.0f s), and trailed" % due)
+hexes, due = refresh(200, {"ac": [plane], "fetched": 70.0, "pending": 1})
+check(hexes == ["c0ffee"] and 0 < due <= RETRY_S + 0.5 and not noted,
+      "a pending answer a minute old is shown, asked for again in %.0f s, and not trailed" % due)
+hexes, due = refresh(200, {"ac": [plane], "fetched": 3600.0, "stale": True})
+check(hexes == [] and 0 < due <= RETRY_S + 0.5 and not noted,
+      "an hour-old answer kept through a failure: none of its aircraft shown as live, asked again soon")
+hexes, due = refresh(503, {"error": "upstream unavailable", "detail": "still asking", "pending": 1})
+check(hexes == [] and 0 < due <= RETRY_S + 0.5,
+      "a 503 while network-compare first asks is asked again in %.0f s, not kept a minute" % due)
+for what, args in (("an answer cut off mid-body", (200, {"ac": [plane]}, True)),
+                   ("an answer of the wrong shape", (200, b"[1, 2]"))):
+    hexes, due = refresh(*args)
+    check(feed._network_worker is None and hexes == [] and 0 < due <= RETRY_S + 0.5,
+          "%s ends the refresh cleanly, so the next one runs" % what)
+feed._network_due = 0.0
+Answer.code, Answer.body, Answer.cut = 200, json.dumps({"ac": [plane]}).encode(), False
+ac, took = timed(feed._network_raw)
+check([a["hex"] for a in ac] == ["c0ffee"] and took < 1.5, "and it does: the next answer has the list")
+feed._network = (cf._now() - 3600, [plane])
+feed._network_due = 0.0
+Network.delay = 4.0
+cf.NETWORK_URL = net_url + "/network"
+ac, took = timed(feed._network_raw)
+check(ac == [] and took < 2.5, "the feed's own hour-old list is not handed out while a refresh is slow")
+for _ in range(60):
+    if feed._network_worker is None:
+        break
+    time.sleep(0.1)
+
+Answer.code, Answer.body, Answer.cut = 200, json.dumps({"abc002": {"total": 2, "nearby": 0}}).encode(), True
+cut = cf.SightingCounts(url=ans_url + "/sightings")
+cut.counts = {"abc001": (4, 1)}
+cut.at = 1.0
+cut.get()
+for _ in range(30):
+    if not cut.busy:
+        break
+    time.sleep(0.1)
+check(not cut.busy and cut.counts == {"abc001": (4, 1)},
+      "a sighting store answer cut off mid-body keeps the last counts and ends the refresh")
+Answer.cut = False
+cut.at = time.time() - cf.SIGHTINGS_CACHE_S - 1
+cut.get()
+for _ in range(30):
+    if not cut.busy:
+        break
+    time.sleep(0.1)
+check(cut.counts == {"abc002": (2, 0)}, "so the next refresh a minute on still runs")
+net_srv.shutdown(); store_srv.shutdown(); ans_srv.shutdown()
 
 # ---- network-compare's /network answers from its cache -------------------------
 os.environ["STATE_DIRECTORY"] = str(tmp)
@@ -175,6 +270,31 @@ for _ in range(80):
     time.sleep(0.1)
 (code, d), took = timed(get_network)
 check(code == 200 and d["mine"] == 2 and took < 0.5, "and the next question after it lands has the fresh one")
+
+
+def landed():
+    for _ in range(80):
+        if nc._cache.get("worker") is None:
+            return
+        time.sleep(0.1)
+
+
+# Nothing asked for an hour, then adsb.lol slow (review, 2026-10-26): last
+# night's comparison is not handed out as the current one.
+nc._cache["at"] -= 3600
+(code, d), took = timed(get_network)
+check(code == 503 and d.get("detail") == "still asking" and d.get("pending") == 1 and took < 3.7,
+      "with the last comparison an hour old and adsb.lol slow, /network says it is still asking (%.1f s)" % took)
+landed()
+(code, d), took = timed(get_network)
+check(code == 200 and d["mine"] == 3 and "pending" not in d and not d.get("stale"),
+      "and once it lands, the fresh one, not pending")
+nc._cache["at"] -= nc.MIN_UPSTREAM_S + 10
+(code, d), took = timed(get_network)
+check(code == 200 and d["mine"] == 3 and d.get("pending") == 1 and d["fetched"] >= nc.MIN_UPSTREAM_S
+      and not d.get("stale") and took < 3.7,
+      "a comparison a minute old goes out while the next is on its way, marked pending, %.0f s old" % d.get("fetched", 0))
+landed()
 nc_srv.shutdown()
 
 # ---- setupd: a sign-in that prints nothing, and the transient units ------------

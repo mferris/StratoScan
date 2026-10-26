@@ -103,6 +103,15 @@ NETWORK_CACHE_S = 60.0  # network-compare caches upstream for 60 s itself (#67)
 # through network-compare, and a slow answer there failed the whole poll,
 # the antenna's aircraft too.
 NETWORK_WAIT_S = 2.0
+# An answer network-compare marks as not its current one, "pending" (a fresh
+# one is on its way) or "stale" (the last kept through a failure), or none at
+# all (a 503 while it first asks, a body cut off), is asked for again after
+# NETWORK_RETRY_S instead of kept for a minute. Aircraft known for longer than
+# NETWORK_OLD_S are not shown at all (review, 2026-10-26): with nothing asking
+# for an hour, the first answer was last night's list, which went out to the
+# app as live aircraft for a minute and into the trails.
+NETWORK_RETRY_S = 5.0
+NETWORK_OLD_S = 120.0
 ROUTE_BATCH_S, ROUTE_BATCH_MAX = 4.0, 50
 OWNER_RETRY_S = 300
 CACHE_MAX = 20000       # routes/owners kept; the oldest go first
@@ -357,17 +366,23 @@ class SightingCounts:
             return self.counts
 
     def _refresh(self):
+        counts = None
         try:
             with urllib.request.urlopen(self.url, timeout=3) as r:
                 doc = json.load(r)
             counts = {h.lower(): (int(v.get("total") or 0), int(v.get("nearby") or 0))
                       for h, v in doc.items() if isinstance(h, str) and isinstance(v, dict)}
-        except (OSError, ValueError, AttributeError, TypeError):
+        except Exception:
+            # The last good counts are kept, whatever went wrong. Only some
+            # errors were caught at first: an answer cut off mid-body (an
+            # IncompleteRead, no OSError) ended the refresh with busy still
+            # set, and the counts were never refreshed again (review, 2026-10-26).
             counts = None
-        with self.lock:
-            if counts is not None:
-                self.counts = counts
-            self.busy = False
+        finally:
+            with self.lock:
+                if counts is not None:
+                    self.counts = counts
+                self.busy = False
 
 
 def band_of(a, hex_, uat):
@@ -533,7 +548,8 @@ class Feed:
         self.uat = uat if uat is not None else UatHeard()
         self.sightings = sightings if sightings is not None else SightingCounts()
         self._antenna = (0.0, [])
-        self._network = (0.0, [])
+        self._network = (0.0, [])       # (when network-compare fetched them, the network's aircraft)
+        self._network_due = 0.0         # when they are asked for again
         self._network_worker = None     # the one refresh of the network's aircraft running, if any
         self.lock = threading.Lock()
         self.trails = Trails()
@@ -577,33 +593,53 @@ class Feed:
 
     def _network_raw(self):
         """The network's aircraft: the last list, refreshed behind the feed
-        once it is older than NETWORK_CACHE_S. An answer waits at most
-        NETWORK_WAIT_S for a refresh, then goes out with what is known."""
+        when it is due (NETWORK_CACHE_S after network-compare fetched a
+        current one, NETWORK_RETRY_S after anything else). An answer waits at
+        most NETWORK_WAIT_S for a refresh, then goes out with what is known,
+        unless that is older than NETWORK_OLD_S."""
         with self.lock:
             at, ac = self._network
-            if _now() - at < NETWORK_CACHE_S:
-                return ac
+            if _now() < self._network_due:
+                return ac if _now() - at < NETWORK_OLD_S else []
             worker = self._network_worker
             if worker is None:
                 worker = self._network_worker = threading.Thread(target=self._refresh_network, daemon=True)
                 worker.start()
         worker.join(NETWORK_WAIT_S)
         with self.lock:
-            return self._network[1]
+            at, ac = self._network
+            return ac if _now() - at < NETWORK_OLD_S else []
 
     def _refresh_network(self):
+        ac, age, current = [], 0.0, False
         try:
             req = urllib.request.Request(NETWORK_URL, headers={"User-Agent": USER_AGENT})
             with urllib.request.urlopen(req, timeout=12) as r:
-                ac = (json.load(r) or {}).get("ac") or []
-        except (OSError, ValueError):
-            ac = []
-        with self.lock:
-            self._network = (_now(), ac)
-            self._network_worker = None
+                doc = json.load(r)
+            fetched = doc.get("fetched")            # how long ago network-compare asked adsb.lol
+            age = max(0.0, float(fetched)) if isinstance(fetched, (int, float)) else 0.0
+            ac = [a for a in doc.get("ac") or [] if isinstance(a, dict)]
+            current = not doc.get("pending") and not doc.get("stale") and age < NETWORK_CACHE_S
+        except Exception:
+            # network-compare down or still asking (503), or an answer cut
+            # off (an IncompleteRead, no OSError) or of the wrong shape: none
+            # for now, asked again soon. Catching only some errors let a
+            # refresh die still marked running, and the list was never
+            # refreshed again (review, 2026-10-26).
+            ac, age, current = [], 0.0, False
+        finally:
+            with self.lock:
+                now = _now()
+                self._network = (now - age, ac)
+                # A current list is kept until network-compare's own copy is due again.
+                self._network_due = now - age + NETWORK_CACHE_S if current else now + NETWORK_RETRY_S
+                self._network_worker = None
         # The network's aircraft are fetched only while a screen shows them
         # (privacy.md), so their trails grow only then, a point per fetch.
-        self._note_trails(ac)
+        # Only from a current answer: an old one's points were noted when it
+        # was new, or are too old to be stamped with now.
+        if current:
+            self._note_trails(ac)
 
     def label(self, a, source, counts=None):
         hex_ = a["hex"].lower().lstrip("~")
