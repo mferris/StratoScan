@@ -1802,6 +1802,18 @@ function airlineFor(cs, hasCallsign, hex) {
 
 // ---- State -----------------------------------------------------
 let home = null;                 // { lat, lon } of the receiver
+// Where the radar is, as a third party is told it (2026-10-26): `home` rounded
+// to 0.05 degrees (about 5 km), as the radar asks Overpass and adsb.lol and as
+// the app sends it. On the panel and at home `home` is the antenna's exact
+// position, so no outside service is ever asked anything built from `home`
+// itself -- the lightning probe sent it to about 11 m every two minutes.
+// Weather and a 15 nm lightning ring lose nothing at 5 km.
+const HOME_AREA_DEG = 0.05;
+function homeArea() {
+  if (!home) return null;
+  const snap = v => Math.round(Math.round(v / HOME_AREA_DEG) * HOME_AREA_DEG * 100) / 100;
+  return { lat: snap(home.lat), lon: snap(home.lon) };
+}
 let planes = new Map();          // hex -> plane record
 let lastGoodFetch = 0;
 let connected = false;
@@ -3083,9 +3095,9 @@ async function onlineTilesReachable(style) {
       tiles = (await res.json()).tiles;
     }
     if (!Array.isArray(tiles) || !tiles.length) return false;
-    const z = 10, n = 2 ** z;
-    const x = Math.floor((home.lon + 180) / 360 * n);
-    const latR = home.lat * Math.PI / 180;
+    const z = 10, n = 2 ** z, area = homeArea();   // any tile near here will do
+    const x = Math.floor((area.lon + 180) / 360 * n);
+    const latR = area.lat * Math.PI / 180;
     const y = Math.floor((1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2 * n);
     const url = tiles[0].replace('{z}', z).replace('{x}', x).replace('{y}', y);
     const res = await fetch(url, { signal: timeLimit(ONLINE_STYLE_TIMEOUT_MS) });
@@ -3692,9 +3704,9 @@ function refreshLightning() {
 // specifically because, unlike GOESEastGLMFEDRadC shown on the map, it's
 // one of the two RealEarth products that actually supports point probing).
 //
-// A single probe at home's exact coordinates only really tells you about
-// the one small grid-cell-sized patch of sky right overhead -- to cover a
-// real radius, this probes two concentric rings of points around home
+// A single probe overhead only really tells you about the one small
+// grid-cell-sized patch of sky right there -- to cover a real radius, this
+// probes two concentric rings of points around the radar's area, homeArea()
 // (reusing destinationPoint(), the same geodesic helper the extended
 // runway lines use) plus the center point, and treats "any probe
 // non-zero" as "lightning nearby". This is a real approximation, not
@@ -3730,13 +3742,19 @@ async function probeLightningValue(lat, lon) {
 }
 
 async function checkLightningNearby() {
-  if (!home || !alertSettings.lightningAlert || lightningChecking) return;
+  // Outside GOES-East's view every probe comes back empty: RealEarth is not
+  // asked at all there (2026-10-26).
+  if (!home || !alertSettings.lightningAlert || !lightningCovers(home) || lightningChecking) return;
   const radius = lightningAlerted ? LIGHTNING_ALERT_CLEAR_RADIUS_NM : LIGHTNING_ALERT_RADIUS_NM;
-  const points = [[home.lat, home.lon]];
+  // Every point is worked out from the rounded centre, never from `home`: the
+  // rings are symmetric, so rings round the exact position would give it
+  // away even with the centre probe rounded (2026-10-26).
+  const area = homeArea();
+  const points = [[area.lat, area.lon]];
   for (const r of [radius / 2, radius]) {
     for (let i = 0; i < LIGHTNING_PROBE_RING_POINTS; i++) {
       const bearing = i * 360 / LIGHTNING_PROBE_RING_POINTS;
-      const [lon, lat] = destinationPoint(home.lat, home.lon, bearing, r);
+      const [lon, lat] = destinationPoint(area.lat, area.lon, bearing, r);
       points.push([lat, lon]);
     }
   }
@@ -6956,7 +6974,9 @@ function alertSettingsMeta() { return [
     group: 'overlays', key: 'networkCompare', label: 'Network comparison',
     sub: 'Outlines aircraft a public ADS-B network sees that this antenna cannot hear, and scores your coverage. Sends this radar\u2019s approximate location to adsb.lol',
   },
-  { group: 'alerts', key: 'lightningAlert', label: 'Lightning proximity alert', sub: `Chime + banner when a strike is detected within ${LIGHTNING_ALERT_RADIUS_NM}nm` },
+  // Says who is asked, as Network comparison does: the probe works with the
+  // overlay off, when RealEarth is credited nowhere else on screen (2026-10-26).
+  { group: 'alerts', key: 'lightningAlert', label: 'Lightning proximity alert', sub: `Chime + banner when a strike is detected within ${LIGHTNING_ALERT_RADIUS_NM}nm. Asks SSEC RealEarth about this radar’s area, to about 5 km`, available: () => lightningCovers(home), unavailableNote: 'Not available here — GOES-East only covers the Americas' },
   { group: 'display', key: 'nightDim', label: 'Dim at night', sub: 'Darkens the display between sunset and sunrise at the receiver' },
   { group: 'display', key: 'emptySky', label: 'Clock & weather when quiet', sub: 'Shows the time, the weather and today’s count when nothing is in range' },
   { group: 'alerts', key: 'notableNames', label: 'Name well-known people', sub: 'When a well-known person’s aircraft is listed, say and show whose it is. Never on the public page' },
@@ -7333,8 +7353,8 @@ function renderScorecard() {
 // EMPTY_SKY_AFTER_MS with nothing in range, show the time, the weather and
 // today's tally instead; the first aircraft back clears it at once.
 // Weather is Open-Meteo (free for non-commercial use, CC BY 4.0, credited on
-// screen), asked for with the position rounded to 2 dp (~1 km), the same
-// precision the public Funnel gateway already publishes.
+// screen), asked for the radar's area, homeArea() (0.05 degrees, about 5 km;
+// it was 2 dp, about 1 km, until 2026-10-26).
 const EMPTY_SKY_AFTER_MS = 30 * 1000;
 const WEATHER_REFRESH_MS = 20 * 60 * 1000;
 const TODAY_REFRESH_MS = 5 * 60 * 1000;
@@ -7368,9 +7388,9 @@ function useFahrenheit() {
 async function refreshWeather() {
   if (!home) return;
   weatherAt = performance.now();
-  const f = useFahrenheit();
+  const f = useFahrenheit(), area = homeArea();
   const url = 'https://api.open-meteo.com/v1/forecast'
-    + `?latitude=${home.lat.toFixed(2)}&longitude=${home.lon.toFixed(2)}`
+    + `?latitude=${area.lat.toFixed(2)}&longitude=${area.lon.toFixed(2)}`
     + '&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min'
     + `&timezone=auto&forecast_days=1${f ? '&temperature_unit=fahrenheit' : ''}`;
   try {
