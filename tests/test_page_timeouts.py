@@ -318,6 +318,11 @@ light = "\n".join([(re.search(r"^const LIGHTNING_ALERT_RADIUS_NM = .*$", page_js
                    (re.search(r"^const LIGHTNING_ALERT_CLEAR_RADIUS_NM = .*$", page_js, re.M) or [""])[0],
                    (re.search(r"^const LIGHTNING_PROBE_RING_POINTS = .*$", page_js, re.M) or [""])[0],
                    (re.search(r"^const LIGHTNING_PROBE_PRODUCT = .*$", page_js, re.M) or [""])[0],
+                   (re.search(r"^const LIGHTNING_LON_MIN = .*$", page_js, re.M) or [""])[0],
+                   (re.search(r"^const LIGHTNING_LAT_MIN = .*$", page_js, re.M) or [""])[0],
+                   function(page_js, "function lightningCovers("),
+                   (re.search(r"^const HOME_AREA_DEG = .*$", page_js, re.M) or [""])[0],
+                   function(page_js, "function homeArea("),
                    function(page_js, "async function probeLightningValue("),
                    function(page_js, "async function checkLightningNearby(")])
 js = r"""
