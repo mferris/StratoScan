@@ -23,6 +23,7 @@ on this chipset, and a unit that camps in AP mode after a brief router
 reboot never rejoins on its own. So it retries the real networks between AP
 periods.
 """
+import errno
 import json
 import os
 import subprocess
@@ -248,7 +249,19 @@ def touch_runtime(path):
     d = os.path.dirname(path)
     if d:
         os.makedirs(d, exist_ok=True)
-    open(path, "w").close()
+    # Never through a link (security review 2026-10-26). LAST_REBOOT sits in
+    # the web tier's own directory and this runs as root, so a link planted
+    # there would have had root truncate whatever it named. A link in the way
+    # is removed (unlinking never follows one) and the marker made fresh.
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+    try:
+        fd = os.open(path, flags, 0o644)
+    except OSError as e:
+        if e.errno != errno.ELOOP:
+            raise
+        os.unlink(path)
+        fd = os.open(path, flags | os.O_EXCL, 0o644)
+    os.close(fd)
     return path
 
 
