@@ -72,7 +72,9 @@ struct LogbookView: View {
             HStack {
                 // the radar's daily tally counts visits, not distinct aircraft
                 tile(Self.count(s.today?.total), "visits")
-                tile(Self.count(s.today?.nearby), "close passes")
+                // Not on the public address, which leaves out what is measured
+                // from the antenna's exact spot (security review 2026-10-26).
+                if let n = s.today?.nearby { tile(Self.count(n), "close passes") }
             }
         }
     }
@@ -82,7 +84,7 @@ struct LogbookView: View {
             HStack {
                 tile(Self.count(s.aircraft), "aircraft")
                 tile(Self.count(s.visits), "visits")
-                tile(Self.count(s.nearby), "close passes")
+                if let n = s.nearby { tile(Self.count(n), "close passes") }
             }
             if let only = s.networkOnly, only > 0 {
                 Text("Plus \(Self.count(only)) aircraft only the network saw, which the antenna didn't hear.")
@@ -254,7 +256,7 @@ struct LogStats: Decodable {
 }
 struct LogCount: Decodable { var ac: Int }
 struct LogRecord: Decodable { var v: Double; var hex: String? = nil; var cs: String?; var at: Double? }
-struct LogToday: Decodable { var total: Int; var nearby: Int }
+struct LogToday: Decodable { var total: Int; var nearby: Int? }
 struct LogTop: Decodable { var hex: String; var cs: String?; var visits: Int; var k: String? }
 struct LogYear: Decodable {
     var year: Int?
