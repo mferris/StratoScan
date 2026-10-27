@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Ring tests are worked out round the receiver rounded to 0.01 degrees
 (2026-10-26), in the core feed (counts.heard, notHeard, on978) and in the
-network comparison (the ghosts, mine and network, the scorecard's bearings).
-Their answers reach the public page, so they say nothing finer than the
-public receiver.json does: two receiver positions in the same 0.01 degree
-cell give identical answers, with aircraft all round the 20 nm ring.
+network comparison (the ghosts, mine and network, the scorecard's bearings,
+and so the network's trails the core feed keeps). Their answers reach the
+public page, so they say nothing finer than the public receiver.json does:
+two receiver positions in the same 0.01 degree cell give identical answers,
+with aircraft just outside the 20 nm ring on the side one of them lies.
 
 Run: python3 tests/test_ring_same_cell.py
 """
@@ -129,6 +130,19 @@ check(pa["mine"] == pb["mine"] and pa["network"] == pb["network"], "mine and net
 check(sorted(g["hex"] for g in pa["ac"]) == sorted(g["hex"] for g in pb["ac"]), "the same ghosts go out from both")
 check(json.dumps(pa, sort_keys=True) == json.dumps(pb, sort_keys=True), "and so does the whole /network answer")
 check(sa == sb and sa["byBearing"] == sb["byBearing"], "the scorecard (/network/stats), bearings included, is the same from both")
+
+
+def trails_from(ghosts):
+    """/api/trails as the core feed keeps it from two answers ten seconds apart."""
+    feed = cf.Feed(trails=False)
+    for step in (0, 1):
+        cf._now = lambda: 1000.0 + 10 * step
+        feed._note_trails([dict(g, lat=g["lat"] + 0.01 * step) for g in ghosts])
+    return feed.trails.payload(1010.0)
+
+
+ta, tb = trails_from(pa["ac"]), trails_from(pb["ac"])
+check(ta["trails"] and ta == tb, "and so are the network's trails (/api/trails) the core feed keeps from it")
 check(all("/35.88/-78.79/" in u for u in asked if u.startswith("https://")), "the question to the network is the rounded point")
 check(nc.home() == (35.88, -78.79), "home() is the rounded position")
 
