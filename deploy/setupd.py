@@ -1452,6 +1452,13 @@ def tailscale_login_start(hostname):
     p = _login_proc["p"]
     if p and p.poll() is None and _login_proc["url"] and time.time() - _login_proc["started"] < LOGIN_REUSE_S:
         return {"url": _login_proc["url"], "state": tailscale_status().get("state")}
+    # Signed in already: nothing to do (2026-10-26). --force-reauth below
+    # would sign a connected radar out of its tailnet and in afresh, and this
+    # is the on-screen setup's verb, which asks no password. Moving a
+    # connected radar to another account is for /setup, signed in, with an
+    # auth key.
+    if tailscale_status().get("state") == "Running":
+        return {"url": None, "state": "Running", "alreadyLoggedIn": True}
 
     _stop_login()
 
