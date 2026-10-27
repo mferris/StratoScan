@@ -210,16 +210,16 @@ What that changes, and only that:
   leaves the `sudo` group. Real changes reach the unit as signed updates.
   Service-file changes, which the updater refuses, need the owner at the
   keyboard; keep them rare.
-- **Writes to the shared stores only from private addresses**
-  (`deploy/92-stratoscan-managed-writes.conf`), so a radar on a shared
-  network takes its sighting and approach records only from its own LAN,
-  its setup hotspot or the tailnet.
 - **The fleet's key** goes into the user's `authorized_keys`, once.
 - **Rollout ring 1.** Releases reach units in rings (README, "A release
   reaches units in rings"): a managed unit starts in ring 1, so it takes a
   release the day after the maintainer's own radar has run it, not at the
   same time. `RING=2` or `RING=3` on the install command puts it later in
   the order; the file is `/etc/stratoscan/ring`.
+
+Writes to the shared stores only from private addresses
+(`deploy/92-stratoscan-managed-writes.conf`) used to be on this list; since
+2026-10-26 every unit has it.
 
 Nothing here runs on RDU or on a unit its owner administers: without
 `MANAGED=1` the installer skips the whole block (the ring file is written
