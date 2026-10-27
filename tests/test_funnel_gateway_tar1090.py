@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
 The public tunnel must serve only the readsb/tar1090 data files that the
-gateway rewrites or that hold counters, never the ones that locate the
-antenna. Found 2026-10-04 on the live tunnel: aircraft.binCraft.zst, the
-binary feed tar1090 prefers, carried the receiver's position unrounded in
-its header while the rounded receiver.json beside it said 35.88, -78.79.
-history and chunk files carry past aircraft.json snapshots with r_dst and
-r_dir intact, and outline.json is the range outline drawn around the antenna.
+gateway rewrites or that hold nothing measured from the receiver, never the
+ones that locate the antenna. Found 2026-10-04 on the live tunnel:
+aircraft.binCraft.zst, the binary feed tar1090 prefers, carried the
+receiver's position unrounded in its header while the rounded receiver.json
+beside it said 35.88, -78.79. history and chunk files carry past
+aircraft.json snapshots with r_dst and r_dir intact, and outline.json is the
+range outline drawn around the antenna. stats.json joined them on 2026-10-26.
 
 Run: python3 tests/test_funnel_gateway_tar1090.py
 """
@@ -19,6 +20,7 @@ spec = importlib.util.spec_from_file_location("fg", root / "deploy" / "funnel-ga
 fg = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fg)
 private = fg.Handler._is_tar1090_private
+rewrites = getattr(fg, "PUBLIC_REWRITES", {})
 
 MUST_BLOCK = [
     "/tar1090/data/aircraft.binCraft.zst", "/tar1090/data/aircraft.binCraft",
@@ -33,14 +35,18 @@ MUST_BLOCK = [
     "/tar1090/globe_history/2026/10/04/traces/00/trace_full_abca00.json",
     # the allowed names with something after them are different files
     "/tar1090/data/aircraft.json.gz", "/tar1090/data/receiver.json.bak", "/tar1090/data/aircraft.json/x",
+    # readsb's statistics hold figures measured from the receiver's position,
+    # and nothing public reads them (2026-10-26)
+    "/tar1090/data/stats.json", "/./tar1090/data/stats.json", "/tar1090/data/STATS.json",
+    "/tar1090/data/stats.json?x=1", "/tar1090/data/%73tats.json",
 ]
 
-# The rewritten and counters-only files, in every spelling lighttpd would
-# route to the same file.
+# The rewritten files and status.json, in every spelling lighttpd would route
+# to the same file.
 MUST_ALLOW = [
-    "/tar1090/data/aircraft.json", "/tar1090/data/receiver.json", "/tar1090/data/stats.json",
+    "/tar1090/data/aircraft.json", "/tar1090/data/receiver.json",
     "/tar1090/data/status.json", "/tar1090/data/aircraft.json?_=1", "/tar1090/data/receiver.json/",
-    "//tar1090/data/aircraft.json", "/./tar1090/data/stats.json",
+    "//tar1090/data/aircraft.json", "/./tar1090/data/status.json",
     # the page itself and everything else on the site are not this filter's business
     "/", "/index.html", "/tar1090/", "/tar1090/index.html", "/tar1090/style.css", "/tar1090/script.js",
     "/api/aircraft", "/sightings", "/config.json", "/tar1090x/data/outline.json",
@@ -66,7 +72,13 @@ def main():
     for p in (fg.ROUNDED_PATH, fg.STRIPPED_PATH):
         if p not in fg.TAR1090_PUBLIC_FILES:
             failures.append(f"rewritten file not in the allowlist: {p}")
-    n = len(MUST_BLOCK) + len(MUST_ALLOW) + 4 + 2
+    # Every allowed file is either rewritten or holds nothing measured from
+    # the receiver: a file added here has to be one or the other.
+    for p in fg.TAR1090_PUBLIC_FILES:
+        if p not in rewrites and p != "/tar1090/data/status.json":
+            failures.append(f"allowed but neither rewritten nor known harmless: {p}")
+    checks = 1
+    n = len(MUST_BLOCK) + len(MUST_ALLOW) + 4 + 2 + checks
     print(f"{n - len(failures)}/{n} tar1090 public-file checks passed")
     for f in failures:
         print("  FAILED:", f)

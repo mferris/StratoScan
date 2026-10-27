@@ -11,12 +11,16 @@ of lighttpd directly, so only the copy that actually leaves the house over
 the public internet gets filtered -- LAN/kiosk traffic never touches this
 process at all.
 
-Every request is proxied through unchanged except one: GET
+Public traffic only reads: GET and HEAD, and a browser's violation report to
+/csp-report; anything else is refused before it is proxied (2026-10-26).
+Most reads go through unchanged. The ones rewritten on the way out (see
+PUBLIC_REWRITES) are the answers worked out from the receiver's position:
 /tar1090/data/receiver.json (readsb's own receiver-location endpoint, which
 index.html's loadHome() fetches to auto-center the radar) has its lat/lon
 rounded to 2 decimal places -- about 0.7 miles of fuzz, plenty to keep the
 map/radar centered correctly at the app's actual range scale, but no longer
-a literal street address to anyone who curls the Funnel URL.
+a literal street address to anyone who curls the Funnel URL -- and the
+others lose what is measured from the exact position.
 """
 import base64
 import hashlib
@@ -62,12 +66,15 @@ CORE_FEED_PUBLIC_STRIPPED = ("owner",)
 #   outline.json           the range outline, drawn around the antenna
 #   history_*.json, chunks/  past aircraft.json snapshots, r_dst and r_dir intact
 #   globe_history/, traces/  per-aircraft traces, likewise
-# The four allowed are the two rewritten above and two counters-only files.
-# The public receiver.json also turns binCraft, zstd, outlineJson and history
-# off, so tar1090's own page asks for none of them.
+#   stats.json             readsb's statistics, which include figures
+#                          measured from the receiver's position; neither
+#                          the page nor tar1090's own page reads it (2026-10-26)
+# The three allowed are the two rewritten above and status.json (the time and
+# readsb's uptime). The public receiver.json also turns binCraft, zstd,
+# outlineJson and history off, so tar1090's own page asks for none of them.
 TAR1090_PRIVATE_PREFIXES = ("/tar1090/data", "/tar1090/chunks", "/tar1090/globe_history")
 TAR1090_PUBLIC_FILES = frozenset({"/tar1090/data/aircraft.json", "/tar1090/data/receiver.json",
-                                  "/tar1090/data/stats.json", "/tar1090/data/status.json"})
+                                  "/tar1090/data/status.json"})
 PUBLIC_RECEIVER_FLAGS = {"binCraft": False, "zstd": False, "outlineJson": False, "history": 0}
 COORD_PRECISION = 2  # decimal places -- ~0.7mi at this latitude
 
@@ -92,7 +99,15 @@ LOCAL_ONLY_PATHS = ("/wake", "/setup", "/tts", "/photo", "/data/notable-people",
 # approach heatmap, which is months of accumulated data.
 #
 # Reads stay open, because the page itself needs them from public viewers.
+# A write to one of these is answered 403, which is what the page's storeWrite
+# stops on (#67); every other path answers a write 405 (PUBLIC_METHODS).
 READ_ONLY_PUBLIC_PATHS = ("/sightings", "/approaches", "/network", "/api")
+
+# The only methods the public address answers (2026-10-26), apart from a
+# browser's POST to /csp-report. The public page and the app away from home
+# only ever read, and the rewrites below are for reads: a HEAD goes through
+# the same rewrite as a GET and gets its headers without the body.
+PUBLIC_METHODS = ("GET", "HEAD")
 
 # A future edit that empties or mistypes this list would silently expose the
 # device's privileged endpoints to the public internet. Fail loudly instead.
@@ -139,6 +154,91 @@ def strip_owners(data):
                     if k in a:
                         a[k] = None
     return data
+
+
+def round_receiver(data):
+    """receiver.json at COORD_PRECISION, telling tar1090 to ask for none of
+    the refused files."""
+    if isinstance(data, dict):
+        for key in ("lat", "lon"):
+            if isinstance(data.get(key), (int, float)):
+                data[key] = round(data[key], COORD_PRECISION)
+        data.update(PUBLIC_RECEIVER_FLAGS)
+    return data
+
+
+# ---- what is measured from the receiver's position (2026-10-26) -------------
+# Close passes ("nearby") are counted against the radar's exact position, and
+# the sighting store's 'far' and 'near' records are ranges from it. Public
+# answers carry neither: close-pass counts are emptied (null, as owners are,
+# so the shapes stay), and the range records are whole nautical miles with
+# no aircraft and no time. The core feed's ring counts are emptied too, and
+# core-feed.py and network-compare.py now work their rings out from the
+# rounded position anyway. The radar's own screens and the phone at home
+# read these services directly and keep all of it.
+RANGE_RECORDS = ("far", "near")
+
+
+def _empty_nearby(d):
+    if isinstance(d, dict) and "nearby" in d:
+        d["nearby"] = None
+
+
+def public_core_feed(data):
+    """The core feed for a public viewer: no owners, no ring counts, no
+    close-pass counts."""
+    data = strip_owners(data)
+    if isinstance(data, dict):
+        if "counts" in data:
+            data["counts"] = None
+        for a in data.get("aircraft") if isinstance(data.get("aircraft"), list) else ():
+            if isinstance(a, dict):
+                _empty_nearby(a.get("sightings"))
+    return data
+
+
+def public_sighting_counts(data):
+    """GET /sightings for a public viewer: each aircraft's visits, no close passes."""
+    if isinstance(data, dict):
+        for v in data.values():
+            _empty_nearby(v)
+    return data
+
+
+def public_sighting_summary(data):
+    """/sightings/stats or /sightings/year for a public viewer."""
+    if not isinstance(data, dict):
+        return data
+    _empty_nearby(data)
+    for group in ("byOp", "byKind"):
+        if isinstance(data.get(group), dict):
+            for v in data[group].values():
+                _empty_nearby(v)
+    # Today's tally goes whole, its visits with its close passes: the app's
+    # Logbook reads today as two numbers, and fails the whole screen on a null
+    # (LogToday); a missing today it shows as unknown.
+    if "today" in data:
+        data["today"] = None
+    records = data.get("records")
+    if isinstance(records, dict):
+        for k in RANGE_RECORDS:
+            r = records.pop(k, None)
+            v = r.get("v") if isinstance(r, dict) else None
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                records[k] = {"v": float(round(v))}
+    return data
+
+
+# The answers rewritten for public viewers, by the path each is for. A GET or
+# HEAD of any spelling that reaches one is served through its rewrite.
+PUBLIC_REWRITES = {
+    ROUNDED_PATH: round_receiver,
+    STRIPPED_PATH: strip_antenna_relative,
+    CORE_FEED_PATH: public_core_feed,
+    "/sightings": public_sighting_counts,
+    "/sightings/stats": public_sighting_summary,
+    "/sightings/year": public_sighting_summary,
+}
 
 
 def forward_headers(items):
@@ -584,16 +684,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(204)
             self.end_headers()
             return
-        # Public traffic may read the shared stores but never write them.
-        if self.command != "GET" and self._is_read_only_public(self.path):
-            self.send_error(403, "Read-only")
+        # Public traffic only reads (PUBLIC_METHODS), and nothing else is
+        # proxied. The shared stores answer a write 403, as they always did.
+        if self.command not in PUBLIC_METHODS:
+            if self._is_read_only_public(self.path):
+                self.send_error(403, "Read-only")
+            else:
+                self._refuse_method()
             return
-        if self.command == "GET" and self._is_rounded_receiver_json(self.path):
-            self._serve_rounded_receiver_json()
-        elif self.command in ("GET", "HEAD") and self._normalise(self.path) == STRIPPED_PATH:
-            self._serve_stripped_aircraft_json()
-        elif self.command in ("GET", "HEAD") and self._normalise(self.path) == CORE_FEED_PATH:
-            self._serve_public_core_feed()
+        base = self._normalise(self.path)
+        if base in PUBLIC_REWRITES:
+            self._serve_rewritten(base, PUBLIC_REWRITES[base])
         else:
             self._proxy()
 
@@ -637,58 +738,32 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _is_local_only(cls, path):
         return _matches(cls._normalise(path), LOCAL_ONLY_PATHS)
 
-    def _serve_rounded_receiver_json(self):
-        try:
-            with _opener.open(UPSTREAM + self.path, timeout=5) as upstream:
-                data = json.loads(upstream.read())
-        except Exception:
-            self.send_response(502)
-            self.end_headers()
-            return
-
-        for key in ("lat", "lon"):
-            if isinstance(data.get(key), (int, float)):
-                data[key] = round(data[key], COORD_PRECISION)
-        # and nothing that would send tar1090 to the files refused above
-        data.update(PUBLIC_RECEIVER_FLAGS)
-
-        body = json.dumps(data).encode()
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
+    def _refuse_method(self):
+        body = b"Method not allowed\n"
+        self.send_response(405)
+        self.send_header("Allow", ", ".join(PUBLIC_METHODS))
+        self.send_header("Content-Type", "text/plain")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
         self._send_security_headers()
         self.end_headers()
         self.wfile.write(body)
 
-    def _serve_stripped_aircraft_json(self):
+    def _serve_rewritten(self, base, rewrite):
+        """A public GET or HEAD of one of PUBLIC_REWRITES: the upstream answer
+        through its rewrite. Asked for by the path the rewrite is for (and the
+        request's query), not the spelling the client sent, so the answer
+        rewritten is the one that was decided on."""
+        query = self.path.split("#", 1)[0].partition("?")[2]
+        url = UPSTREAM + base + ("?" + query if query else "")
         try:
-            with _opener.open(UPSTREAM + STRIPPED_PATH, timeout=5) as upstream:
-                data = json.loads(upstream.read())
+            req = urllib.request.Request(url, headers={PUBLIC_MARKER: "1"})
+            with _opener.open(req, timeout=10) as upstream:
+                data = rewrite(json.loads(upstream.read()))
         except Exception:
             self.send_response(502)
             self.end_headers()
             return
-        body = json.dumps(strip_antenna_relative(data), separators=(",", ":")).encode()
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self._send_security_headers()
-        self.end_headers()
-        if self.command == "GET":
-            self.wfile.write(body)
-
-    def _serve_public_core_feed(self):
-        """The core feed for a public viewer: the same answer minus owners."""
-        try:
-            with _opener.open(UPSTREAM + self.path, timeout=10) as upstream:
-                data = json.loads(upstream.read())
-        except Exception:
-            self.send_response(502)
-            self.end_headers()
-            return
-        body = json.dumps(strip_owners(data), separators=(",", ":")).encode()
+        body = json.dumps(data, separators=(",", ":")).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
