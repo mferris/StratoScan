@@ -10,7 +10,12 @@ The code for all three is public at
 
 ## The short version
 
-- Your radar's exact location never leaves it.
+- Your radar's exact location never leaves it. Its public page shows its
+  position rounded to about 1 km, and nothing on it is measured from the
+  exact spot: no count of close passes or of the aircraft in its ring, and
+  the farthest and closest contacts only in whole nautical miles, at most a
+  day fresh, without the aircraft or the time (since 2026-10-26). The
+  radar's own screen and the app at home show all of it.
 - The app uses your phone's location only if you ask it to show you on the
   radar, and only on the phone. One exception: with the public network on
   (Settings › Public network, one switch, on by default), away from your
@@ -64,7 +69,9 @@ turn on:
   the radar asks adsb.lol for the aircraft near it, sending its location
   rounded to about 1 km, whenever a screen that shows the network's aircraft
   is open: its own, the public page, or the app with the public network on.
-  Asked at most once every few seconds however many screens are open.
+  Asked at most once every few seconds however many screens are open. The
+  ring it compares, its counts and the scorecard's bearings are worked out
+  from that rounded location too.
 - **Its public web address, checked** (only while the public address is on):
   every ten minutes the radar asks a public DNS service whether its public
   name still resolves. It asks over HTTPS (DNS over HTTPS), Cloudflare's
@@ -80,7 +87,14 @@ turn on:
   FlightAware account, not here.
 - **Map tiles, routes, photos and weather** are fetched from the public
   services credited on the radar and in the app. Like any web request,
-  they see an IP address and the area or aircraft being looked up.
+  they see an IP address and the area or aircraft being looked up. The
+  area is the radar's location rounded to about 5 km (0.05°), never the
+  location itself: the weather, and the lightning alert, which while it is
+  on asks SSEC's RealEarth about that area every two minutes (since
+  2026-10-26). The radar's own screen and browsers at home load the page's
+  two typefaces from Google Fonts, which sees their IP address; the public
+  page doesn't load them, and tells the services it uses nothing about the
+  page that asked (no referrer).
 - **Runway outlines** (since 2026-10-26): about once a month the radar asks
   OpenStreetMap's Overpass service for the runways and taxiways in a box
   about 45 nm across, centred on its location rounded to about 5 km. It
@@ -129,6 +143,9 @@ significant-change service: roughly every 500 m or more, which needs the
 your radar**: the app seals it with your radar's own key, which it checks
 against the identity it learned when you paired, so the StratoScan relay
 that carries it only ever stores an unreadable blob, for at most 6 hours.
+Only radars this phone paired itself get it: if the relay ever lists a
+radar the phone didn't pair, no radar gets the location until you settle
+it in Settings (since 2026-10-26). The pairing question says so.
 Your radar decrypts it, keeps it in memory to run the prediction, and
 never writes it down, logs it or sends it on. The alert itself names the
 aircraft and when it will pass, not how far or which way from you; but an
