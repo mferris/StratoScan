@@ -37,18 +37,27 @@ import shutil
 import shlex
 import socket
 import socketserver
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 
 SOCK_PATH = "/run/stratoscan/setupd.sock"
 RUN_DIR = "/run/stratoscan"
+# The web tier's directory: group-writable for it by design, and systemd
+# can hand everything in it to the web tier's user when that starts. So
+# root never trusts a name in there (security review 2026-10-26): it writes
+# only by renaming a fresh file into place, reads without following a link,
+# and checks what it reads back. Its own files live in PRIVATE_DIR.
 STATE_DIR = "/var/lib/stratoscan-setup"
-PENDING = os.path.join(STATE_DIR, "pending.json")
-LOCK = os.path.join(STATE_DIR, "lock")
+PRIVATE_DIR = "/var/lib/stratoscan-setupd"
+PENDING = os.path.join(STATE_DIR, "pending.json")    # stays: net-watchdog looks for it there
+LOCK = os.path.join(RUN_DIR, "setupd.lock")
 READSB_DEFAULT = "/etc/default/readsb"
-READSB_ORIG = os.path.join(STATE_DIR, "readsb.default.orig")
-READSB_BACKUP = os.path.join(STATE_DIR, "readsb.fr-backup")
+READSB_ORIG = os.path.join(PRIVATE_DIR, "readsb.default.orig")
+READSB_BACKUP = os.path.join(PRIVATE_DIR, "readsb.fr-backup")
+HOTSPOT_PSK = os.path.join(PRIVATE_DIR, "hotspot-psk")
 CONFIG_JSON = "/var/www/html/config.json"
 OFFLINE_MAP_DIR = "/var/www/html/offline-map"
 OFFLINE_MAP = "/opt/stratoscan/offline-map.py"
@@ -74,6 +83,7 @@ SYSTEMCTL = "/usr/bin/systemctl"
 LAT_MIN, LAT_MAX = -90.0, 90.0
 LON_MIN, LON_MAX = -180.0, 180.0
 
+RE_UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 RE_TS_HOSTNAME = re.compile(r"^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$")
 RE_TS_AUTHKEY = re.compile(r"^tskey-[A-Za-z0-9_-]{10,200}$")
 RE_ATC_MOUNT = re.compile(r"^[a-z0-9][a-z0-9_-]{2,39}$")
@@ -116,16 +126,26 @@ def atomic_write(path, data, mode=0o600):
 
     Without the directory fsync a power cut can leave the rename unrecorded,
     which for /etc/default/readsb means the receiver may not start.
+
+    The temporary file is a new one each time (mkstemp: O_EXCL, no link
+    followed) and its mode is set on the open file, not by name (2026-10-26).
+    It had one fixed name, and in STATE_DIR a link left at that name would
+    have been written through.
     """
     d = os.path.dirname(path)
     os.makedirs(d, exist_ok=True)
-    tmp = os.path.join(d, f".{os.path.basename(path)}.tmp")
-    with open(tmp, "w") as f:
-        f.write(data)
-        f.flush()
-        os.fsync(f.fileno())
-    os.chmod(tmp, mode)
-    os.replace(tmp, path)
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=f".{os.path.basename(path)}.")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(data)
+            f.flush()
+            os.fchmod(f.fileno(), mode)
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
     dfd = os.open(d, os.O_DIRECTORY)
     try:
         os.fsync(dfd)
@@ -133,10 +153,39 @@ def atomic_write(path, data, mode=0o600):
         os.close(dfd)
 
 
+def read_shared(path, limit=65536):
+    """The text of `path` in a directory the web tier can write, or None.
+
+    Only a plain file with no other name, opened without following a link
+    (2026-10-26): whatever is at that name may have been put there by the
+    web tier, and root must not read through it to a file of its own.
+    """
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError:
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_size > limit:
+            return None
+        data = os.read(fd, limit + 1)
+        return data.decode("utf-8") if len(data) <= limit else None
+    except (OSError, UnicodeDecodeError):
+        return None
+    finally:
+        os.close(fd)
+
+
 @contextlib.contextmanager
 def state_lock():
-    os.makedirs(STATE_DIR, exist_ok=True)
-    with open(LOCK, "w") as f:
+    # In RUN_DIR since 2026-10-26, which only root can write; it was in
+    # STATE_DIR, opened for writing by name, so a link there was followed.
+    os.makedirs(os.path.dirname(LOCK), exist_ok=True)
+    try:
+        fd = os.open(LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    except OSError as e:
+        raise Err("busy", f"the change lock cannot be opened ({e.strerror})")
+    with os.fdopen(fd, "w") as f:
         try:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
@@ -330,6 +379,36 @@ def strip_readsb_location(text):
     return "\n".join(out) + "\n"
 
 
+# Comments, blank lines and NAME="options" (or 'options', or a bare word)
+# with nothing in them that could end the quoting: all an
+# /etc/default/readsb needs to hold.
+RE_READSB_LINE = re.compile(r'''^\s*(#.*)?$|^\s*[A-Z_][A-Z0-9_]*=("[^"'`$\\]*"|'[^']*'|[^\s"'`$\\;&|<>()]*)\s*$''')
+
+
+def v_readsb_file(text):
+    """`text` if it reads as an /etc/default/readsb and nothing else.
+
+    The saved original is restored on a reset. Until 2026-10-26 it was kept
+    where the web tier could rewrite it and was restored verbatim, so it is
+    checked line by line before root writes it back.
+    """
+    if not isinstance(text, str) or len(text) > 16384:
+        raise Err("readsb_unsafe_token", "not a readsb options file")
+    for line in text.splitlines():
+        if not RE_READSB_LINE.match(line):
+            raise Err("readsb_unsafe_token", "refusing to restore an unsafe option")
+    return text
+
+
+def saved_readsb_original():
+    """The readsb options saved before setup first set a location, or None."""
+    try:
+        with open(READSB_ORIG) as f:
+            return v_readsb_file(f.read())
+    except (OSError, UnicodeDecodeError, Err):
+        return None
+
+
 def restart_readsb_or_rollback(previous):
     """Restart readsb; restore the previous file if it does not come back.
 
@@ -453,11 +532,26 @@ def write_pending(rec):
 
 
 def read_pending():
+    """The unconfirmed WiFi change, or None.
+
+    pending.json is where the web tier can write (net-watchdog looks for it
+    there), and its network id goes to nmcli as root, so it is read with
+    read_shared and checked as it comes back (2026-10-26).
+    """
     try:
-        with open(PENDING) as f:
-            return json.load(f)
-    except Exception:
+        rec = json.loads(read_shared(PENDING) or "null")
+    except ValueError:
         return None
+    if not isinstance(rec, dict) or rec.get("kind") != "wifi":
+        return None
+    try:
+        v_ssid(rec.get("ssid"))
+    except Err:
+        return None
+    known_good = rec.get("knownGoodUuid")
+    if not (isinstance(known_good, str) and RE_UUID.match(known_good)):
+        rec["knownGoodUuid"] = None     # nothing to switch back to, rather than anything
+    return rec
 
 
 def clear_pending():
@@ -610,16 +704,22 @@ def hotspot_start():
     return {"ssid": "StratoScan-Setup", "psk": psk}
 
 
+def v_hotspot_psk(text):
+    psk = v_psk(text.strip()) if isinstance(text, str) else None
+    if psk is None:
+        raise Err("bad_psk", "empty")
+    return psk
+
+
 def hotspot_psk():
     """Stable per-device PSK, so the label/on-screen value stays valid."""
-    path = os.path.join(STATE_DIR, "hotspot-psk")
     try:
-        with open(path) as f:
+        with open(HOTSPOT_PSK) as f:
             return f.read().strip()
     except FileNotFoundError:
         import secrets as _s
         psk = "".join(_s.choice("23456789abcdefghjkmnpqrstuvwxyz") for _ in range(10))
-        atomic_write(path, psk, mode=0o660)
+        atomic_write(HOTSPOT_PSK, psk, mode=0o600)
         return psk
 
 
@@ -1452,9 +1552,8 @@ def reset_settings():
     """
     with contextlib.suppress(FileNotFoundError):
         os.unlink(CONFIG_JSON)
-    if os.path.exists(READSB_ORIG):
-        with open(READSB_ORIG) as f:
-            pristine = f.read()
+    pristine = saved_readsb_original()
+    if pristine is not None:
         atomic_write(READSB_DEFAULT, pristine, mode=0o644)
         os.chown(READSB_DEFAULT, 0, 0)
         run([SYSTEMCTL, "restart", "readsb"], timeout=30)
@@ -1522,9 +1621,11 @@ def reset_full():
     # exist it can carry whoever built the unit's own position. So whatever
     # is restored is stripped of --lat/--lon outright.
     with contextlib.suppress(Exception):
-        source = READSB_ORIG if os.path.exists(READSB_ORIG) else READSB_DEFAULT
-        with open(source) as f:
-            atomic_write(READSB_DEFAULT, strip_readsb_location(f.read()), mode=0o644)
+        original = saved_readsb_original()
+        if original is None:
+            with open(READSB_DEFAULT) as f:
+                original = f.read()
+        atomic_write(READSB_DEFAULT, strip_readsb_location(original), mode=0o644)
         os.chown(READSB_DEFAULT, 0, 0)
     # Restarted, not just rewritten: until readsb restarts it keeps
     # publishing the old position in receiver.json -- which the page, the
@@ -1711,12 +1812,11 @@ def ensure_claim_code():
     """
     import secrets as _s
     try:
-        with open(os.path.join(STATE_DIR, "setup.json")) as f:
-            if json.load(f).get("claimed"):
-                # already owned -- no code, so it cannot be re-claimed
-                with contextlib.suppress(FileNotFoundError):
-                    os.unlink(os.path.join(RUN_DIR, "claim-code"))
-                return None
+        if json.loads(read_shared(os.path.join(STATE_DIR, "setup.json")) or "{}").get("claimed"):
+            # already owned -- no code, so it cannot be re-claimed
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(os.path.join(RUN_DIR, "claim-code"))
+            return None
     except Exception:
         pass  # unreadable state => treat as unclaimed, never as locked out
     # Crockford-style alphabet: no I/L/O/U, so nothing is misread off a screen
@@ -1739,6 +1839,11 @@ def share_state_dir():
     Shared by group instead. The web tier legitimately reads and writes this
     file (claiming, password changes), so group write is the intent, not a
     weakening of it.
+
+    Only setup.json, and through a descriptor opened without following a
+    link (2026-10-26). This used to chown and chmod every name in the
+    directory by name, which follows links, and it opened root's own files
+    in here (now in PRIVATE_DIR) to the web tier as well.
     """
     gid = resolve_gid()
     if not gid:
@@ -1746,17 +1851,49 @@ def share_state_dir():
     with contextlib.suppress(Exception):
         os.chown(STATE_DIR, 0, gid)
         os.chmod(STATE_DIR, 0o2770)   # setgid: new files inherit the group
-    for name in os.listdir(STATE_DIR):
-        path = os.path.join(STATE_DIR, name)
-        with contextlib.suppress(Exception):
-            if os.path.isfile(path):
-                os.chown(path, os.stat(path).st_uid, gid)
-                os.chmod(path, 0o660)
+    with contextlib.suppress(OSError):
+        fd = os.open(os.path.join(STATE_DIR, "setup.json"),
+                     os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        try:
+            st = os.fstat(fd)
+            if stat.S_ISREG(st.st_mode) and st.st_nlink == 1:
+                os.fchown(fd, st.st_uid, gid)
+                os.fchmod(fd, 0o660)
+        finally:
+            os.close(fd)
+
+
+def take_private_files():
+    """Make PRIVATE_DIR (root only) and carry root's own files into it.
+
+    They were in STATE_DIR until 2026-10-26, where the web tier could write
+    every one of them, so each is carried over only if it is a plain file
+    whose contents pass its check. The old names go either way.
+    """
+    os.makedirs(PRIVATE_DIR, mode=0o700, exist_ok=True)
+    os.chmod(PRIVATE_DIR, 0o700)
+    for name, dest, check in (("readsb.default.orig", READSB_ORIG, v_readsb_file),
+                              ("hotspot-psk", HOTSPOT_PSK, v_hotspot_psk),
+                              ("readsb.fr-backup", None, None),
+                              ("lock", None, None)):
+        old = os.path.join(STATE_DIR, name)
+        text = read_shared(old) if dest else None
+        if text is not None and not os.path.exists(dest):
+            with contextlib.suppress(Err):
+                atomic_write(dest, check(text), mode=0o600)
+        for leftover in (old, os.path.join(STATE_DIR, f".{name}.tmp")):
+            with contextlib.suppress(OSError):
+                os.unlink(leftover)
 
 
 def main():
     os.makedirs(RUN_DIR, mode=0o700, exist_ok=True)
     os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+    try:
+        take_private_files()
+    except OSError as e:
+        # Not a reason to stay down: this is the recovery path for the network.
+        print(f"setupd: could not move its own files out of {STATE_DIR}: {e}", flush=True)
     share_state_dir()
     code = ensure_claim_code()
     if code:
