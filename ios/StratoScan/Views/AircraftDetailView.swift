@@ -172,7 +172,7 @@ struct AircraftDetailView: View {
         }
         if let s = p.sightings {
             rows.append(("Sightings", "\(s.total)"))
-            rows.append(("Within 2 mi", "\(s.nearby)"))
+            if let n = s.nearby { rows.append(("Within 2 mi", "\(n)")) }
         }
         return VStack(spacing: 10) {
             ForEach(rows, id: \.0) { row in

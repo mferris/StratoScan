@@ -45,7 +45,9 @@ struct FeedRare: Decodable {
 }
 /// How many times this radar has picked it up, and how many came within
 /// the nearby-alert radius (the sighting store's counts, #77).
-struct FeedSightings: Decodable { let total: Int; let nearby: Int }
+/// `nearby` is nil on the radar's public address, which leaves out what is
+/// measured from the antenna's exact spot (security review 2026-10-26).
+struct FeedSightings: Decodable { let total: Int; let nearby: Int? }
 
 /// Raw shape of one entry in aircraft.json, decoded permissively — most
 /// fields are optional since readsb omits whatever it hasn't received yet.
