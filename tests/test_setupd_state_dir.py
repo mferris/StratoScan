@@ -6,7 +6,9 @@ which can put anything at any name in it, and systemd hands everything in it
 to the web tier's user whenever that starts. So root keeps its own files in
 a directory of its own, and in the shared one it never writes through a
 name, never reads through a link, never changes a file's owner or mode by
-name, and checks what it reads back.
+name, and checks what it reads back. Its files in the old place it carries
+over once, on the first start, and a saved readsb original it restores
+holds readsb's own options and nothing else.
 
 These run setupd's own code against a temporary directory laid out as the
 web tier could leave it. (They run as an ordinary user; the links point at
@@ -139,6 +141,32 @@ check(stat.S_IMODE(own.stat().st_mode) == 0o600, "and nothing else in there is o
 take = getattr(d, "take_private_files", None)
 check(take is not None, "setupd carries its own files out of the shared directory at start")
 ORIG = 'RECEIVER_OPTIONS="--device 0 --gain -10"\nDECODER_OPTIONS="--max-range 450 --write-json-every 1"\n'
+# What setupd may restore into /etc/default/readsb: readsb's own four option
+# variables, and nothing else (2026-10-26). The file is readsb.service's
+# EnvironmentFile, and that unit runs radio-select.py as root first.
+STOCK = ('# readsb configuration\n\n'
+         'RECEIVER_OPTIONS="--device 0 --device-type rtlsdr --gain auto --ppm 0"\n'
+         'DECODER_OPTIONS="--max-range 450 --write-json-every 1"\n'
+         'NET_OPTIONS="--net --net-bind-address 127.0.0.1 --net-ri-port 30001 --net-ro-port 30002"\n'
+         'JSON_OPTIONS="--json-location-accuracy 2 --range-outline-hours 24"\n')
+NOT_READSB = (("a link in its place", None),
+              ("unsafe options", 'DECODER_OPTIONS="--lat 1 $(id)"\n'),
+              ("a Python variable", ORIG + 'PYTHONPATH=/var/lib/stratoscan-setup\n'),
+              ("a library preload", 'LD_PRELOAD=/var/lib/stratoscan-setup/x.so\n' + ORIG),
+              ("radio-select's own settings", ORIG + 'STRATOSCAN_RADIOS_FILE="/var/lib/stratoscan-setup/r.json"\n'),
+              ("any other variable", ORIG + 'ENABLED=yes\n'))
+
+
+def fresh_private():
+    """A new PRIVATE_DIR, as on the first start of a setupd that has one."""
+    global priv
+    priv = pathlib.Path(tempfile.mkdtemp(dir=tmp)) / "private"
+    d.PRIVATE_DIR = str(priv)
+    d.READSB_ORIG = str(priv / "readsb.default.orig")
+    d.READSB_BACKUP = str(priv / "readsb.fr-backup")
+    d.HOTSPOT_PSK = str(priv / "hotspot-psk")
+
+
 if take:
     (state / "readsb.default.orig").write_text(ORIG)
     (state / "hotspot-psk").write_text("23456789ab")
@@ -153,13 +181,33 @@ if take:
     check(not any((state / n).exists() for n in ("readsb.default.orig", "hotspot-psk", "readsb.fr-backup", "lock")),
           "and gone from the shared directory")
     check(d.hotspot_psk() == "23456789ab", "the hotspot keeps its password (the label stays right)")
-    for label, setup in (("a link", lambda p: p.symlink_to(victim("orig-elsewhere", ORIG))),
-                         ("unsafe options", lambda p: p.write_text('DECODER_OPTIONS="--lat 1 $(id)"\n'))):
-        (priv / "readsb.default.orig").unlink(missing_ok=True)
-        setup(state / "readsb.default.orig")
+    for label, body in NOT_READSB:
+        fresh_private()
+        if body is None:
+            (state / "readsb.default.orig").symlink_to(victim("orig-elsewhere", ORIG))
+        else:
+            (state / "readsb.default.orig").write_text(body)
         take()
         check(not (priv / "readsb.default.orig").exists() and not os.path.lexists(state / "readsb.default.orig"),
-              "a saved original that is %s is not carried over, and is removed" % label)
+              "a saved original with %s is not carried over, and is removed" % label)
+    fresh_private()
+    (state / "readsb.default.orig").write_text(STOCK)
+    take()
+    check((priv / "readsb.default.orig").read_text() == STOCK,
+          "readsb's stock options, comments and all, are carried over")
+
+    # Once: on the first start that has PRIVATE_DIR, and never after. A unit
+    # located by hand has no saved original, so one that turns up in the
+    # shared directory later was not left there by setupd.
+    fresh_private()
+    take()
+    (state / "readsb.default.orig").write_text(ORIG)
+    (state / "hotspot-psk").write_text("23456789ab")
+    take()
+    check(not (priv / "readsb.default.orig").exists() and not (priv / "hotspot-psk").exists(),
+          "files that turn up in the shared directory after the first start are never carried over")
+    check(not os.path.lexists(state / "readsb.default.orig") and not os.path.lexists(state / "hotspot-psk"),
+          "and are removed")
 
 # ---- restoring the saved original on a reset ---------------------------------------
 calls = []
@@ -176,7 +224,9 @@ d.CONFIG_JSON = str(tmp / "config.json")
 d.READSB_DEFAULT = str(tmp / "readsb")
 current = 'DECODER_OPTIONS="--lat 35.87760 --lon -78.78750 --max-range 450"\n'
 for label, saved, want in (("unsafe options", 'DECODER_OPTIONS="--max-range 450"\nX=`id`\n', current),
-                           ("a sound original", ORIG, ORIG)):
+                           ("a variable that is not readsb's", 'DECODER_OPTIONS="--max-range 450"\nPYTHONPATH=/tmp\n', current),
+                           ("a sound original", ORIG, ORIG),
+                           ("readsb's stock options", STOCK, STOCK)):
     pathlib.Path(d.READSB_DEFAULT).write_text(current)
     pathlib.Path(d.READSB_ORIG).write_text(saved)
     d.reset_settings()
@@ -185,6 +235,17 @@ for label, saved, want in (("unsafe options", 'DECODER_OPTIONS="--max-range 450"
 pathlib.Path(d.READSB_ORIG).write_text('DECODER_OPTIONS="--lat 1 $(id)"\n')
 check(d.saved_readsb_original() is None if hasattr(d, "saved_readsb_original") else False,
       "a saved original is checked line by line before root writes it back")
+for label, body in NOT_READSB[1:]:
+    pathlib.Path(d.READSB_ORIG).write_text(body)
+    check(d.saved_readsb_original() is None if hasattr(d, "saved_readsb_original") else False,
+          "a saved original with %s is never written back" % label)
+
+# ---- root's python3 before readsb ---------------------------------------------------
+# radio-select.py runs as root with readsb.service's environment, which
+# /etc/default/readsb sets: isolated, so no PYTHON* variable there counts.
+dropin = (ROOT / "deploy" / "readsb-stratoscan-radio.conf").read_text()
+pre = [l for l in dropin.splitlines() if l.startswith("ExecStartPre=") and "python3" in l]
+check(pre and all(" -I " in l for l in pre), "readsb's drop-in runs root's python3 isolated (-I)")
 
 print("setupd state checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)
