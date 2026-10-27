@@ -27,7 +27,7 @@ ss.time.time = lambda: clock[0]
 ss._fail.clear()
 ss._fail_all.update(count=0, until=0.0, window=clock[0])
 
-ATTACKER, OWNER = "192.168.4.50", "192.168.4.20"
+ATTACKER, OWNER = "192.168.1.50", "192.168.1.23"
 for _ in range(8):
     ss.note_failure(ATTACKER)
 check(ss.throttled(ATTACKER), "eight failures throttle that address")

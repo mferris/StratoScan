@@ -491,7 +491,7 @@ def hotspot_address():
 
     Never hardcode this. NetworkManager's shared mode hands out 10.42.0.1 by
     default, but it is configurable and can differ -- and the first version of
-    the setup screen printed a hardcoded 192.168.4.1, which was simply the
+    the setup screen printed a hardcoded address, which was simply the
     development network's router. Anyone following it reached nothing.
     """
     a = run([NMCLI, "-t", "-f", "IP4.ADDRESS", "device", "show", "wlan0"], timeout=15)
