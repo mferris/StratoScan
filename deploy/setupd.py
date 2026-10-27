@@ -379,10 +379,13 @@ def strip_readsb_location(text):
     return "\n".join(out) + "\n"
 
 
-# Comments, blank lines and NAME="options" (or 'options', or a bare word)
-# with nothing in them that could end the quoting: all an
-# /etc/default/readsb needs to hold.
-RE_READSB_LINE = re.compile(r'''^\s*(#.*)?$|^\s*[A-Z_][A-Z0-9_]*=("[^"'`$\\]*"|'[^']*'|[^\s"'`$\\;&|<>()]*)\s*$''')
+# Comments, blank lines and readsb's four option variables, each "options"
+# (or 'options', or a bare word) with nothing in them that could end the
+# quoting: all an /etc/default/readsb needs to hold. Those four names and no
+# others (2026-10-26): the file is readsb.service's EnvironmentFile, so any
+# variable in it reaches every program that unit starts, and one of those is
+# radio-select.py, run as root before readsb.
+RE_READSB_LINE = re.compile(r'''^\s*(#.*)?$|^\s*(RECEIVER|DECODER|NET|JSON)_OPTIONS=("[^"'`$\\]*"|'[^']*'|[^\s"'`$\\;&|<>()]*)\s*$''')
 
 
 def v_readsb_file(text):
@@ -1871,26 +1874,34 @@ def share_state_dir():
 
 
 def take_private_files():
-    """Make PRIVATE_DIR (root only) and carry root's own files into it.
+    """Make PRIVATE_DIR (root only) and carry root's own files into it, once.
 
     They were in STATE_DIR until 2026-10-26, where the web tier could write
     every one of them, so each is carried over only if it is a plain file
-    whose contents pass its check. The old names go either way.
+    whose contents pass its check, and only on the first start that has
+    PRIVATE_DIR. Anything at those names later was not left there by an
+    earlier setupd, so it is never taken (a unit with no saved original, one
+    located by hand, would otherwise take one on every start). The old names
+    go either way.
     """
     os.makedirs(PRIVATE_DIR, mode=0o700, exist_ok=True)
     os.chmod(PRIVATE_DIR, 0o700)
+    carried = os.path.join(PRIVATE_DIR, "carried-over")
+    first = not os.path.exists(carried)
     for name, dest, check in (("readsb.default.orig", READSB_ORIG, v_readsb_file),
                               ("hotspot-psk", HOTSPOT_PSK, v_hotspot_psk),
                               ("readsb.fr-backup", None, None),
                               ("lock", None, None)):
         old = os.path.join(STATE_DIR, name)
-        text = read_shared(old) if dest else None
+        text = read_shared(old) if dest and first else None
         if text is not None and not os.path.exists(dest):
             with contextlib.suppress(Err):
                 atomic_write(dest, check(text), mode=0o600)
         for leftover in (old, os.path.join(STATE_DIR, f".{name}.tmp")):
             with contextlib.suppress(OSError):
                 os.unlink(leftover)
+    if first:
+        atomic_write(carried, "", mode=0o600)
 
 
 def main():
