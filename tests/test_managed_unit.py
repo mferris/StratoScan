@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """A managed (gift) unit's hardening (security review 2026-10-04, items 6
-and 8): SSH only over the tailnet, the shared stores written only from
-private addresses, a narrow sudo rule for the maintainer's login and one
-SSH key per fleet -- and none of it unless the installer is told MANAGED=1."""
+and 8): SSH only over the tailnet, a narrow sudo rule for the maintainer's
+login and one SSH key per fleet -- and none of it unless the installer is
+told MANAGED=1. Writes to the shared stores only from private addresses
+were part of it; they are on every unit since 2026-10-26 (test_lan_hosts.py)."""
 import os
 import re
 import sys
@@ -42,9 +43,12 @@ inst = open(os.path.join(D, "install-setup-server.sh")).read()
 block = inst.split('if [ "${MANAGED:-0}" = "1" ]; then', 1)
 check(len(block) == 2, "the installer has a MANAGED=1 block")
 managed = block[1].split("\nfi\n\n", 1)[0] if len(block) == 2 else ""
-for needle in ("stratoscan-managed.nft", "nft -c -f /etc/nftables.conf", "92-stratoscan-managed-writes.conf",
+for needle in ("stratoscan-managed.nft", "nft -c -f /etc/nftables.conf",
                "visudo -cf", "rm -f /etc/sudoers.d/010_pi-nopasswd", 'deluser "$M" sudo', "grep -qxF \"$MAINTAINER_PUBKEY\""):
     check(needle in managed, "the block does: %s" % needle)
+check("92-stratoscan-managed-writes.conf" not in managed and "lighttpd_conf \"$c\"" in block[0]
+      and "92-stratoscan-managed-writes.conf" in block[0].split("lighttpd_conf \"$c\"")[0].rsplit("for c in", 1)[-1],
+      "the stores' private-address rule is installed on every unit, not in the block")
 before = "\n".join(l for l in block[0].split("== managed unit")[0].splitlines() if not l.lstrip().startswith("#"))
 check("MANAGED" not in before, "nothing before the block depends on MANAGED")
 doc = open(os.path.join(ROOT, "docs", "gifting-a-unit.md")).read()
