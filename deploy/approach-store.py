@@ -22,7 +22,8 @@ GET  /approaches  -> [[lon, lat, landings], ...], one per square, at its
                      centre. A page from before the grid reads the third
                      number as an altitude and still draws the squares.
 POST /approaches  -> one landing: {"hex": "a1b2c3", "points": [[lon, lat], ...]}
-                     (a bare [[lon, lat], ...] from an older page is taken too)
+                     (a bare [[lon, lat], ...] from an older page is taken too),
+                     as JSON from the radar's own page (write_refused)
 
 Every open viewer (kiosk, phone, laptop) reports the landings it sees. The
 same aircraft reported again within DEDUPE_S counts once, so two browsers do
@@ -41,6 +42,7 @@ import signal
 import sys
 import threading
 import time
+import urllib.parse
 
 LISTEN = ("127.0.0.1", 8082)
 STORE_PATH = os.path.join(os.environ.get("STATE_DIRECTORY", "."), "approaches.json")
@@ -63,6 +65,43 @@ V1_TRACK_GAP_KM = 2.0
 # and the whole body gets read into memory before any validation happens.
 MAX_BODY_BYTES = 200_000
 HEX_RE = re.compile(r"^~?[0-9a-f]{6}$")
+
+# Who may write (security review 2026-10-26): the radar's own page, and
+# programs on the radar. A browser sends another site's POST with a plain
+# content type without asking first, so only JSON is taken, which makes it
+# ask (and nothing here answers). A page that asks anyway names its site in
+# Origin: only the radar's own may write, the address the request was sent
+# to or the kiosk's localhost. No Origin means no web page sent it. And the
+# address has to be a name the radar is reached by, the same ones lighttpd
+# answers to (84-stratoscan-hosts.conf), never a name of some other site's.
+RADAR_HOST_RE = re.compile(r"(?i)^(|[0-9]{1,3}(\.[0-9]{1,3}){3}|\[[0-9a-f:.]+\]|[a-z0-9-]+|([a-z0-9-]+\.)+(local|localhost|ts\.net|home\.arpa|internal|lan|home|localdomain|fritz\.box))\.?(:[0-9]{1,5})?$")
+LOOPBACK = ("localhost", "127.0.0.1", "::1")
+
+
+def _host_port(netloc):
+    u = urllib.parse.urlsplit("//" + netloc)
+    return (u.hostname or "").rstrip("."), u.port
+
+
+def write_refused(headers):
+    """The status that refuses this write, or None to take it."""
+    ctype = (headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+    if ctype != "application/json":
+        return 415
+    host = (headers.get("Host") or "").strip()
+    if not RADAR_HOST_RE.fullmatch(host):
+        return 403
+    origin = headers.get("Origin")
+    if origin is None:
+        return None
+    try:
+        o = urllib.parse.urlsplit(origin)
+        if o.scheme in ("http", "https") and o.hostname and (
+                o.hostname in LOOPBACK or _host_port(o.netloc) == _host_port(host)):
+            return None
+    except ValueError:
+        pass
+    return 403              # another site, or "null" (a sandboxed page, a file)
 
 lock = threading.Lock()
 _store = None
@@ -258,6 +297,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         global _dirty
         if self.path != "/approaches":
             self.send_response(404)
+            self.end_headers()
+            return
+        refused = write_refused(self.headers)
+        if refused:
+            self.send_response(refused)
             self.end_headers()
             return
         length = int(self.headers.get("Content-Length", 0) or 0)

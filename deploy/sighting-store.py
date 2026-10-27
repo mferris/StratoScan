@@ -47,6 +47,8 @@ resolved; this end only stores and aggregates what it is told.
                             Returns the updated {"total": N, "nearby": M}.
                          -> or body {"batch": [{"hex": ..., "class": {...}}, ...]}
                             to classify many at once.
+                            Either as JSON from the radar's own page
+                            (write_refused).
 
 The store lives in memory and is written to disk at most every
 FLUSH_INTERVAL seconds, plus on shutdown. It used to be re-read and rewritten
@@ -71,6 +73,7 @@ import signal
 import sys
 import threading
 import time
+import urllib.parse
 
 LISTEN = ("127.0.0.1", 8083)
 STORE_PATH = os.path.join(os.environ.get("STATE_DIRECTORY", "."), "sightings.json")
@@ -109,6 +112,43 @@ MAX_UNCLASSIFIED = 400   # hexes handed out per request, so the page works in bo
 # A batch is bigger than a single increment by design; still bounded, and the
 # gateway refuses public writes regardless.
 MAX_BATCH_BYTES = 64000
+
+# Who may write (security review 2026-10-26): the radar's own page, and
+# programs on the radar. A browser sends another site's POST with a plain
+# content type without asking first, so only JSON is taken, which makes it
+# ask (and nothing here answers). A page that asks anyway names its site in
+# Origin: only the radar's own may write, the address the request was sent
+# to or the kiosk's localhost. No Origin means no web page sent it. And the
+# address has to be a name the radar is reached by, the same ones lighttpd
+# answers to (84-stratoscan-hosts.conf), never a name of some other site's.
+RADAR_HOST_RE = re.compile(r"(?i)^(|[0-9]{1,3}(\.[0-9]{1,3}){3}|\[[0-9a-f:.]+\]|[a-z0-9-]+|([a-z0-9-]+\.)+(local|localhost|ts\.net|home\.arpa|internal|lan|home|localdomain|fritz\.box))\.?(:[0-9]{1,5})?$")
+LOOPBACK = ("localhost", "127.0.0.1", "::1")
+
+
+def _host_port(netloc):
+    u = urllib.parse.urlsplit("//" + netloc)
+    return (u.hostname or "").rstrip("."), u.port
+
+
+def write_refused(headers):
+    """The status that refuses this write, or None to take it."""
+    ctype = (headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+    if ctype != "application/json":
+        return 415
+    host = (headers.get("Host") or "").strip()
+    if not RADAR_HOST_RE.fullmatch(host):
+        return 403
+    origin = headers.get("Origin")
+    if origin is None:
+        return None
+    try:
+        o = urllib.parse.urlsplit(origin)
+        if o.scheme in ("http", "https") and o.hostname and (
+                o.hostname in LOOPBACK or _host_port(o.netloc) == _host_port(host)):
+            return None
+    except ValueError:
+        pass
+    return 403              # another site, or "null" (a sandboxed page, a file)
 
 lock = threading.Lock()
 _store = None   # loaded on first use; see current()
@@ -601,6 +641,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path.split("?", 1)[0].rstrip("/") != "/sightings":
             self.send_response(404)
+            self.end_headers()
+            return
+        refused = write_refused(self.headers)
+        if refused:
+            self.send_response(refused)
             self.end_headers()
             return
         length = int(self.headers.get("Content-Length", 0) or 0)
