@@ -109,6 +109,13 @@ READ_ONLY_PUBLIC_PATHS = ("/sightings", "/approaches", "/network", "/api")
 # the same rewrite as a GET and gets its headers without the body.
 PUBLIC_METHODS = ("GET", "HEAD")
 
+# tar1090's URL parameters that point its page at another server for data or
+# map tiles (aiscatcher_server, droneJson, customTiles; tar1090 reads names
+# case-blind). Nothing on the public page uses them, so a public request
+# carrying one is refused, on any path (2026-10-26). customTiles=remove is
+# tar1090's own way to forget a stored tile address, and stays allowed.
+REFUSED_PARAMS = frozenset({"aiscatcher_server", "dronejson", "customtiles"})
+
 # A future edit that empties or mistypes this list would silently expose the
 # device's privileged endpoints to the public internet. Fail loudly instead.
 assert "/wake" in LOCAL_ONLY_PATHS and "/setup" in LOCAL_ONLY_PATHS \
@@ -229,6 +236,22 @@ def public_sighting_summary(data):
     return data
 
 
+def refused_query(path):
+    """Whether a request's query names one of REFUSED_PARAMS, in any spelling
+    tar1090 would read as that name."""
+    query = path.split("#", 1)[0].partition("?")[2]
+    for name, value in urllib.parse.parse_qsl(query, keep_blank_values=True):
+        for _ in range(4):                      # as _normalise: %255F is still an underscore
+            decoded = urllib.parse.unquote(name)
+            if decoded == name:
+                break
+            name = decoded
+        name = name.strip().casefold()
+        if name in REFUSED_PARAMS and not (name == "customtiles" and value == "remove"):
+            return True
+    return False
+
+
 # The answers rewritten for public viewers, by the path each is for. A GET or
 # HEAD of any spelling that reaches one is served through its rewrite.
 PUBLIC_REWRITES = {
@@ -343,6 +366,42 @@ def page_csp(page):
             _csp_cache.clear()
         _csp_cache[digest] = policy
     return policy
+
+
+# ---- and for tar1090's page (2026-10-26) --------------------------------------
+# tar1090 (/tar1090/, upstream's map) is not ours to rewrite: it has two inline
+# scripts and inline onclick handlers, some written by its own script, so its
+# scripts can't be named by hash as the radar page's are, and 'unsafe-inline'
+# stays. What the policy holds tar1090 to is where it may fetch data from: the
+# radar itself, the photo and route services its own settings use, and the
+# OpenFreeMap and RainViewer layers. No host that serves anyone's uploads is
+# listed (tar1090's optional TFR and special-use airspace overlays load from
+# such hosts, and are left out publicly). Map tiles are images, from many
+# hosts, as on the radar page.
+TAR1090_CSP_DIRECTIVES = (
+    "default-src 'none'",
+    "script-src 'self' 'unsafe-inline'",
+    "worker-src 'self' blob:",              # its JSON worker; OpenLayers' WebGL worker is a blob
+    "child-src 'self' blob:",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self' data:",
+    "img-src 'self' data: blob: https:",
+    "connect-src 'self' https://api.planespotters.net https://adsb.im "
+    "https://tiles.openfreemap.org https://api.rainviewer.com",
+    "media-src 'self'",
+    "manifest-src 'self'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "report-uri /csp-report",
+)
+TAR1090_CSP = "; ".join(TAR1090_CSP_DIRECTIVES)
+
+
+def is_tar1090(base):
+    """Whether a normalised path is tar1090's (its page, its files)."""
+    return base == "/tar1090" or base.startswith("/tar1090/")
 
 
 CSP_HEADER = "Content-Security-Policy" if CSP_ENFORCE else "Content-Security-Policy-Report-Only"
@@ -670,6 +729,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self._is_local_only(self.path) or self._is_tar1090_private(self.path):
             self.send_error(404)  # 404, not 403 -- don't confirm it exists
             return
+        if refused_query(self.path):
+            self.send_error(400, "Parameter refused")
+            return
         if VISITS is not None:
             try:
                 VISITS.record(self.command, self._normalise(self.path), self.headers)
@@ -798,9 +860,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._send_security_headers()
         # Only a GET carries the document the policy is for: a HEAD has no
         # body to hash, and would get a policy with no script hash in it.
-        if (status == 200 and self.command == "GET" and self._normalise(self.path) in PAGE_PATHS
-                and (resp.headers.get("Content-Type") or "").startswith("text/html")):
+        base = self._normalise(self.path)
+        html = (resp.headers.get("Content-Type") or "").startswith("text/html")
+        if status == 200 and self.command == "GET" and base in PAGE_PATHS and html:
             self.send_header(CSP_HEADER, page_csp(body))
+        elif html and is_tar1090(base):
+            self.send_header(CSP_HEADER, TAR1090_CSP)    # one policy, nothing to hash
         self.end_headers()
         self.wfile.write(body)
 

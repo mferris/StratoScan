@@ -9,6 +9,10 @@ beside it said 35.88, -78.79. history and chunk files carry past
 aircraft.json snapshots with r_dst and r_dir intact, and outline.json is the
 range outline drawn around the antenna. stats.json joined them on 2026-10-26.
 
+tar1090's own page, publicly (2026-10-26): its parameters that point it at
+another server are refused, and it gets a Content-Security-Policy that keeps
+its data to the radar and the services its own features use.
+
 Run: python3 tests/test_funnel_gateway_tar1090.py
 """
 import importlib.util
@@ -21,6 +25,9 @@ fg = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fg)
 private = fg.Handler._is_tar1090_private
 rewrites = getattr(fg, "PUBLIC_REWRITES", {})
+refused = getattr(fg, "refused_query", lambda path: False)
+tar1090_csp = getattr(fg, "TAR1090_CSP", "")
+is_tar1090 = getattr(fg, "is_tar1090", lambda base: None)
 
 MUST_BLOCK = [
     "/tar1090/data/aircraft.binCraft.zst", "/tar1090/data/aircraft.binCraft",
@@ -78,6 +85,51 @@ def main():
         if p not in rewrites and p != "/tar1090/data/status.json":
             failures.append(f"allowed but neither rewritten nor known harmless: {p}")
     checks = 1
+
+    # tar1090's parameters that point its page at another server's data or
+    # tiles are refused publicly, in every spelling tar1090 itself would read
+    # (it lowercases names after URLSearchParams has decoded them).
+    for q in ("/tar1090/?aiscatcher_server=https://x.example", "/tar1090/index.html?AISCATCHER_SERVER=x",
+              "/tar1090/?Aiscatcher_Server=x", "/tar1090/?ais%63atcher_server=x", "/tar1090/?aiscatcher%5Fserver=x",
+              "/tar1090/?aiscatcher%255Fserver=x", "/tar1090/?zoom=9&aiscatcher_server=x",
+              "/tar1090/?aiscatcher_server", "/tar1090/?aiscatcher_server=", "/tar1090/?droneJson=https://x.example/d.json",
+              "/tar1090/?dronejson=x", "/tar1090/?customTiles=https://x.example/{z}/{x}/{y}.png",
+              "/tar1090/?CUSTOMTILES=x", "/tar1090?customTiles=x", "/?aiscatcher_server=x",
+              "/tar1090/?customTiles=removex", "/tar1090/?customTiles=remove&aiscatcher_server=x"):
+        checks += 1
+        if not refused(q):
+            failures.append(f"NOT REFUSED: {q!r}")
+    for q in ("/tar1090/", "/tar1090/?zoom=9&lat=35.88&lon=-78.79", "/tar1090/?icao=a1b2c3",
+              "/tar1090/?customTiles=remove", "/", "/?x=aiscatcher_server", "/tar1090/#aiscatcher_server=x",
+              "/api/aircraft?network=1"):
+        checks += 1
+        if refused(q):
+            failures.append(f"wrongly refused: {q!r}")
+
+    # A CSP on tar1090's pages: data only from the radar and the services
+    # tar1090's own features use; never a host that serves anyone's uploads.
+    csp = dict((d.split(" ", 1) + [""])[:2] for d in tar1090_csp.split("; "))
+    connect = csp.get("connect-src", "").split()
+    for want, ok in ((("default-src", "'none'"), csp.get("default-src") == "'none'"),
+                     (("connect-src", "'self'"), "'self'" in connect),
+                     (("connect-src", "no wildcard"), not any(h in ("*", "https:", "http:", "data:") or "*" in h for h in connect)),
+                     (("connect-src", "no upload hosts"), not any("githubusercontent" in h or "arcgis" in h for h in connect)),
+                     (("connect-src", "photos"), "https://api.planespotters.net" in connect),
+                     (("frame-ancestors", "'none'"), csp.get("frame-ancestors") == "'none'"),
+                     (("object-src", "'none'"), csp.get("object-src") == "'none'"),
+                     (("base-uri", "'none'"), csp.get("base-uri") == "'none'"),
+                     (("report-uri", "/csp-report"), csp.get("report-uri") == "/csp-report")):
+        checks += 1
+        if not ok:
+            failures.append(f"tar1090 CSP: {want}")
+    for p in ("/tar1090", "/tar1090/", "/tar1090/index.html", "/TAR1090/", "/x/../tar1090/"):
+        checks += 1
+        if not is_tar1090(fg.Handler._normalise(p)):
+            failures.append(f"not treated as tar1090's page: {p!r}")
+    for p in ("/", "/index.html", "/tar1090x/", "/tar1090.html"):
+        checks += 1
+        if is_tar1090(fg.Handler._normalise(p)):
+            failures.append(f"wrongly treated as tar1090's page: {p!r}")
     n = len(MUST_BLOCK) + len(MUST_ALLOW) + 4 + 2 + checks
     print(f"{n - len(failures)}/{n} tar1090 public-file checks passed")
     for f in failures:
