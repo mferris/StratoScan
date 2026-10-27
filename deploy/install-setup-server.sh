@@ -262,13 +262,13 @@ if [ -e /etc/systemd/system/stratoscan-netwatchdog.timer ]; then
   if live; then systemctl disable --now stratoscan-netwatchdog.timer 2>/dev/null || true; fi
   rm -f /etc/systemd/system/stratoscan-netwatchdog.timer
 fi
-# The last line (2026-10-26): only the radar's own names are answered, and
-# the stores take writes only from private addresses on every unit, not
-# only managed ones.
+# The last line (2026-10-26): only the radar's own names are answered;
+# tar1090 is held to what a radar needs of it; and the stores take writes
+# only from private addresses on every unit, not only managed ones.
 for c in 85-stratoscan-tls.conf 86-stratoscan-nocache.conf 87-stratoscan-uploads.conf 89-stratoscan-photo-proxy.conf 91-stratoscan-approach-store.conf \
          93-stratoscan-sighting-store.conf 94-stratoscan-core.conf 95-stratoscan-network.conf 96-stratoscan-wake.conf \
          97-stratoscan-tts.conf 98-stratoscan-setup.conf 99-stratoscan-captive.conf \
-         84-stratoscan-hosts.conf 92-stratoscan-managed-writes.conf; do
+         84-stratoscan-hosts.conf 88-stratoscan-tar1090.conf 92-stratoscan-managed-writes.conf; do
   lighttpd_conf "$c"
 done
 # Captive portal DNS for the setup hotspot (so phones stop using cellular).
@@ -675,14 +675,16 @@ done
 [ "$fail" = "0" ] || { echo "REFUSING TO FINISH: the public filter is not working"; exit 1; }
 
 echo "== verifying the radar answers only to its own names =="
-# 84-stratoscan-hosts.conf, checked as lighttpd runs it (2026-10-26): what
-# it says to its own name and to any other.
+# 84-stratoscan-hosts.conf and 88-stratoscan-tar1090.conf, checked as lighttpd
+# runs them (2026-10-26): what it says to its own name, to any other, and to
+# a tar1090 link naming a server for it.
 answers() {   # name, path, the status lighttpd must give
   code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' -H "Host: $1" "http://127.0.0.1$2")
   [ "$code" = "$3" ] || { echo "  FAIL: $2 for $1 returned $code, not $3"; fail=1; }
 }
 answers 127.0.0.1 / 200
 answers example.com / 302
+answers 127.0.0.1 '/tar1090/?aiscatcher_server=x' 403
 # And the stores, through lighttpd: the radar's own page reaches them (an
 # empty sighting, refused as one, so nothing is written) and another site's
 # is turned away, which needs lighttpd to pass on the name it was asked for.

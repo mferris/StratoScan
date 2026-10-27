@@ -112,7 +112,7 @@ for store in ("sighting-store.py", "approach-store.py"):
 inst = text(D / "install-setup-server.sh")
 loop = re.search(r"^for c in (.*?); do\n  lighttpd_conf \"\$c\"\ndone", inst, re.M | re.S)
 confs = loop.group(1).replace("\\\n", " ").split() if loop else []
-for c in ("84-stratoscan-hosts.conf", "92-stratoscan-managed-writes.conf"):
+for c in ("84-stratoscan-hosts.conf", "88-stratoscan-tar1090.conf", "92-stratoscan-managed-writes.conf"):
     check(c in confs, "the installer enables %s on every unit" % c)
 managed = inst.split('if [ "${MANAGED:-0}" = "1" ]; then', 1)[-1].split("\nfi\n\n", 1)[0]
 check("92-stratoscan-managed-writes.conf" not in managed,
