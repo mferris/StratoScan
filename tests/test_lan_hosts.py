@@ -77,7 +77,6 @@ own = {
     "MagicDNS's short name, or a router's bare name": "stratoscan-rdu",
     "a router's name under home.arpa": "stratoscan-rdu.home.arpa",
     "a router's name under lan": "stratoscan-rdu.lan",
-    "a router's name under fritz.box": "stratoscan-rdu.fritz.box",
     "localhost with a port": "localhost:8080",
 }
 for what, host in own.items():
@@ -88,7 +87,10 @@ foreign = ["attacker.example", "rebind.attacker.example", "192.168.1.23.attacker
            "localhost.attacker.example", "stratoscan.local.attacker.example", "ts.net.attacker.example",
            "stratoscan.lan.attacker.example", "192.168.1.23.nip.io", "example.com:80", "ts.net",
            "captive.apple.com", "connectivitycheck.gstatic.com", "www.msftconnecttest.com",
-           "detectportal.firefox.com", "x.y.z.example"]
+           "detectportal.firefox.com", "x.y.z.example",
+           # A FRITZ!Box's names, but .box is a public top-level domain and
+           # fritz.box a registered name in it, so anyone could have one.
+           "stratoscan-rdu.fritz.box", "fritz.box"]
 for host in foreign:
     check(not answers(host), "not answered: %r" % host)
 

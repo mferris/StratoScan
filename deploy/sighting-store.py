@@ -121,7 +121,7 @@ MAX_BATCH_BYTES = 64000
 # to or the kiosk's localhost. No Origin means no web page sent it. And the
 # address has to be a name the radar is reached by, the same ones lighttpd
 # answers to (84-stratoscan-hosts.conf), never a name of some other site's.
-RADAR_HOST_RE = re.compile(r"(?i)^(|[0-9]{1,3}(\.[0-9]{1,3}){3}|\[[0-9a-f:.]+\]|[a-z0-9-]+|([a-z0-9-]+\.)+(local|localhost|ts\.net|home\.arpa|internal|lan|home|localdomain|fritz\.box))\.?(:[0-9]{1,5})?$")
+RADAR_HOST_RE = re.compile(r"(?i)^(|[0-9]{1,3}(\.[0-9]{1,3}){3}|\[[0-9a-f:.]+\]|[a-z0-9-]+|([a-z0-9-]+\.)+(local|localhost|ts\.net|home\.arpa|internal|lan|home|localdomain))\.?(:[0-9]{1,5})?$")
 LOOPBACK = ("localhost", "127.0.0.1", "::1")
 
 
