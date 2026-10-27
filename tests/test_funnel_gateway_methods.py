@@ -135,7 +135,9 @@ REWRITTEN = {
     "stats": ["/sightings/stats", "/sightings/stats/", "/SIGHTINGS/stats"],
     "year": ["/sightings/year", "/sightings/year?y=2026"],
 }
-REFUSED = ["/tar1090/data/stats.json", "/tar1090/data/stats.json?x=1", "/./tar1090/data/stats.json"]
+REFUSED = ["/tar1090/data/stats.json", "/tar1090/data/stats.json?x=1", "/./tar1090/data/stats.json",
+           "/tar1090/?aiscatcher_server=https://x.example", "/tar1090/?customTiles=https://x.example/{z}/{x}/{y}.png",
+           "/tar1090/index.html?droneJson=https://x.example/d.json"]
 PASSED = ["/tar1090/data/status.json", "/network", "/network/stats", "/approaches", "/sightings/unclassified",
           "/tar1090/", "/tar1090/index.html", "/", "/index.html"]
 ALL_PATHS = [p for ps in REWRITTEN.values() for p in ps] + REFUSED + PASSED
@@ -158,7 +160,7 @@ for path in ALL_PATHS:
         if found:
             leaked.append("%s %s: %s" % (method, path, found))
         if method in ("GET", "HEAD"):
-            want = (404,) if path in REFUSED else (200,)
+            want = (404,) if "stats.json" in path else (400,) if path in REFUSED else (200,)
             if status not in want:
                 wrong_status.append("%s %s -> %d" % (method, path, status))
         else:
@@ -228,6 +230,10 @@ for name, paths in REWRITTEN.items():
 check(not heads, "a HEAD of a rewritten answer gets its length, not the original's%s" % ("" if not heads else ": %s" % heads))
 
 # ---- the policies ------------------------------------------------------------
+for p in ("/tar1090/", "/tar1090/index.html"):
+    for m in ("GET", "HEAD"):
+        csp = ask(m, p)[1].get("content-security-policy")
+        check(csp is not None and csp == getattr(fg, "TAR1090_CSP", None), "%s %s carries tar1090's policy" % (m, p))
 page_policy = ask("GET", "/")[1].get("content-security-policy") or ""
 check(page_policy.startswith("default-src 'none'") and "'sha256-" in page_policy and "'unsafe-inline'" not in page_policy.split("style-src")[0],
       "the radar page keeps its own hashed policy")
