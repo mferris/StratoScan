@@ -262,9 +262,13 @@ if [ -e /etc/systemd/system/stratoscan-netwatchdog.timer ]; then
   if live; then systemctl disable --now stratoscan-netwatchdog.timer 2>/dev/null || true; fi
   rm -f /etc/systemd/system/stratoscan-netwatchdog.timer
 fi
+# The last line (2026-10-26): only the radar's own names are answered, and
+# the stores take writes only from private addresses on every unit, not
+# only managed ones.
 for c in 85-stratoscan-tls.conf 86-stratoscan-nocache.conf 87-stratoscan-uploads.conf 89-stratoscan-photo-proxy.conf 91-stratoscan-approach-store.conf \
          93-stratoscan-sighting-store.conf 94-stratoscan-core.conf 95-stratoscan-network.conf 96-stratoscan-wake.conf \
-         97-stratoscan-tts.conf 98-stratoscan-setup.conf 99-stratoscan-captive.conf; do
+         97-stratoscan-tts.conf 98-stratoscan-setup.conf 99-stratoscan-captive.conf \
+         84-stratoscan-hosts.conf 92-stratoscan-managed-writes.conf; do
   lighttpd_conf "$c"
 done
 # Captive portal DNS for the setup hotspot (so phones stop using cellular).
@@ -397,7 +401,8 @@ else
 fi
 
 # A MANAGED unit (docs/gifting-a-unit.md): one the maintainer keeps reachable
-# over the tailnet. Security review 2026-10-04, items 6 and 8. Never on RDU
+# over the tailnet. Security review 2026-10-04, item 8 (item 6, the stores'
+# private-address rule, is on every unit since 2026-10-26). Never on RDU
 # or on a radar its owner administers: MANAGED=1 is set only when building
 # a managed radar, and nothing here runs without it.
 echo "== managed unit (MANAGED=${MANAGED:-0}) =="
@@ -416,10 +421,6 @@ if [ "${MANAGED:-0}" = "1" ]; then
     systemctl restart nftables
     echo "  ssh: only over Tailscale (nftables)"
   fi
-  # The shared stores take writes only from private addresses.
-  lighttpd_conf 92-stratoscan-managed-writes.conf
-  lighttpd_test
-  if live; then systemctl reload lighttpd; fi
   # The maintainer's login: a narrow sudo rule in place of NOPASSWD: ALL,
   # and the fleet's own SSH key (one key pair per fleet, MAINTAINER_PUBKEY).
   M=${MAINTAINER_USER:-$KIOSK_USER}
@@ -672,6 +673,28 @@ for p in /setup /./setup /x/../setup /%73etup /wake /%77ake /tts; do
 done
 [ "$fail" = "0" ] && echo "  all privileged paths refused publicly"
 [ "$fail" = "0" ] || { echo "REFUSING TO FINISH: the public filter is not working"; exit 1; }
+
+echo "== verifying the radar answers only to its own names =="
+# 84-stratoscan-hosts.conf, checked as lighttpd runs it (2026-10-26): what
+# it says to its own name and to any other.
+answers() {   # name, path, the status lighttpd must give
+  code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' -H "Host: $1" "http://127.0.0.1$2")
+  [ "$code" = "$3" ] || { echo "  FAIL: $2 for $1 returned $code, not $3"; fail=1; }
+}
+answers 127.0.0.1 / 200
+answers example.com / 302
+# And the stores, through lighttpd: the radar's own page reaches them (an
+# empty sighting, refused as one, so nothing is written) and another site's
+# is turned away, which needs lighttpd to pass on the name it was asked for.
+writes() {    # Origin, the status the sighting store must give
+  code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' -X POST -H 'Host: 10.42.0.1' -H "Origin: $1" \
+         -H 'Content-Type: application/json' --data '{}' "http://127.0.0.1/sightings")
+  [ "$code" = "$2" ] || { echo "  FAIL: a write from $1 returned $code, not $2"; fail=1; }
+}
+writes http://10.42.0.1 400
+writes https://example.com 403
+[ "$fail" = "0" ] && echo "  only its own names answered, and only its own page writes"
+[ "$fail" = "0" ] || { echo "REFUSING TO FINISH: the radar's names or writes are not being checked"; exit 1; }
 
 echo
 echo "Setup page:  http://$(hostname -I | awk '{print $1}')/setup"
