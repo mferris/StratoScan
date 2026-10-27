@@ -179,11 +179,52 @@ def round_receiver(data):
 # the sighting store's 'far' and 'near' records are ranges from it. Public
 # answers carry neither: close-pass counts are emptied (null, as owners are,
 # so the shapes stay), and the range records are whole nautical miles with
-# no aircraft and no time. The core feed's ring counts are emptied too, and
-# core-feed.py and network-compare.py now work their rings out from the
-# rounded position anyway. The radar's own screens and the phone at home
-# read these services directly and keep all of it.
+# no aircraft and no time, from a copy (PublicRangeRecords). The core feed's
+# ring counts are emptied too, and core-feed.py and network-compare.py now
+# work their rings out from the rounded position anyway. The radar's own
+# screens and the phone at home read these services directly and keep all
+# of it.
 RANGE_RECORDS = ("far", "near")
+
+# A range record moves the moment an aircraft beats it, so even in whole
+# nautical miles the live value says when some aircraft crossed a range from
+# the antenna. The public gets a copy taken at most once a day instead, and
+# when a record moved is lost in that day (2026-10-26).
+RANGE_RECORDS_REFRESH_S = 86400
+
+
+def _whole_nm(records):
+    """The range records as whole nautical miles: no aircraft, no time. A
+    record without a number goes altogether."""
+    out = {}
+    for k in RANGE_RECORDS:
+        r = records.get(k)
+        v = r.get("v") if isinstance(r, dict) else None
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            out[k] = {"v": float(round(v))}
+    return out
+
+
+class PublicRangeRecords:
+    """The range records a public viewer sees: a whole-nm copy of the live
+    ones, taken at most once every RANGE_RECORDS_REFRESH_S and shared by
+    /sightings/stats and /sightings/year, which carry the same records."""
+
+    def __init__(self, now=time.monotonic):
+        self.now = now
+        self.lock = threading.Lock()
+        self.copy = None
+        self.taken = 0.0
+
+    def public(self, live):
+        t = self.now()
+        with self.lock:
+            if self.copy is None or t - self.taken >= RANGE_RECORDS_REFRESH_S:
+                self.copy, self.taken = _whole_nm(live), t
+            return {k: dict(v) for k, v in self.copy.items()}
+
+
+PUBLIC_RANGE_RECORDS = PublicRangeRecords()
 
 
 def _empty_nearby(d):
@@ -212,8 +253,9 @@ def public_sighting_counts(data):
     return data
 
 
-def public_sighting_summary(data):
-    """/sightings/stats or /sightings/year for a public viewer."""
+def public_sighting_summary(data, range_records=None):
+    """/sightings/stats or /sightings/year for a public viewer. The range
+    records come from `range_records` (PUBLIC_RANGE_RECORDS unless given)."""
     if not isinstance(data, dict):
         return data
     _empty_nearby(data)
@@ -228,11 +270,8 @@ def public_sighting_summary(data):
         data["today"] = None
     records = data.get("records")
     if isinstance(records, dict):
-        for k in RANGE_RECORDS:
-            r = records.pop(k, None)
-            v = r.get("v") if isinstance(r, dict) else None
-            if isinstance(v, (int, float)) and not isinstance(v, bool):
-                records[k] = {"v": float(round(v))}
+        live = {k: records.pop(k, None) for k in RANGE_RECORDS}
+        records.update((range_records or PUBLIC_RANGE_RECORDS).public(live))
     return data
 
 

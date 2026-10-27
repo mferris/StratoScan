@@ -211,9 +211,10 @@ y = json.loads(ask("GET", "/sightings/year?y=2026")[2])
 check(y["nearby"] is None and y["records"]["far"] == {"v": 187.0} and y["visits"] == 50, "/sightings/year likewise")
 check(("GET", "/sightings/year?y=2026") in received, "the query goes through to the store")
 check(ask("GET", "/tar1090/data/stats.json")[0] == 404, "stats.json is not served publicly")
-summary = getattr(fg, "public_sighting_summary", lambda d: d)
+summary = getattr(fg, "public_sighting_summary", lambda d, *_: d)
 counts = getattr(fg, "public_sighting_counts", lambda d: d)
-check(summary({"records": {"far": {"v": "x", "cs": "FARREC1"}, "near": "odd", "fast": {"v": 500}}})
+fresh = getattr(fg, "PublicRangeRecords", lambda: None)()   # not the copy the requests above took
+check(summary({"records": {"far": {"v": "x", "cs": "FARREC1"}, "near": "odd", "fast": {"v": 500}}}, fresh)
       == {"records": {"fast": {"v": 500}}} and summary([1]) == [1] and summary({"byOp": "odd"}) == {"byOp": "odd"},
       "a range record without a number goes altogether; odd answers pass through")
 check(counts({"a1b2c3": "odd", "a1b2c4": {"total": 1}}) == {"a1b2c3": "odd", "a1b2c4": {"total": 1}} and counts([1]) == [1],
