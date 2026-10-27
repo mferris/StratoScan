@@ -14,7 +14,10 @@ Why a device-side service rather than fetching from the page:
     built from coordinates ROUNDED to 2dp (~1.1km), the same precision
     funnel-gateway.py already exposes publicly. Sending survey-precision
     coordinates to a third party to ask "what is near me" would undo the
-    rounding the rest of this project does deliberately.
+    rounding the rest of this project does deliberately. The ring the
+    answer is cut to, its counts and the scorecard's bearings are worked
+    out from the same rounded point (2026-10-26), since all of them reach
+    the public page too.
 
 Nothing here runs on its own. The scorecard accumulates only from
 requests the page makes, and the page only makes them when the
@@ -95,6 +98,7 @@ UPSTREAM_DEADLINE_S = 30        # one answer, however slowly it trickles in
 NETWORK_KEEP_S = 2 * MIN_UPSTREAM_S
 RADIUS_NM = 25          # a little beyond the 20nm ring the radar draws
 RING_NM = 20            # what the radar actually shows; stats use this
+HOME_DP = 2             # the receiver's position as everything here uses it (see the docstring)
 
 MAX_BODY = 400_000
 # The network round a point the radar's screen is looking at (roadmap 2.23 on
@@ -274,8 +278,10 @@ def haversine(lat1, lon1, lat2, lon2):
 
 
 def home():
+    """The receiver's position at HOME_DP places, before anything uses it: the
+    question to the network, the ring and the bearings (2026-10-26)."""
     d = get_json(LOCAL_RECEIVER, timeout=4)
-    return float(d["lat"]), float(d["lon"])
+    return round(float(d["lat"]), HOME_DP), round(float(d["lon"]), HOME_DP)
 
 
 def median(xs):
@@ -288,8 +294,8 @@ def median(xs):
 def compare(lat, lon):
     """One paired sample: what this antenna heard vs what the network has."""
     local = get_json(LOCAL_AIRCRAFT, timeout=4)
-    # Round before it leaves the machine. See the module docstring.
-    net = get_json(SOURCE_URL.format(lat=round(lat, 2), lon=round(lon, 2),
+    # Round before it leaves the machine (home() has already). See the module docstring.
+    net = get_json(SOURCE_URL.format(lat=round(lat, HOME_DP), lon=round(lon, HOME_DP),
                                      radius=RADIUS_NM), timeout=UPSTREAM_TIMEOUT)
 
     mine = {}

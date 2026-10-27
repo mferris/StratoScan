@@ -26,9 +26,11 @@ alerts use -- and the lookups are made once and cached.
                                   never fetched while a screen waits
 
 Safe to publish: no antenna-relative field (r_dst, r_dir) and no receiver
-position leaves this service, so the feed can't locate the receiver; the
-public gateway serves it read-only like the other stores. Aircraft positions
-are what the aircraft broadcast to everyone.
+position leaves this service, and the ring counts are worked out round the
+receiver rounded to 0.01 degrees (RING_CENTRE_DP), so the feed can't locate
+the receiver more closely than the public receiver.json does; the public
+gateway serves it read-only like the other stores, without owners, counts or
+close passes. Aircraft positions are what the aircraft broadcast to everyone.
 
 Lookups (routes from adsb.im, registered owners from adsbdb for private
 aircraft) run in a background thread, batched and cached in memory the way
@@ -78,6 +80,11 @@ RELAY_OWNER_PATH = "/v1/net/owner/{hex}"
 USER_AGENT = "StratoScan/1.0 (+https://github.com/mferris/StratoScan; core feed)"
 
 RING_NM = 20            # what the radar draws; counts use it, as the kiosk's do
+# The ring the counts use is centred on the receiver rounded to this many
+# decimal places (2026-10-26): the 0.01 degrees the public receiver.json gives,
+# so that nothing the counts say is finer than that. At 20 nm, ~1 km off
+# centre changes no count anyone would notice.
+RING_CENTRE_DP = 2
 # Which band each aircraft was heard on (2026-10-10). readsb turns 978 MHz
 # (UAT) messages into 1090-style ones before merging them, so its own list
 # cannot say which came from where; the 978 decoder's JSON output can, so
@@ -495,6 +502,11 @@ RUNWAYS_MAX_AGE_S = 3600     # how long a screen may keep an answer without aski
 RUNWAYS_MAX_BYTES = 32 << 20
 
 
+def ring_centre(home):
+    """The centre the ring counts use: the receiver at RING_CENTRE_DP places."""
+    return (round(home[0], RING_CENTRE_DP), round(home[1], RING_CENTRE_DP)) if home else None
+
+
 def runway_centre(lat, lon):
     """offline-map.py's: the receiver rounded to 0.05 degrees."""
     return round(round(float(lat) * 20) / 20, 2), round(round(float(lon) * 20) / 20, 2)
@@ -690,7 +702,7 @@ class Feed:
         return out
 
     def build(self, with_network=False):
-        home = self._receiver()
+        centre = ring_centre(self._receiver())
         antenna = self._antenna_raw()
         heard = {a["hex"].lower().lstrip("~") for a in antenna}
         counts = self.sightings.get()
@@ -703,9 +715,9 @@ class Feed:
             aircraft += network
 
         def in_ring(x):
-            if not home or not isinstance(x.get("lat"), (int, float)) or not isinstance(x.get("lon"), (int, float)):
+            if not centre or not isinstance(x.get("lat"), (int, float)) or not isinstance(x.get("lon"), (int, float)):
                 return False
-            return _nm(home[0], home[1], x["lat"], x["lon"]) <= RING_NM
+            return _nm(centre[0], centre[1], x["lat"], x["lon"]) <= RING_NM
 
         return {"now": round(_now(), 1),
                 "counts": {"heard": sum(1 for x in aircraft if x["source"] == "antenna" and in_ring(x)),
