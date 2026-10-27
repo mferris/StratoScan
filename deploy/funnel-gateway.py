@@ -339,7 +339,10 @@ PUBLIC_MARKER = "X-FR-Public"
 SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "no-referrer-when-downgrade",
+    # No referrer (security review 2026-10-26): tiles, photos and weather were
+    # told the full public address of the page that asked. The setup page
+    # already sends none.
+    "Referrer-Policy": "no-referrer",
 }
 
 # ---- Content-Security-Policy for the page (security review 2026-10-04, #5) --
