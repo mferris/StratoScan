@@ -4241,12 +4241,18 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawStat
 // shows in the fallback fonts every font stack already names until the web
 // fonts come, and the canvas text (ring labels, compass letters) is drawn
 // again once they have.
+//
+// Not on the public page (2026-10-26). The stylesheet can be asked for without
+// a referrer, but the font files it names are fetched with CORS, and those
+// always carry the page's origin: there, the radar's public address beside
+// each visitor's IP. Visitors get the fallback fonts instead, so they never
+// contact Google. The panel and browsers at home still load the typefaces,
+// which shows Google the home's IP address.
 const WEB_FONTS_URL = 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap';
-{
+if (!PUBLIC_PAGE) {
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  // Google is not told whose page asked (2026-10-26): from the public page
-  // the referrer was the radar's public address, beside each visitor's IP.
+  // No referrer on the stylesheet; the font files still carry the origin.
   link.referrerPolicy = 'no-referrer';
   link.href = WEB_FONTS_URL;
   link.addEventListener('load', () => {
