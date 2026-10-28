@@ -8,7 +8,10 @@ its words finish before the next one's chime, closing the panel brings the
 next, an emergency goes first, and one about an aircraft that has gone, or
 that waited over a minute, is dropped.
 
-The page's own queue code is run under node with a stand-in clock and panel.
+The page's own queue code is run under node with a stand-in clock and panel,
+off the device, with the take-off sound's hold (#81) in it: off the panel it
+holds nothing, so all of this is as it was. tests/test_boot_sound.py runs the
+hold on the panel.
 
 Run: python3 tests/test_alert_queue.py
 """
@@ -35,6 +38,7 @@ end = html.index("function checkNearbyAlert(pl, range)")
 block = html[start:end]
 hide = html[html.index("function hideDetailPanel() {"):]
 hide = hide[:hide.index("\n}\n") + 3]
+hold = html[html.index("// ---- The take-off sound plays alone"):html.index("function playTakeoffSound() {")]
 
 check(html.count("raiseAlert({") == 3, "nearby, notable and emergency alerts all go through the queue")
 check("showDetailPanel(pl, true" not in html, "nothing opens an alert panel around it")
@@ -65,9 +69,11 @@ let speaking = 0;
 function speak(text) { spoken.push(text); speaking++; setTimeout(() => speaking--, 4000); }   // a sentence takes 4 s
 function alertQuiet() { return speaking === 0; }
 const planes = new Map([['a1', {}], ['b2', {}], ['c3', {}], ['e9', {}]]);
-""" + block + hide + r"""
+const ON_DEVICE = false;     // a browser viewing the page
+""" + hold + block + hide + r"""
 const A = hex => ({ pl: { hex }, label: 'WITHIN 2 MILES', speech: () => `about ${hex}` });
 const out = {};
+out.noHold = bootHoldUntil === 0 && !bootHoldOn();
 raiseAlert(A('a1'));
 out.first = shown.slice();
 raiseAlert(A('b2'));
@@ -112,6 +118,7 @@ console.log(JSON.stringify(out));
     except Exception:
         o = {}
         print(r.stderr[-800:])
+    check(o.get("noHold") is True, "off the panel the take-off sound holds nothing back")
     check(o.get("first") == ["a1:WITHIN 2 MILES"], "the first alert shows at once")
     check(o.get("secondWaits") is True, "a second, for another aircraft, waits instead of replacing it or speaking over it")
     check((o.get("more") or "").strip() == "· 1 MORE", "and the panel says one more is waiting")

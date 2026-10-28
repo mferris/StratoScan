@@ -3788,6 +3788,7 @@ async function checkLightningNearby() {
 // alert sound in the app (nearby-aircraft, emergency squawk, RDU phase),
 // since this is the one alert that isn't about a specific aircraft at all.
 function playLightningAlertSound() {
+  if (bootHoldOn()) return;   // dropped while the take-off sound holds alerts back (#81); the toast still shows
   playTones([[600, 0, 0.18, 0.28], [600, 0.25, 0.18, 0.28], [600, 0.5, 0.24, 0.3]]);
 }
 
@@ -4759,19 +4760,61 @@ preloadSoundTheme(soundTheme());
 const BOOT_SOUND_KEY = 'stratoscan.bootSoundFor';
 const BOOT_SOUND_WITHIN_S = 300;
 function maybePlayBootSound() {
+  if (bootSoundPlays()) playTakeoffAlone(); else endBootHold();   // either way, the alerts held for it go on
+}
+function bootSoundPlays() {
   const b = netInfo && netInfo.boot;
-  if (!ON_DEVICE || !b || b.powerOn !== true || !b.id) return;
-  if (typeof b.uptimeS !== 'number' || b.uptimeS > BOOT_SOUND_WITHIN_S) return;
-  if (!alertSettings.bootSound) return;
+  if (!ON_DEVICE || !b || b.powerOn !== true || !b.id) return false;
+  if (typeof b.uptimeS !== 'number' || b.uptimeS > BOOT_SOUND_WITHIN_S) return false;
+  if (!alertSettings.bootSound) return false;
   let last = null;
   try { last = localStorage.getItem(BOOT_SOUND_KEY); } catch (e) {}
-  if (last === b.id) return;                       // once per boot, whatever reloads the page
+  if (last === b.id) return false;                 // once per boot, whatever reloads the page
   try { localStorage.setItem(BOOT_SOUND_KEY, b.id); } catch (e) {}
-  if (soundAllowedNow()) playTakeoffSound();
+  return soundAllowedNow();
+}
+
+// ---- The take-off sound plays alone (#81, 2026-10-28) ----------------------
+// At the owner's plug-in test (RDU, 2026-10-28) the take-off sound played at
+// the same moment as an aircraft's chime and announcement: the page announces
+// what is already in range as soon as it loads, and nothing made the two take
+// turns. Now, on the panel, alerts hold back from the moment the page loads
+// until the first /onboard answer says whether the take-off sound plays, and
+// then while it plays. Not a power-on, the setting off, sound not allowed now,
+// or played already in this boot: the hold ends with that answer. The wait
+// for the answer is at most BOOT_HOLD_MAX_MS, so a slow or lost one (#86)
+// never keeps alerts back for long; a sound still due when a late answer
+// comes waits for a quiet moment instead, and holds alerts while it plays.
+//
+// An alert raised in the hold waits in the queue (raiseAlert) and is shown in
+// turn when it ends, an emergency first. Speech is only ever an alert's, so it
+// waits with its alert. The airport's landing and take-off chime and the
+// lightning chime are dropped instead (in their play functions): they have
+// never waited for alerts, so held they would all sound at the hold's end, on
+// top of the first alert waiting. The airport chime is one of many a day,
+// and the lightning warning still shows, only without its chime.
+// Off the panel there is no hold: bootHoldUntil stays 0.
+const BOOT_HOLD_MAX_MS = 15 * 1000;
+const TAKEOFF_SOUND_MS = 7000;           // the sound is 6.5 s long
+let bootHoldUntil = ON_DEVICE ? performance.now() + BOOT_HOLD_MAX_MS : 0;
+let bootSoundDecided = !ON_DEVICE;       // the first answer decides, once
+function bootHoldOn() { return performance.now() < bootHoldUntil; }
+function endBootHold() {
+  if (bootSoundDecided) return;
+  bootSoundDecided = true;
+  bootHoldUntil = 0;
+  scheduleNextAlert();
+}
+function playTakeoffAlone() {
+  bootSoundDecided = true;
+  if (!alertQuiet()) { setTimeout(playTakeoffAlone, 500); return; }   // a late answer: the alert sounding first
+  bootHoldUntil = performance.now() + TAKEOFF_SOUND_MS;
+  scheduleNextAlert();
+  playTakeoffSound();
 }
 
 function playTakeoffSound() {
-  markSoundBusy(7000);
+  markSoundBusy(TAKEOFF_SOUND_MS);
   const ctx = getAudioCtx(), out = getMasterGain(), t0 = ctx.currentTime + 0.05, dur = 6.5;
   // the roar: two seconds of deep (brown-ish) noise, looped, through a
   // low-pass that opens as the engines spool up and closes as it climbs away
@@ -4838,6 +4881,7 @@ function playEmergencySound() {
 // down, takeoff pitches up, so the two are distinguishable by ear without
 // looking at the screen.
 function playAirportPhaseSound(phase) {
+  if (bootHoldOn()) return;   // dropped while the take-off sound holds alerts back (#81)
   markSoundBusy(2000);
   soundTheme().airportPhase(phase);
 }
@@ -4864,7 +4908,8 @@ function alertPanelUp() {
 }
 // a: { pl, label, glyph, sound(), speech(), speechDelay, after(), urgent }
 function raiseAlert(a) {
-  if (alertPanelUp() && alertOnScreen.hex !== a.pl.hex) {
+  // the take-off sound's hold (#81) queues it too, to be shown when the hold ends
+  if (bootHoldOn() || (alertPanelUp() && alertOnScreen.hex !== a.pl.hex)) {
     if (!alertQueue.some(q => q.pl.hex === a.pl.hex)) {
       a.queuedAt = performance.now();
       if (a.urgent) alertQueue.unshift(a); else alertQueue.push(a);
@@ -4888,11 +4933,12 @@ function presentAlert(a) {
 function scheduleNextAlert() {
   clearTimeout(nextAlertTimer);
   if (!alertQueue.length) return;
-  const due = alertOnScreen ? alertOnScreen.shownAt + ALERT_MIN_SHOW_MS : 0;
+  const due = Math.max(alertOnScreen ? alertOnScreen.shownAt + ALERT_MIN_SHOW_MS : 0, bootHoldUntil);
   nextAlertTimer = setTimeout(showNextAlert, Math.max(0, due - performance.now()));
 }
 function showNextAlert() {
   clearTimeout(nextAlertTimer);
+  if (bootHoldOn()) { scheduleNextAlert(); return; }   // the take-off sound first (#81)
   if (!alertQuiet()) { nextAlertTimer = setTimeout(showNextAlert, 400); return; }   // the last one's words first
   while (alertQueue.length) {
     const a = alertQueue.shift();
