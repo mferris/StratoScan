@@ -124,5 +124,77 @@ enabling = inst.split('echo "== enabling =="')[1].split("done")[0]
 check("stratoscan-https.service" in enabling and "stratoscan-https.service" in inst.split('echo "== system services and web routing =="')[1].split("done")[0],
       "and installs and enables its service")
 
+# ---- #93: lighttpd starts without waiting for the network -------------------------
+# Debian orders lighttpd After=network-online.target. After a boot with no WiFi
+# the radar's page came a minute late, and the kiosk showed "This site can't be
+# reached" until its watchdog restarted it (RDU, 2026-10-28). A drop-in cannot
+# take a dependency away -- systemd skips an empty After= -- so the installer
+# gives lighttpd a unit of its own: Debian's, less that target.
+check(re.search(r"^(After|Wants|Requires)=\s*$", drop, re.M) is None,
+      "the drop-in does not count on an empty After= (systemd ignores one for dependencies)")
+check([l for l in drop.splitlines() if l and not l.startswith("#")]
+      == ["[Unit]", "Wants=stratoscan-tls-cert.service", "After=stratoscan-tls-cert.service"],
+      "and still only adds the certificate's ordering")
+own = re.search(r"^DEBIAN_LIGHTTPD=.*?^mv [^\n]*$", inst, re.M | re.S)
+check(own is not None and "DEBIAN_LIGHTTPD=/usr/lib/systemd/system/lighttpd.service\n" in own.group(0)
+      and "OWN_LIGHTTPD=/etc/systemd/system/lighttpd.service\n" in own.group(0),
+      "the installer makes lighttpd's own unit from Debian's")
+check(own is not None and inst.index(own.group(0)) < inst.index("\nlighttpd_test\n") < inst.index('echo "== enabling =="')
+      and "if live; then systemctl daemon-reload; fi" in inst.split('echo "== enabling =="')[1].split("\n")[1],
+      "before lighttpd is checked, and a live unit reloads systemd after it")
+DEBIAN_UNIT = """[Unit]
+Description=Lighttpd Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+PIDFile=/run/lighttpd.pid
+ExecStartPre=/usr/sbin/lighttpd -tt -f /etc/lighttpd/lighttpd.conf
+ExecStart=/usr/sbin/lighttpd -D -f /etc/lighttpd/lighttpd.conf
+ExecReload=/usr/sbin/lighttpd -tt -f /etc/lighttpd/lighttpd.conf
+ExecReload=/bin/kill -USR1 $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+
+def make_own(debian_text, existing=None):
+    """Runs the installer's lines against a stand-in /usr/lib and /etc;
+    returns (exit status, the unit left in /etc or None)."""
+    d = tempfile.mkdtemp()
+    os.makedirs(os.path.join(d, "usr")); os.makedirs(os.path.join(d, "etc"))
+    if debian_text is not None:
+        open(os.path.join(d, "usr", "lighttpd.service"), "w").write(debian_text)
+    if existing is not None:
+        open(os.path.join(d, "etc", "lighttpd.service"), "w").write(existing)
+    script = own.group(0).replace("/usr/lib/systemd/system/", d + "/usr/").replace("/etc/systemd/system/", d + "/etc/")
+    rc = subprocess.run(["sh", "-ec", script], capture_output=True).returncode
+    try:
+        return rc, open(os.path.join(d, "etc", "lighttpd.service")).read()
+    except OSError:
+        return rc, None
+
+
+if own is not None:
+    rc, unit = make_own(DEBIAN_UNIT)
+    check(rc == 0 and unit is not None and "network-online" not in unit,
+          "lighttpd's own unit has no network-online.target, After= or Wants=")
+    kept = [l for l in DEBIAN_UNIT.splitlines() if "network-online" not in l]
+    check(unit is not None and unit.splitlines() == kept, "and is otherwise Debian's, line for line")
+    rc, unit = make_own(DEBIAN_UNIT.replace("After=network-online.target",
+                                            "After=network.target network-online.target remote-fs.target"))
+    check(unit is not None and "\nAfter=network.target remote-fs.target\n" in unit,
+          "only that target goes from a line that names others too")
+    rc, unit = make_own(None, existing=DEBIAN_UNIT)
+    check(rc != 0 and unit == DEBIAN_UNIT, "with no Debian unit to start from, the install stops and changes nothing")
+    rc, unit = make_own("", existing=DEBIAN_UNIT)
+    check(rc != 0 and unit == DEBIAN_UNIT, "nor is an empty unit ever put in its place (systemd would take it as masked)")
+img = (root / "image" / "build.sh").read_text()
+check('"$MNT/etc/systemd/system/lighttpd.service"' in img and "lighttpd waits for the network" in img,
+      "the factory image is checked for it")
+
 print("setup tls checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)
