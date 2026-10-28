@@ -247,6 +247,21 @@ install -m 0644 deploy/readsb-stratoscan-radio.conf /etc/systemd/system/readsb.s
 install -d -m 0755 /etc/systemd/system/lighttpd.service.d
 install -m 0644 deploy/lighttpd-stratoscan-tls.conf /etc/systemd/system/lighttpd.service.d/stratoscan-tls.conf
 if live; then sh deploy/tls-cert.sh; fi
+# lighttpd starts without waiting for the network (#93, 2026-10-28). Debian
+# orders it After=network-online.target, so after a boot with no WiFi the
+# radar's own page waited out NetworkManager-wait-online's whole minute and
+# the kiosk showed "This site can't be reached". Nothing lighttpd serves needs
+# a network, and it listens on every address (port 80, and 4443 above), never
+# on one that comes with a network. A drop-in can only add dependencies, so
+# lighttpd gets a unit of its own: Debian's, with network-online.target taken
+# out. Made afresh from Debian's at every run, so a new package's unit is
+# picked up by the next run; remove it (and daemon-reload) to go back.
+DEBIAN_LIGHTTPD=/usr/lib/systemd/system/lighttpd.service
+OWN_LIGHTTPD=/etc/systemd/system/lighttpd.service
+sed -E 's/[[:space:]]*network-online\.target//g; /^(After|Wants|Requires)=[[:space:]]*$/d' "$DEBIAN_LIGHTTPD" > "$OWN_LIGHTTPD.new"
+grep -q '^ExecStart=' "$OWN_LIGHTTPD.new"   # never an empty unit: systemd takes one for masked
+chmod 0644 "$OWN_LIGHTTPD.new"
+mv "$OWN_LIGHTTPD.new" "$OWN_LIGHTTPD"
 # lighttpd's https is on 4443; this sends the app's 443 there, except on the
 # tailnet, where Tailscale's public address keeps 443 (#75). Checked before
 # anything relies on it: a rule nft would refuse fails the install.

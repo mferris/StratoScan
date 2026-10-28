@@ -83,6 +83,9 @@ for u in bluetooth.service cups.service udisks2.service wayvnc-control.service; 
   [ "$(readlink "$MNT/etc/systemd/system/$u")" = "/dev/null" ] || { echo "  $u is not masked"; fail=1; }
 done
 grep -q "^AllowedCPUs=" "$MNT/etc/systemd/system/stratoscan-tts.service" || { echo "  speech is not held to one core"; fail=1; }
+# lighttpd's own unit, Debian's without the wait for the network (#93).
+{ grep -q "^ExecStart=" "$MNT/etc/systemd/system/lighttpd.service" && ! grep -q "network-online" "$MNT/etc/systemd/system/lighttpd.service"; } \
+  || { echo "  lighttpd waits for the network"; fail=1; }
 # The setup certificate is made per unit on first boot (tls-cert.sh), never in
 # the image: one baked in would be every unit's, and its key public.
 # Every new unit is in rollout ring 3, everyone, until its owner's install
