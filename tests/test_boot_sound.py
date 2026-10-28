@@ -8,6 +8,13 @@ watchdog reset (RDU read 0x1000 after a replug). The panel plays the sound
 once per boot, in the first five minutes, through the usual volume, mute and
 quiet hours, and only while its setting is on.
 
+And it plays alone (2026-10-28). At the owner's plug-in test it played over
+an aircraft's chime and announcement, as the page announced what was already
+in range. On the panel alerts now wait from page load until the boot answer
+says whether it plays, and while it plays; then they come in turn, an
+emergency first. Without a power-on they wait only for that answer, and never
+more than 15 s for it.
+
 Run: python3 tests/test_boot_sound.py
 """
 import importlib.util
@@ -66,6 +73,8 @@ const localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k
 let ON_DEVICE = true, netInfo = null, allowed = true, played = 0;
 const alertSettings = { bootSound: true };
 function soundAllowedNow() { return allowed; }
+function alertQuiet() { return true; }
+function scheduleNextAlert() {}
 """ + block.replace("function playTakeoffSound() {", "function playTakeoffSound() { played++; return;") + r"""
 const out = {};
 const boot = (id, powerOn, uptimeS) => { netInfo = { boot: { id, powerOn, uptimeS } }; maybePlayBootSound(); return played; };
@@ -92,6 +101,116 @@ console.log(JSON.stringify(out));
     check(o.get("quiet") == 1 and o.get("quietLater") == 1,
           "inside quiet hours (or muted) it stays silent, and doesn't play later in that boot")
     check(o.get("remote") == 1, "and only the panel plays it, not a phone or laptop viewing the page")
+
+    # ---- it plays alone (2026-10-28) ------------------------------------------
+    # The boot block, the alert queue and the two plain chimes, run under node
+    # with a stand-in clock, panel and speech; every sound, panel and sentence
+    # is logged with its time.
+    def function(head):
+        f = html[html.index(head):]
+        return f[:f.index("\n}\n") + 3]
+    queue = html[html.index("// ---- One alert at a time"):html.index("function checkNearbyAlert(pl, range)")]
+    chimes = function("function playAirportPhaseSound(") + function("function playLightningAlertSound(")
+    takeoff = "function playTakeoffSound() {\n  markSoundBusy(TAKEOFF_SOUND_MS);"
+    check(takeoff in block, "the take-off sound marks its length as busy")
+    harness = r"""
+let now = 0; const timers = [];
+const performance = { now: () => now };
+function setTimeout(fn, ms) { const t = { at: now + (ms || 0), fn }; timers.push(t); return t; }
+function clearTimeout(t) { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); }
+function advance(ms) { const end = now + ms; for (;;) { timers.sort((a, b) => a.at - b.at); const t = timers[0]; if (!t || t.at > end) break; timers.shift(); now = t.at; t.fn(); } now = end; }
+const S = SCENARIO;
+const store = Object.assign({}, S.store);
+const localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
+let ON_DEVICE = S.onDevice !== false, netInfo = null;
+const alertSettings = { bootSound: S.setting !== false };
+function soundAllowedNow() { return S.allowed !== false; }
+const log = [];                      // [what, ms]
+let busyUntil = 0, speaking = 0;
+function markSoundBusy(ms) { busyUntil = Math.max(busyUntil, now + ms); }
+function alertQuiet() { return speaking === 0 && now >= busyUntil; }
+function speak(text) { log.push(['words ' + text, now]); speaking++; setTimeout(() => speaking--, 4000); }   // a sentence takes 4 s
+function playTones() { log.push(['lightning chime', now]); }
+function soundTheme() { return { airportPhase: phase => log.push([phase + ' chime', now]) }; }
+const classes = new Set();
+const detailPanelEl = {
+  classList: { contains: c => classes.has(c), add: c => classes.add(c), remove: c => classes.delete(c) },
+  querySelector: () => null,
+};
+const detailBackdropEl = { classList: { add() {}, remove() {} } };
+let detailPanelHex = null, detailDismissTimer = null;
+function showDetailPanel(p, isAlert) { classes.add('show'); isAlert ? classes.add('alert') : classes.delete('alert'); log.push(['show ' + p.hex, now]); }
+const planes = new Map([['a1', {}], ['b2', {}], ['e9', {}]]);
+""" + block.replace(takeoff, takeoff + " log.push(['take-off', now]); return;") + chimes + queue + function("function hideDetailPanel() {") + r"""
+const alert = (hex, urgent) => ({ pl: { hex }, label: urgent ? 'EMERGENCY' : 'WITHIN 2 MILES', urgent,
+  sound: () => { log.push(['chime ' + hex, now]); markSoundBusy(3000); }, speech: () => hex });
+function answer(boot) { netInfo = { boot }; maybePlayBootSound(); }
+SCRIPT
+console.log(JSON.stringify(log));
+"""
+
+    def run(script, **scenario):
+        js = harness.replace("SCENARIO", json.dumps(scenario)).replace("SCRIPT", script)
+        r = subprocess.run(["node", "-e", js], capture_output=True, text=True, timeout=60)
+        try:
+            return [tuple(e) for e in json.loads(r.stdout.strip().splitlines()[-1])]
+        except Exception:
+            print(r.stderr[-1500:])
+            return []
+
+    # A power-on: the answer comes 1 s after load, with one aircraft already in
+    # range; an emergency and two plain chimes come while the sound plays.
+    log = run(r"""
+advance(500); raiseAlert(alert('a1'));
+advance(500); answer({ id: 'p', powerOn: true, uptimeS: 40 });
+advance(1000); playAirportPhaseSound('takeoff'); playLightningAlertSound();
+advance(1000); raiseAlert(alert('e9', true));
+advance(30000); playAirportPhaseSound('landing'); playLightningAlertSound();
+""")
+    check(log[:1] == [("take-off", 1000)], "after a power-on the take-off sound plays as the answer comes, alone")
+    check(len(log) > 1 and all(t >= 8000 for _, t in log[1:]),
+          "no alert, chime or words until it has finished (7 s), though an aircraft was in range from the start")
+    shows = [w for w, _ in log if w.startswith("show ")]
+    check(shows == ["show e9", "show a1"] and ("words a1", 17000) in log,
+          "the alerts raised meanwhile wait, not dropped, and come after it in turn, the emergency first")
+    check(("show e9", 8000) in log, "an emergency is shown the moment the hold ends")
+    check(not any(w in ("takeoff chime", "lightning chime") and t < 8000 for w, t in log)
+          and ("landing chime", 33000) in log and ("lightning chime", 33000) in log,
+          "the airport and lightning chimes during it are dropped; after it they sound as before")
+
+    # No take-off sound: the hold ends with the answer, at 1 s.
+    for label, kw in (("a reboot", dict(boot="{ id: 'r', powerOn: false, uptimeS: 30 }")),
+                      ("a page reloaded later in the boot", dict(boot="{ id: 'q', powerOn: true, uptimeS: 900 }")),
+                      ("a reload after it played this boot",
+                       dict(boot="{ id: 'p', powerOn: true, uptimeS: 120 }", store={"stratoscan.bootSoundFor": "p"})),
+                      ("the setting off", dict(boot="{ id: 'p', powerOn: true, uptimeS: 30 }", setting=False)),
+                      ("quiet hours or mute", dict(boot="{ id: 'p', powerOn: true, uptimeS: 30 }", allowed=False)),
+                      ("an answer without boot information", dict(boot="undefined"))):
+        boot = kw.pop("boot")
+        log = run("advance(500); raiseAlert(alert('a1'));\nadvance(500); answer(%s);\nadvance(100);" % boot, **kw)
+        check(log[:3] == [("show a1", 1000), ("chime a1", 1000), ("words a1", 1000)],
+              f"{label}: no take-off sound, and the waiting alert comes as soon as the answer does")
+
+    # No answer at all: alerts wait 15 s at most.
+    log = run("advance(500); raiseAlert(alert('a1'));\nadvance(29500);")
+    check(log[:1] == [("show a1", 15000)], "with no answer, an alert waits 15 s at most")
+
+    # An answer after that limit, while an alert is speaking: the sound waits
+    # for the words, and the next alert waits for the sound.
+    log = run(r"""
+advance(500); raiseAlert(alert('a1'));
+advance(15500); answer({ id: 'p', powerOn: true, uptimeS: 70 });
+advance(1000); raiseAlert(alert('b2'));
+advance(30000);
+""")
+    at = dict(log)
+    check(at.get("show a1") == 15000 and at.get("take-off") == 19000,
+          "a late answer still plays it, once the alert on screen has finished speaking")
+    check(at.get("show b2", 0) >= 26000, "and the next alert waits for it to finish")
+
+    log = run("raiseAlert(alert('a1')); answer({ id: 'p', powerOn: true, uptimeS: 30 }); advance(100);", onDevice=False)
+    check(log[:1] == [("show a1", 0)] and "take-off" not in dict(log),
+          "off the panel nothing waits: the alert shows at once")
 
 print("boot sound checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)
