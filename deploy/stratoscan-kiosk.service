@@ -4,6 +4,23 @@ After=graphical-session.target
 
 [Service]
 ExecStartPre=/bin/sh -c 'i=0; while [ $i -lt 60 ]; do ls "$XDG_RUNTIME_DIR"/wayland-*[0-9] >/dev/null 2>&1 && exit 0; sleep 1; i=$((i+1)); done; exit 1'
+# The browser starts once the radar's own web server answers (#93,
+# 2026-10-28). After a boot with no WiFi, lighttpd came up a minute after the
+# kiosk, and the panel showed "This site can't be reached" until the paint
+# watchdog restarted the kiosk two minutes in. Until then the start-up
+# picture stays up (boot-cover.py, and swaybg's copy of it underneath). Any
+# answer will do: lighttpd sending an error is lighttpd up. After 120 s the
+# browser starts anyway, so a broken lighttpd still ends in a page on the
+# panel, and the paint watchdog's restarts, rather than in no browser at all.
+# That watchdog (wake-listener.py) counts from its own start at login, not
+# the kiosk's: it restarts the kiosk no sooner than 150 s in, then at most
+# every 15 minutes. So the wait is over before its first look, and a restart
+# that lands in a wait starts it over once, not again and again.
+ExecStartPre=/bin/sh -c 'timeout 120 sh -c "until curl -so /dev/null -m 2 http://localhost/; do sleep 1; done" || echo "no answer from http://localhost/ in 120 s; starting the browser anyway"'
+# The user manager gives a start 90 s by default, less than the two waits
+# above can take (60 + 120 s). A start cut short is tried again from the top
+# (Restart=always), so with lighttpd down the browser would never start.
+TimeoutStartSec=4min
 # The HTTP cache lives in the runtime dir (tmpfs), not ~/.cache on the SD
 # card: storm and lightning tiles are re-fetched every few minutes forever,
 # and that churn was ~1 GB/day of card writes. The profile itself stays on

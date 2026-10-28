@@ -470,6 +470,62 @@ for needle, what in (("notable-db.py ensure", "notable-aircraft list"), ("offlin
 for unit, limit in (("stratoscan-ota-auto.service", "30min"), ("stratoscan-ota-check.service", "5min")):
     check(f"TimeoutStartSec={limit}" in (D / unit).read_text(), f"{unit}, a oneshot, has a start limit")
 
+# ---- the kiosk waits for its page, with a limit (#93, 2026-10-28) ----------------
+# After a boot with no WiFi, lighttpd came up a minute after the kiosk, and the
+# panel showed "This site can't be reached" until the paint watchdog restarted
+# the kiosk. Now the browser waits for http://localhost/ to answer, but never
+# past a limit: a broken lighttpd must still end in a browser on the panel.
+kiosk = (D / "stratoscan-kiosk.service").read_text()
+pres = [l[len("ExecStartPre="):] for l in kiosk.splitlines() if l.startswith("ExecStartPre=")]
+wayland = next((p for p in pres if "wayland-" in p), "")
+page = next((p for p in pres if "http://localhost/" in p), "")
+page_sh = re.fullmatch(r"/bin/sh -c '([^']*)'", page)
+bound = re.search(r"^timeout (\d+) sh -c \"until curl -so /dev/null -m (\d+) http://localhost/; do sleep 1; done\" \|\| echo ",
+                  page_sh.group(1) if page_sh else "")
+check(bound is not None and int(bound.group(1)) <= 120 and int(bound.group(2)) <= 5,
+      "the kiosk waits for http://localhost/ at most 120 s, each try limited, then starts the browser anyway")
+check(bool(wayland) and bool(page) and pres.index(wayland) < pres.index(page) and kiosk.index(page) < kiosk.index("\nExecStart="),
+      "after the wait for Wayland, before the browser")
+if bound:
+    limit_s = int(bound.group(1))
+    hold = re.search(r"-lt (\d+) \]", wayland)               # one look a second
+    start_limit = re.search(r"^TimeoutStartSec=(\d+)min$", kiosk, re.M)
+    check(hold is not None and start_limit is not None
+          and int(start_limit.group(1)) * 60 >= int(hold.group(1)) + limit_s + 30,
+          "systemd lets both waits run out: a start cut short would begin again from the top, never reaching the browser")
+    # The paint watchdog counts from its own start at login, not the kiosk's.
+    wl_src = (D / "wake-listener.py").read_text()
+    wl_const = lambda name: eval(re.search(rf"^{name} = ([0-9 *]+)", wl_src, re.M).group(1), {"__builtins__": {}})
+    check(limit_s < wl_const("FROZEN_AFTER_S"),
+          "the wait is over before the paint watchdog can first restart the kiosk (%d s in)" % wl_const("FROZEN_AFTER_S"))
+    check(limit_s < wl_const("MIN_RESTART_INTERVAL_S"),
+          "and a restart that lands in a wait has the browser up before the watchdog may restart it again")
+
+    # The wait itself, run with a shorter limit against stand-ins for lighttpd.
+    class Answers(Slow):
+        delay, body = 0.0, b"<!doctype html>"
+
+    class Hangs(Slow):
+        delay = 30.0
+
+    def wait_for(url):
+        script = page_sh.group(1).replace("http://localhost/", url + "/").replace(f"timeout {limit_s} ", "timeout 3 ", 1)
+        t0 = time.monotonic()
+        r = subprocess.run(["sh", "-c", script], env=env, capture_output=True, text=True, timeout=30)
+        return r, time.monotonic() - t0
+
+    up, up_url = serve(Answers)
+    r, took = wait_for(up_url)
+    check(r.returncode == 0 and took < 2 and r.stdout == "", "lighttpd answering: the browser starts at once (%.1f s)" % took)
+    s = socket.socket(); s.bind(("127.0.0.1", 0)); closed_url = "http://127.0.0.1:%d" % s.getsockname()[1]; s.close()
+    r, took = wait_for(closed_url)
+    check(r.returncode == 0 and 2.5 < took < 6 and "starting the browser anyway" in r.stdout,
+          "lighttpd not there: the start goes on at the limit, and says why (%.1f s of 3)" % took)
+    hung, hung_url = serve(Hangs)
+    r, took = wait_for(hung_url)
+    check(r.returncode == 0 and took < 6 and "starting the browser anyway" in r.stdout,
+          "lighttpd taking connections but not answering: the same (%.1f s of 3)" % took)
+
 # ---- the code: every outside call in deploy/*.py names a timeout ------------------
 # Popen has no timeout of its own. Each one is listed here with what bounds it.
 POPEN_ALLOWED = {
