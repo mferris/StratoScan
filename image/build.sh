@@ -64,6 +64,7 @@ for f in /usr/bin/readsb /usr/local/share/tar1090/git/.stratoscan-commit /var/ww
          /etc/cloud/cloud-init.disabled; do must "$f"; done
 for f in /var/lib/stratoscan-relay/unit.key /var/lib/stratoscan-setup/setup.json \
          /var/lib/stratoscan-setup/hotspot-psk /var/lib/tailscale/tailscaled.state \
+         /var/lib/stratoscan-setupd/hotspot-psk /var/lib/stratoscan-setupd/readsb.default.orig \
          /var/lib/stratoscan-relay/events.json /var/lib/stratoscan-relay/heartbeat.json \
          /etc/xdg/autostart/piwiz.desktop /etc/sudoers.d/010_wiz-nopasswd \
          /etc/stratoscan/tls/unit.pem \
