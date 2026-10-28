@@ -95,7 +95,9 @@ RUNWAY_STEP = 20            # the centre is rounded to 1/20 degree (0.05, ~5 km)
 RUNWAYS_REFRESH_S = 30 * 86400
 RUNWAYS_RETRY_S = 3600      # after Overpass failed: a shared, often busy service
 RUNWAYS_EMPTY_RETRY_S = 86400   # after it found none: there may truly be none
-RUNWAYS_TIMEOUT_S = 30      # the whole question, answer and all
+RUNWAYS_TIMEOUT_S = 120     # the whole question, answer and all. Nobody waits on it (a monthly
+                            # job in the background), and a busy Overpass took 44 s just to
+                            # start answering on 2026-10-28, past the 30 s first set here
 RUNWAYS_MAX_BYTES = 32 << 20
 RUNWAYS_SOURCE = "OpenStreetMap via Overpass"
 RUNWAYS_LICENCE = "ODbL 1.0, © OpenStreetMap contributors"

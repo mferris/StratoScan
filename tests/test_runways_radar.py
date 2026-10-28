@@ -115,7 +115,7 @@ check(req.full_url == "https://overpass-api.de/api/interpreter" and req.get_meth
 check(req.get_header("Content-type") == "application/x-www-form-urlencoded", "form-encoded, as the kiosk sent it")
 ua = req.get_header("User-agent") or ""
 check("StratoScan" in ua and "github.com/mferris/StratoScan" in ua, "with a User-Agent naming StratoScan and the project: %s" % ua)
-check(timeout == 30, "with a 30 s time limit (%s)" % timeout)
+check(timeout == 120, "with a 2-minute time limit: in the background, and Overpass can be slow to start (%s)" % timeout)
 check(query.startswith("[out:json][timeout:25];") and query.endswith("out body;>;out skel qt;")
       and query.count('way["aeroway"="runway"]') == 1 and query.count('way["aeroway"="taxiway"]') == 1,
       "the kiosk's query: runways and taxiways, their nodes")
