@@ -139,7 +139,8 @@ const detailPanelEl = {
 };
 const detailBackdropEl = { classList: { add() {}, remove() {} } };
 let detailPanelHex = null, detailDismissTimer = null;
-function showDetailPanel(p, isAlert) { classes.add('show'); isAlert ? classes.add('alert') : classes.delete('alert'); log.push(['show ' + p.hex, now]); }
+let shownLabel = null;
+function showDetailPanel(p, isAlert, label) { shownLabel = label; classes.add('show'); isAlert ? classes.add('alert') : classes.delete('alert'); log.push(['show ' + p.hex, now]); }
 const planes = new Map([['a1', {}], ['b2', {}], ['e9', {}]]);
 """ + block.replace(takeoff, takeoff + " log.push(['take-off', now]); return;") + chimes + queue + function("function hideDetailPanel() {") + r"""
 const alert = (hex, urgent) => ({ pl: { hex }, label: urgent ? 'EMERGENCY' : 'WITHIN 2 MILES', urgent,
@@ -190,6 +191,19 @@ advance(30000); playAirportPhaseSound('landing'); playLightningAlertSound();
         log = run("advance(500); raiseAlert(alert('a1'));\nadvance(500); answer(%s);\nadvance(100);" % boot, **kw)
         check(log[:3] == [("show a1", 1000), ("chime a1", 1000), ("words a1", 1000)],
               f"{label}: no take-off sound, and the waiting alert comes as soon as the answer does")
+
+    # An aircraft squawking an emergency inside the ring at load: the poll
+    # raises its plain alert and then its emergency, both in the hold. One
+    # alert waits per aircraft, so the emergency must take the plain one's
+    # place, not be dropped (it is never raised again while it squawks).
+    log = run(r"""
+advance(500); raiseAlert(alert('a1')); raiseAlert(alert('a1', true));
+advance(500); answer({ id: 'r', powerOn: false, uptimeS: 30 });
+advance(100); log.push(['label ' + shownLabel, now]);
+advance(30000);
+""")
+    check([w for w, _ in log if w.startswith("show ")] == ["show a1"] and ("label EMERGENCY", 1100) in log,
+          "an emergency raised in the hold for an aircraft whose plain alert waits replaces it, and is the one shown")
 
     # No answer at all: alerts wait 15 s at most.
     log = run("advance(500); raiseAlert(alert('a1'));\nadvance(29500);")

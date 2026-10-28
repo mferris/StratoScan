@@ -4910,6 +4910,12 @@ function alertPanelUp() {
 function raiseAlert(a) {
   // the take-off sound's hold (#81) queues it too, to be shown when the hold ends
   if (bootHoldOn() || (alertPanelUp() && alertOnScreen.hex !== a.pl.hex)) {
+    // One alert waits per aircraft, but an emergency takes the place of its
+    // plain one: the poll checks nearby before squawk, so in the hold both
+    // come for an emergency aircraft in the ring, and the emergency would be
+    // dropped and never raised again while it squawks (2026-10-28).
+    const i = alertQueue.findIndex(q => q.pl.hex === a.pl.hex);
+    if (i >= 0 && a.urgent && !alertQueue[i].urgent) alertQueue.splice(i, 1);
     if (!alertQueue.some(q => q.pl.hex === a.pl.hex)) {
       a.queuedAt = performance.now();
       if (a.urgent) alertQueue.unshift(a); else alertQueue.push(a);
