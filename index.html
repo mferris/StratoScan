@@ -4780,8 +4780,8 @@ function bootSoundPlays() {
 // what is already in range as soon as it loads, and nothing made the two take
 // turns. Now, on the panel, alerts hold back from the moment the page loads
 // until the first /onboard answer says whether the take-off sound plays, and
-// then while it plays. Not a power-on, the setting off, sound not allowed now,
-// or played already in this boot: the hold ends with that answer. The wait
+// then while it plays. Not a power-on, sound not allowed now, or played
+// already in this boot: the hold ends with that answer. The wait
 // for the answer is at most BOOT_HOLD_MAX_MS, so a slow or lost one (#86)
 // never keeps alerts back for long; a sound still due when a late answer
 // comes waits for a quiet moment instead, and holds alerts while it plays.
@@ -4796,8 +4796,10 @@ function bootSoundPlays() {
 // Off the panel there is no hold: bootHoldUntil stays 0.
 const BOOT_HOLD_MAX_MS = 15 * 1000;
 const TAKEOFF_SOUND_MS = 7000;           // the sound is 6.5 s long
-let bootHoldUntil = ON_DEVICE ? performance.now() + BOOT_HOLD_MAX_MS : 0;
-let bootSoundDecided = !ON_DEVICE;       // the first answer decides, once
+// With the take-off sound switched off or the panel muted, there is nothing to
+// wait for, so no hold at all: alerts come as soon as they're raised.
+let bootHoldUntil = ON_DEVICE && alertSettings.bootSound && !alertSettings.muted ? performance.now() + BOOT_HOLD_MAX_MS : 0;
+let bootSoundDecided = !bootHoldUntil;   // the first answer decides, once
 function bootHoldOn() { return performance.now() < bootHoldUntil; }
 function endBootHold() {
   if (bootSoundDecided) return;

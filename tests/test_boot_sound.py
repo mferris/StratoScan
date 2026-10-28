@@ -123,8 +123,8 @@ const S = SCENARIO;
 const store = Object.assign({}, S.store);
 const localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
 let ON_DEVICE = S.onDevice !== false, netInfo = null;
-const alertSettings = { bootSound: S.setting !== false };
-function soundAllowedNow() { return S.allowed !== false; }
+const alertSettings = { bootSound: S.setting !== false, muted: S.muted === true };
+function soundAllowedNow() { return !alertSettings.muted && S.allowed !== false; }   // as the page's: mute first
 const log = [];                      // [what, ms]
 let busyUntil = 0, speaking = 0;
 function markSoundBusy(ms) { busyUntil = Math.max(busyUntil, now + ms); }
@@ -184,13 +184,19 @@ advance(30000); playAirportPhaseSound('landing'); playLightningAlertSound();
                       ("a page reloaded later in the boot", dict(boot="{ id: 'q', powerOn: true, uptimeS: 900 }")),
                       ("a reload after it played this boot",
                        dict(boot="{ id: 'p', powerOn: true, uptimeS: 120 }", store={"stratoscan.bootSoundFor": "p"})),
-                      ("the setting off", dict(boot="{ id: 'p', powerOn: true, uptimeS: 30 }", setting=False)),
                       ("quiet hours or mute", dict(boot="{ id: 'p', powerOn: true, uptimeS: 30 }", allowed=False)),
                       ("an answer without boot information", dict(boot="undefined"))):
         boot = kw.pop("boot")
         log = run("advance(500); raiseAlert(alert('a1'));\nadvance(500); answer(%s);\nadvance(100);" % boot, **kw)
         check(log[:3] == [("show a1", 1000), ("chime a1", 1000), ("words a1", 1000)],
               f"{label}: no take-off sound, and the waiting alert comes as soon as the answer does")
+
+    # The take-off sound switched off, or the panel muted: nothing to wait for,
+    # so no hold at all, whenever the answer comes.
+    for label, kw in (("the setting off", dict(setting=False)), ("the panel muted", dict(muted=True))):
+        log = run("advance(500); raiseAlert(alert('a1'));\nadvance(9500); answer({ id: 'p', powerOn: true, uptimeS: 30 });\nadvance(100);", **kw)
+        check(log[:1] == [("show a1", 500)] and "take-off" not in dict(log),
+              f"{label}: no hold, the alert shows the moment it is raised")
 
     # An aircraft squawking an emergency inside the ring at load: the poll
     # raises its plain alert and then its emergency, both in the hold. One
