@@ -153,7 +153,10 @@ restart_kiosk() {   # reason
         WAYLAND_DISPLAY="$WD" timeout 10 wlopm --on HDMI-A-1 >/dev/null 2>&1 || true
         sleep 2
     fi
-    timeout 120 systemctl --user restart stratoscan-kiosk.service
+    # || true: since #93 the kiosk's start waits up to 120 s for the radar's
+    # page, so with lighttpd down this can time out, and under set -e the
+    # panel would be left lit (2026-10-28)
+    timeout 120 systemctl --user restart stratoscan-kiosk.service || true
     if [ "$was_off" = "1" ]; then
         sleep "$RESTART_SETTLE_S"
         WAYLAND_DISPLAY="$WD" timeout 10 wlopm --off HDMI-A-1 >/dev/null 2>&1 || true
