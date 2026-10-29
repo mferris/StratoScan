@@ -17,8 +17,10 @@ more than 15 s for it.
 
 And a cabin ding first (2026-10-28): the owner asked for the "ding" heard
 inside an airliner, then the take-off. Both go on the audio clock at once,
-the take-off 1.2-1.5 s after the ding, and alerts wait for the whole of it.
-Switching the setting on in Settings plays it once, as a preview.
+the take-off 0.2-0.4 s after the ding, and alerts wait for the whole of it.
+The take-off's roar swells up from nothing, so started 1.3 s after the ding,
+as at first, it left over 2 s of near-silence between them. Switching the
+setting on in Settings plays it once, as a preview.
 
 Run: python3 tests/test_boot_sound.py
 """
@@ -203,8 +205,9 @@ advance(30000); playAirportPhaseSound('landing'); playLightningAlertSound();
     ding, takeoff, ends = at.get("ding", 0), at.get("take-off", 0), at.get("sound ends", 0)
     check(log[:2] == [("ding", ding), ("take-off", takeoff)] and 1000 <= ding <= 1100,
           "after a power-on the startup sound plays as the answer comes, alone: the cabin ding first")
-    check(1200 <= takeoff - ding <= 1500,
-          "then the take-off, %d ms after the ding on the audio clock, as the ding fades" % (takeoff - ding))
+    check(200 <= takeoff - ding <= 400,
+          "then the take-off, %d ms after the ding on the audio clock, so its slow swell is heard a second after the ding, not two"
+          % (takeoff - ding))
     others = [(w, t) for w, t in log if w not in ("ding", "take-off", "sound ends")]
     check(others and all(t >= ends for _, t in others),
           "no alert, chime or words until the whole of it has finished (%.2f s), though an aircraft was in range from the start"
