@@ -59,6 +59,8 @@ CORE = {
     "back_posts", "back_post_holes", "screw_ring_holes",
     # the front screw posts and their heat-set insert holes
     "front_posts", "front_post_holes",
+    # the shelf's sloped underside (2026-10-29)
+    "shelf_slope",
     # the outer shell: the body less the front insert holes
     "shell",
     # the display clamp
