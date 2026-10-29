@@ -39,7 +39,7 @@ flowchart LR
 | A **USB-C plug pigtail**: two wires, 20 AWG or thicker, rated 5 A | Or cut one from a USB-C to USB-C cable rated 5 A (sold as 100 W or 240 W), as in step 4. Not a USB-A to USB-C cable: its power wires are thin |
 | Snap-on ferrite clip | For the pigtail |
 | Heat-shrink, a soldering iron, a multimeter | |
-| For the case: a back plate printed since 2026-10-29, and `power_trigger_mount`, `power_trigger_stop` and `power_regulator_tray`, printed (`usbc_gauge` too, to try the fit first); two M3 × 8 button-head screws and two M3 × 3 heat-set inserts; two M2 × 8 screws; VHB tape | In the case folders; see [In the case](#in-the-case) |
+| For the case: a back plate printed since 2026-10-29, and `power_trigger_mount`, two `power_trigger_stop`s and `power_regulator_tray`, printed (`usbc_gauge` too, to try the fit first); two M3 × 8 button-head screws and four M3 × 3 heat-set inserts; two M2 × 8 screws; VHB tape | In the case folders; see [In the case](#in-the-case). A trial fit on `usbc_gauge` spends two of the inserts, which stay in it, and one stop's crush ribs |
 
 The Pi's 5 V pins would also take the regulator's output, but they sit under
 the FlyCatcher, so the 5.2 V goes into the Pi's own USB-C port instead.
@@ -147,18 +147,37 @@ question.
      mount's wall. It only goes in that way round (since 2026-10-29: back to
      front it used to go in too, and its screws then held it 0.5 mm off the
      board).
-  6. Drive two M2 × 8 screws through the mount's side walls into the stop:
-     they draw it the last 0.3 mm onto the board.
+  6. Drive two M2 × 8 screws through the mount's side walls into the stop,
+     snug and no harder: they draw it the last 0.3 mm onto the board as they
+     seat. Past that, each strips the thread it cut in the wall, and the
+     slack comes back.
 
   The plate is what sets the board's place, so the board's front edge must be
   on it before the stop is locked; done on the bench, the socket would rest
   on the bench and the board would end up 2 mm too far back. Try it on
   `usbc_gauge` first, a ten-minute print of the plate round the window: the
   charger's plug must click fully home, and the click is the test, not how
-  close the moulding looks. Trim any strand that droops from the pocket's
-  floor round the window first. The two steps in that floor, a slot and a
-  rectangle, are meant to be there: they let it print as a clean bridge, so
-  slice with counterbore hole bridging off. Details and checks are in the
+  close the moulding looks. The two steps in the pocket's floor, a slot and
+  a rectangle, are meant to be there: they let it print as a clean bridge,
+  so slice with counterbore hole bridging off. If the plug won't click home:
+  1. Trim any strand of plastic on the pocket's floor and round the window's
+     edge.
+  2. Check that the board's front edge is on the plate: from outside, the
+     socket's face stands 0.4 mm proud of the pocket's floor. If it doesn't,
+     undo the stop's screws, push the board's back edge home, and screw the
+     stop back.
+  3. Try another cable, one with a slimmer moulding round its plug.
+
+  If it still won't, reprint the coupon with a bigger pocket: in the case's
+  `.scad`, `usbc_recess_w` and `usbc_recess_h` set its size (14 × 10 mm;
+  the width can go to 16.8). If the moulding goes into the pocket but stops
+  on its floor, raise `usbc_seat_margin` from 0.4 to 0.6, which makes the
+  pocket one layer deeper, as deep as it can go.
+
+  The trial spends two of the inserts, which stay in the coupon, and the
+  stop's crush ribs, which don't spring back. Use the other two inserts and
+  the second stop for the plate, and move the mount across with the board
+  still in it. Details and checks are in the
   [retro case's README](../enclosure/Retro%20Radar%20Enclosure/README.md#the-power-fix-the-charger-plugs-into-the-trigger-board).
 - **The regulator goes in `power_regulator_tray`,** stuck to the plate's
   inner face with VHB tape. Put it as far from the FlyCatcher and the antenna

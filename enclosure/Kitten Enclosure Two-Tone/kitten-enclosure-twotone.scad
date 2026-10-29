@@ -1788,13 +1788,16 @@ assert(abs(usbc_recess_d/usbc_bridge_layer - round(usbc_recess_d/usbc_bridge_lay
        "the pocket must be a whole number of layers deep, so each bridge step is a layer of its own");
 assert(usbc_cut_h/2 <= usbc_recess_h/2 - usbc_recess_r,
        "the first bridge step's slot must end on the pocket's straight side walls, not in its corners");
-assert(back_plate_t - usbc_recess_d - 2*usbc_bridge_layer >= 1.0,
+// The two limits a reprint for a bigger moulding meets (2026-10-29), so each
+// passes at its limit, not just short of it: at usbc_seat_margin = 0.6 or
+// usbc_recess_w = 16.8 the plain sums come out a hair under 1.0 and 1.6.
+assert(back_plate_t - usbc_recess_d - 2*usbc_bridge_layer >= 1.0 - 1e-6,
        "the window's round-ended part, above the two bridge steps, must be at least 1 mm of plate");
 assert(pwr_trig_t - pwr_trig_sock_t - usbc_cut_clear >= 1.0,
        "the board's front edge must bear on at least 1 mm of plate below the window");
 assert(usbc_cut_w < pwr_trig_w,
        "the window must be narrower than the board, or unplugging pulls the board through it");
-assert(usbc_screw_pitch/2 - insert_hole_dia/2 - usbc_recess_w/2 >= 1.6,
+assert(usbc_screw_pitch/2 - insert_hole_dia/2 - usbc_recess_w/2 >= 1.6 - 1e-6,
        "the inserts need 1.6 mm of plate between them and the pocket");
 assert(usbc_insert_len <= back_plate_t,
        "the inserts must not stand out of the plate's outer face");

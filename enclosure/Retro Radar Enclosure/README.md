@@ -21,7 +21,7 @@ the rest follows.
 | `antenna_mount_twin_cover_8_twotone.3mf`, `antenna_mount_twin_cover_11_twotone.3mf` | the same covers with the frequencies in a second colour: one object, the cover on filament 1 and the lettering (`antenna_mount_twin_cover_text_8` / `_11`) on filament 2. Built by `make-cover-3mf.py` from binary STL exports |
 | `usbc_gauge` | test coupon: a 36 × 18 mm piece of the back plate round the USB-C window, its window, pocket and insert holes exactly the plate's, so the charger's plug can be tried in the trigger board before a whole plate is printed (about ten minutes) |
 | `power_trigger_mount` | the power fix's 12 V trigger board's mount: a sleeve round the board, two crush ribs in its roof holding the board down, on two M3 screws into inserts in the plate, with the board's socket through the plate's USB-C window, so the charger plugs straight into it ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)) |
-| `power_trigger_stop` | the block behind the trigger board in its mount, locked by two M2 screws through the mount's walls, so the board has no play; keyed, so it goes in only the right way round |
+| `power_trigger_stop` | the block behind the trigger board in its mount, locked by two M2 screws through the mount's walls, so the board has no play; keyed, so it goes in only the right way round. Print two: a trial fit on `usbc_gauge` spends one's crush ribs |
 | `power_regulator_tray` | a tray for the power fix's 5 V regulator, stuck to the plate's inner face |
 
 Three extra targets, `test_antenna`, `test_speaker` and `test_rings`, clip
@@ -380,16 +380,44 @@ To fit it (the plate lying outer face down):
 5. Slide the stop in behind the board, ribs first and its ridge toward the
    slot in the mount's wall, until the ribs touch the board. It only goes in
    that way.
-6. Drive the two M2 × 8 screws through the mount's side walls into the stop.
-   They draw it the last 0.3 mm onto the board.
+6. Drive the two M2 × 8 screws through the mount's side walls into the stop,
+   snug and no harder. They draw it the last 0.3 mm onto the board as they
+   seat. Past that, each strips the thread it cut in the 2.2 mm wall, and
+   the slack comes back.
 
 Print `usbc_gauge` first and fit the mount to it the same way: the
 charger's plug must click fully home, its moulding down in the pocket. Go by
 the click: a plug that stops without one is not home, however close it looks.
-If a strand droops from the pocket's floor round the window, trim it with a
-knife before you try the plug. The coupon is the plate's own geometry round
-the window, bridge steps and all, so a plug that seats there seats in the
-plate.
+The coupon is the plate's own geometry round the window, bridge steps and
+all, so a plug that seats there seats in the plate. If it won't click home:
+
+1. Trim any strand of plastic on the pocket's floor and round the window's
+   edge with a sharp knife. Leave the two steps in the floor: they are meant
+   to be there.
+2. Check that the board's front edge is down on the plate. From outside, the
+   socket's face should stand 0.4 mm proud of the pocket's floor, not level
+   with it or below it. If it doesn't, undo the stop's two screws, push the
+   board's back edge until its front edge is on the plate, and screw the stop
+   back.
+3. Try another cable, one with a slimmer moulding round its plug.
+
+If it still won't, the plate needs to change, and the coupon is reprinted
+first. A moulding too big for the 14 × 10 mm pocket needs `usbc_recess_w`
+and `usbc_recess_h` bigger: `usbc_recess_w` can go to 16.8 mm before the
+inserts lose their 1.6 mm of plate. A moulding that goes into the pocket
+but stops on its floor needs `usbc_seat_margin` up from 0.4 to 0.6 mm, a
+pocket one layer deeper. That is as deep as it goes: the window's wall above
+the floor's two steps is then 1 mm, the least the design allows. The asserts
+in the design hold both limits.
+
+The trial fit spends some parts. Its two inserts stay in the coupon, and the
+stop's crush ribs, once squeezed, don't spring back. So the plate needs two
+more M3 × 3 inserts and a second stop; the mount, the board and the screws
+move across. Undo the stop's screws and slide it out, then lift the mount
+off the coupon with the board still in it, so the roof's ribs keep their
+hold on the socket. Fit it to the plate with steps 1 to 6 and the new stop;
+in step 4 the board is already in, so just push its back edge until its
+front edge is on the plate.
 
 **`power_regulator_tray`** holds the regulator (63 × 27 mm, and 12.3 mm from
 its underside to the top of its tallest capacitor, so about 16 mm off the
@@ -472,6 +500,7 @@ Every screw that gets undone goes into a brass M3 heat-set insert. The holes are
 | Back posts in the shell (back plate screws into these) | 8 | M3 × 6 | M3 × 8 | Pressed from the back face, flush |
 | Antenna mount flange | 3 | M3 × 5 | M3 × 8 | The pocket is in the mount; the screws come from inside the case, through the back plate |
 | Back plate, beside the USB-C window (the trigger board's mount screws into these) | 2 | M3 × 3 | M3 × 8 button head | Pressed from the inner face with the outer face on a flat board, so each ends flush with both faces; the screws come from inside the case, through the mount's ears (since 2026-10-29) |
+| `usbc_gauge`, for the trial fit before the plate | 2 | M3 × 3 | the mount's own two M3 × 8 | Pressed the same way. They stay in the coupon, so the plate needs two of its own |
 | Twin antenna mount's cover | 5 | M2 × 3 | M2 × 6 | 3.0 mm holes in the cover seat (for a 3.2 mm knurl; 3.2 if the kit's inserts are the 3.5 mm kind — measure them). The cover's holes are counterbored 4.4 mm × 1.5 mm, so the cap heads stand only 0.5 mm proud (since 2026-10-10) |
 | Speaker bosses (optional) | 8 | M2 × 3 | M2 × 6 | The 2.6 mm pilot takes the speaker's self-tapping screws; drill it to 3.0 for an M2 insert |
 
