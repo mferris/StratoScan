@@ -43,14 +43,15 @@ SHARED_PRINTS = ["back_plate", "retainer", "usbc_gauge", "antenna_socket_gauge",
                  "antenna_mount", "antenna_mount_sma", "antenna_mount_twin_8", "antenna_mount_twin_11",
                  "antenna_mount_twin_cover_8", "antenna_mount_twin_cover_11",
                  "antenna_mount_twin_cover_text_8", "antenna_mount_twin_cover_text_11",
-                 "power_trigger_mount", "power_regulator_tray"]
+                 "power_trigger_mount", "power_trigger_stop", "power_regulator_tray"]
 OPENSCAD = "/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD"
 
 # Everything the hardware touches: the shell's internal furniture, the back,
 # and the antenna mount. These must be character-for-character the same.
 CORE = {
-    # the back plate and everything cut into it
-    "back_plate", "back_lip", "usbc_cutout", "usbc_gauge",
+    # the back plate and everything cut into it, and the coupon of its USB-C
+    # window
+    "back_plate", "back_lip", "usbc_cutout", "usbc_window2d", "usbc_gauge",
     "intake_grille", "fan_grille",
     # what the Pi, fan and speakers bolt to
     "cradle_rails", "cradle_arm", "fan_mount", "speaker_bracket",
@@ -73,10 +74,15 @@ CORE = {
     # the twin mount (1090 + 978 MHz) and its check helpers
     "antenna_mount_twin", "antenna_mount_twin_cover", "ant_twin_frame", "ant_twin_teardrop", "ant_twin_outline2d", "ant_twin_slab", "ant_twin_cover2d", "ant_twin_bore", "ant_twin_cover_placed", "ant_twin_bore_probe", "ant_twin_jack_probe", "ant_twin_barrel_probe", "ant_twin_channel_probe", "ant_twin_screw_probes",
     "ant_twin_envelopes", "ant_twin_panel_ring", "ant_twin_hole_probe",
-    # the power fix (roadmap 5.7): the trigger board held behind the USB-C
-    # window by its mount, and the regulator's tray
-    "power_trigger_mount", "power_regulator_tray", "pwr_board_y0", "pwr_pin_y", "pwr_pin_z",
-    "power_trigger_mount_placed", "power_trigger_board_placed", "power_plug_probe", "power_pin_probe",
+    # the power fix (roadmap 5.7): the trigger board with its socket through
+    # the USB-C window, held by its mount and the stop behind it, and the
+    # regulator's tray
+    "power_trigger_mount", "power_trigger_stop", "power_trigger_stop_shape", "power_regulator_tray",
+    "pwr_x_teardrop", "pwr_socket2d", "pwr_board_y0", "pwr_pcb_y1", "pwr_board_z1", "pwr_tube_w",
+    "pwr_stop_hw", "pwr_stop_y0", "pwr_stop_y1", "pwr_stop_z0", "pwr_stop_z1", "pwr_m2_y", "pwr_m2_z",
+    "pwr_mount_len", "pwr_m2_reach", "pwr_m2_engaged",
+    "power_trigger_mount_placed", "power_trigger_stop_placed", "power_trigger_board_placed",
+    "power_plug_probe", "power_m2_probe", "power_m3_probe", "power_insert_probe", "power_wire_probe",
 }
 
 # The only shared names allowed to differ, and why. Anything NOT listed here

@@ -29,13 +29,14 @@ The head is one colour and prints as before:
 | `shell` | black | the head — body cylinder plus two ears, and all the internals |
 | `front_trim` | black | the face — bezel ring with a nose, whisker grooves and seven screw holes |
 | `retainer` | — | ring behind the glass (identical to the retro part) |
-| `back_plate` | black | removable back — locating lip, vents, one USB-C pass-through, the antenna mount's bolt holes and cable hole |
+| `back_plate` | black | removable back — locating lip, vents, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the antenna mount's bolt holes and cable hole |
 | `antenna_mount` | black | bolt-on arm carrying the antenna socket |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
 | `antenna_mount_twin_8`, `antenna_mount_twin_11` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight. Two styles, for jumpers whose bulkhead body is an 8 mm hex or an 11 mm hex; two parts each, this body and the cover below (`antenna_mount_twin` is whichever `ant_twin_jack_af` names) |
 | `antenna_mount_twin_cover_8`, `antenna_mount_twin_cover_11` | the 3 mm cover that closes the twin body's cable channel, on five M2 screws, with each side's frequency engraved in it (`twin_assembled` and `twin_assembled_11` show both parts on the plate, for pictures only) |
-| `usbc_gauge` | — | test coupon: five candidate USB-C cutouts, to fit the connector before printing a plate |
-| `power_trigger_mount` | — | the power fix's 12 V trigger board, held behind the USB-C window ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)); identical to the retro part |
+| `usbc_gauge` | — | test coupon: a 36 × 18 mm piece of the back plate round the USB-C window, exactly the plate's, to try the charger's plug in the trigger board before printing a plate |
+| `power_trigger_mount` | — | the power fix's 12 V trigger board's mount, with the board's socket through the USB-C window ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)); identical to the retro part |
+| `power_trigger_stop` | — | the block behind the trigger board in its mount, on two M2 screws; identical to the retro part |
 | `power_regulator_tray` | — | a tray for the power fix's 5 V regulator, stuck to the plate's inner face |
 
 The stand is split into five bodies, one per colour region:
@@ -78,14 +79,15 @@ through all eight. Three checks hold it — `lip_present` as a positive
 control, `lip_clears_posts`, and `lip_inside_bore`, since a lip larger than
 the bore does not locate anything, it just stops the plate seating.
 
-The two cable glands are gone, replaced by a single opening for a panel-mount
-USB-C cable; the antenna's coax comes in through the mount's own bore
-instead. **The cutout has been fitted to the real
-connector** (2026-09-29): it fits, its two M3 mounting screws are 16.5mm
-apart, and the holes are M3 clearance. Since 2026-10-13 they are short slots
-reaching to 17mm centres, so a 5 A / 100 W jumper with 17mm spacing fits too. For a different connector, print
-`usbc_gauge`, a coupon carrying the cutout plus four neighbours at ±0.5 and
-±1.0mm, and fit it before committing a plate.
+The two cable glands are gone, replaced by a single USB-C opening; the
+antenna's coax comes in through the mount's own bore instead. **Since
+2026-10-29 the opening is the 12 V trigger board's own**: a window the shape
+of its socket, a 14 × 10 mm pocket round it in the outer face for the plug's
+moulding, and two insert holes for the board's mount (see the power fix,
+below). It took a panel-mount USB-C extension until then, in an 11 × 8 mm
+window with two M3 holes 16.5 mm apart; that extension doesn't fit this
+plate. Print `usbc_gauge`, the 36 × 18 mm piece of the plate round the
+window, to try the board and the charger's plug before committing a plate.
 
 The mount screws into three M3 heat-set inserts on the plate's inner face
 rather than through bare holes, so it can be removed without holding a nut
@@ -308,12 +310,18 @@ to find a real hole for the pair to mean anything.
 
 ## The power fix: the charger plugs into the trigger board
 
-The same two parts as the retro case, since they fit the shared back plate:
-`power_trigger_mount` holds the 12 V trigger board behind the USB-C window on
-the window's own two holes (two M3 × 8 button-head screws), with a 1.75 mm
-filament pin behind the board, so the charger plugs straight into it.
-`power_regulator_tray` holds the 5 V regulator, stuck to the plate's inner
-face with VHB tape. Fitting, sizes and checks are in the retro case's README
+The same three parts as the retro case, since they fit the shared back plate.
+Since 2026-10-29 the 12 V trigger board's socket goes through the plate: the
+board's front edge bears on the plate's inner face, its socket goes out
+through a window its own shape, and a plug's moulding goes into the pocket
+round it to meet the socket, so the plug goes fully home.
+`power_trigger_mount` holds the board there, on two M3 × 8 button-head
+screws from inside the case into two M3 × 3 inserts in the plate, and
+`power_trigger_stop`, behind the board on two M2 × 8 screws through the
+mount's walls, presses it forward with no play. `power_regulator_tray` holds
+the 5 V regulator, stuck to the plate's inner face with VHB tape, off the
+33 × 13.5 mm patch round the window that the mount stands on. Fitting, sizes
+and checks are in the retro case's README
 ([The power fix](../Retro%20Radar%20Enclosure/README.md#the-power-fix-the-charger-plugs-into-the-trigger-board)),
 and the build in [docs/power-fix.md](../../docs/power-fix.md).
 
@@ -326,6 +334,7 @@ Every screw that gets undone goes into a brass M3 heat-set insert. The holes are
 | Front posts in the shell (front trim and retainer screw into these) | 8 posts, 7 used | M3 × 5 | M3 × 14 | Pressed from the front, flush with the shelf the retainer sits on |
 | Back posts in the shell (back plate screws into these) | 8 | M3 × 6 | M3 × 8 | Pressed from the back face, flush |
 | Antenna mount flange | 3 | M3 × 5 | M3 × 8 | The pocket is in the mount; the screws come from inside the case, through the back plate |
+| Back plate, beside the USB-C window (the trigger board's mount screws into these) | 2 | M3 × 3 | M3 × 8 button head | Pressed from the inner face with the outer face on a flat board, so each ends flush with both faces; the screws come from inside the case, through the mount's ears (since 2026-10-29) |
 | Twin antenna mount's cover | 5 | M2 × 3 | M2 × 6 | 3.0 mm holes in the cover seat (for a 3.2 mm knurl; 3.2 if the kit's inserts are the 3.5 mm kind — measure them). No counterbores: a 3 mm cover printed face-down can't roof them, so the cap heads stand 2 mm proud of a face nothing touches |
 | Speaker bosses (optional) | 8 | M2 × 3 | M2 × 6 | The 2.6 mm pilot takes the speaker's self-tapping screws; drill it to 3.0 for an M2 insert |
 
@@ -425,7 +434,7 @@ check.
 
 ```sh
 for p in shell front_trim retainer stand back_plate usbc_gauge \
-           power_trigger_mount power_regulator_tray \
+           power_trigger_mount power_trigger_stop power_regulator_tray \
            antenna_mount antenna_mount_sma antenna_mount_twin_8 antenna_mount_twin_11 \
            antenna_mount_twin_cover_8 antenna_mount_twin_cover_11 \
            stand_body stand_paws stand_toes stand_claws stand_tail stand_tail_tip; do

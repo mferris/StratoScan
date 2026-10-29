@@ -13,14 +13,15 @@ the rest follows.
 | `front_trim` | bezel in front of the glass, rabbeted so it seats flush |
 | `retainer` | ring behind the glass; the glass rests on its front face |
 | `stand` | desk cradle — two ring-arc arms on a plinth with two ridges all the way round, 4mm proud, their undersides sloped at 45° to a small lip like the case's rings, so they print without support (the old 1mm strips printed rough unsupported, and square 4mm ridges needed supports all round) |
-| `back_plate` | removable back — locating lip, both vent grilles, one USB-C pass-through, the antenna mount's bolt holes and cable hole |
+| `back_plate` | removable back — locating lip, both vent grilles, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the antenna mount's bolt holes and cable hole |
 | `antenna_mount` | bolt-on arm carrying the antenna socket (identical to the kitten's) |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
 | `antenna_mount_twin_8`, `antenna_mount_twin_11` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight. Two styles, for jumpers whose bulkhead body is an 8 mm hex or an 11 mm hex; two parts each, this body and the cover below (`antenna_mount_twin` is whichever `ant_twin_jack_af` names) |
 | `antenna_mount_twin_cover_8`, `antenna_mount_twin_cover_11` | the 3 mm cover that closes the twin body's cable channel, on five M2 screws, with each side's frequency engraved in it (`twin_assembled` and `twin_assembled_11` show both parts on the plate, for pictures only) |
 | `antenna_mount_twin_cover_8_twotone.3mf`, `antenna_mount_twin_cover_11_twotone.3mf` | the same covers with the frequencies in a second colour: one object, the cover on filament 1 and the lettering (`antenna_mount_twin_cover_text_8` / `_11`) on filament 2. Built by `make-cover-3mf.py` from binary STL exports |
-| `usbc_gauge` | test coupon: five candidate USB-C cutouts, to fit the connector before printing a whole plate |
-| `power_trigger_mount` | the power fix's 12 V trigger board, held behind the USB-C window on the window's own two screws, so the charger plugs straight into it ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)) |
+| `usbc_gauge` | test coupon: a 36 × 18 mm piece of the back plate round the USB-C window, its window, pocket and insert holes exactly the plate's, so the charger's plug can be tried in the trigger board before a whole plate is printed (about ten minutes) |
+| `power_trigger_mount` | the power fix's 12 V trigger board's mount: a sleeve round the board, on two M3 screws into inserts in the plate, with the board's socket through the plate's USB-C window, so the charger plugs straight into it ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)) |
+| `power_trigger_stop` | the block behind the trigger board in its mount, locked by two M2 screws through the mount's walls, so the board has no play |
 | `power_regulator_tray` | a tray for the power fix's 5 V regulator, stuck to the plate's inner face |
 
 Three extra targets, `test_antenna`, `test_speaker` and `test_rings`, clip
@@ -120,18 +121,18 @@ seating.
 ### One pass-through, not two
 
 The USB-C power gland and the SMA antenna gland are replaced by a single
-opening for a panel-mount USB-C cable. The antenna no longer needs a bulkhead
-here at all — its coax comes in through the antenna mount's own cable bore,
-inside the bolt circle.
+USB-C opening. The antenna no longer needs a bulkhead here at all — its coax
+comes in through the antenna mount's own cable bore, inside the bolt circle.
 
-**The cutout has been fitted to the real connector** (2026-09-29): it fits
-the window, and its two mounting screws are 16.5mm apart. Those screws are
-M3, so the holes are M3 clearance (3.4mm) like every other screw hole. Since
-2026-10-13 each hole is a short slot reaching to 17mm centres, so a 5 A /
-100 W jumper with its screws 17mm apart fits too (reprint the plate for one). The
-listing publishes no cutout size, so for a different connector print
-`usbc_gauge` — the cutout plus four neighbours at ±0.5 and ±1.0mm — and fit
-it before committing a back plate. A coupon is minutes; a plate is hours.
+**Since 2026-10-29 the opening is the 12 V trigger board's own** (the power
+fix, [below](#the-power-fix-the-charger-plugs-into-the-trigger-board)): a
+window the shape of the board's socket, a pocket round it in the outer face
+for the plug's moulding, and two insert holes for the board's mount. Until
+then it took a panel-mount USB-C extension, in an 11 × 8 mm window with two
+M3 holes 16.5 mm apart (slots to 17 mm from 2026-10-13); that extension
+doesn't fit this plate. Print `usbc_gauge`, the 36 × 18 mm piece of the plate
+round the window, to try the board and the charger's plug before printing a
+plate. A coupon is minutes; a plate is hours.
 
 ### The front: trim, glass, retainer
 
@@ -150,13 +151,11 @@ sliver. The notches also stop the ring turning. Checks: `retainer_clears_bore`,
 
 **The connector is 37 mm lower than it first was** (2026-10-10), at `[60, -51]`, so the power jumper no longer bends against the Pi's USB ports beside the old spot; a check proves a plug there clears the stand with the case leaning back.
 
-**The connector sits in a pocket** (2026-10-10). Its body is a 22.25 × 11 mm
-boss mounted from inside; through the full 3 mm plate the socket sat 3 mm
-below the outer face and a plug would not seat. The outer face now has a
-2 mm pocket the boss's size (0.3 mm clearance a side), so a 1 mm web is all
-that stands in front of the connector; the two screw heads sit in the pocket,
-and the same M3 × 6 screws reach 2 mm further into the connector. Checks:
-`usbc_recess_open`, `usbc_recess_web`.
+**The plug's moulding goes into a pocket** (since 2026-10-10; 14 × 10 mm and
+1.4 mm deep since 2026-10-29). The trigger board's socket stands 0.4 mm proud
+of the pocket's floor, so a moulding meets the socket and never the plate.
+Checks: `usbc_recess_open`, `usbc_recess_web`, `usbc_inserts_clear_pocket`
+(with `usbc_insert_probe_works`).
 
 ### The plate fits one way only
 
@@ -277,59 +276,112 @@ the same probe reaching 1 mm into the wall, is its positive control.
 
 Roadmap 5.7 ([#53](https://github.com/mferris/StratoScan/issues/53)) feeds
 the Pi from a 12 V USB-C trigger board and a 5 V regulator
-([docs/power-fix.md](../../docs/power-fix.md)). Two small parts fit them
-without changing the back plate.
+([docs/power-fix.md](../../docs/power-fix.md)). The charger plugs straight
+into the trigger board, whose socket comes out through the back plate, so no
+panel-mount extension is needed. Three small parts fit the boards.
 
-**`power_trigger_mount`** holds the trigger board behind the USB-C window,
-on the window's own two holes:
+**The socket goes through the plate** (since 2026-10-29). Until then the
+socket's face sat at the plate's inner face, behind the whole 3 mm plate, so
+a plug's moulding had to go through a 2 mm pocket and an 8 mm tall window in
+a 1 mm web before the plug was home. A moulding a little too big, or a board
+a little off-centre, and it never got there: the power cut out whenever the
+cable moved. Now:
 
-- The board sits in a sleeve with its socket centred in the window.
-- Its front edge rests on the mount's flange, which takes the pull of
-  unplugging.
-- A short length of 1.75 mm filament, pushed through the two holes behind the
-  board, takes the push of plugging in.
-- Two **M3 × 8 button-head** screws go in from outside, with their heads in
-  the window's pocket as the old connector's were. They cut their own thread
-  in the mount's 2.5 mm holes.
+- **The board's front edge bears on the plate's inner face**, and its socket,
+  which stands 2 mm past that edge, goes out through a window its own shape:
+  the socket's 8.94 × 3.26 mm round-ended outline, 0.3 mm bigger all round
+  (9.54 × 3.86 mm), since a printed hole comes out a little small. The window
+  locates the socket, and the plate takes the pull of unplugging straight
+  from the board's edge, on 1.27 mm of plate below the window.
+- **The pocket in the outer face is 14 × 10 mm and 1.4 mm deep**, its floor
+  0.4 mm behind the socket's face, so a moulding meets the socket and never
+  the plate. The USB-C standard allows a moulding up to 12.35 × 6.5 mm, and
+  real ones run bigger; this takes anything up to about 13.4 × 9.4 mm. The
+  floor prints as a bridge over the pocket, and a bridge sags, so a floor
+  level with the socket's face could stop a moulding just short of it again.
+  That leaves 1.6 mm of web round the window, 60 % more than the old 1 mm.
+- **`power_trigger_mount`** is a sleeve round the board, 0.2 mm clear of it a
+  side, its flat face on the plate's inner face, level with the board's front
+  edge: no flange, since the plate is the front stop now. Two **M3 × 8
+  button-head** screws come from inside the case, through its two ears and
+  into **M3 × 3 heat-set inserts** in the plate, 24 mm apart, so nothing of
+  them is in the outer face, and each clamps its ear, 5.5 mm of plastic. They
+  used to come from outside, 16.5 mm apart, their heads in the old pocket;
+  with the pocket 1.4 mm deep and wide enough for a moulding, the heads would
+  have stood in the moulding's way. The ear nearer the speaker is under the
+  speaker's corner, so use button heads, not socket caps, and M3 × 8 only: an
+  M3 × 10 would come out of the plate's outer face.
+- **`power_trigger_stop`** slides into the mount behind the board, and two
+  **M2 × 8** screws through the mount's side walls lock it there. Its two
+  crush ribs press the board's back edge forward, so the board is held
+  between the plate and the stop with no play: each screw lands on a
+  countersink in the stop and draws it the last 0.3 mm forward, squeezing the
+  ribs onto the board, before it threads in. The screws thread through the
+  walls as well as into the stop, so they have no slack to give, and the stop
+  is a T that only goes in the right way up. It replaced a 1.75 mm filament
+  pin, which let the board move.
 
-The socket's face ends 1 mm below the pocket floor, at the plate's inner
-face. So that a plug seats fully, its moulding has to pass the 1 mm web
-around the window, which is why the window is 8 mm tall (it was 6.5 mm until
-2026-10-23: the owner's cable stopped on the web and made no solid
-connection until the window was cut taller). The charger plugs straight into
-the trigger board, and the panel-mount extension isn't needed.
+To fit it (the plate lying outer face down):
 
-To fit it:
+1. Press an M3 × 3 insert into each of the two holes beside the window, from
+   the inner face, with the outer face on a flat board, until it stops on the
+   board: it is as long as the plate is thick, so it ends flush with both
+   faces. Each ear's hole is chamfered underneath, room for any plastic the
+   insert raises.
+2. Solder the 12 V pair to the trigger board.
+3. Set the mount on the plate's inner face over the window, ears on the
+   inserts, and put in the two M3 × 8 screws from inside, a turn short of
+   tight.
+4. Drop the board into the mount from the back, socket first, the wires
+   trailing out of the back, until its socket goes into the window and its
+   front edge rests on the plate. Tighten the two M3 screws.
+5. Slide the stop in behind the board, ribs first, until the ribs touch the
+   board. It only goes in the right way up.
+6. Drive the two M2 × 8 screws through the mount's side walls into the stop.
+   They draw it the last 0.3 mm onto the board.
 
-1. Solder the 12 V pair to the trigger board.
-2. Feed the wires through the mount's sleeve from its flat face and out of
-   the back.
-3. Slide the board in after them, socket first, from the back, until it stops
-   on the flange.
-4. Push the filament pin through the two holes behind it.
-5. Hold the mount against the plate's inner face with the socket in the
-   window, and put in the two screws.
+Print `usbc_gauge` first and fit the mount to it the same way: the
+charger's plug must click fully home, its moulding down in the pocket. It is
+the plate's own geometry round the window, so a plug that seats there seats
+in the plate.
 
 **`power_regulator_tray`** holds the regulator (63 × 27 mm, and 12.3 mm from
 its underside to the top of its tallest capacitor, so about 16 mm off the
 plate in the tray). Both ends stay open for its terminals, input jack and
 USB socket. Stick it to the plate's inner face with VHB tape, away from the
 receiver and its antenna leads, and where the pigtail reaches the Pi's power
-port. Two grooves under its floor take an optional cable tie round the board.
+port; keep it off the 33 × 13.5 mm patch round the window that the trigger
+board's mount stands on. Two grooves under its floor take an optional cable
+tie round the board.
 
 The trigger board's size was measured: 19.19 × 10.72 × 4.83 mm, from its
 socket's face to its back edge, across it, and from its underside to the top
 of the socket. Its socket stands about 2 mm past the board's front edge
-(`pwr_trig_proud`), which makes the flange 2 mm thick.
-Both parts print in minutes, so each is its own test piece. Print the mount
-flat face down.
+(`pwr_trig_proud`). All three parts print in minutes and need no supports:
+print the mount flat face down, the stop on its wide face, and the plate and
+the coupon outer face down.
 
-`power_mount_vs_plate`, `power_board_held`, `power_plug_reaches`,
-`power_pin_passes`, `power_screws_pass`, `power_mount_vs_shell`,
-`power_mount_vs_speakers` and `power_moulding_reaches` (a 10.4 × 7.6 mm
-moulding reaches the socket's face) must come out empty. `power_screws_bite`,
-`power_plug_probe_works`, `power_pin_holds` and `power_moulding_probe_works`
-(a 10 mm tall moulding stops on the web) are their positive controls.
+Checks that must come out empty: `power_mount_vs_plate`, `power_board_held`,
+`power_edge_on_plate` (the plate is solid in front of the board's edge below
+the window), `power_socket_clears_window` (the socket, 0.25 mm bigger all
+round, clears the window), `power_plug_reaches` and `power_moulding_reaches`
+(an 8.4 × 2.6 mm plug shell and a 13.4 × 9.4 mm moulding reach the socket's
+face), `power_m3_pass`, `power_m3_inside_plate` (nothing of the screws or
+inserts comes out of the outer face), `usbc_inserts_surrounded`,
+`power_mount_vs_shell`, `power_mount_vs_speakers`,
+`power_m3_clear_of_speakers`, `power_stop_fits_tube`,
+`power_stop_clear_of_board`, `power_m2_holes_line_up`,
+`power_m2_clear_of_board`, `power_m2_threads_held`, `power_wires_out`,
+`power_stop_vs_shell`, `power_stop_vs_speakers`, `power_parts_vs_stand` and
+`power_parts_in_patch` (everything at the window stays in its 33 × 13.5 mm
+patch). `power_ribs_squeeze_board` must find only a sliver: the ribs in the
+board's edge. Their positive controls: `power_mount_on_plate`,
+`power_plate_holds_board`, `power_edge_strip_works`,
+`power_window_is_close`, `power_plug_probe_works`,
+`power_moulding_probe_works` (a moulding 1 mm bigger than the pocket stops on
+the outer face), `power_m3_bite`, `usbc_insert_holes_open`,
+`power_speaker_drawing_works`, `power_stop_takes_push`,
+`power_m2_threads_bite` and `power_wire_probe_works`.
 
 ## Heat-set inserts
 
@@ -340,6 +392,7 @@ Every screw that gets undone goes into a brass M3 heat-set insert. The holes are
 | Front posts in the shell (front trim and retainer screw into these) | 8 | M3 × 5 | M3 × 14 | Pressed from the front, flush with the shelf the retainer sits on |
 | Back posts in the shell (back plate screws into these) | 8 | M3 × 6 | M3 × 8 | Pressed from the back face, flush |
 | Antenna mount flange | 3 | M3 × 5 | M3 × 8 | The pocket is in the mount; the screws come from inside the case, through the back plate |
+| Back plate, beside the USB-C window (the trigger board's mount screws into these) | 2 | M3 × 3 | M3 × 8 button head | Pressed from the inner face with the outer face on a flat board, so each ends flush with both faces; the screws come from inside the case, through the mount's ears (since 2026-10-29) |
 | Twin antenna mount's cover | 5 | M2 × 3 | M2 × 6 | 3.0 mm holes in the cover seat (for a 3.2 mm knurl; 3.2 if the kit's inserts are the 3.5 mm kind — measure them). The cover's holes are counterbored 4.4 mm × 1.5 mm, so the cap heads stand only 0.5 mm proud (since 2026-10-10) |
 | Speaker bosses (optional) | 8 | M2 × 3 | M2 × 6 | The 2.6 mm pilot takes the speaker's self-tapping screws; drill it to 3.0 for an M2 insert |
 

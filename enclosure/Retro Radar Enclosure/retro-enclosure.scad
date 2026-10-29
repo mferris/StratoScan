@@ -183,42 +183,38 @@ back_key_clear = 0.5;               // per side, between the block and the notch
 // gland that used to sit side by side. The antenna no longer needs a
 // bulkhead here: its coax comes in through the antenna mount's cable bore.
 //
-// Fitted against the real connector on 2026-09-29: it fits this window, and
-// its mounting holes are 16.5mm apart, centre to centre. The listing
-// publishes no cutout size, so these started as the usual values for that
-// style of part; part="usbc_gauge" (this window plus four neighbours) is
-// still the quick way to re-fit a different connector.
-usbc_cut_w       = 11.0;
-// 8.0 tall, from 6.5 (2026-10-23). The trigger board's socket face sits at
-// the plate's inner face, 1 mm behind the pocket floor, so a plug only seats
-// if its moulding goes through the web to the socket. At 6.5 mm tall the
-// owner's cable's moulding stopped on the web: no solid connection until
-// the window was cut taller. The width stays 11.0, held by the screw holes
-// beside it (with M3 button heads in the pocket, about 10.8 mm clear between
-// them).
-usbc_cut_h       = 8.0;
-usbc_cut_r       = 1.2;
-usbc_screw_pitch = 16.5;   // centre-to-centre of the two mounting screws
-// ...and up to this: each screw hole is a short slot, so a connector with
-// its screws 17 mm apart fits too (the 5 A, 100 W jumper ordered
-// 2026-10-13; the first one's are 16.5 mm).
-usbc_screw_pitch_max = 17.0;
-usbc_screw_dia   = screw_clear_dia;   // M3 clearance (3.4), same as every other M3 hole
+// Since 2026-10-29 the opening is the 12 V trigger board's own (the power
+// fix, below). The board's front edge bears on the plate's inner face, its
+// socket goes out through a window its own shape, and a plug's moulding goes
+// into a pocket in the outer face to meet the socket. The window's size and
+// the pocket's depth follow the board's measured sizes, so they are set with
+// them, in "The power fix". Until then the opening took a panel-mount USB-C
+// extension: an 11 x 8 window, two M3 holes 16.5 mm apart and a 2 mm pocket
+// with the screw heads in it. That extension does not fit this plate.
+//
 // 37 mm below where it was ([60, -14]): the owner's ask, 2026-10-10. At
 // the old spot the power jumper bent hard against the Pi's USB ports; the
 // bottom centre, tried first, did not suit either.
 usbc_cut_pos     = [60, -51];
-// The connector's body is a rectangular boss, 22.25 x 11 (measured
-// 2026-10-10), mounted from inside against the plate; through a 3 mm plate
-// its socket sat 3 mm below the outer face and a plug would not seat. A
-// pocket in the OUTER face, the boss's size with a little clearance and
-// usbc_recess_d deep, leaves a 1 mm web the two screws clamp through and
-// puts the socket 1 mm below the pocket floor. The screw heads sit in the
-// pocket; M3 x 6 still reach (2 mm further into the connector).
-usbc_boss_w      = 22.25;
-usbc_boss_h      = 11.0;
-usbc_boss_clear  = 0.3;    // a side
-usbc_recess_d    = 2.0;    // of back_plate_t: the web is what is left
+// The pocket, for a plug's moulding (2026-10-29). The USB-C standard lets a
+// moulding be up to 12.35 x 6.5 mm, and real ones run bigger: thick strain
+// reliefs, braided cables. 14 x 10 takes any that keeps to the standard,
+// with 0.8 mm to spare each side across and 1.7 above and below, and
+// mouldings that don't, up to about 13.4 x 9.4. The owner's went through
+// the old 11 x 8 window.
+usbc_recess_w    = 14;
+usbc_recess_h    = 10;
+usbc_recess_r    = 2.5;    // its corners, as round as a moulding's
+// The trigger board's mount is held by two M3 screws from INSIDE the case,
+// through its ears and into M3 x 3 heat-set inserts pressed into the plate
+// (2026-10-29), so nothing of them is in the outer face, and each screw
+// clamps the ear's whole thickness. 24 mm apart, so each insert keeps 3 mm
+// of plate between it and the pocket. At the old 16.5 mm an M3 head, 5.5 to
+// 6 mm across, reached to within 5.3 mm of the window's centre line, inside
+// the 14 mm a moulding needs: with the pocket only 1.4 mm deep it could
+// neither sit in the pocket nor be sunk out of a moulding's way.
+usbc_screw_pitch = 24;
+usbc_insert_len  = 3;      // M3 x 3: flush with both faces of the 3 mm plate
 
 // ---- Antenna-mount inserts (inside face) -----------------------------
 // Bosses on the INNER face taking M3 heat-set inserts, so the mount screws
@@ -1639,20 +1635,30 @@ module back_key_notch() {
             cube([back_key_reach + 3, back_key_w + 2*back_key_clear, back_lip_h + 2]);
 }
 
+// The single pass-through, cut through the plate from below (2026-10-29):
+// the window the trigger board's socket goes out through, the pocket in the
+// outer face for a plug's moulding, and the holes for the two inserts its
+// mount screws into.
 module usbc_cutout() {
-    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1]) {
-        linear_extrude(height = back_plate_t + 2)
-            offset(r = usbc_cut_r) offset(delta = -usbc_cut_r)
-                square([usbc_cut_w, usbc_cut_h], center = true);
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], 0]) {
+        translate([0, 0, -back_plate_t - 1])
+            linear_extrude(height = back_plate_t + 2) usbc_window2d();
+        // the pocket, in the outer face (z = -back_plate_t)
+        translate([0, 0, -back_plate_t - 1])
+            linear_extrude(height = usbc_recess_d + 1)
+                offset(r = usbc_recess_r) offset(delta = -usbc_recess_r)
+                    square([usbc_recess_w, usbc_recess_h], center = true);
         for (sx = [-1, 1])
-            hull() for (pitch = [usbc_screw_pitch, usbc_screw_pitch_max])
-                translate([sx * pitch/2, 0, 0])
-                    cylinder(d = usbc_screw_dia, h = back_plate_t + 2);
-        // the pocket for the connector's boss, in the outer face (z = -back_plate_t)
-        linear_extrude(height = usbc_recess_d + 1)
-            offset(r = usbc_cut_r) offset(delta = -usbc_cut_r)
-                square([usbc_boss_w + 2*usbc_boss_clear, usbc_boss_h + 2*usbc_boss_clear], center = true);
+            translate([sx * usbc_screw_pitch/2, 0, -back_plate_t - 1])
+                cylinder(d = insert_hole_dia, h = back_plate_t + 2);
     }
+}
+
+// The window, face on: the socket's own outline, usbc_cut_clear bigger all
+// round, its ends round as the socket's shell's are.
+module usbc_window2d() {
+    hull() for (sx = [-1, 1])
+        translate([sx * (usbc_cut_w/2 - usbc_cut_r), 0]) circle(r = usbc_cut_r);
 }
 
 
@@ -1705,52 +1711,126 @@ module ant_insert_bores() {
     }
 }
 
-// A 5-minute test coupon: the real cutout flanked by four neighbours at
-// +/-0.5 and +/-1.0mm. Fit the connector to it before printing a back plate.
+// A ten-minute test coupon (2026-10-29): the piece of the back plate round
+// the USB-C window, cut from back_plate() itself, so its window, pocket and
+// insert holes are the plate's own. Press the two inserts in, screw the
+// trigger board's mount on with the board and its stop in it, and plug the
+// charger's cable in: it must click fully home, its moulding down in the
+// pocket, before a whole plate is worth printing. It prints as the plate
+// does, outer face down. It used to carry five sizes of the old connector's
+// window.
+usbc_gauge_size = [36, 18];
 module usbc_gauge() {
-    difference() {
-        translate([-70, -18, 0]) cube([140, 36, back_plate_t]);
-        for (i = [-2 : 2])
-            translate([i * 28, 0, -1])
-                linear_extrude(height = back_plate_t + 2)
-                    offset(r = usbc_cut_r) offset(delta = -usbc_cut_r)
-                        square([usbc_cut_w + i*0.5, usbc_cut_h + i*0.5], center = true);
-    }
+    translate([-usbc_cut_pos[0], -usbc_cut_pos[1], back_plate_t])
+        intersection() {
+            back_plate();
+            translate([usbc_cut_pos[0] - usbc_gauge_size[0]/2, usbc_cut_pos[1] - usbc_gauge_size[1]/2, -back_plate_t - 1])
+                cube([usbc_gauge_size[0], usbc_gauge_size[1], back_plate_t + 2]);
+        }
 }
 
 // ---- The power fix (roadmap 5.7, #53), 2026-10-17 ------------------------
-// Two small parts for the 12 V trigger board and the 5 V regulator
+// Three small parts for the 12 V trigger board and the 5 V regulator
 // (docs/power-fix.md). The trigger board takes the charger's plug itself, in
-// the back plate's USB-C window: power_trigger_mount screws into the window's
-// own two holes, so the plate does not change and no panel-mount extension is
-// needed. The board goes into the mount from the back, socket first, until
-// its front edge meets the mount's flange, and a length of 1.75 mm filament
-// pushed through the two holes behind it keeps it there: the flange takes the
-// pull of unplugging, the pin the push of plugging in. The socket's face ends
-// where the old connector's did, 1 mm below the window's pocket floor, the
-// depth at which a plug seats, and the plug's moulding goes into the pocket
-// as before. power_regulator_tray holds the regulator, stuck to the plate's
-// inner face wherever the case has room.
+// the back plate's USB-C window, so no panel-mount extension is needed.
+// power_trigger_mount is a sleeve round the board, screwed to the plate's
+// inner face; power_trigger_stop slides in behind the board, and two M2
+// screws through the mount's side walls lock it there. power_regulator_tray
+// holds the regulator, stuck to the plate's inner face wherever the case has
+// room.
 //
-// The board is held wholly behind the plate. A first version (same day)
-// clamped it with a bezel in the pocket, which needed the board's front edge
-// inside the 11 mm window; the board measured 10.72 mm across, too close for
-// a printed hole.
+// The socket goes through the plate since 2026-10-29. The owner's power kept
+// cutting out when the cable moved: the plug would not make a good
+// connection. Until then the socket's face sat at the plate's inner face,
+// behind the whole 3 mm plate, so a plug's moulding had to travel through a
+// 2 mm pocket and an 11 x 8 window in the 1 mm web before the plug was home.
+// A moulding a little too big, or a board a little off-centre, and it never
+// got there. Now:
+//   - The board's front edge bears on the plate's inner face, and its socket,
+//     which stands pwr_trig_proud past that edge, goes out through a window
+//     in the plate: the socket's own round-ended outline, usbc_cut_clear
+//     bigger all round. The window locates the socket, and the plate takes
+//     the pull of unplugging straight from the board's edge: no flange,
+//     nothing printed between them.
+//   - The pocket in the outer face goes past the socket's face, so a
+//     moulding meets the socket and never the plate, and the plug goes fully
+//     home.
+//   - The mount sits flat on the plate's inner face, level with the board's
+//     front edge. Its two M3 screws come from inside, through its ears, into
+//     heat-set inserts in the plate, so nothing of them is in the outer face.
+//   - The stop presses the board's back edge forward, so the board is held
+//     between the plate and the stop with no play.
+// A first version (2026-10-17) clamped the board with a bezel in the pocket,
+// which needed its front edge inside the window; the board measured 10.72 mm
+// across, too close for a printed hole. It goes the other way now: only the
+// socket goes through.
+//
+// The stop replaced a 1.75 mm filament pin (2026-10-29). The pin crossed the
+// tube 0.25 mm behind the board, so the board had that much play and more as
+// the pin bent. The owner put two M2 screws in the pin's holes instead, their
+// tips pressing on the board; it held, but the power cut out twice in two
+// days when the cable was jiggled. Now nothing touches the board but the
+// plate in front and the stop's two crush ribs on its back edge, and the
+// screws hold everything with no slack:
+//   - The M2 screws thread into the stop: a solid block, so each gets more
+//     than 4 mm of thread, which the mount's thin walls could never give.
+//   - They thread through the walls too, rather than passing through
+//     clearance holes. A screw in a clearance hole can shift by the hole's
+//     slack when the board pushes on the stop, and crush ribs, once squeezed,
+//     do not spring back to follow it: the board would have its play again.
+//     Threaded in the wall, the screw has no slack to give.
+//   - Each pilot in the stop has a countersink. Push the stop in until its
+//     ribs touch the board's back edge; each screw, coming through its wall,
+//     lands on the countersink and draws the stop the last 0.3 mm forward,
+//     squeezing the ribs onto the board, before it threads in. The ribs take
+//     up the board's and the print's tolerances, about 0.3 mm either way.
+//   - The two screws are staggered along the board, one in each wall, so each
+//     can run most of the way across the stop: two on one line would meet in
+//     the middle long before M2 x 8 was in.
+//   - The stop's chamber is deeper than the board's tube and, below the
+//     board's level, 0.6 mm narrower each side, and the stop is a T to match.
+//     Upside down it would still take the screws, with its ribs under the
+//     board's edge and the board loose; as a T it cannot go in that way far
+//     enough for its holes to meet the walls'. The board cannot drop into the
+//     deeper part either, on its way past, and the walls round the screws are
+//     2.2 mm thick.
 //
 // Measured on the owner's boards, 2026-10-17, except where it says otherwise.
 pwr_trig_l        = 19.19;  // socket face to the board's back edge
 pwr_trig_w        = 10.72;  // across the board
 pwr_trig_t        = 4.83;   // the board's underside to the socket's flat top
 pwr_trig_sock_w   = 8.94;   // the USB-C socket's shell, across: the standard size
-pwr_trig_sock_t   = 3.26;   // and through; it sits on top of the board
-pwr_trig_proud    = 2.0;    // how far the socket's face stands past the board's front edge: the flange's thickness
-pwr_trig_clear    = 0.25;   // a side
+pwr_trig_sock_t   = 3.26;   // and through, its ends round; it sits on top of the board
+pwr_trig_proud    = 2.0;    // how far the socket's face stands past the board's front edge
+// Round the board in the mount, a side: 0.25 until 2026-10-29, closer now
+// that the board's socket goes through a close-fitting window.
+pwr_trig_clear    = 0.2;
 pwr_mount_wall    = 1.6;
-pwr_mount_boss_od = 7.5;
-pwr_mount_boss_h  = 9;
-pwr_mount_pilot   = 2.5;    // M3 screws cut their own thread, as the speakers' do
-pwr_sock_open     = 0.2;    // round the socket in the flange, a side
-pwr_pin_d         = 1.9;    // holes for a 1.75 mm filament pin
+// The mount's two ears take its M3 screws (2026-10-29): button heads, from
+// inside the case, through a clearance hole in each ear and 2.5 mm into an
+// M3 x 3 insert in the plate. Each screw clamps its ear, 5.5 mm of plastic.
+// The ear nearer the speaker at 0 degrees is under that speaker's corner,
+// which starts 8 mm in from the plate, so the ears and the heads on them stop
+// at 7.15. M3 x 8 is the length: an M3 x 10 would come 1.5 mm out of the
+// plate's outer face, and an M3 x 6 would barely reach its insert. The
+// asserts below hold both ends.
+pwr_ear_od        = 7.5;
+pwr_ear_t         = 5.5;
+pwr_m3_len        = 8;
+pwr_m3_head       = [5.7, 1.65];   // a button head (ISO 7380): across, and tall
+// The stop and its two M2 screws (2026-10-29). M2 x 8 by default; M2 x 10
+// fits too. M2 x 6 would leave under 4 mm of thread in the stop, and M2 x 12
+// would reach the far wall. The asserts below hold both ends.
+pwr_m2_len        = 8;
+pwr_m2_pilot      = 1.65;   // thread-forming M2 in ASA, in the stop and in the walls
+pwr_m2_wall       = 1.25;   // plastic round each pilot in the stop (1.2 at least)
+pwr_m2_pitch      = 3.0;    // between the two screws, along the board
+pwr_m2_csk        = 2.8;    // the countersink round each pilot's mouth in the stop
+pwr_stop_clear    = 0.15;   // round the stop in its chamber, a side
+pwr_stop_step     = 0.6;    // how much narrower, each side, the stop's body is than its top
+pwr_rib_h         = 0.8;    // the stop's two crush ribs: 90-degree ridges across the board's back edge
+pwr_rib_squeeze   = 0.3;    // how far they press into it once the screws are in
+pwr_rib_x         = 3.0;    // either side of the middle, well inside the board's 10.72
 pwr_reg_l         = 63;     // the regulator: a 9-36 V to 5.2 V module, 63 x 27 (published)
 pwr_reg_w         = 27;
 pwr_reg_h         = 12.29;  // its tallest capacitor to the board's underside: 16 mm off the plate in the tray
@@ -1762,69 +1842,254 @@ pwr_tray_rib_w    = 3;
 pwr_tray_rib_h    = 1.5;    // the board rests on two ribs; its solder joints stay clear
 pwr_tie_w         = 6;      // grooves under the floor for an optional cable tie
 pwr_tie_d         = 1.2;
-assert(pwr_trig_proud >= 0.6,
-       "the socket must stand at least 0.6 mm past the board's front edge, or the flange is too thin to hold the board");
-assert(pwr_trig_sock_w + 2*pwr_sock_open < pwr_trig_w,
-       "the flange's opening must be narrower than the board, or unplugging pulls the board out");
 
-// In the mount's frame (window centre at x = y = 0, the plate's inner face at
-// z = 0, the case inward along +z): the socket is centred in the window with
-// its face at z = 0, so the board lies below it and starts pwr_trig_proud in.
+// The back plate's window and the pocket's depth, from the board's sizes
+// (2026-10-29). The window is the socket's outline usbc_cut_clear bigger all
+// round: 0.3, because a printed hole comes out smaller than it is drawn, by a
+// tenth or so a side, and ASA shrinks as it cools. The pocket's floor is
+// usbc_seat_margin behind the socket's face: the floor prints as a bridge
+// over the pocket, and a bridge sags, by a layer or more in ASA. Level with
+// the socket's face, a sagging floor would stop a moulding just short of it,
+// which is the fault this fixes. That leaves a web of 1.6 mm round the
+// window, 60% more than the old 1 mm.
+usbc_cut_clear    = 0.3;
+usbc_cut_w        = pwr_trig_sock_w + 2*usbc_cut_clear;    // 9.54
+usbc_cut_h        = pwr_trig_sock_t + 2*usbc_cut_clear;    // 3.86
+usbc_cut_r        = usbc_cut_h/2;                          // round ends
+usbc_seat_margin  = 0.4;
+usbc_recess_d     = back_plate_t - pwr_trig_proud + usbc_seat_margin;   // 1.4
+
+assert(back_plate_t - usbc_recess_d < pwr_trig_proud,
+       "the socket's face must stand past the pocket's floor, or a moulding stops on the plate short of it");
+assert(pwr_trig_t - pwr_trig_sock_t - usbc_cut_clear >= 1.0,
+       "the board's front edge must bear on at least 1 mm of plate below the window");
+assert(usbc_cut_w < pwr_trig_w,
+       "the window must be narrower than the board, or unplugging pulls the board through it");
+assert(usbc_screw_pitch/2 - insert_hole_dia/2 - usbc_recess_w/2 >= 1.6,
+       "the inserts need 1.6 mm of plate between them and the pocket");
+assert(usbc_insert_len <= back_plate_t,
+       "the inserts must not stand out of the plate's outer face");
+assert(pwr_m3_len - pwr_ear_t <= back_plate_t - 0.3,
+       "the M3 screws must end inside the plate, short of its outer face: use a shorter screw");
+assert(pwr_m3_len - pwr_ear_t >= 2,
+       "the M3 screws need 2 mm of thread in their inserts: use a longer screw");
+assert(pwr_ear_t >= 2.5,
+       "each M3 screw must clamp at least 2.5 mm of plastic");
+assert(pwr_ear_t + pwr_m3_head[1] <= (shell_depth - speaker_d)/2 - 0.5,
+       "the ears, and the M3 heads on them, must stay under the speaker beside the window");
+
+// In the plate's frame round the window (its centre at x = y = 0, the
+// plate's inner face at z = 0, its outer face at z = -back_plate_t, the case
+// inward along +z): the socket is centred in the window with its face at
+// z = -pwr_trig_proud, in the pocket, and the board lies below it, its front
+// edge on the plate at z = 0. The mount's flat face is on the plate too.
 function pwr_board_y0() = pwr_trig_sock_t/2 - pwr_trig_t;          // the board's underside
-function pwr_pin_y()    = -pwr_trig_sock_t/2 - pwr_pin_d/2;        // the pin's top level with the board's
-function pwr_pin_z()    = pwr_trig_l + pwr_trig_clear + pwr_pin_d/2;
+function pwr_pcb_y1()   = pwr_board_y0() + pwr_trig_t - pwr_trig_sock_t;   // its top face, where the wires are soldered
+function pwr_board_z1() = pwr_trig_l - pwr_trig_proud;             // its back edge
+// The stop, in the same frame. Its top part is the tube's width less its
+// clearance, and reaches 2 x pwr_trig_clear under the board's top face, so
+// the wires soldered there pass over it; below the board's level its body is
+// narrower (pwr_stop_hw) and carries the two M2 pilots, with pwr_m2_wall of
+// plastic past their teardrop roofs too. Its front face stands
+// pwr_rib_h - pwr_rib_squeeze behind the board's back edge, so only the ribs
+// reach the board.
+function pwr_tube_w()   = pwr_trig_w + 2*pwr_trig_clear;
+function pwr_stop_hw()  = pwr_tube_w()/2 - pwr_stop_step - pwr_stop_clear;
+function pwr_stop_y1()  = pwr_pcb_y1() - 2*pwr_trig_clear;
+function pwr_m2_y()     = pwr_stop_y1() - pwr_m2_wall - pwr_m2_pilot/2;
+function pwr_stop_y0()  = pwr_m2_y() - pwr_m2_pilot/2*sqrt(2) - pwr_m2_wall;
+function pwr_stop_z0()  = pwr_board_z1() + pwr_rib_h - pwr_rib_squeeze;
+// the screws' axes along the board: [the one through the +x wall, the one through the -x wall]
+function pwr_m2_z()     = [pwr_stop_z0() + pwr_m2_wall + pwr_m2_pilot/2,
+                           pwr_stop_z0() + pwr_m2_wall + pwr_m2_pilot/2 + pwr_m2_pitch];
+function pwr_stop_z1()  = pwr_m2_z()[1] + pwr_m2_pilot/2 + pwr_m2_wall;
+function pwr_mount_len() = pwr_stop_z1() + 0.4;                    // the tube's back end, just past the stop's
+// from a wall's outer face, where a screw's head sits, to the stop's far side
+function pwr_m2_reach() = pwr_mount_wall + pwr_stop_step + pwr_stop_clear + 2*pwr_stop_hw();
+// a screw's full thread in the stop: its length less the wall, the gap and the countersink
+function pwr_m2_engaged() = pwr_m2_len - pwr_mount_wall - pwr_stop_step - pwr_stop_clear - (pwr_m2_csk - pwr_m2_pilot)/2;
+assert(pwr_m2_engaged() >= 4,
+       "the M2 screws must have at least 4 mm of thread in the stop: use a longer screw");
+assert(pwr_m2_len <= pwr_m2_reach() - 0.5,
+       "the M2 screws must end inside the stop, short of the far wall: use a shorter screw");
+assert(pwr_m2_pitch >= pwr_m2_pilot + 1.2,
+       "the two M2 pilots need 1.2 mm of plastic between them");
+assert(pwr_rib_squeeze > 0 && pwr_rib_squeeze < pwr_rib_h - 0.3,
+       "the ribs must reach into the board's back edge, and the stop's face stay clear of it");
+assert(pwr_stop_hw() + pwr_stop_clear < pwr_trig_w/2 - 0.2,
+       "the stop's chamber must be narrower than the board below its level, so the board cannot drop into it");
+
+// A hole along x that prints without support with z up: round, with a
+// 45-degree roof toward +z. The mount prints flat face down, z up; the stop
+// turns it to suit the way it prints.
+module pwr_x_teardrop(d, h) {
+    rotate([0, 90, 0]) linear_extrude(height = h, center = true)
+        hull() { circle(d = d); translate([-d/2*sqrt(2), 0]) square(0.01, center = true); }
+}
+
+// The socket's shell, face on: pwr_trig_sock_w x pwr_trig_sock_t, its ends
+// round. grow makes it bigger all round, for the checks.
+module pwr_socket2d(grow = 0) {
+    hull() for (sx = [-1, 1])
+        translate([sx * (pwr_trig_sock_w/2 - pwr_trig_sock_t/2), 0]) circle(d = pwr_trig_sock_t + 2*grow);
+}
 
 // The trigger mount, in place (it goes at usbc_cut_pos). It prints as it
-// sits, flat face down.
+// sits, flat face down: the face that goes on the plate, with the ears'
+// faces in it. The board's tube is open at the front, the board's front edge
+// level with the face. Behind the board the tube's floor drops to make a
+// chamber for the stop; a 45-degree step underneath carries the deeper part,
+// so nothing overhangs, and the M2 pilots through the walls are teardrops.
 module power_trigger_mount() {
-    cw = pwr_trig_w + 2*pwr_trig_clear;
-    y0 = pwr_board_y0() - pwr_trig_clear;
-    y1 = pwr_trig_sock_t/2 + pwr_trig_clear;
+    cw = pwr_tube_w();
+    y0 = pwr_board_y0() - pwr_trig_clear;     // the board's floor
+    y1 = pwr_trig_sock_t/2 + pwr_trig_clear;  // the tube's ceiling, the same all along
+    yk = y0 - pwr_stop_clear;                 // where the chamber narrows, under the stop's top
+    yc = pwr_stop_y0() - pwr_stop_clear;      // the stop's floor
+    hc = pwr_stop_hw() + pwr_stop_clear;      // the chamber's half-width below yk
     w  = pwr_mount_wall;
-    f  = pwr_trig_proud;               // the flange: the board's front edge rests on its back face
-    px = usbc_screw_pitch_max/2;
-    len = pwr_pin_z() + pwr_pin_d/2 + 1.6;
+    px = usbc_screw_pitch/2;
+    zc = pwr_board_z1();               // the chamber starts at the board's back edge
+    len = pwr_mount_len();
+    drop = y0 - yc;
     difference() {
         union() {
             translate([-cw/2 - w, y0 - w, 0]) cube([cw + 2*w, y1 - y0 + 2*w, len]);
-            for (sx = [-1, 1]) translate([sx*px, 0, 0]) cylinder(d = pwr_mount_boss_od, h = pwr_mount_boss_h);
-            translate([-px, -pwr_mount_boss_od/2, 0]) cube([2*px, pwr_mount_boss_od, pwr_mount_boss_h]);
+            hull() {
+                translate([-cw/2 - w, y0 - w, zc - drop]) cube([cw + 2*w, y1 - y0 + 2*w, 0.01]);
+                translate([-cw/2 - w, yc - w, zc]) cube([cw + 2*w, y1 - yc + 2*w, len - zc]);
+            }
+            // the ears, on the plate with the rest of the face
+            for (sx = [-1, 1]) translate([sx*px, 0, 0]) cylinder(d = pwr_ear_od, h = pwr_ear_t);
+            translate([-px, -pwr_ear_od/2, 0]) cube([2*px, pwr_ear_od, pwr_ear_t]);
         }
-        // the board's tube, from the flange back, open at the back end
-        translate([-cw/2, y0, f]) cube([cw, y1 - y0, len]);
-        // the socket's way through the flange
-        translate([-(pwr_trig_sock_w/2 + pwr_sock_open), -(pwr_trig_sock_t/2 + pwr_sock_open), -1])
-            cube([pwr_trig_sock_w + 2*pwr_sock_open, pwr_trig_sock_t + 2*pwr_sock_open, f + 2]);
-        // the pin's holes, across the tube just behind the board
-        translate([-(cw/2 + w + 1), pwr_pin_y(), pwr_pin_z()]) rotate([0, 90, 0])
-            cylinder(d = pwr_pin_d, h = cw + 2*w + 2);
-        // pilot holes for the window's two screws, from the flat face
-        for (sx = [-1, 1]) translate([sx*px, 0, -1]) cylinder(d = pwr_mount_pilot, h = pwr_mount_boss_h - 1.5 + 1);
+        // the board's tube, open at both ends
+        translate([-cw/2, y0, -1]) cube([cw, y1 - y0, len + 2]);
+        // the stop's chamber behind it: as wide down to just under the board's
+        // floor, then narrower and deeper
+        translate([-cw/2, yk, zc]) cube([cw, y1 - yk, len]);
+        translate([-hc, yc, zc]) cube([2*hc, yk - yc + 0.01, len]);
+        // a 0.5 mm lead-in round the back end, for the board and the stop
+        translate([0, 0, len - 0.5]) hull() {
+            translate([-cw/2, yk, 0]) cube([cw, y1 - yk, 0.01]);
+            translate([-cw/2 - 0.5, yk - 0.5, 0.51]) cube([cw + 1, y1 - yk + 1, 0.01]);
+        }
+        translate([0, 0, len - 0.5]) hull() {
+            translate([-hc, yc, 0]) cube([2*hc, yk - yc, 0.01]);
+            translate([-hc - 0.5, yc - 0.5, 0.51]) cube([2*hc + 1, yk - yc + 1, 0.01]);
+        }
+        // the M2 pilots, one through each side wall, staggered along the board
+        for (i = [0, 1]) let (sx = i == 0 ? 1 : -1)
+            translate([sx*(hc + cw/2 + w)/2, pwr_m2_y(), pwr_m2_z()[i]]) pwr_x_teardrop(pwr_m2_pilot, cw/2 + w - hc + 1);
+        // the M3 screws' clearance holes through the ears, each with a 1 mm
+        // chamfer at the face: room for the insert's end and any plastic it
+        // has raised round its hole
+        for (sx = [-1, 1]) translate([sx*px, 0, 0]) {
+            translate([0, 0, -1]) cylinder(d = screw_clear_dia, h = pwr_ear_t + 2);
+            translate([0, 0, -0.01]) cylinder(d1 = screw_clear_dia + 2, d2 = screw_clear_dia, h = 1.01);
+        }
     }
 }
 
 module power_trigger_mount_placed() { translate([usbc_cut_pos[0], usbc_cut_pos[1], 0]) power_trigger_mount(); }
 
-// The board itself, as the mount holds it, for the checks.
-module power_trigger_board_placed() {
-    translate([usbc_cut_pos[0], usbc_cut_pos[1], 0]) {
-        translate([-pwr_trig_w/2, pwr_board_y0(), pwr_trig_proud])
-            cube([pwr_trig_w, pwr_trig_t - pwr_trig_sock_t, pwr_trig_l - pwr_trig_proud]);
-        translate([-pwr_trig_sock_w/2, -pwr_trig_sock_t/2, 0]) cube([pwr_trig_sock_w, pwr_trig_sock_t, 7]);
+// The stop, in the mount's frame, where the two screws hold it: a T, its top
+// the tube's width and its body narrower. Its crush ribs run up its front
+// face across the board's back edge, from just above the tube's floor to the
+// stop's top; ribs = false leaves them off, for the checks. Both pilots run
+// right across, each countersunk on the side its screw comes in from; they
+// are teardrops, roofed toward the stop's bottom, which is up as it prints.
+module power_trigger_stop_shape(ribs = true) {
+    hw = pwr_stop_hw();
+    ht = pwr_tube_w()/2 - pwr_stop_clear;     // the top's half-width
+    yk = pwr_board_y0() - pwr_trig_clear;     // the top's underside, level with the tube's floor
+    y0 = pwr_stop_y0(); y1 = pwr_stop_y1();
+    z0 = pwr_stop_z0(); z1 = pwr_stop_z1();
+    yr = yk + 0.1;
+    csk = (pwr_m2_csk - pwr_m2_pilot)/2;
+    difference() {
+        union() {
+            translate([-hw, y0, z0]) cube([2*hw, yk - y0 + 0.01, z1 - z0]);
+            // the top, its two upper edges chamfered: they are on the bed as
+            // it prints, where the first layer spreads
+            translate([0, 0, z0]) linear_extrude(height = z1 - z0)
+                polygon([[-ht, yk], [ht, yk], [ht, y1 - 0.4], [ht - 0.4, y1], [-ht + 0.4, y1], [-ht, y1 - 0.4]]);
+            if (ribs) for (sx = [-1, 1])
+                translate([sx*pwr_rib_x, yr, z0]) rotate([-90, 0, 0]) linear_extrude(height = y1 - yr)
+                    polygon([[-pwr_rib_h, -0.01], [pwr_rib_h, -0.01], [0, pwr_rib_h]]);
+        }
+        for (i = [0, 1]) let (sx = i == 0 ? 1 : -1, z = pwr_m2_z()[i]) {
+            translate([0, pwr_m2_y(), z]) rotate([90, 0, 0]) pwr_x_teardrop(pwr_m2_pilot, 2*ht + 2);
+            translate([sx*(hw + 0.01), pwr_m2_y(), z]) rotate([0, -sx*90, 0])
+                cylinder(d1 = pwr_m2_csk + 0.02, d2 = pwr_m2_pilot, h = csk + 0.01);
+        }
     }
 }
 
-// A USB-C plug's shell (8.4 x 2.6), from out past the stand to the socket face.
-module power_plug_probe() {
-    translate([usbc_cut_pos[0] - 4.2, usbc_cut_pos[1] - 1.3, -back_plate_t - 20])
-        cube([8.4, 2.6, 20 + back_plate_t]);
+module power_trigger_stop_placed() { translate([usbc_cut_pos[0], usbc_cut_pos[1], 0]) power_trigger_stop_shape(); }
+
+// The stop as it prints: on its top face, the T's wide part down, so its
+// narrower body stands on it with nothing overhanging; the ribs rise from the
+// bed up its front face, and the pilots lie level, roofed upward.
+module power_trigger_stop() {
+    translate([0, 0, pwr_stop_y1()]) rotate([-90, 0, 0]) translate([0, 0, -pwr_stop_z0()])
+        power_trigger_stop_shape();
 }
 
-// The 1.75 mm filament pin, through both holes.
-module power_pin_probe() {
-    cw = pwr_trig_w + 2*pwr_trig_clear;
-    translate([usbc_cut_pos[0] - (cw/2 + pwr_mount_wall + 0.5), usbc_cut_pos[1] + pwr_pin_y(), pwr_pin_z()])
-        rotate([0, 90, 0]) cylinder(d = 1.75, h = cw + 2*pwr_mount_wall + 1);
+// The board itself, as the mount holds it, for the checks: its circuit
+// board, the front edge on the plate, and its socket's shell, round-ended,
+// from its face 7 mm back.
+module power_trigger_board_placed() {
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], 0]) {
+        translate([-pwr_trig_w/2, pwr_board_y0(), 0])
+            cube([pwr_trig_w, pwr_trig_t - pwr_trig_sock_t, pwr_board_z1()]);
+        translate([0, 0, -pwr_trig_proud]) linear_extrude(height = 7) pwr_socket2d();
+    }
+}
+
+// A USB-C plug's shell (8.4 x 2.6), from out past the stand to the socket's face.
+module power_plug_probe() {
+    translate([usbc_cut_pos[0] - 4.2, usbc_cut_pos[1] - 1.3, -back_plate_t - 20])
+        cube([8.4, 2.6, 20 + back_plate_t - pwr_trig_proud]);
+}
+
+// The two M2 screws as they sit, for the checks: each shank d across and len
+// long, in from its wall's outer face, and its head (a cap or pan head, 4 mm
+// across and 2 tall) on that face.
+module power_m2_probe(d = 2.0, len = pwr_m2_len, head = true) {
+    for (i = [0, 1]) let (sx = i == 0 ? 1 : -1)
+        translate([usbc_cut_pos[0] + sx*(pwr_tube_w()/2 + pwr_mount_wall), usbc_cut_pos[1] + pwr_m2_y(), pwr_m2_z()[i]]) {
+            rotate([0, -sx*90, 0]) cylinder(d = d, h = len, $fn = 24);
+            if (head) rotate([0, sx*90, 0]) cylinder(d = 4.0, h = 2.0, $fn = 24);
+        }
+}
+
+// The two M3 screws as they sit, for the checks: each shank d across and len
+// long, from its ear's face away from the plate toward the plate, and its
+// button head on that face.
+module power_m3_probe(d = 3.0, len = pwr_m3_len, head = true) {
+    for (sx = [-1, 1])
+        translate([usbc_cut_pos[0] + sx*usbc_screw_pitch/2, usbc_cut_pos[1], pwr_ear_t]) {
+            translate([0, 0, -len]) cylinder(d = d, h = len, $fn = 24);
+            if (head) cylinder(d = pwr_m3_head[0], h = pwr_m3_head[1], $fn = 24);
+        }
+}
+
+// The two M3 x 3 inserts as they are pressed into the plate, d across (4.5,
+// their knurl), flush with its outer face, for the checks.
+module power_insert_probe(d = 4.5) {
+    for (sx = [-1, 1])
+        translate([usbc_cut_pos[0] + sx*usbc_screw_pitch/2, usbc_cut_pos[1], -back_plate_t])
+            cylinder(d = d, h = usbc_insert_len, $fn = 32);
+}
+
+// The board's two output wires, 18 AWG (2.1 mm across), soldered on its top
+// face near the back edge and laid straight out past the mount's back end,
+// for the checks. dy moves them up or down.
+module power_wire_probe(dy = 0) {
+    for (sx = [-1, 1])
+        translate([usbc_cut_pos[0] + sx*2.6, usbc_cut_pos[1] + pwr_pcb_y1() + 1.05 + dy, pwr_board_z1() - 3])
+            cylinder(d = 2.1, h = pwr_mount_len() - pwr_board_z1() + 13, $fn = 24);
 }
 
 // The regulator's tray, printed and fitted floor down. The board's long axis
@@ -1883,7 +2148,7 @@ module back_plate() {
             translate([screw_r*cos(a), screw_r*sin(a), -back_plate_t-1])
                 cylinder(d=screw_clear_dia, h=back_plate_t+2);
         }
-        // One pass-through, for the panel-mount USB-C cable.
+        // One pass-through, for the trigger board's socket (2026-10-29).
         usbc_cutout();
         // The grilles cut a band from z=-1 to wall+1; shifted down by the
         // plate thickness that band covers the plate exactly.
@@ -2009,6 +2274,7 @@ else if (part == "twin_assembled_11") { antenna_mount_twin([11, 11]); ant_twin_c
 else if (part == "none") {}  // for a file that includes this one to draw its own views
 else if (part == "usbc_gauge") usbc_gauge();
 else if (part == "power_trigger_mount") power_trigger_mount();
+else if (part == "power_trigger_stop") power_trigger_stop();
 else if (part == "power_regulator_tray") power_regulator_tray();
 else if (part == "antenna_socket_gauge") antenna_socket_gauge();
 else if (part == "stand") stand();
