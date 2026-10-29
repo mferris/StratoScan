@@ -25,14 +25,14 @@ EMPTY="twin_vs_stand_11 twin_slot_takes_jack_11 twin_barrel_through_panel_11 twi
        whisker_vs_screws whisker_vs_nose whisker_off_nose nose_screw_removed
        antenna_clears_head mount_hidden plate_vs_shell mount_vs_stand sma_mount_vs_stand
        material_lost paws_vs_tail lip_clears_posts lip_inside_bore
-       vents_clear_of_mount claws_off_the_desk connector_passes
+       vents_clear_of_mount connector_passes
        socket_takes_base connector_has_room cable_slot_open power_mount_vs_plate power_board_held power_plug_reaches power_mount_vs_shell power_mount_vs_speakers power_moulding_reaches speaker_sleeve_hollow
        power_m3_clear_of_speakers power_speakers_on_pads power_stop_fits_tube power_stop_clear_of_board power_m2_holes_line_up power_m2_clear_of_board power_m2_threads_held power_wires_out power_stop_vs_shell power_stop_vs_speakers power_parts_vs_stand
        usbc_inserts_clear_pocket usbc_inserts_surrounded power_edge_on_plate power_socket_clears_window power_m3_pass power_m3_inside_plate power_parts_in_patch usbc_recess_open usbc_plug_clears_stand
        usbc_bridge_steps_open
        usbc_label_cut usbc_label_inside_plate usbc_label_off_gauge usbc_label_clear_of_holes power_m2_drivers_clear
        rail_lip_kept rear_rail_square speaker_slot_closed retainer_key_fits front_stack_seats
-       front_posts_on_wall"
+       front_posts_on_wall tail_on_the_desk"
 
 # Must come out small but not empty (2026-10-29): the trigger board's stop
 # presses its two crush ribs into the board's back edge, 0.4 mm as drawn (0.3
@@ -202,7 +202,7 @@ done
 # find a real hole. A 3.2mm probe through the bezel is about 56mm3; the
 # threshold only has to separate that from nothing.
 echo "Positive controls — must find real geometry:"
-for c in key_blocks_45 key_blocks_90 key_blocks_135 key_blocks_180 key_blocks_225 key_blocks_270 key_blocks_315 other_screws_present back_inserts_open lip_present usbc_open ant_plate_holes_open ant_flange_inserts_open driver_path_was_blocked vents_were_under_mount socket_gauge_works cable_slot_other_side connector_gauge_works sma_passage_joins sma_panel_present sma_hole_open claws_stand_proud top_wall_solid front_insert_holes_open twin_panels_present twin_holes_open top_screw_was_under_mount twin_channel_open twin_cover_seats twin_cover_screws_open twin_antennas_probe_works twin_channel_open_11 twin_cover_seats_11 twin_cover_screws_open_11 twin_panels_present_11 power_plug_probe_works power_moulding_probe_works speaker_probe_works power_speaker_drawing_works power_stop_takes_push power_m2_threads_bite power_wire_probe_works usbc_insert_probe_works usbc_insert_holes_open power_mount_on_plate power_plate_holds_board power_edge_strip_works power_window_is_close power_m3_bite usbc_recess_web usbc_plug_probe_works usbc_bridge_steps_held power_board_on_floor usbc_label_present usbc_label_probe_works power_m2_drivers_reach rail_slope_present rear_rail_probe_works shelf_slope_present speaker_slot_probe_works retainer_key_blocks_45 retainer_key_blocks_90 retainer_key_blocks_135 retainer_key_blocks_180 retainer_key_blocks_225 retainer_key_blocks_270 retainer_key_blocks_315 front_stack_retainer_down front_stack_trim_down post_wall_probe_works; do
+for c in key_blocks_45 key_blocks_90 key_blocks_135 key_blocks_180 key_blocks_225 key_blocks_270 key_blocks_315 other_screws_present back_inserts_open lip_present usbc_open ant_plate_holes_open ant_flange_inserts_open driver_path_was_blocked vents_were_under_mount socket_gauge_works cable_slot_other_side connector_gauge_works sma_passage_joins sma_panel_present sma_hole_open claws_stand_proud top_wall_solid front_insert_holes_open twin_panels_present twin_holes_open top_screw_was_under_mount twin_channel_open twin_cover_seats twin_cover_screws_open twin_antennas_probe_works twin_channel_open_11 twin_cover_seats_11 twin_cover_screws_open_11 twin_panels_present_11 power_plug_probe_works power_moulding_probe_works speaker_probe_works power_speaker_drawing_works power_stop_takes_push power_m2_threads_bite power_wire_probe_works usbc_insert_probe_works usbc_insert_holes_open power_mount_on_plate power_plate_holds_board power_edge_strip_works power_window_is_close power_m3_bite usbc_recess_web usbc_plug_probe_works usbc_bridge_steps_held power_board_on_floor usbc_label_present usbc_label_probe_works power_m2_drivers_reach rail_slope_present rear_rail_probe_works shelf_slope_present speaker_slot_probe_works retainer_key_blocks_45 retainer_key_blocks_90 retainer_key_blocks_135 retainer_key_blocks_180 retainer_key_blocks_225 retainer_key_blocks_270 retainer_key_blocks_315 front_stack_retainer_down front_stack_trim_down post_wall_probe_works tail_probe_works; do
     out="$TMP/$c.stl"
     "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
     v=$(vol_of "$out")
@@ -226,10 +226,12 @@ for c in $CANARY; do
 done
 
 # The check the volume tests cannot make: two parts sharing a surface have
-# zero shared volume and still stipple the preview. Compared face by face.
-echo "Coincident faces between colour bodies — must be none:"
+# zero shared volume and still stipple the preview. Compared face by face, on
+# the exported meshes, with each body's lumps counted and, since 2026-10-29,
+# each lump's lowest point, which must be on the bed.
+echo "Colour bodies — no coincident faces, the right lumps, every lump on the bed:"
 if python3 "$DIR/check-coincident.py" >"$TMP/coin.txt" 2>&1; then
-    grep -c PASS "$TMP/coin.txt" | sed 's/^/  all /;s/$/ pairs clean/'
+    grep -c PASS "$TMP/coin.txt" | sed 's/^/  all /;s/$/ clean/'
 else
     grep FAIL "$TMP/coin.txt" | sed 's/^/  /'
     fail=1

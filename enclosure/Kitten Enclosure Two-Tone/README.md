@@ -239,15 +239,31 @@ claw** and leaves the other seven — which looks like the tool ignoring you.
 There is no way to fix that from the STL side; eight claws cannot be one
 connected lump. So the assignment lives in the project file instead.
 
-The filament slots are 1 for the black (body, toes, tail), 2 for the white
-(paws, tail tip) and 3 for the claws, kept on their own slot so they can be a
-third colour. Change any of them in the slicer.
+The filament slots are 1 for the black (body, toes, tail) and 2 for the white
+(paws, tail tip and claws). The claws had slot 3 to themselves until
+2026-10-29, so they could be a third colour; on the paws' white the print
+needs one filament change fewer in each of the 29 layers they are in. For a
+third colour, pick another filament for them in the slicer, or set
+`stand_claws` to 3 in `make-3mf.py`. Change any of them in the slicer.
 
 If you would rather load the STLs by hand anyway: load the first, then "add
 part"/"load as part" for the rest, which preserves their positions, and
 assign a filament to each.
-No supports needed for the paws or toes; the tail tip lifts off the paw and
-wants a little support under the flick.
+
+**Support.** Everything on the stand starts on the bed (2026-10-29). The
+claws used to stop 1.2 mm short of the desk and the toes 0.47 mm, so each
+began in mid-air; now both come down onto it, level with the pads' flat
+bottoms. The tail lies on the desk until it reaches the right paw, sunk
+1.2 mm so its sides need nothing, and climbs at about 40° beside the paw,
+which prints on its own; it used to rise off the desk well before the paw and
+cross about 25 mm of air, 3-14 mm up. Over the paw it is as it was: it rises
+off the pad and the tip flicks up, so that part still wants a little support,
+and so do the rounded undersides of the toes and claws, in tiny supports
+under 2 mm tall at the bed, and the clefts between the toes where they run
+in under the pads. Sliced in Bambu Studio 2.08 (X1C 0.4 mm, 0.20 mm Standard,
+Bambu ASA, tree supports at 30°), the one-piece stand's support went from
+3.3 to 2.1 cm³ and the print from 5.8 to 5.6 hours; the 0.9 cm³ that held up
+the tail before the paw is gone.
 
 **Single extruder.** Print them as separate objects and glue. Every split
 follows a real seam in the shape — pad to toe, tail to tip — so the joins
@@ -310,13 +326,14 @@ vacuous, since moving the angle would move the wedge along with the grooves.
   drooping toward the desk the way a cat's does. Their base sits *inside* the
   toe rather than butted against it: a spike joined at a tangent point is a
   weak spot in the print, and a butted joint would share a surface with the
-  toe, which is the coincidence that stipples the preview. The tip stops
-  clear of the desk on purpose — claws that reached z=0 would carry the
-  stand's weight on eight little points and rock, which `claws_off_the_desk`
-  holds. `claws_stand_proud` is the paired positive control: a claw entirely
-  buried in its toe passes every seam and volume check while being invisible
-  on the print, which is exactly what the grooves-as-nails problem looked
-  like.
+  toe, which is the coincidence that stipples the preview. The tip comes down
+  onto the desk, cut flat there like the pads (2026-10-29). It used to stop
+  clear of it, so the claws would not carry the stand and rock, but the pads
+  are flat on the desk too, so claws level with them carry nothing, and held
+  off, each began in mid-air on a first layer of 1 mm². `claws_stand_proud`
+  is a positive control: a claw entirely buried in its toe passes every seam
+  and volume check while being invisible on the print, which is exactly what
+  the grooves-as-nails problem looked like.
 - **Tail black, tip white, and the tip lifts.** The first version had the tip
   resting flat on the pad, which is what a sitting cat does — but that put a
   white tip on top of a white paw, where it vanished. The whole point of a
@@ -518,6 +535,11 @@ Alongside the fit checks on the head and cradle, the colour split adds:
   real geometry: lowered 0.2 mm, the retainer runs into the shelf and the
   trim into the rim, so neither stands off the head. (The preview drew the
   retainer inside the shelf until 2026-10-29.)
+- `tail_on_the_desk` — must be empty: under the tail's middle, from the
+  plinth's side to beside the right paw, the first three layers on the desk
+  are solid, so it lies on the desk all that way (the old stand finds
+  40 mm³ of air there). `tail_probe_works`, its control, is the same probes
+  further on, under its climb, where they find the air (20 mm³).
 - `canary` — must produce geometry. Without it, a typo in the `use <>` path
   makes every check above pass against nothing, which has happened here
   before.
@@ -526,9 +548,13 @@ Alongside the fit checks on the head and cradle, the colour split adds:
 the exported meshes face by face and counts triangles two parts have at
 identical coordinates. Two parts sharing a surface have zero shared volume
 and still stipple, so nothing about that bug is visible in a volume
-measurement. All ten pairs must come out at zero. With the overlap disabled
+measurement. All fifteen pairs must come out at zero. With the overlap disabled
 (`-D colour_overlap=0`) the same check reports 3,502 shared faces between the
-paws and the toes, which is precisely the speckling.
+paws and the toes, which is precisely the speckling. It also counts each
+body's separate lumps, and since 2026-10-29 checks that every lump of the
+body, paws, toes, claws and tail starts on the bed: a lump whose lowest point
+is above it begins in mid-air, which no volume check sees. The old claws
+start 1.24 mm up and the old toes 0.47 mm.
 
 Run everything with `sh run-checks.sh`, which also runs the coincidence
 check.
@@ -544,6 +570,7 @@ for p in shell front_trim retainer stand back_plate usbc_gauge \
   openscad --backend=manifold --export-format binstl \
            -D "part=\"$p\"" -o "$p.stl" kitten-enclosure-twotone.scad
 done
+python3 make-3mf.py   # kitten-stand-twotone.3mf, from the six stand_* meshes
 ```
 
 **The exporter is not deterministic.** Two consecutive exports of unchanged

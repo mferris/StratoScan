@@ -12,9 +12,12 @@ around; the assignment belongs in the file.
 
 Filament slots (change them in the slicer if you want other colours):
   1  stand_body, stand_toes, stand_tail        the black
-  2  stand_paws, stand_tail_tip                the white
-  3  stand_claws                               left on its own slot so the
-                                               claws can be a third colour
+  2  stand_paws, stand_tail_tip, stand_claws   the white
+
+The claws had slot 3 to themselves until 2026-10-29, so they could be a
+third colour. On the paws' white the print needs one filament change fewer
+in each of the 29 layers the claws are in. For a third colour, set
+stand_claws to 3 below, or pick another filament for them in the slicer.
 """
 import struct, sys, zipfile
 from xml.sax.saxutils import escape
@@ -25,7 +28,7 @@ PARTS = [
     ("stand_tail",     1),
     ("stand_paws",     2),
     ("stand_tail_tip", 2),
-    ("stand_claws",    3),
+    ("stand_claws",    2),
 ]
 
 

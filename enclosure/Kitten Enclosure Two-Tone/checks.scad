@@ -172,14 +172,10 @@ else if (check=="claws_stand_proud") {
     union() { paw_toes(paw_x); paw_toes(-paw_x); paw_pad(paw_x); paw_pad(-paw_x); }
   }
 }
-// A claw that reaches the desk plane would carry the stand's weight on four
-// points per paw and rock. Nothing below z=0.6.
-else if (check=="claws_off_the_desk") {
-  intersection() {
-    part_stand_claws();
-    translate([-300,-300,-300]) cube([600,600,300.6]);
-  }
-}
+// claws_off_the_desk held the claws 0.6mm off the desk, so they would not
+// carry the stand and rock. Since 2026-10-29 they come down onto it, cut flat
+// at z = 0 like the pads, so they carry nothing and start on the bed:
+// check-coincident.py holds that every claw, and every toe, does.
 else if (check=="paws_vs_tail")     { intersection() { part_stand_paws(); part_stand_tail(); } }
 else if (check=="body_vs_paws")     { intersection() { part_stand_body(); part_stand_paws(); } }
 else if (check=="tail_vs_tip")      { intersection() { part_stand_tail(); part_stand_tail_tip(); } }
@@ -1373,3 +1369,20 @@ if (check=="front_posts_on_wall")   difference() {
   shell();
 }
 if (check=="post_wall_probe_works") intersection() { post_wall_probe(90, fp_cone_tip); shell(); }
+
+// ---- the tail lies on the desk until it reaches the paw (2026-10-29) -----
+// Restated, as above.
+tail_smooth_steps=14;
+// Under the tail's middle, from its fourth point by the plinth's side (106,
+// -10) to its seventh beside the right paw (82, -85), the first three layers
+// on the desk are solid (tail_on_the_desk): it lies on the desk all the way. It
+// rose gently from about y -30, so it crossed 25mm of air, 3-14mm up, before
+// the paw: the old stand finds 40 mm3 of air under it. The control is the
+// same probes from the foot of its climb beside the paw to where it crosses
+// over the paw's edge, which find the air under it there.
+module tail_floor_probes(i0, i1) {
+  for (i = [i0 : i1]) let (p = tail_curve()[i])
+    translate([p[0], p[1], 0.05]) cylinder(d = 2, h = 0.55, $fn = 16);
+}
+if (check=="tail_on_the_desk")  difference() { tail_floor_probes(3*tail_smooth_steps, 6*tail_smooth_steps); stand(); }
+if (check=="tail_probe_works")  difference() { tail_floor_probes(6*tail_smooth_steps + 2, 7*tail_smooth_steps + 4); stand(); }
