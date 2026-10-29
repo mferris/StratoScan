@@ -25,7 +25,7 @@ EMPTY="twin_vs_stand_11 twin_slot_takes_jack_11 twin_barrel_through_panel_11 twi
        exhaust_top_only rivets_clear_of_grilles grille_in_front_of_ribs antenna_clears_case mount_vs_stand sma_mount_vs_stand socket_takes_base connector_has_room cable_slot_open power_mount_vs_plate power_board_held power_plug_reaches power_mount_vs_shell power_mount_vs_speakers power_moulding_reaches speaker_sleeve_hollow rib_lip_kept plinth_lip_kept
        power_m3_clear_of_speakers power_speakers_on_pads power_stop_fits_tube power_stop_clear_of_board power_m2_holes_line_up power_m2_clear_of_board power_m2_threads_held power_wires_out power_stop_vs_shell power_stop_vs_speakers power_parts_vs_stand
        usbc_inserts_clear_pocket usbc_inserts_surrounded power_edge_on_plate power_socket_clears_window power_m3_pass power_m3_inside_plate power_parts_in_patch
-       usbc_bridge_steps_open power_stop_slides_home power_stop_key_is_what_blocks
+       usbc_bridge_steps_open
        usbc_label_cut usbc_label_inside_plate usbc_label_off_gauge usbc_label_clear_of_holes power_m2_drivers_clear"
 
 # Must come out small but not empty (2026-10-29): the trigger board's stop
@@ -52,6 +52,17 @@ MEETS_MIN_MM3=0.05
 # front without its key, the same poses find nothing.
 BLOCKED="power_stop_back_to_front_blocked power_stop_upside_down_blocked power_stop_end_over_end_blocked"
 BLOCK_MIN_MM3=0.3
+
+# Must come out with nothing at all, not just under MAX_MM3 (2026-10-29): the
+# trigger board's stop the right way round, slid in all the way home, and
+# back to front without its key. Where the key runs into the mount's wall it
+# is only about 0.36 mm2 across, so under MAX_MM3 a slot begun 2.5 mm late,
+# which jams the stop 2.35 mm short of home, passed. JAMMED is their
+# control: the slot begun 0.5 mm late jams it 0.35 mm short, about 0.13 mm3,
+# and must come out over CLEAR_MAX_MM3, so this limit sees it.
+CLEAR="power_stop_slides_home power_stop_key_is_what_blocks"
+JAMMED="power_stop_jam_probe_works"
+CLEAR_MAX_MM3=0.01
 
 # Must come out SMALL but non-zero. These are the colour seams, and they
 # overlap on purpose -- see colour_overlap in the .scad. Cutting each part
@@ -137,6 +148,28 @@ for c in $BLOCKED; do
         printf "  PASS  %-18s %8s mm3\n" "$c" "$v"
     else
         printf "  FAIL  %-18s %8s mm3  (it goes in)\n" "$c" "$v"; fail=1
+    fi
+done
+
+echo "Clear — must meet nothing at all, not just under ${MAX_MM3} mm3 (under ${CLEAR_MAX_MM3} mm3):"
+for c in $CLEAR; do
+    out="$TMP/$c.stl"
+    "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
+    v=$(vol_of "$out")
+    if [ "$(echo "$v < $CLEAR_MAX_MM3" | bc -l)" = "1" ]; then
+        printf "  PASS  %-18s %8s mm3\n" "$c" "$v"
+    else
+        printf "  FAIL  %-18s %8s mm3  (it jams)\n" "$c" "$v"; fail=1
+    fi
+done
+for c in $JAMMED; do
+    out="$TMP/$c.stl"
+    "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
+    v=$(vol_of "$out")
+    if [ "$(echo "$v > $CLEAR_MAX_MM3" | bc -l)" = "1" ]; then
+        printf "  PASS  %-18s %8s mm3  (the control: a jam it sees)\n" "$c" "$v"
+    else
+        printf "  FAIL  %-18s %8s mm3  (the control: a jam it cannot see)\n" "$c" "$v"; fail=1
     fi
 done
 

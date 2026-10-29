@@ -436,6 +436,11 @@ Alongside the fit checks on the head and cradle, the colour split adds:
 - `power_stop_back_to_front_blocked`, `power_stop_upside_down_blocked`,
   `power_stop_end_over_end_blocked` — must run into the mount: the trigger
   board's stop the wrong way round, as far in as a screw could start in it.
+- `power_stop_slides_home`, `power_stop_key_is_what_blocks` — must meet
+  nothing at all, under 0.01 mm³ rather than 1: the same stop slid home the
+  right way round, and back to front without its key. A jam there is a
+  sliver, so `power_stop_jam_probe_works`, the key's slot begun 0.5 mm
+  late, must be found (0.13 mm³).
 - `canary` — must produce geometry. Without it, a typo in the `use <>` path
   makes every check above pass against nothing, which has happened here
   before.
