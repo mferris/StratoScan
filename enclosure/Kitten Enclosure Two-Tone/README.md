@@ -479,6 +479,12 @@ Alongside the fit checks on the head and cradle, the colour split adds:
   right way round, and back to front without its key. A jam there is a
   sliver, so `power_stop_jam_probe_works`, the key's slot begun 0.5 mm
   late, must be found (0.13 mm³).
+- `front_stack_seats` — must be empty: the retainer, glass and trim, placed
+  by `front_stack_placed()` as the preview places them, meet the head with no
+  volume. `front_stack_retainer_down` and `front_stack_trim_down` must find
+  real geometry: lowered 0.2 mm, the retainer runs into the shelf and the
+  trim into the rim, so neither stands off the head. (The preview drew the
+  retainer inside the shelf until 2026-10-29.)
 - `canary` — must produce geometry. Without it, a typo in the `use <>` path
   makes every check above pass against nothing, which has happened here
   before.

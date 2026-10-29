@@ -1309,3 +1309,13 @@ if (check=="retainer_key_blocks_180") intersection() { retainer_seated(180); she
 if (check=="retainer_key_blocks_225") intersection() { retainer_seated(225); shell(); }
 if (check=="retainer_key_blocks_270") intersection() { retainer_seated(270); shell(); }
 if (check=="retainer_key_blocks_315") intersection() { retainer_seated(315); shell(); }
+
+// ---- the front stack, placed in one place (2026-10-29) -----------------
+// The front stack as front_stack_placed() puts it, for every picture: it
+// meets the shell with no volume (front_stack_seats). Lowered 0.2mm, the
+// retainer runs into the shelf and the trim into the shell's rim, each on
+// its own, so neither stands off the shell: a trim floating 4.9mm proud, as
+// the pictures had it, passes the first check and fails the last.
+if (check=="front_stack_seats")          intersection() { front_stack_placed(); shell(); }
+if (check=="front_stack_retainer_down")  intersection() { translate([0, 0, -0.2]) front_stack_placed("retainer"); shell(); }
+if (check=="front_stack_trim_down")      intersection() { translate([0, 0, -0.2]) front_stack_placed("trim"); shell(); }
