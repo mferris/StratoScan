@@ -407,8 +407,12 @@ and `usbc_recess_h` bigger: `usbc_recess_w` can go to 16.8 mm before the
 inserts lose their 1.6 mm of plate. A moulding that goes into the pocket
 but stops on its floor needs `usbc_seat_margin` up from 0.4 to 0.6 mm, a
 pocket one layer deeper. That is as deep as it goes: the window's wall above
-the floor's two steps is then 1 mm, the least the design allows. The asserts
-in the design hold both limits.
+the floor's two steps is then 1 mm, and the plate the board's front edge
+bears on 1.4 mm instead of 1.6, the least the design allows for each. The
+asserts in the design hold all three limits. `checks.scad` restates the
+pocket's size, so change it there too (`usbc_recess_w`, or `usbc_recess_d`,
+1.6 for the deeper pocket) before running the checks; they pass at either
+limit.
 
 The trial fit spends some parts. Its two inserts stay in the coupon, and the
 stop's crush ribs, once squeezed, don't spring back. So the plate needs two
@@ -440,10 +444,11 @@ the coupon outer face down.
 
 Checks that must come out empty: `power_mount_vs_plate`, `power_board_held`,
 `power_edge_on_plate` (the plate is solid in front of the board's edge below
-the window), `power_socket_clears_window` (the socket, 0.25 mm bigger all
-round, clears the window), `usbc_bridge_steps_open` (the first layer over the
-pocket is open from wall to wall, and the second across the window's
-rectangle), `power_plug_reaches` and `power_moulding_reaches`
+the window, from its inner face to the pocket's floor, at any pocket depth
+the design allows), `power_socket_clears_window` (the socket, 0.25 mm
+bigger all round, clears the window), `usbc_bridge_steps_open` (the first
+layer over the pocket is open from wall to wall, and the second across the
+window's rectangle), `power_plug_reaches` and `power_moulding_reaches`
 (an 8.4 × 2.6 mm plug shell and a 13.4 × 9.4 mm moulding reach the socket's
 face), `power_m3_pass`, `power_m3_inside_plate` (nothing of the screws or
 inserts comes out of the outer face), `usbc_inserts_surrounded`,
