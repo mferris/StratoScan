@@ -148,6 +148,7 @@ function markSoundBusy(ms) { busyUntil = Math.max(busyUntil, now + ms); }
 function alertQuiet() { return speaking === 0 && now >= busyUntil; }
 function speak(text) { log.push(['words ' + text, now]); speaking++; setTimeout(() => speaking--, 4000); }   // a sentence takes 4 s
 function playTones() { log.push(['lightning chime', now]); }
+function allowThroughQuiet(ms) { log.push(['quiet window ' + ms, now]); }
 function soundTheme() { return { airportPhase: phase => log.push([phase + ' chime', now]) }; }
 const classes = new Set();
 const detailPanelEl = {
@@ -296,6 +297,25 @@ console.log(JSON.stringify(peaks));
     check(len(peaks) > 1 and sum(peaks) <= 0.25,
           "the ding is no louder than the nearby chime: its partials peak at %.3f together, the chime at 0.25" % sum(peaks))
 
+    # The Settings preview: on at 1 s, after a power-on whose sound was off. It
+    # plays alone (the alert raised during it waits until it has finished), a
+    # second tap while it plays adds nothing, it opens quiet hours for its
+    # length, and the next status answer in the same boot doesn't play it again.
+    log = run(r"""
+answer({ id: 'p', powerOn: true, uptimeS: 30 });
+advance(1000); alertSettings.bootSound = true; previewStartupSound();
+advance(500); raiseAlert(alert('a1'));
+advance(1500); previewStartupSound();
+advance(57000); answer({ id: 'p', powerOn: true, uptimeS: 90 });
+advance(10000);
+""", setting=False)
+    dings = [t for w, t in log if w == "ding"]
+    check(dings == [1050], "the preview plays once, and a second tap while it plays adds nothing (dings at %s)" % dings)
+    check(("quiet window %d" % hold, 1000) in log, "it is heard through quiet hours for its whole length")
+    check(dict(log).get("show a1", 0) >= 1000 + hold, "an alert raised during it waits until it has finished")
+    check(not any(w == "ding" and t > 50000 for w, t in log),
+          "and the next status answer in that boot doesn't play it again: the preview counted as this boot's")
+
     # ---- Settings plays it when it is switched on (2026-10-28) ------------------
     # The settings panel's own tap handler, run with a stand-in row and switch.
     h = html.index("settingsPanelEl.addEventListener('pointerup', (e) => {")
@@ -307,8 +327,7 @@ const alertSettings = { bootSound: false, muted: false, nearby: true };
 const heard = [];
 function saveAlertSettings() {}
 function renderSettingsPanel() {}
-function allowThroughQuiet(ms) { heard.push('through quiet hours for ' + ms); }
-function playStartupSound() { heard.push('ding and take-off'); }
+function previewStartupSound() { heard.push('preview'); }
 const STARTUP_SOUND_MS = %d;
 """ % hold + html[h:html.index("\n});\n", h) + 5] + r"""
 function tapSwitch(key) {          // a tap on the switch in that setting's row
@@ -332,8 +351,7 @@ console.log(JSON.stringify(out));
     except Exception:
         o = {}
         print(r.stderr[-1500:])
-    check(o.get("on") == ["through quiet hours for %d" % hold, "ding and take-off"],
-          "switching it on in Settings plays it once, as a preview, heard through quiet hours for all of it")
+    check(o.get("on") == ["preview"], "switching it on in Settings plays the preview once")
     check(o.get("off") == [], "switching it off plays nothing")
     check(o.get("muted") == [], "nor switching it on or off while the panel is muted")
     check(o.get("other") == [], "and no other switch plays it")
