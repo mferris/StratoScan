@@ -63,8 +63,8 @@ CORE = {
     "shelf_slope",
     # the outer shell: the body less the front insert holes
     "shell",
-    # the display clamp
-    "retainer",
+    # the display clamp, and the same keyed ring as it prints (2026-10-29)
+    "retainer", "retainer_print",
     # Cooling is NOT shared: the retro case vents through nine side slots
     # across the top; the kitten has none and vents through its hollow ears.
     # the antenna mount, all of it -- both variants. They share the flange,

@@ -106,6 +106,18 @@ front_post_cone  = 4;
 relief_center_deg = 270;
 relief_arc_deg    = 50;
 
+// ---- The retainer's key (2026-10-29) ---------------------------------
+// A tab on the retainer's back face, outboard of the glass's edge, that drops
+// into the shelf's gap at the bottom only when the ring's relief is there
+// too, over the display's driver board. At any of the other seven screw
+// positions it lands on the shelf and holds the ring 2mm proud, before a
+// screw goes in, so the trim's screws can't press the glass, and the board
+// taped to its back, onto solid ring. Clear of the screw notches, and just
+// outside the relief, whose outer edge is at r 102.67.
+retainer_key_a = [250, 258];   // degrees: inside the shelf's 245-295 gap
+retainer_key_r = [102.7, 107];
+retainer_key_h = 2;
+
 // ---- The shelf's underside (2026-10-29) ------------------------------
 // It slopes at 45 degrees from r 103 down to the wall, so the outer half of
 // the 11mm ledge prints on its own rather than on 55mm-tall supports. Not
@@ -890,6 +902,19 @@ module retainer() {
                 translate([relief_r0, -1])
                     square([relief_w, retainer_h+2]);
     }
+    // The key (2026-10-29): a tab standing retainer_key_h off the back face,
+    // the face that sits on the shelf. See retainer_key_a.
+    rotate([0, 0, retainer_key_a[0]])
+        rotate_extrude(angle = retainer_key_a[1] - retainer_key_a[0])
+            translate([retainer_key_r[0], -retainer_key_h])
+                square([retainer_key_r[1] - retainer_key_r[0], retainer_key_h + 0.01]);
+}
+
+// The retainer as it prints: glass face down, so the key stands up off its
+// top rather than being the first layer, under a ring 2mm up in the air
+// (2026-10-29). retainer.stl is exported this way up.
+module retainer_print() {
+    translate([0, 0, retainer_h]) rotate([180, 0, 0]) retainer();
 }
 
 // ============================================================
@@ -2634,7 +2659,7 @@ module stand_colour_parts() {
 
 // ============================================================
 if (part == "front_trim") front_trim();
-else if (part == "retainer") retainer();
+else if (part == "retainer") retainer_print();   // glass face down, as it prints
 else if (part == "shell") shell();
 else if (part == "stand") stand();
 else if (part == "back_plate") back_plate();

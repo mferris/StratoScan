@@ -1291,3 +1291,21 @@ module speaker_slot_probe() {
 }
 if (check=="speaker_slot_closed")      difference() { speaker_slot_probe(); shell(); }
 if (check=="speaker_slot_probe_works") intersection() { speaker_slot_probe(); shell(); }
+
+// ---- the retainer goes in one way only (2026-10-29) --------------------
+retainer_h=4;   // restated
+// Seated on the shelf the right way round, the retainer's key drops into the
+// shelf's gap and meets nothing (retainer_key_fits). Turned by each of the
+// other seven 45-degree steps the screws allow, the key lands on the shelf,
+// about 126 mm3 (retainer_key_blocks_*), so the ring stands 2mm proud before
+// a screw goes in. Each angle is its own check, as the back plate's are: a
+// key that blocked only some would still let it in wrong.
+module retainer_seated(a = 0) { translate([0, 0, shell_depth - retainer_h]) rotate([0, 0, a]) retainer(); }
+if (check=="retainer_key_fits")       intersection() { retainer_seated(0);   shell(); }
+if (check=="retainer_key_blocks_45")  intersection() { retainer_seated(45);  shell(); }
+if (check=="retainer_key_blocks_90")  intersection() { retainer_seated(90);  shell(); }
+if (check=="retainer_key_blocks_135") intersection() { retainer_seated(135); shell(); }
+if (check=="retainer_key_blocks_180") intersection() { retainer_seated(180); shell(); }
+if (check=="retainer_key_blocks_225") intersection() { retainer_seated(225); shell(); }
+if (check=="retainer_key_blocks_270") intersection() { retainer_seated(270); shell(); }
+if (check=="retainer_key_blocks_315") intersection() { retainer_seated(315); shell(); }

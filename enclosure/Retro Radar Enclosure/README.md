@@ -11,7 +11,7 @@ the rest follows.
 |---|---|
 | `shell` | the body: Pi, dongle, wiring, speakers |
 | `front_trim` | bezel in front of the glass, rabbeted so it seats flush |
-| `retainer` | ring behind the glass; the glass rests on its front face |
+| `retainer` | ring behind the glass; the glass rests on its front face. Keyed, so it goes in only one way: its relief at the bottom, over the gap in the shelf ([below](#the-retainer-goes-in-one-way-only)). `retainer.stl` is glass face down, the way it prints |
 | `stand` | desk cradle — two ring-arc arms on a plinth with two ridges all the way round, 4mm proud, their undersides sloped at 45° to a small lip like the case's rings, so they print without support (the old 1mm strips printed rough unsupported, and square 4mm ridges needed supports all round) |
 | `back_plate` | removable back — locating lip, both vent grilles, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the charger it needs engraved above it, the antenna mount's bolt holes and cable hole |
 | `antenna_mount` | bolt-on arm carrying the antenna socket (identical to the kitten's) |
@@ -156,6 +156,30 @@ sliver. The notches also stop the ring turning. Checks: `retainer_clears_bore`,
 of the pocket's floor, so a moulding meets the socket and never the plate.
 Checks: `usbc_recess_open`, `usbc_recess_web`, `usbc_inserts_clear_pocket`
 (with `usbc_insert_probe_works`).
+
+### The retainer goes in one way only
+
+The retainer's relief, the 50° gap in its inner band, has to be at the
+bottom, over the display's driver board, which is taped to the back of the
+glass there. The ring's eight screw notches let it go in eight ways, and in
+the other seven, solid ring sits under the board: tightening the trim's
+screws then presses the glass, and the board, onto it.
+
+Since 2026-10-29 a 2 mm tab on its back face (the face that sits on the
+shelf), at 250-258° and r 102.7-107 mm, outboard of the glass's edge, drops
+into the gap in the shelf at the bottom only when the relief is there too.
+Turned to any other position, the tab lands on the shelf, and the ring
+stands 2 mm proud before a screw goes in. So: **relief at the bottom, over
+the gap in the shelf.** Seen from behind, the tab is a little right of the
+bottom.
+
+`retainer.stl` is exported glass face down, the way it prints: the tab
+stands up off its top, and nothing overhangs.
+
+`retainer_key_fits` proves the ring seated the right way round meets the
+shell with no volume, and `retainer_key_blocks_45` … `retainer_key_blocks_315`
+that each of the other seven positions lands the tab on the shelf (125.9 mm³
+each), each as its own check, as for the plate's key below.
 
 ### The plate fits one way only
 

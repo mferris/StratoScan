@@ -28,7 +28,7 @@ The head is one colour and prints as before:
 |---|---|---|
 | `shell` | black | the head — body cylinder plus two ears, and all the internals |
 | `front_trim` | black | the face — bezel ring with a nose, whisker grooves and seven screw holes |
-| `retainer` | — | ring behind the glass (identical to the retro part) |
+| `retainer` | — | ring behind the glass (identical to the retro part), keyed so it goes in only one way: its relief at the bottom, over the gap in the shelf ([below](#so-does-the-retainer)). `retainer.stl` is glass face down, the way it prints |
 | `back_plate` | black | removable back — locating lip, vents, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the charger it needs engraved above it, the antenna mount's bolt holes and cable hole |
 | `antenna_mount` | black | bolt-on arm carrying the antenna socket |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
@@ -151,6 +151,19 @@ angle, so the one plate still fits both cases.
 `key_blocks_45` … `key_blocks_315` prove each of the other seven positions
 collides (43.7 mm³ each), each as its own check, because a key that blocked
 only some angles would still let the plate in wrong.
+
+## So does the retainer
+
+The retainer's relief has to be at the bottom, over the display's driver
+board, which is taped to the back of the glass; the other seven of the eight
+ways its screw notches allow put solid ring under the board. Since
+2026-10-29 a 2 mm tab on its back face, at 250-258° and outboard of the
+glass, drops into the gap in the shelf at the bottom only when the relief is
+there too; anywhere else it lands on the shelf and holds the ring 2 mm proud
+before a screw goes in. So: **relief at the bottom, over the gap in the
+shelf.** `retainer.stl` is glass face down, the way it prints, with the tab
+standing up. `retainer_key_fits` and `retainer_key_blocks_45` …
+`retainer_key_blocks_315` hold it, as for the plate (125.9 mm³ each).
 
 ## Less support inside the head
 
