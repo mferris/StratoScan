@@ -328,7 +328,8 @@ counterbore hole bridging off, the default. Above the pocket the plate says
 which charger the board needs, `USB-C PD 12V 27W`, engraved in its outer
 face so it reads from behind the case. `power_regulator_tray` holds
 the 5 V regulator, stuck to the plate's inner face with VHB tape, off the
-33 × 13.5 mm patch round the window that the mount stands on. Fitting, sizes
+70 × 13.5 mm strip across the window: the mount stands in its middle, and
+the rest is the M2 screwdriver's way in from either side. Fitting, sizes
 and checks are in the retro case's README
 ([The power fix](../Retro%20Radar%20Enclosure/README.md#the-power-fix-the-charger-plugs-into-the-trigger-board)),
 and the build in [docs/power-fix.md](../../docs/power-fix.md).

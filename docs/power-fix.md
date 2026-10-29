@@ -163,9 +163,11 @@ question.
 - **The regulator goes in `power_regulator_tray`,** stuck to the plate's
   inner face with VHB tape. Put it as far from the FlyCatcher and the antenna
   leads as the case allows, and where the pigtail reaches the Pi's power
-  port, off the 33 × 13.5 mm patch round the window that the trigger board's
-  mount stands on. Keep the 5 V side short (a 10–20 cm pigtail), and twist
-  the 12 V pair.
+  port, off the 70 × 13.5 mm strip across the window. The trigger board's
+  mount stands in the middle of it, and the M2 screwdriver needs the rest,
+  25 mm out either side along the screws, so the stop can be locked or
+  freed with the tray in place. Keep the 5 V side short (a 10–20 cm
+  pigtail), and twist the 12 V pair.
 - **Never run the regulator's leads along an antenna cable.** On the first
   unit (2026-10-18) its lead had ended up wrapped round the external
   antenna's cable: 1090 MHz reception fell to a few messages a minute,
