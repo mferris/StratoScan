@@ -231,6 +231,19 @@ def same_shape(g1, g2):
             and all(abs(x - y) <= 0.02 for x, y in zip(g1[1] + g1[2], g2[1] + g2[2])))
 
 
+def in_git(root):
+    """The files git tracks (or has staged) under `root`, as paths; None when
+    `root` is not in a git checkout, or there is no git."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], capture_output=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0:
+        return None
+    return {root / p for p in r.stdout.decode().split("\0") if p}
+
+
 def export(scad, var, part, out):
     import subprocess
     subprocess.run([OPENSCAD, "--backend=manifold", "--export-format", "binstl",
@@ -241,7 +254,8 @@ def export(scad, var, part, out):
 
 def folders_and_prints():
     """Checks 5-8: every case folder registered; variants include, never copy;
-    shared print files the same shape everywhere; print files not stale."""
+    shared print files the same shape everywhere; print files in git and not
+    stale."""
     import os
     import tempfile
     failures, checks = [], 0
@@ -289,14 +303,28 @@ def folders_and_prints():
                 failures.append(f"{part}.stl is not the same shape in every case folder: "
                                 f"re-export it from each design (and check the designs agree)")
 
-    # 8. print files match their design today (needs OpenSCAD; skipped without it)
+    # 8. print files are in git, and match their design today (that part needs
+    #    OpenSCAD, and is skipped without it). In git (2026-10-29): the Retro
+    #    with Dials' six STLs and the kitten stand's 3MF sat ignored by
+    #    enclosure/.gitignore. Here on disk they passed every check, but no
+    #    clone had them, so this test failed in every fresh worktree, and
+    #    `git clean -X` would have deleted the only copies.
+    jobs = [(RETRO, "part", part, ROOT / fname / f"{part}.stl")
+            for part in SHARED_PRINTS for fname in FULL]
+    for name, (scad, base, prints) in VARIANTS.items():
+        jobs += [(ROOT / name / scad, "dpart", part, ROOT / name / fn) for fn, part in prints.items()]
+    tracked = in_git(ROOT)
+    if tracked is None:
+        print("note: not a git checkout: print files not checked for being in git")
+    else:
+        for committed in sorted({job[3] for job in jobs}):
+            checks += 1
+            if committed not in tracked:
+                failures.append(f"{committed.relative_to(ROOT)} is not in git: `git add` it, and check "
+                                f"that its folder's .gitignore lets it in")
     if os.path.exists(OPENSCAD) and os.environ.get("ENCLOSURE_QUICK") != "1":
         with tempfile.TemporaryDirectory() as t:
             t = pathlib.Path(t)
-            jobs = [(RETRO, "part", part, ROOT / fname / f"{part}.stl")
-                    for part in SHARED_PRINTS for fname in FULL]
-            for name, (scad, base, prints) in VARIANTS.items():
-                jobs += [(ROOT / name / scad, "dpart", part, ROOT / name / fn) for fn, part in prints.items()]
             made = {}
             for scad, var, part, committed in jobs:
                 checks += 1
