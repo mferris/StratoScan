@@ -171,10 +171,10 @@ The same three changes as the retro case, which has the details
 (2026-10-29), all in the shared internals:
 
 - the shelf's underside slopes at 45° from r 103 out to the wall, except over
-  the speakers, over 30-75° and in the shelf's gap at the bottom. Here it also
-  stops at z 53 where an ear's hollow opens into the head (about 40-80° and
-  100-140°): the wall below the shelf is gone there, so the slope would start
-  in mid-air;
+  the speakers, over 30-75° and in the shelf's gap at the bottom. Where an
+  ear's hollow opens into the head it stops wherever the hollow comes up past
+  z 49, since the wall below the shelf is gone there and the slope would start
+  in mid-air; since the ears' tops are tented (below), that is nowhere;
 - over each speaker, the sleeve's top wall reaches up to the shelf, closing
   the 2 mm slot between them;
 - the front rail has the retro rings' 45° underside and 0.8 mm lip; the rear
@@ -182,11 +182,43 @@ The same three changes as the retro case, which has the details
 
 Sliced in Bambu Studio 2.08 (X1C 0.4 mm, 0.20 mm Standard, Bambu ASA, tree
 supports at 30°), the head's support went from 58.4 to 49.7 cm³ and the print
-from 10.0 to 9.2 hours. The ear roofs at z 53 (now 4,550 mm²) still need
-support. `shelf_slope_present`, `speaker_slot_closed` (with
+from 10.0 to 9.2 hours. `shelf_slope_present`, `speaker_slot_closed` (with
 `speaker_slot_probe_works`), `rail_slope_present`, `rail_lip_kept` and
 `rear_rail_square` (with `rear_rail_probe_works`) hold it, and
 `head_in_cradle` still finds the head clear of the stand.
+
+### The ears: tented tops, and wall under the two posts in them
+
+Two more changes, to the kitten's own ears (2026-10-29):
+
+- **The ears' hollows have 45° tented tops.** Each hollow had a flat roof at
+  z 53, 4,550 mm² in all, printed on 53 mm-tall supports inside the ears. Now
+  every side of the hollow slopes inward at 45° from z 28, so its top comes to
+  a point at z 53: nothing in the ears is flat, so nothing there needs
+  support. The plastic it adds prints as infill, and comes to less than the
+  support it saves. It shows only from behind, looking up into an ear.
+- **The head wall stands under the front posts at 45° and 135°.** The
+  hollows cut the wall away from the back collar (z 11) up to z 53, and those
+  two posts are inside the openings, so each hung free from the shelf: its
+  cone's tip was an island 45 mm above the bed, joined to nothing until z 53.
+  The wall is now kept from the edge of each ear's opening to 3° past its
+  post, the whole height, so the cone lands on wall growing from the collar,
+  as on the retro case. (3° past the post rather than either side of it: the
+  opening's edge is only 5° beyond the post, and a strip either side would
+  leave a slit 2-4 mm wide.)
+
+Together they take the head's support from 49.7 to 33.7 cm³, the print from
+9.2 to 8.1 hours and the filament from 200 to 193 g: all 13.2 cm³ of support
+inside the ears goes, and round the two posts it is now what every other post
+has. The ears' openings into the head shrink from 6,260 to 3,680 mm², which
+leaves the airflow as it was: it is set by the back plate's vents, 608 mm²,
+and the ears' open backs, 3,833 mm², are unchanged.
+
+`front_posts_on_wall` must come out empty: the wall behind every front post,
+over its cone and the post below the shelf (z 45-53), is all there, and
+behind the two in the ears all the way down to the collar (the old head lacks
+1,554 mm³ of it). `post_wall_probe_works` is its control: the same probe
+behind the 90° post, which always stood on wall, finds it (160 mm³).
 
 ## Printing it in two colours
 
@@ -390,10 +422,11 @@ Every screw that gets undone goes into a brass M3 heat-set insert. The holes are
 | Twin antenna mount's cover | 5 | M2 × 3 | M2 × 6 | 3.0 mm holes in the cover seat (for a 3.2 mm knurl; 3.2 if the kit's inserts are the 3.5 mm kind — measure them). No counterbores: a 3 mm cover printed face-down can't roof them, so the cap heads stand 2 mm proud of a face nothing touches |
 | Speaker bosses (optional) | 8 | M2 × 3 | M2 × 6 | The 2.6 mm pilot takes the speaker's self-tapping screws; drill it to 3.0 for an M2 insert |
 
-**The front posts are new.** They used to be only 2 mm tall: an insert sat in 2 mm of plastic with open air under it and the wall on one side only (measured: a third of the ring round it was solid). Now each post hangs 8 mm below the shelf, merged into the wall, with a 45° cone under it so it prints without support. The holes are cut after the whole shell is unioned, so the speaker brackets at 0° and 180° can't fill them.
+**The front posts are new.** They used to be only 2 mm tall: an insert sat in 2 mm of plastic with open air under it and the wall on one side only (measured: a third of the ring round it was solid). Now each post hangs 8 mm below the shelf, merged into the wall, with a 45° cone under it that lands on the wall below, so it prints without support. That was not true of all eight until 2026-10-29: the two at 45° and 135° are inside the ears' openings, where the wall was cut away below the shelf, so they hung free and their cones began 45 mm up in mid-air. The wall now stands under them too ([above](#the-ears-tented-tops-and-wall-under-the-two-posts-in-them)). The holes are cut after the whole shell is unioned, so the speaker brackets at 0° and 180° can't fill them.
 
 - `front_inserts_surrounded` proves every front insert has a 1.75 mm ring of plastic all round it for its full length. Run against the old shell, it finds 545 mm³ missing.
 - `front_insert_holes_open` is its positive control.
+- `front_posts_on_wall` proves the wall behind every post is there under its cone, and under the two in the ears all the way down to the back collar; `post_wall_probe_works` is its control.
 
 The kitten's bezel has seven screws (see *Seven screws, not eight*). The post under the nose needs no insert.
 
