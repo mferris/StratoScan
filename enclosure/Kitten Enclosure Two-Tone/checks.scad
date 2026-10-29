@@ -980,11 +980,16 @@ if (check=="power_board_cannot_rock") intersection() {
 }
 // The board's front edge bears on solid plate below the window: in front of
 // the edge, across the board's width and from its underside up to the
-// window, the plate is solid 1.5 mm deep. The control: the same strip, moved
-// 1.5 mm up into the window, finds air.
+// window, the plate is solid from its inner face to the pocket's floor, all
+// of the plate there (back_plate_t - usbc_recess_d: 1.6 mm, or 1.4 with the
+// deeper pocket the README allows; an assert in the design holds it to 1.4 or
+// more). Until 2026-10-29 the strip was a fixed 1.5 mm deep, so that deeper
+// pocket failed this check although the plate was whole. The control: the
+// same strip, moved 1.5 mm up into the window, finds air.
 module pwr_edge_strip(dy = 0) {
-  translate([usbc_cut_pos[0] - pwr_trig_w/2 + 0.05, usbc_cut_pos[1] + pwr_board_y0() + 0.05 + dy, -1.5])
-    cube([pwr_trig_w - 0.1, -usbc_cut_h/2 - pwr_board_y0() - 0.1, 1.49]);
+  t = back_plate_t - usbc_recess_d;
+  translate([usbc_cut_pos[0] - pwr_trig_w/2 + 0.05, usbc_cut_pos[1] + pwr_board_y0() + 0.05 + dy, -t + 0.01])
+    cube([pwr_trig_w - 0.1, -usbc_cut_h/2 - pwr_board_y0() - 0.1, t - 0.02]);
 }
 if (check=="power_edge_on_plate")     difference() { pwr_edge_strip(); back_plate(); }
 if (check=="power_edge_strip_works")  difference() { pwr_edge_strip(1.5); back_plate(); }

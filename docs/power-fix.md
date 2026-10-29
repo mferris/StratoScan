@@ -172,7 +172,9 @@ question.
   `.scad`, `usbc_recess_w` and `usbc_recess_h` set its size (14 × 10 mm;
   the width can go to 16.8). If the moulding goes into the pocket but stops
   on its floor, raise `usbc_seat_margin` from 0.4 to 0.6, which makes the
-  pocket one layer deeper, as deep as it can go.
+  pocket one layer deeper, as deep as it can go: the plate the board's front
+  edge bears on is then 1.4 mm thick instead of 1.6, the least the design
+  allows.
 
   The trial spends two of the inserts, which stay in the coupon, and the
   stop's crush ribs, which don't spring back. Use the other two inserts and
