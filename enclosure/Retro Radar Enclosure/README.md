@@ -181,6 +181,18 @@ stands 2 mm proud before a screw goes in. So: **relief at the bottom, over
 the gap in the shelf.** Seen from behind, the tab is a little right of the
 bottom.
 
+**Check the leads before fitting a keyed ring.** The tab hangs 2 mm into the
+shelf's gap, the channel left for the display's cabling, at 250-258° and
+r 102.7-107 mm, between the glass's edge and the wall, so a display cable or
+speaker lead running through there would be pinched under it. No built unit
+has been checked for one yet (2026-10-29). If one has to run there, move the
+tab instead: set `retainer_key_a` to another 8° of the gap (245-295°), clear
+of the lead and at least 3° from the screw at 270°, in both cases' designs,
+since the retainer is shared; re-export `retainer.stl` in both case folders;
+and re-run `retainer_key_fits` and `retainer_key_blocks_45` …
+`retainer_key_blocks_315`, which must still find all seven wrong positions
+blocked.
+
 `retainer.stl` is exported glass face down, the way it prints: the tab
 stands up off its top, and nothing overhangs.
 
