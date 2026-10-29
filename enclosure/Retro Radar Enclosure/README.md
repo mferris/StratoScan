@@ -13,7 +13,7 @@ the rest follows.
 | `front_trim` | bezel in front of the glass, rabbeted so it seats flush |
 | `retainer` | ring behind the glass; the glass rests on its front face |
 | `stand` | desk cradle — two ring-arc arms on a plinth with two ridges all the way round, 4mm proud, their undersides sloped at 45° to a small lip like the case's rings, so they print without support (the old 1mm strips printed rough unsupported, and square 4mm ridges needed supports all round) |
-| `back_plate` | removable back — locating lip, both vent grilles, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the antenna mount's bolt holes and cable hole |
+| `back_plate` | removable back — locating lip, both vent grilles, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the charger it needs engraved above it, the antenna mount's bolt holes and cable hole |
 | `antenna_mount` | bolt-on arm carrying the antenna socket (identical to the kitten's) |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
 | `antenna_mount_twin_8`, `antenna_mount_twin_11` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight. Two styles, for jumpers whose bulkhead body is an 8 mm hex or an 11 mm hex; two parts each, this body and the cover below (`antenna_mount_twin` is whichever `ant_twin_jack_af` names) |
@@ -311,6 +311,14 @@ cable moved. Now:
   third. Look into the pocket and you see the two steps: they are meant to be
   there. Slice with **counterbore hole bridging off**, Bambu Studio's
   default; that option does worse with this shape.
+- **The plate says which charger it needs** (since 2026-10-29): `USB-C PD`
+  over `12V 27W`, engraved 0.6 mm deep in the outer face above the pocket,
+  in bold capitals 5 mm tall that read the right way from behind the case.
+  The trigger board asks the charger for 12 V, and one without it, such as
+  a 5 V-only Pi-style supply, never starts the radar. The plate prints outer
+  face down, so the letters are its first three layers and need no support.
+  They stand 1.5 mm above the coupon's 36 × 18 mm patch, so `usbc_gauge` is
+  unchanged.
 - **`power_trigger_mount`** is a sleeve round the board, 0.2 mm clear of it
   either side, its flat face on the plate's inner face, level with the
   board's front edge: no flange, since the plate is the front stop now. The
@@ -415,9 +423,14 @@ inserts comes out of the outer face), `usbc_inserts_surrounded`,
 `power_stop_vs_shell`, `power_stop_vs_speakers`, `power_parts_vs_stand`,
 `power_parts_in_patch` (everything at the window stays in its 33 × 13.5 mm
 patch), `power_stop_slides_home` (the stop, slid in the right way round from
-outside the mount all the way home, meets nothing) and
+outside the mount all the way home, meets nothing),
 `power_stop_key_is_what_blocks` (back to front without its key, posed as
-below, it meets nothing either). `power_ribs_squeeze_board` and
+below, it meets nothing either), and `usbc_label_cut`,
+`usbc_label_inside_plate`, `usbc_label_off_gauge` and
+`usbc_label_clear_of_holes` (the engraving is cut, lies inside the plate and
+no more than 1 mm deep, keeps off the coupon's patch, and stays 1.5 mm or
+more from every other hole: the pocket, the window, the inserts, the vents,
+the antenna holes and the screws). `power_ribs_squeeze_board` and
 `power_top_ribs_squeeze_socket` must find only a sliver: the stop's ribs in
 the board's edge, and the roof's in the socket's top.
 `power_board_cannot_rock` must find more than a film: the board tipped 1°
@@ -430,7 +443,9 @@ the slot's ends are solid), `power_plug_probe_works`,
 `power_moulding_probe_works` (a moulding 1 mm bigger than the pocket stops on
 the outer face), `power_m3_bite`, `usbc_insert_holes_open`,
 `power_speaker_drawing_works`, `power_stop_takes_push`,
-`power_m2_threads_bite` and `power_wire_probe_works`.
+`power_m2_threads_bite`, `power_wire_probe_works`, `usbc_label_present` (the
+letters, 80 mm³) and `usbc_label_probe_works` (the clearance probe, moved
+12 mm down over the pocket, finds it).
 
 `power_stop_back_to_front_blocked`, `power_stop_upside_down_blocked` and
 `power_stop_end_over_end_blocked` must run into the mount: the stop the

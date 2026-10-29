@@ -1147,6 +1147,42 @@ if (check=="power_parts_in_patch")    difference() {
   pwr_patch();
 }
 
+// ---- the charger it needs, engraved in the plate (2026-10-29) ----
+// "USB-C PD / 12V 27W", 0.6 mm deep in the outer face above the USB-C
+// pocket, read from behind. Restated for the probes below:
+usbc_gauge_size=[36,18]; usbc_label_depth=0.6;
+// Where its letters are, there is no plate: they are cut...
+if (check=="usbc_label_cut")           intersection() { usbc_label_solid(); back_plate(); }
+// ...and they are there, in the plate's blank (the control, about 80 mm3).
+if (check=="usbc_label_present")       intersection() { usbc_label_solid(); translate([0, 0, -back_plate_t]) cylinder(d = outer_dia, h = back_plate_t); }
+// They lie inside the plate, 5 mm or more in from its rim and no more than
+// 1 mm into its outer face...
+if (check=="usbc_label_inside_plate")  difference() { usbc_label_solid(); translate([0, 0, -back_plate_t]) cylinder(d = outer_dia - 10, h = 1); }
+// ...outside the coupon's 36 x 18 patch, so usbc_gauge is the plate's own
+// geometry, unchanged...
+if (check=="usbc_label_off_gauge")     intersection() {
+  usbc_label_solid();
+  translate([usbc_cut_pos[0] - usbc_gauge_size[0]/2, usbc_cut_pos[1] - usbc_gauge_size[1]/2, -back_plate_t - 1])
+    cube([usbc_gauge_size[0], usbc_gauge_size[1], back_plate_t + 2]);
+}
+// ...and 1.5 mm or more from every other hole in the plate: the pocket, the
+// window and the inserts' holes beside it, the vents, the antenna mount's
+// holes and the eight screws' (1.5 mm past a screw's hole is past its head).
+// The probe is the letters' outline grown by 1.5 mm, through the plate; the
+// control moves it 12 mm down, over the pocket, where it finds them.
+module usbc_label_probe(dy = 0) {
+  translate([0, dy, -back_plate_t - 1]) linear_extrude(height = back_plate_t + 2) offset(r = 1.5) projection() usbc_label_solid();
+}
+module plate_holes_but_label() {
+  difference() {
+    translate([0, 0, -back_plate_t]) cylinder(d = outer_dia, h = back_plate_t);
+    back_plate();
+    translate([0, 0, -0.02]) usbc_label_solid(usbc_label_depth + 0.04);
+  }
+}
+if (check=="usbc_label_clear_of_holes") intersection() { usbc_label_probe(); plate_holes_but_label(); }
+if (check=="usbc_label_probe_works")    intersection() { usbc_label_probe(-12); plate_holes_but_label(); }
+
 // The speaker sleeve is hollow (2026-10-23): inside it, from the speaker's
 // face to the wall and clear of the four screw pads, there is no plastic. It
 // was a solid block with the grille drilled through it as tubes. The control

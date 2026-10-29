@@ -1740,6 +1740,38 @@ module usbc_gauge() {
         }
 }
 
+// The charger it needs, engraved in the plate's outer face above the USB-C
+// pocket (2026-10-29). The trigger board asks the charger for 12 V, and one
+// that has no 12 V, such as a Pi-style 5 V 5 A supply, never starts the
+// radar and gives no sign why. Two lines of capitals 5 mm tall, 0.6 mm deep,
+// in the font of the antenna cover's lettering. It is read from behind the
+// case, so it is mirrored here. The plate prints outer face down, so the
+// letters are its first three layers, open to the bed: they need no support.
+// It stands 1.5 mm above the coupon's patch, so usbc_gauge is unchanged, and
+// is well clear of every hole in the plate.
+usbc_label       = ["USB-C PD", "12V 27W"];
+usbc_label_cap   = 5;       // the capitals' height
+usbc_label_size  = usbc_label_cap / 0.955;   // the text size for that: Liberation Sans Bold's capitals are 0.955 of it
+usbc_label_pitch = 7.5;     // line to line, 2.5 mm between them
+usbc_label_depth = 0.6;
+usbc_label_pos   = [usbc_cut_pos[0],
+                    usbc_cut_pos[1] + usbc_gauge_size[1]/2 + 1.5 + (usbc_label_pitch*(len(usbc_label) - 1) + usbc_label_cap)/2];
+
+// The label's lines, face on as they read, centred on [0, 0].
+module usbc_label2d() {
+    for (i = [0 : len(usbc_label) - 1])
+        translate([0, ((len(usbc_label) - 1)/2 - i) * usbc_label_pitch])
+            text(usbc_label[i], size = usbc_label_size, font = "Liberation Sans:style=Bold",
+                 halign = "center", valign = "center");
+}
+
+// Its letters as a solid h deep from the plate's outer face in, mirrored to
+// read from behind: cut from back_plate(), and probed by the checks.
+module usbc_label_solid(h = usbc_label_depth) {
+    translate([usbc_label_pos[0], usbc_label_pos[1], -back_plate_t]) mirror([1, 0, 0])
+        linear_extrude(height = h) usbc_label2d();
+}
+
 // ---- The power fix (roadmap 5.7, #53), 2026-10-17 ------------------------
 // Three small parts for the 12 V trigger board and the 5 V regulator
 // (docs/power-fix.md). The trigger board takes the charger's plug itself, in
@@ -2308,6 +2340,8 @@ module back_plate() {
         }
         // One pass-through, for the trigger board's socket (2026-10-29).
         usbc_cutout();
+        // and the charger it needs, engraved above it (2026-10-29)
+        translate([0, 0, -0.01]) usbc_label_solid(usbc_label_depth + 0.01);
         // The grilles cut a band from z=-1 to wall+1; shifted down by the
         // plate thickness that band covers the plate exactly.
         translate([0,0,-back_plate_t]) intake_grille();

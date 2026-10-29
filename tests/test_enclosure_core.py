@@ -49,9 +49,10 @@ OPENSCAD = "/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD"
 # Everything the hardware touches: the shell's internal furniture, the back,
 # and the antenna mount. These must be character-for-character the same.
 CORE = {
-    # the back plate and everything cut into it, and the coupon of its USB-C
-    # window
+    # the back plate and everything cut into it, the coupon of its USB-C
+    # window, and the charger's label engraved above it
     "back_plate", "back_lip", "usbc_cutout", "usbc_window2d", "usbc_gauge",
+    "usbc_label2d", "usbc_label_solid",
     "intake_grille", "fan_grille",
     # what the Pi, fan and speakers bolt to
     "cradle_rails", "cradle_arm", "fan_mount", "speaker_bracket",
