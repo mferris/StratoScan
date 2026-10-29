@@ -39,7 +39,7 @@ flowchart LR
 | A **USB-C plug pigtail**: two wires, 20 AWG or thicker, rated 5 A | Or cut one from a USB-C to USB-C cable rated 5 A (sold as 100 W or 240 W), as in step 4. Not a USB-A to USB-C cable: its power wires are thin |
 | Snap-on ferrite clip | For the pigtail |
 | Heat-shrink, a soldering iron, a multimeter | |
-| For the case: `power_trigger_mount` and `power_regulator_tray`, printed; two M3 × 8 button-head screws; 2 cm of 1.75 mm filament; VHB tape | In the case folders; see [In the case](#in-the-case) |
+| For the case: a back plate printed since 2026-10-29, and `power_trigger_mount`, `power_trigger_stop` and `power_regulator_tray`, printed (`usbc_gauge` too, to try the fit first); two M3 × 8 button-head screws and two M3 × 3 heat-set inserts; two M2 × 8 screws; VHB tape | In the case folders; see [In the case](#in-the-case) |
 
 The Pi's 5 V pins would also take the regulator's output, but they sit under
 the FlyCatcher, so the 5.2 V goes into the Pi's own USB-C port instead.
@@ -89,8 +89,8 @@ The Pi isn't involved until step 6.
 6. Shut the Pi down: `sudo poweroff`, or ask whoever looks after it.
 7. Unplug the supply from the Pi (or the back plate's extension from the
    Pi's port), and plug the pigtail into the Pi's USB-C port.
-8. Plug the charger into the trigger board: in the case, through the back
-   plate's extension. The Pi starts.
+8. Plug the charger into the trigger board: in the case, straight into its
+   socket in the back plate. The Pi starts.
 9. Check it:
 
    ```sh
@@ -118,15 +118,40 @@ question.
 
 ## In the case
 
-- **The trigger board goes behind the back plate's USB-C window.**
-  `power_trigger_mount` holds it there on the window's own two holes, with a
-  1.75 mm filament pin behind the board. The charger plugs straight into the
-  trigger board, and no extension is needed. Fitting steps are in the
+- **The trigger board's socket goes through the back plate** (since
+  2026-10-29). The board's front edge bears on the plate's inner face, and its
+  socket goes out through a window its own shape into a pocket in the outer
+  face, so the charger's plug meets the socket and goes fully home. Until then
+  the socket sat behind the plate, and a plug had to reach it through the
+  plate; one whose moulding stopped short of it made a poor connection that
+  cut out when the cable moved. `power_trigger_mount` holds the board, and
+  `power_trigger_stop` behind it presses it against the plate with no play.
+  No extension is needed. To fit them, with the plate outer face down:
+  1. Press an M3 × 3 insert into each hole beside the window, from the inner
+     face, with the outer face on a flat board, until it stops on the board.
+  2. Solder the 12 V pair to the trigger board.
+  3. Set the mount on the plate over the window, and screw it on with two
+     M3 × 8 button-head screws from inside, into the inserts, a turn short of
+     tight.
+  4. Drop the board in from the back of the mount, socket first, until its
+     socket goes into the window and its front edge rests on the plate.
+     Tighten the two M3 screws.
+  5. Slide the stop in behind the board until its ribs touch the board.
+  6. Drive two M2 × 8 screws through the mount's side walls into the stop:
+     they draw it the last 0.3 mm onto the board.
+
+  The plate is what sets the board's place, so the board's front edge must be
+  on it before the stop is locked; done on the bench, the socket would rest
+  on the bench and the board would end up 2 mm too far back. Try it on
+  `usbc_gauge` first, a ten-minute print of the plate round the window: the
+  charger's plug must click fully home. Details and checks are in the
   [retro case's README](../enclosure/Retro%20Radar%20Enclosure/README.md#the-power-fix-the-charger-plugs-into-the-trigger-board).
 - **The regulator goes in `power_regulator_tray`,** stuck to the plate's
   inner face with VHB tape. Put it as far from the FlyCatcher and the antenna
   leads as the case allows, and where the pigtail reaches the Pi's power
-  port. Keep the 5 V side short (a 10–20 cm pigtail), and twist the 12 V pair.
+  port, off the 33 × 13.5 mm patch round the window that the trigger board's
+  mount stands on. Keep the 5 V side short (a 10–20 cm pigtail), and twist
+  the 12 V pair.
 - **Never run the regulator's leads along an antenna cable.** On the first
   unit (2026-10-18) its lead had ended up wrapped round the external
   antenna's cable: 1090 MHz reception fell to a few messages a minute,

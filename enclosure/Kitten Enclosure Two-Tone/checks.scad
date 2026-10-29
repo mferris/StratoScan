@@ -54,8 +54,10 @@ back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9;
 back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40;
 // The USB-C window moved to [60,-51] on 2026-10-10 and this copy didn't,
 // so usbc_open probed the old spot and failed from then (found 2026-10-13).
-usbc_cut_pos=[60,-51]; usbc_cut_w=11.0; usbc_cut_h=8.0; usbc_screw_pitch=16.5; usbc_screw_dia=3.4;
-usbc_screw_pitch_max=17.0;
+// Since 2026-10-29 it is the trigger board's socket's window, with a pocket
+// for a plug's moulding and two insert holes beside it.
+usbc_cut_pos=[60,-51]; usbc_cut_w=9.54; usbc_cut_h=3.86; usbc_cut_r=1.93; usbc_screw_pitch=24;
+usbc_recess_w=14; usbc_recess_h=10; usbc_recess_r=2.5; usbc_recess_d=1.4; insert_hole_dia=4.0; usbc_insert_len=3;
 mount_hole_x=58; mount_hole_y=49;
 
 if (check=="ear_vs_post") {
@@ -654,40 +656,78 @@ if (check=="usbc_open") {
 }
 
 
-// The USB-C pass-through screws moved from 24.0mm centres to 16.5mm, to suit
-// a pass-through that mounts from INSIDE the plate. That pulls each screw
-// 3.75mm closer to the window, leaving 1.60mm of plate between them where
-// there used to be 5.35mm -- four perimeters at a 0.4mm nozzle. Still sound,
-// but no longer something to change casually, so it is pinned.
-//
-// Grow the window by 1mm all round and the screw holes must STILL miss it.
-// Empty here means at least 1mm of material survives between them.
-if (check=="usbc_screws_clear_window") {
+// The holes for the trigger board mount's two inserts sit 24 mm apart since
+// 2026-10-29, outside the moulding's pocket. (They were screw holes 16.5 mm
+// apart, for the old connector, with 1.6 mm of plate between them and its
+// window.) Grow the pocket by 1.6 mm all round and the insert holes must
+// still miss it: at least 1.6 mm of plate, four perimeters at a 0.4 mm
+// nozzle, between them.
+if (check=="usbc_inserts_clear_pocket") {
   intersection() {
     translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
       linear_extrude(height = back_plate_t + 2)
-        offset(r = 1)
-          square([usbc_cut_w, usbc_cut_h], center = true);
+        offset(r = 1.6) offset(r = usbc_recess_r) offset(delta = -usbc_recess_r)
+          square([usbc_recess_w, usbc_recess_h], center = true);
     translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
       for (sx = [-1, 1])
         translate([sx * usbc_screw_pitch/2, 0, 0])
-          cylinder(d = usbc_screw_dia, h = back_plate_t + 2);
+          cylinder(d = insert_hole_dia, h = back_plate_t + 2);
   }
 }
-// Paired positive control: the same probe at the OLD 24.0mm pitch would also
-// come out empty, so an empty result above proves nothing on its own. Grow
-// the window by 4mm instead and the screws must now be caught -- which shows
-// the probe can find them at all, and that they really did move inwards.
-if (check=="usbc_screw_probe_works") {
+// Paired positive control: grow the pocket by 4 mm instead and the holes must
+// now be caught, which shows the probe can find them at all.
+if (check=="usbc_insert_probe_works") {
   intersection() {
     translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
       linear_extrude(height = back_plate_t + 2)
-        offset(r = 4)
-          square([usbc_cut_w, usbc_cut_h], center = true);
+        offset(r = 4) offset(r = usbc_recess_r) offset(delta = -usbc_recess_r)
+          square([usbc_recess_w, usbc_recess_h], center = true);
     translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 1])
       for (sx = [-1, 1])
         translate([sx * usbc_screw_pitch/2, 0, 0])
-          cylinder(d = usbc_screw_dia, h = back_plate_t + 2);
+          cylinder(d = insert_hole_dia, h = back_plate_t + 2);
+  }
+}
+// The pocket in the outer face for a plug's moulding (2026-10-29: 14 x 10 and
+// 1.4 deep round the trigger board's socket): open to usbc_recess_d from the
+// outer face over its whole footprint (a probe there meets no plate)...
+if (check=="usbc_recess_open") {
+  intersection() {
+    back_plate();
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 0.5])
+      linear_extrude(height = usbc_recess_d + 0.45)
+        offset(r = usbc_recess_r - 0.1) offset(delta = -usbc_recess_r)
+          square([usbc_recess_w, usbc_recess_h], center = true);
+  }
+}
+// ...and the web round the window is still there (a probe in it, between the
+// window and the pocket's edge, finds plate): the pocket must never break
+// through.
+if (check=="usbc_recess_web") {
+  intersection() {
+    back_plate();
+    translate([usbc_cut_pos[0] - 6, usbc_cut_pos[1] + usbc_cut_h/2 + 0.3, -back_plate_t + usbc_recess_d + 0.1])
+      cube([12, 2.0, back_plate_t - usbc_recess_d - 0.2]);
+  }
+}
+// A plug in the USB-C socket (as big as the pocket, 14 x 10, and 35 mm out of
+// the plate with its strain relief) clears the stand, paws, tail and all,
+// with the head leaning back in it...
+if (check=="usbc_plug_clears_stand") {
+  intersection() {
+    stand();
+    translate([0,0,base_h + cradle_od/2 - 3]) rotate([90-stand_angle,0,0]) translate([0,0,-shell_depth/2])
+      translate([usbc_cut_pos[0] - usbc_recess_w/2, usbc_cut_pos[1] - usbc_recess_h/2, -back_plate_t - 35])
+        cube([usbc_recess_w, usbc_recess_h, 35]);
+  }
+}
+// ...and the same probe, run on into the plate, does meet it (the probe is
+// where the socket is).
+if (check=="usbc_plug_probe_works") {
+  intersection() {
+    back_plate();
+    translate([usbc_cut_pos[0] - usbc_recess_w/2, usbc_cut_pos[1] - usbc_recess_h/2, -back_plate_t - 35])
+      cube([usbc_recess_w, usbc_recess_h, 35 + back_plate_t + 1]);
   }
 }
 
@@ -862,47 +902,191 @@ if (check=="cable_slot_other_side") {
 }
 
 // ---- the power fix (roadmap 5.7): the trigger board in the USB-C window ----
-// The mount holds the board behind the plate: its flange in front, a 1.75 mm
-// filament pin behind. The speakers themselves aren't in shell() (only their
-// brackets), so their bodies are drawn here: 100 x 45 x 21 on each bracket's
-// face.
+// Since 2026-10-29 the board's socket goes through the plate: the board's
+// front edge bears on the plate's inner face, its socket goes out through a
+// window its own shape, and the socket's face stands in the pocket, past the
+// pocket's floor. The mount sits on the plate round the board, held by two M3
+// screws from inside into inserts in the plate, and a printed stop behind the
+// board, locked by two M2 screws through the mount's side walls, presses it
+// forward. Restated for the probes below:
+pwr_m2_pilot=1.65; pwr_m2_csk=2.8; pwr_trig_w=10.72; pwr_trig_proud=2.0;
+// The speakers themselves aren't in shell() (only their sleeves and pads), so
+// their bodies are drawn here: 100 x 45 x 21, the face on the sleeve's rim,
+// where the four screw pads hold it. Until 2026-10-29 this drew each one 4 mm
+// further out, its face where the bracket's mounting face used to be: inside
+// its own screw pads, by 4487 mm3, and 4 mm clear of a mount that in fact
+// reached 1 mm into the speaker's corner. power_speakers_on_pads now holds
+// the drawing to the pads.
 module pwr_speaker_bodies() {
   for (a = speaker_angles) rotate([0, 0, a])
-    translate([outer_dia/2 - wall - speaker_bracket_depth - speaker_h, -speaker_w/2, (shell_depth - speaker_d)/2])
+    translate([outer_dia/2 - wall - speaker_bracket_depth - speaker_boss_h - speaker_h, -speaker_w/2, (shell_depth - speaker_d)/2])
       cube([speaker_h, speaker_w, speaker_d]);
 }
-// The window's two M3 shanks, from the outer face to `into` past the inner one.
-module pwr_screw_probes(into, d) {
-  for (sx = [-1, 1])
-    translate([usbc_cut_pos[0] + sx*usbc_screw_pitch_max/2, usbc_cut_pos[1], -back_plate_t - 0.01])
-      cylinder(d = d, h = back_plate_t + into, $fn = 24);
+// Round each M2 screw's thread in the stop, from the bottom of its
+// countersink to the screw's tip: the pilot's own teardrop inside, and
+// 1.2 mm of plastic outside it all round, roof included.
+module pwr_m2_thread_rings() {
+  x0 = pwr_stop_hw() - (pwr_m2_csk - pwr_m2_pilot)/2;
+  e = pwr_m2_engaged();
+  r = pwr_m2_pilot/2;
+  for (i = [0, 1]) let (sx = i == 0 ? 1 : -1)
+    translate([usbc_cut_pos[0] + sx*(x0 - e/2), usbc_cut_pos[1] + pwr_m2_y(), pwr_m2_z()[i]])
+      rotate([90, 0, 0]) difference() {     // roofed toward the stop's bottom, as its pilots are
+        rotate([0, 90, 0]) linear_extrude(height = e, center = true)
+          hull() { circle(r = r + 1.2, $fn = 48); translate([-r*sqrt(2), 0]) circle(r = 1.2, $fn = 48); }
+        pwr_x_teardrop(pwr_m2_pilot + 0.05, e + 2);
+      }
 }
+// the case's local frame -> the stand's, as the case sits in it
+module pwr_posed() { translate([0, 0, base_h + cradle_od/2 - 3]) rotate([90 - stand_angle, 0, 0]) translate([0, 0, -shell_depth/2]) children(); }
+
+// The mount sits on the plate: nothing of it is in the plate...
 if (check=="power_mount_vs_plate")    intersection() { power_trigger_mount_placed(); back_plate(); }
+// ...and its face is down on it: moved 0.5 mm into the plate, it meets it.
+if (check=="power_mount_on_plate")    intersection() { translate([0, 0, -0.5]) power_trigger_mount_placed(); back_plate(); }
+// The board and its socket meet neither the plate nor the mount...
 if (check=="power_board_held")        intersection() { power_trigger_board_placed(); union() { back_plate(); power_trigger_mount_placed(); } }
+// ...and the plate is what stops the board: moved 1.5 mm forward, its front
+// edge runs into the plate.
+if (check=="power_plate_holds_board") intersection() { translate([0, 0, -1.5]) power_trigger_board_placed(); back_plate(); }
+// The board's front edge bears on solid plate below the window: in front of
+// the edge, across the board's width and from its underside up to the
+// window, the plate is solid 1.5 mm deep. The control: the same strip, moved
+// 1.5 mm up into the window, finds air.
+module pwr_edge_strip(dy = 0) {
+  translate([usbc_cut_pos[0] - pwr_trig_w/2 + 0.05, usbc_cut_pos[1] + pwr_board_y0() + 0.05 + dy, -1.5])
+    cube([pwr_trig_w - 0.1, -usbc_cut_h/2 - pwr_board_y0() - 0.1, 1.49]);
+}
+if (check=="power_edge_on_plate")     difference() { pwr_edge_strip(); back_plate(); }
+if (check=="power_edge_strip_works")  difference() { pwr_edge_strip(1.5); back_plate(); }
+// The socket goes through its window with room all round: its shell, 0.25 mm
+// bigger all round, meets no plate through the web. The control: 1 mm bigger
+// all round, it does, so the window is close round the socket.
+module pwr_socket_probe(grow) {
+  translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t + usbc_recess_d - 0.5])
+    linear_extrude(height = back_plate_t - usbc_recess_d + 1) pwr_socket2d(grow);
+}
+if (check=="power_socket_clears_window") intersection() { pwr_socket_probe(0.25); back_plate(); }
+if (check=="power_window_is_close")      intersection() { pwr_socket_probe(1.0); back_plate(); }
+// A plug's shell (8.4 x 2.6) reaches the socket's face, out in the pocket...
 if (check=="power_plug_reaches")      intersection() { power_plug_probe(); union() { back_plate(); power_trigger_mount_placed(); } }
-if (check=="power_pin_passes")        intersection() { power_pin_probe(); union() { power_trigger_mount_placed(); power_trigger_board_placed(); } }
-if (check=="power_screws_pass")       intersection() { pwr_screw_probes(0, 2.9); back_plate(); }
+// ...and the same probe, moved 6 mm up, stops on the plate.
+if (check=="power_plug_probe_works")  intersection() { translate([0, 6, 0]) power_plug_probe(); back_plate(); }
+// So does a moulding the size the pocket is drawn for (2026-10-29): 13.4 x
+// 9.4, the pocket less 0.3 a side, from outside down to the socket's face,
+// meets no plate, no mount and no insert. Until then the socket's face was at
+// the plate's inner face, and a moulding had to go through the web to it.
+// The control: one 1 mm bigger than the pocket each way stops on the outer
+// face.
+module pwr_moulding_probe(w, h) {
+    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 20])
+        linear_extrude(height = 20 + back_plate_t - pwr_trig_proud - 0.01)
+            offset(r = 2) offset(delta = -2) square([w, h], center = true);
+}
+if (check=="power_moulding_reaches")     intersection() { pwr_moulding_probe(usbc_recess_w - 0.6, usbc_recess_h - 0.6); union() { back_plate(); power_trigger_mount_placed(); power_insert_probe(); } }
+if (check=="power_moulding_probe_works") intersection() { pwr_moulding_probe(usbc_recess_w + 1, usbc_recess_h + 1); back_plate(); }
+
+// ---- the mount's M3 screws and their inserts (2026-10-29) ----
+// From inside, through the ears and into the inserts: the shanks meet neither
+// the mount nor the plate (the ears' holes and the inserts' holes are open
+// round them)...
+if (check=="power_m3_pass")           intersection() { power_m3_probe(head = false); union() { power_trigger_mount_placed(); back_plate(); } }
+// ...each goes 2.5 mm into its insert (this control finds them there)...
+if (check=="power_m3_bite")           intersection() { power_m3_probe(head = false); power_insert_probe(insert_hole_dia); }
+// ...and nothing of a screw or an insert comes out past the plate's outer
+// face, where it could catch a moulding or the stand.
+if (check=="power_m3_inside_plate")   intersection() { union() { power_m3_probe(); power_insert_probe(); } translate([0, 0, -back_plate_t - 50]) cylinder(r = 150, h = 50); }
+// The heads, on the ears, stay under the speaker beside the window (its
+// corner comes down to 8 mm from the plate).
+if (check=="power_m3_clear_of_speakers") intersection() { power_m3_probe(); pwr_speaker_bodies(); }
+// The inserts' holes are open right through the plate (the probe is held
+// inside the plate's thickness, so a closed hole finds nothing)...
+if (check=="usbc_insert_holes_open")  difference() {
+  for (sx = [-1, 1]) translate([usbc_cut_pos[0] + sx*usbc_screw_pitch/2, usbc_cut_pos[1], -back_plate_t + 0.01])
+    cylinder(d = insert_hole_dia - 0.2, h = back_plate_t - 0.02);
+  back_plate();
+}
+// ...and each has solid plate 1.5 mm thick all round it, through the plate's
+// whole thickness, for its knurl to melt into.
+if (check=="usbc_inserts_surrounded") difference() {
+  for (sx = [-1, 1]) translate([usbc_cut_pos[0] + sx*usbc_screw_pitch/2, usbc_cut_pos[1], -back_plate_t + 0.01])
+    difference() {
+      cylinder(d = insert_hole_dia + 3, h = back_plate_t - 0.02);
+      translate([0, 0, -1]) cylinder(d = insert_hole_dia + 0.1, h = back_plate_t + 2);
+    }
+  back_plate();
+}
+
+// The mount clears the shell and the speaker beside it...
 if (check=="power_mount_vs_shell")    intersection() { power_trigger_mount_placed(); shell(); }
 if (check=="power_mount_vs_speakers") intersection() { power_trigger_mount_placed(); pwr_speaker_bodies(); }
-// Positive controls: the screws do reach the mount's pilots; the plug probe
-// does hit the plate when moved 4 mm off the socket; and the pin does stop
-// the board when it is pushed 1.5 mm back.
-if (check=="power_screws_bite")       intersection() { pwr_screw_probes(7, 3.0); power_trigger_mount_placed(); }
-if (check=="power_plug_probe_works")  intersection() { translate([0, 5, 0]) power_plug_probe(); back_plate(); }
-
-// A plug's moulding reaches the trigger board's socket (2026-10-23). The socket
-// face is at the plate's inner face, so the moulding must pass the 1 mm web:
-// one 10.4 x 7.6 (about the widest that fits between the screw heads, and
-// taller than the old 6.5 mm window) from outside down to the socket face
-// meets no plastic. The control: one 10 mm tall stops on the web.
-module pwr_moulding_probe(h) {
-    translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t - 20])
-        linear_extrude(height = 20 + back_plate_t - 0.01)
-            offset(r = 1) offset(delta = -1) square([10.4, h], center = true);
+// The speakers as drawn here sit on their pads, not in them.
+if (check=="power_speakers_on_pads")  intersection() { pwr_speaker_bodies(); shell(); }
+// The control for the speaker checks: the speaker drawing catches an ear 9 mm
+// tall where the mount's nearer ear is, so the speaker's corner does come
+// down past it.
+if (check=="power_speaker_drawing_works") intersection() {
+  translate([usbc_cut_pos[0] + usbc_screw_pitch/2, usbc_cut_pos[1], 0]) cylinder(d = 7.5, h = 9);
+  pwr_speaker_bodies();
 }
-if (check=="power_moulding_reaches")     intersection() { pwr_moulding_probe(7.6); union() { back_plate(); power_trigger_mount_placed(); } }
-if (check=="power_moulding_probe_works") intersection() { pwr_moulding_probe(10.0); back_plate(); }
-if (check=="power_pin_holds")         intersection() { translate([0, 0, 1.5]) power_trigger_board_placed(); power_pin_probe(); }
+
+// ---- the stop behind the board (2026-10-29) ----
+// It slides into the mount's back end and fits there: nothing of it is in the
+// mount...
+if (check=="power_stop_fits_tube")    intersection() { power_trigger_stop_placed(); power_trigger_mount_placed(); }
+// ...or in the board, but for its two crush ribs: without them it stands
+// clear of the board's back edge, so it presses on no part of the board...
+if (check=="power_stop_clear_of_board") intersection() {
+  translate([usbc_cut_pos[0], usbc_cut_pos[1], 0]) power_trigger_stop_shape(ribs = false);
+  power_trigger_board_placed();
+}
+// ...and the ribs press into the board's back edge by their squeeze, so the
+// board has no play along its length. This one must come out small but not
+// empty (SQUEEZE in run-checks.sh): empty is a gap behind the board, and more
+// than a sliver is the stop's body on the board.
+if (check=="power_ribs_squeeze_board") intersection() { power_trigger_stop_placed(); power_trigger_board_placed(); }
+// Positive control: the stop is right behind the board; moved 2 mm back, the
+// board runs into its body.
+if (check=="power_stop_takes_push")   intersection() { translate([0, 0, 2]) power_trigger_board_placed(); power_trigger_stop_placed(); }
+// The M2 screws: a probe under the pilots' size, down each screw's axis from
+// its wall's outer face to the stop's far side, meets neither the mount nor
+// the stop, so the walls' pilots and the stop's line up...
+if (check=="power_m2_holes_line_up")  intersection() {
+  power_m2_probe(1.4, pwr_m2_reach() - 0.1, false);
+  union() { power_trigger_mount_placed(); power_trigger_stop_placed(); }
+}
+// ...the screws, heads and all, touch neither the board nor its wires...
+if (check=="power_m2_clear_of_board") intersection() { power_m2_probe(); union() { power_trigger_board_placed(); power_wire_probe(); } }
+// ...and each has its whole thread, at least 4 mm (an assert in the design),
+// in solid stop with 1.2 mm of plastic all round: the rings above, less the
+// stop, leave nothing. Their control: the same rings do lie in the stop.
+if (check=="power_m2_threads_held")   difference() { pwr_m2_thread_rings(); power_trigger_stop_placed(); }
+if (check=="power_m2_threads_bite")   intersection() { pwr_m2_thread_rings(); power_trigger_stop_placed(); }
+// The board's two output wires (2.1 mm across, from its top face) run
+// straight out of the back over the stop, meeting nothing. The control: moved
+// 3 mm down, they run into the stop.
+if (check=="power_wires_out")         intersection() { power_wire_probe(); union() { power_trigger_mount_placed(); power_trigger_stop_placed(); power_m2_probe(); } }
+if (check=="power_wire_probe_works")  intersection() { power_wire_probe(-3); power_trigger_stop_placed(); }
+// The stop and the screws clear the shell and the speakers; and the whole
+// power fix, posed in the stand with the case, clears the stand.
+if (check=="power_stop_vs_shell")     intersection() { union() { power_trigger_stop_placed(); power_m2_probe(); } shell(); }
+if (check=="power_stop_vs_speakers")  intersection() { union() { power_trigger_stop_placed(); power_m2_probe(); } pwr_speaker_bodies(); }
+if (check=="power_parts_vs_stand")    intersection() {
+  pwr_posed() union() { power_trigger_mount_placed(); power_trigger_stop_placed(); power_trigger_board_placed(); power_m2_probe(); power_m3_probe(); }
+  stand();
+}
+// The regulator's tray has no set place: it goes on the plate's inner face
+// wherever the case has room. All of the power fix at the window keeps to a
+// 33 x 13.5 mm patch of the plate round it, up to 26 mm in from the plate, so
+// the tray, and anything else stuck to the plate, need only keep off that
+// patch (the READMEs say so): nothing of the parts is outside it.
+module pwr_patch() {
+  translate([usbc_cut_pos[0] - 16.5, usbc_cut_pos[1] - 9, -back_plate_t - 0.01]) cube([33, 13.5, back_plate_t + 26]);
+}
+if (check=="power_parts_in_patch")    difference() {
+  union() { power_trigger_mount_placed(); power_trigger_stop_placed(); power_trigger_board_placed(); power_m2_probe(); power_m3_probe(); power_insert_probe(); }
+  pwr_patch();
+}
 
 // The speaker sleeve is hollow (2026-10-23): inside it, from the speaker's
 // face to the wall and clear of the four screw pads, there is no plastic. It
