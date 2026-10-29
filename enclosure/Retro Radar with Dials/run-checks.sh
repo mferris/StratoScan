@@ -9,8 +9,10 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
 EMPTY="arc_vs_shell arc_vs_trim cover_vs_shell cover_vs_arc arc_vs_stand vents_clear_of_arc grille_clear_of_arc
-       screw_heads_clear wire_way_clear wire_through_arc button_fits encoder_fits lamp_fits knob_clear_of_face"
-FOUND="pads_touch_drum screw_holes_open probe_finds_post labels_present"
+       screw_heads_clear wire_way_clear wire_through_arc button_fits encoder_fits lamp_fits knob_clear_of_face
+       arc_behind_trim_face trim_face_at_z_trim_face"
+FOUND="pads_touch_drum screw_holes_open probe_finds_post labels_present
+       arc_face_near_trim trim_reaches_z_trim_face button_21mm_meets_cover"
 CANARY="canary"
 MAX_MM3=1.0
 
@@ -41,20 +43,20 @@ fail=0
 echo "Must come out with no real volume (under ${MAX_MM3} mm3):"
 for c in $EMPTY; do
     v=$(run "$c")
-    if [ "$(echo "$v < $MAX_MM3" | bc -l)" = "1" ]; then printf "  PASS  %-22s %9s mm3\n" "$c" "$v"
-    else printf "  FAIL  %-22s %9s mm3\n" "$c" "$v"; fail=1; fi
+    if [ "$(echo "$v < $MAX_MM3" | bc -l)" = "1" ]; then printf "  PASS  %-26s %9s mm3\n" "$c" "$v"
+    else printf "  FAIL  %-26s %9s mm3\n" "$c" "$v"; fail=1; fi
 done
 echo "Positive controls, must find real geometry:"
 for c in $FOUND; do
     v=$(run "$c")
-    if [ "$(echo "$v > 1" | bc -l)" = "1" ]; then printf "  PASS  %-22s %9s mm3\n" "$c" "$v"
-    else printf "  FAIL  %-22s %9s mm3  (found nothing)\n" "$c" "$v"; fail=1; fi
+    if [ "$(echo "$v > 1" | bc -l)" = "1" ]; then printf "  PASS  %-26s %9s mm3\n" "$c" "$v"
+    else printf "  FAIL  %-26s %9s mm3  (found nothing)\n" "$c" "$v"; fail=1; fi
 done
 echo "Canary, or nothing above means anything:"
 for c in $CANARY; do
     v=$(run "$c")
-    if [ "$(echo "$v > 1000" | bc -l)" = "1" ]; then printf "  PASS  %-22s %9s mm3\n" "$c" "$v"
-    else printf "  FAIL  %-22s %9s mm3  (modules not found?)\n" "$c" "$v"; fail=1; fi
+    if [ "$(echo "$v > 1000" | bc -l)" = "1" ]; then printf "  PASS  %-26s %9s mm3\n" "$c" "$v"
+    else printf "  FAIL  %-26s %9s mm3  (modules not found?)\n" "$c" "$v"; fail=1; fi
 done
 [ "$fail" = "0" ] && echo "All checks passed." || echo "SOME CHECKS FAILED."
 exit "$fail"

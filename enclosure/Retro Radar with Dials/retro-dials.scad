@@ -41,9 +41,13 @@ pod_a1    = 74;                   // upper end
 pod_wall  = 2.5;
 pod_face_t = 3;                   // front face thickness
 // The face sits 1 mm behind the front trim's face, so the arc reads as a
-// part bolted to the case rather than a bulge in the trim.
-z_trim_face = shell_depth + panel_glass_depth + 0.1 + front_trim_h;   // 71.55
-pod_z1    = z_trim_face - 1;      // front face
+// part bolted to the case rather than a bulge in the trim. z_trim_face is
+// the retro file's, 66.62, where front_stack_placed() puts the trim
+// (2026-10-29). This file had its own, worked out from the panel's whole
+// 6.45 mm depth rather than the 1.62 mm glass, which stood the face at
+// 70.55, 3.9 mm proud of the trim. The arc is 4.9 mm shallower for it, so
+// the button behind the face is a short one (button_deep).
+pod_z1    = z_trim_face - 1;      // front face, 65.62
 // The back, with its cover, stays in front of the side vent slots (their
 // tops are at z=41.25), so all nine still breathe.
 pod_z0    = 44.5;
@@ -58,6 +62,11 @@ enc_hole   = 7.4;    // EC11 encoder, M7 bushing
 enc_panel  = 2.0;    // the face is thinned to this round the encoder so its nut reaches
 enc_relief = 15;     // diameter of that thinning, from inside
 button_hole = 12.2;  // 12 mm momentary panel button: short enough to fit behind the face
+// The most the button may reach behind the face, body and tags (2026-10-29).
+// The cavity behind the face is 18.1 mm deep, to the cover, and this leaves
+// 2 mm for the wires to turn off the tags. The common 21 mm button would run
+// through the 2.5 mm cover (button_21mm_meets_cover).
+button_deep = 16;
 label_r    = 143.6;  // lettering round the outer edge
 label_size = 3.3;
 label_depth = 0.6;   // inlaid in a second colour, like the antenna cover's lettering
@@ -131,12 +140,13 @@ module radial_cyl(a, z, d, r0, r1) {
     rotate([0, 0, a]) translate([r0, 0, z]) rotate([0, 90, 0]) cylinder(d = d, h = r1 - r0, $fn = 32);
 }
 
-// a teardrop hole along the radius, point towards +Z, so it prints clean
-// in a wall that is printed upright
-module radial_teardrop(a, z, d, r0, r1) {
+// a teardrop along the radius, point towards +Z, so a hole in a wall that is
+// printed upright prints clean. point = -1 turns it towards -Z, for the arc,
+// which prints face down (2026-10-29).
+module radial_teardrop(a, z, d, r0, r1, point = 1) {
     rotate([0, 0, a]) translate([r0, 0, z]) rotate([0, 90, 0])
         linear_extrude(height = r1 - r0)
-            rotate([0, 0, 180]) hull() { circle(d = d, $fn = 32); translate([d/2*sqrt(2)/1.0, 0]) circle(d = 0.01); }
+            rotate([0, 0, point > 0 ? 180 : 0]) hull() { circle(d = d, $fn = 32); translate([d/2*sqrt(2)/1.0, 0]) circle(d = 0.01); }
 }
 
 // tangential lettering on the face, centred on angle a
@@ -157,11 +167,14 @@ module pod() {
                 translate([0, 0, pod_z0 - 1]) linear_extrude(height = pod_z1 - pod_face_t - pod_z0 + 1) pod_outline2d(pod_wall);
             }
             // pads and neck reach across the gap and land on the drum; kept
-            // in front of the back, where the cover goes
+            // in front of the back, where the cover goes. The neck is a
+            // teardrop pointing at the face (2026-10-29): the arc prints face
+            // down, and the round neck's underside, standing 2 mm off the
+            // wall, took support.
             intersection() {
                 union() {
                     for (a = pad_a) radial_cyl(a, pad_z, pad_d, R_case - 1, pod_r_in + pod_wall + pad_into);
-                    radial_cyl(wire_a, wire_z, neck_d, R_case - 1, pod_r_in + pod_wall);
+                    radial_teardrop(wire_a, wire_z, neck_d, R_case - 1, pod_r_in + pod_wall);
                 }
                 translate([-200, -200, pod_z0]) cube([400, 400, 100]);
             }
@@ -173,8 +186,14 @@ module pod() {
         translate([0, 0, pod_z0 - 2]) cylinder(r = R_case, h = 60, $fn = 720);
         // insert holes in the pads, from the drum side
         for (a = pad_a) radial_cyl(a, pad_z, pad_insert_d, R_case - 2, R_case + pad_insert_h);
-        // the wire hole
-        radial_cyl(wire_a, wire_z, wire_d, R_case - 2, pod_r_in + pod_wall + 1);
+        // the wire hole, a teardrop pointing at the back, so its roof prints
+        // clean face down (2026-10-29: it was round, and took support). Its
+        // tip is cut flat 1.2 mm short of the back, so the wall there stays
+        // 1.2 mm; the flat is a 1.3 mm bridge.
+        intersection() {
+            radial_teardrop(wire_a, wire_z, wire_d, R_case - 2, pod_r_in + pod_wall + 1, -1);
+            translate([-200, -200, pod_z0 + 1.2]) cube([400, 400, 100]);
+        }
         // the controls
         translate(concat(polar(ctl_r, lamp_a), [pod_z1 - pod_face_t - 1])) cylinder(d = lamp_hole, h = pod_face_t + 2, $fn = 64);
         translate(concat(polar(ctl_r, button_a), [pod_z1 - pod_face_t - 1])) cylinder(d = button_hole, h = pod_face_t + 2, $fn = 64);
@@ -282,9 +301,10 @@ c_knob  = "#1B1C1D";
 c_label = "#E9E2CC";
 c_chrome = "#B9BEC2";
 
-// the screen, for the picture only: a dark scope with rings and a sweep
+// the screen, for the picture only: a dark scope with rings and a sweep, just
+// under the glass's front face, where front_stack_placed() puts it
 module screen_picture() {
-    translate([0, 0, shell_depth + panel_glass_depth - 0.6]) {
+    translate([0, 0, shell_depth + glass_thickness - 0.6]) {
         color("#08140E") cylinder(d = panel_diameter - 1, h = 0.5, $fn = 180);
         color("#2F7A4A") for (r = [30, 60, 89]) translate([0, 0, 0.5]) difference() { cylinder(r = r, h = 0.15, $fn = 180); translate([0, 0, -0.1]) cylinder(r = r - 0.6, h = 0.4, $fn = 180); }
         color("#3FAF66", 0.9) translate([0, 0, 0.55]) rotate_extrude(angle = 38, $fn = 180) square([89, 0.12]);
@@ -305,11 +325,13 @@ module controls_in_place() {
     color(c_label) pod_text();
 }
 
+// The retainer and trim are placed by the retro file's front_stack_placed()
+// (2026-10-29), so the pictures show the trim where it is built.
 module case_dials_assembled() {
     color(c_body) shell_dials();
-    color(c_trim) translate([0, 0, shell_depth - retainer_h + 0.1]) retainer();
+    color(c_trim) front_stack_placed("retainer");
     screen_picture();
-    color(c_trim) translate([0, 0, shell_depth + panel_glass_depth + 0.1]) front_trim();
+    color(c_trim) front_stack_placed("trim");
     color(c_body) pod();
     color(c_body) pod_cover();
     controls_in_place();
@@ -336,11 +358,11 @@ else if (dpart == "pod_text") pod_text();
 else if (dpart == "knob") knob();
 else if (dpart == "jewel") jewel();
 else if (dpart == "in_stand") in_stand();
-else if (dpart == "arc_closeup") { color(c_body) pod(); controls_in_place(); color(c_body) intersection() { shell_dials(); translate(concat(polar(130, 53), [0])) cylinder(r = 70, h = 80); } color(c_trim) intersection() { translate([0, 0, shell_depth + panel_glass_depth + 0.1]) front_trim(); translate(concat(polar(130, 53), [0])) cylinder(r = 70, h = 90); } }
+else if (dpart == "arc_closeup") { color(c_body) pod(); controls_in_place(); color(c_body) intersection() { shell_dials(); translate(concat(polar(130, 53), [0])) cylinder(r = 70, h = 80); } color(c_trim) intersection() { front_stack_placed("trim"); translate(concat(polar(130, 53), [0])) cylinder(r = 70, h = 90); } }
 else if (dpart == "exploded") {
     color(c_body) shell_dials();
     screen_picture();
-    color(c_trim) translate([0, 0, shell_depth + panel_glass_depth + 0.1]) front_trim();
+    color(c_trim) front_stack_placed("trim");
     translate([22, 22, 0]) { color(c_body) pod(); color(c_label) pod_text(); }
     translate([22, 22, -40]) color(c_body) pod_cover();
     translate([22, 22, 40]) {

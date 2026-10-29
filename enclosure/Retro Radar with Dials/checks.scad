@@ -11,11 +11,26 @@ check = "none";
 // the case's local frame -> the stand's, as in_stand() poses it
 module posed() { translate([0, 0, base_h + cradle_od/2 - 3]) rotate([90 - stand_angle, 0, 0]) translate([0, 0, -shell_depth/2]) children(); }
 
+// the arc and its cover, as they sit on the case
+module arc_and_cover() { pod(); pod_cover(); }
+// a slab from height z forward, wider than the arc
+module slab_from(z) translate([0, 0, z]) cylinder(r = pod_r_out + 5, h = 40, $fn = 96);
+// the button's room behind the face: its 16 mm nut, `deep` back from the face
+module button_room(deep) translate(concat(polar(ctl_r, button_a), [pod_z1 - pod_face_t - deep])) cylinder(d = 16, h = deep - 0.05, $fn = 48);
+
 // ---- must be EMPTY -------------------------------------------------------
 // The arc clears the shell everywhere except where its pads and neck land on
 // the drum's surface (zero volume, a shared face).
 if (check == "arc_vs_shell") intersection() { pod(); shell_dials(); }
-if (check == "arc_vs_trim") intersection() { pod(); translate([0, 0, shell_depth + panel_glass_depth + 0.1]) front_trim(); }
+// the trim where front_stack_placed() puts it (2026-10-29; this drew it on
+// the panel's whole 6.45 mm depth, 4.9 mm too far forward)
+if (check == "arc_vs_trim") intersection() { pod(); front_stack_placed("trim"); }
+// The arc's face stays at least 0.5 mm behind the trim's face (2026-10-29).
+// It stood 3.9 mm proud: the face was set from a trim drawn too far forward.
+if (check == "arc_behind_trim_face") intersection() { pod(); slab_from(z_trim_face - 0.5); }
+// and z_trim_face is where the trim's face really is: none of the trim, as
+// front_stack_placed() puts it, stands in front of it
+if (check == "trim_face_at_z_trim_face") intersection() { front_stack_placed("trim"); slab_from(z_trim_face + 0.01); }
 if (check == "cover_vs_shell") intersection() { pod_cover(); shell_dials(); }
 if (check == "cover_vs_arc") intersection() { pod_cover(); pod(); }
 if (check == "arc_vs_stand") intersection() { posed() union() { pod(); pod_cover(); } stand(); }
@@ -47,15 +62,16 @@ if (check == "wire_through_arc") intersection() {
     pod();
     radial_cyl(wire_a, wire_z, wire_d - 0.4, R_case - 1, pod_r_in + pod_wall + 0.5);
 }
-// the bought parts fit inside the arc, behind the face:
-//   12 mm button: 16 mm nut, 21 mm deep with its tags
+// the bought parts fit inside the arc, behind the face, and clear its cover
+// (the cover was left out until 2026-10-29, so a part reaching into it
+// passed):
+//   12 mm button: 16 mm nut, button_deep (16 mm) deep with its tags
 //   EC11 encoder: 13 x 13 body, 7 deep, then 6 mm of pins
 //   lamp: the lens shank and a 5 mm LED with 12 mm of leads
-if (check == "button_fits") intersection() { pod();
-    translate(concat(polar(ctl_r, button_a), [pod_z1 - pod_face_t - 21])) cylinder(d = 16, h = 21 - 0.05, $fn = 48); }
-if (check == "encoder_fits") intersection() { pod();
+if (check == "button_fits") intersection() { arc_and_cover(); button_room(button_deep); }
+if (check == "encoder_fits") intersection() { arc_and_cover();
     translate(concat(polar(ctl_r, knob_a), [pod_z1 - enc_panel - 13])) rotate([0, 0, knob_a]) translate([-6.75, -6.75, 0]) cube([13.5, 13.5, 13 - (pod_face_t - enc_panel) - 0.05]); }
-if (check == "lamp_fits") intersection() { pod();
+if (check == "lamp_fits") intersection() { arc_and_cover();
     translate(concat(polar(ctl_r, lamp_a), [pod_z1 - pod_face_t - 14])) cylinder(d = 9, h = 14 - 0.05, $fn = 32); }
 // the knob clears the lettering and the face (it stands 1.5 mm off the face on the nut)
 if (check == "knob_clear_of_face") intersection() { pod(); translate(concat(polar(ctl_r, knob_a), [pod_z1 + 1.5])) knob(); }
@@ -73,4 +89,11 @@ if (check == "probe_finds_post") intersection() {   // the head probe, moved ont
     shell_dials(); radial_cyl(45, 52, 5.6, R_case - wall - 3.2, R_case - wall - 0.05);
 }
 if (check == "labels_present") pod_text();
+// The probes above sit where they should (2026-10-29): the arc's face is
+// within 1.5 mm of the trim's face, so arc_behind_trim_face's slab starts
+// just in front of it; the trim reaches within 0.2 mm of z_trim_face; and the
+// common 21 mm button runs into the cover, so the fits see the cover.
+if (check == "arc_face_near_trim") intersection() { pod(); slab_from(z_trim_face - 1.5); }
+if (check == "trim_reaches_z_trim_face") intersection() { front_stack_placed("trim"); slab_from(z_trim_face - 0.2); }
+if (check == "button_21mm_meets_cover") intersection() { arc_and_cover(); button_room(21); }
 if (check == "canary") pod();

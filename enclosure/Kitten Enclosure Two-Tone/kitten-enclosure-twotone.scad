@@ -1009,9 +1009,10 @@ module retainer_print() {
 // them, so a picture can colour each; anything else gives all three. The
 // pictures put the trim on the panel's whole 6.45mm depth instead of the
 // 1.62mm glass, and the kitten's sat the retainer inside the shelf; placing
-// the stack here once stops that. Worked from shell_depth, not z_trim_face,
-// so a file that includes this one and sets its own z_trim_face (the Retro
-// with Dials does, until its arc's depth is settled) still gets it right.
+// the stack here once stops that. The Retro with Dials sets its arc's face
+// 1mm behind z_trim_face, and its checks hold z_trim_face to the trim this
+// puts there; the core test stops a variant setting its own, as the Dials
+// did until 2026-10-29.
 module front_stack_placed(which = "all") {
     all = which != "retainer" && which != "glass" && which != "trim";
     if (all || which == "retainer")
