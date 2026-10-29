@@ -36,7 +36,7 @@ The head is one colour and prints as before:
 | `antenna_mount_twin_cover_8`, `antenna_mount_twin_cover_11` | the 3 mm cover that closes the twin body's cable channel, on five M2 screws, with each side's frequency engraved in it (`twin_assembled` and `twin_assembled_11` show both parts on the plate, for pictures only) |
 | `usbc_gauge` | — | test coupon: a 36 × 18 mm piece of the back plate round the USB-C window, exactly the plate's, to try the charger's plug in the trigger board before printing a plate |
 | `power_trigger_mount` | — | the power fix's 12 V trigger board's mount, with the board's socket through the USB-C window ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)); identical to the retro part |
-| `power_trigger_stop` | — | the block behind the trigger board in its mount, on two M2 screws, keyed so it goes in only the right way round; identical to the retro part. Print two: a trial fit on `usbc_gauge` spends one's crush ribs |
+| `power_trigger_stop` | — | the block behind the trigger board in its mount, on two M2 screws, keyed so it goes in only the right way round; identical to the retro part. Print three: one for the trial fit on `usbc_gauge`, one for the plate and a spare. Its crush ribs are spent once squeezed, so a stop that comes out is never fitted again |
 | `power_regulator_tray` | — | a tray for the power fix's 5 V regulator, stuck to the plate's inner face |
 
 The stand is split into five bodies, one per colour region:
@@ -325,7 +325,9 @@ wall, so it goes in only the right way round. Drive its M2 screws snug, not
 hard: past seating they strip their thread in the mount's wall, and the
 slack comes back. A trial fit on `usbc_gauge` spends two M3 × 3 inserts,
 which stay in the coupon, and one stop's crush ribs, so the plate needs two
-more inserts and a second stop. The pocket's floor
+more inserts and a fresh stop. A stop is good for one fitting: whenever one
+comes out, to re-seat the board or to move the mount across, a fresh one
+goes in, and a test with a refitted one proves nothing. The pocket's floor
 prints as a bridge in two steps, which you can see in the pocket: a slot
 right across it, then the window's rectangle, then the window; slice with
 counterbore hole bridging off, the default. Above the pocket the plate says

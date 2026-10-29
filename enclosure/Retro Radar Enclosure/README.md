@@ -21,7 +21,7 @@ the rest follows.
 | `antenna_mount_twin_cover_8_twotone.3mf`, `antenna_mount_twin_cover_11_twotone.3mf` | the same covers with the frequencies in a second colour: one object, the cover on filament 1 and the lettering (`antenna_mount_twin_cover_text_8` / `_11`) on filament 2. Built by `make-cover-3mf.py` from binary STL exports |
 | `usbc_gauge` | test coupon: a 36 × 18 mm piece of the back plate round the USB-C window, its window, pocket and insert holes exactly the plate's, so the charger's plug can be tried in the trigger board before a whole plate is printed (about ten minutes) |
 | `power_trigger_mount` | the power fix's 12 V trigger board's mount: a sleeve round the board, two crush ribs in its roof holding the board down, on two M3 screws into inserts in the plate, with the board's socket through the plate's USB-C window, so the charger plugs straight into it ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)) |
-| `power_trigger_stop` | the block behind the trigger board in its mount, locked by two M2 screws through the mount's walls, so the board has no play; keyed, so it goes in only the right way round. Print two: a trial fit on `usbc_gauge` spends one's crush ribs |
+| `power_trigger_stop` | the block behind the trigger board in its mount, locked by two M2 screws through the mount's walls, so the board has no play; keyed, so it goes in only the right way round. Print three: one for the trial fit on `usbc_gauge`, one for the plate and a spare. Its crush ribs are spent once squeezed, so a stop that comes out is never fitted again |
 | `power_regulator_tray` | a tray for the power fix's 5 V regulator, stuck to the plate's inner face |
 
 Three extra targets, `test_antenna`, `test_speaker` and `test_rings`, clip
@@ -396,9 +396,13 @@ all, so a plug that seats there seats in the plate. If it won't click home:
    to be there.
 2. Check that the board's front edge is down on the plate. From outside, the
    socket's face should stand 0.4 mm proud of the pocket's floor, not level
-   with it or below it. If it doesn't, undo the stop's two screws, push the
-   board's back edge until its front edge is on the plate, and screw the stop
-   back.
+   with it or below it. If it doesn't, undo the stop's two screws and slide
+   it out, push the board's back edge until its front edge is on the plate,
+   and fit a fresh stop with steps 5 and 6. Not the same one: its ribs were
+   squeezed with the board out of place, and they don't spring back, so it
+   would leave the board loose by however far it was out. A plug can then
+   push the board back instead of clicking home, so a test with that stop
+   proves nothing.
 3. Try another cable, one with a slimmer moulding round its plug.
 
 If it still won't, the plate needs to change, and the coupon is reprinted
@@ -415,13 +419,15 @@ pocket's size, so change it there too (`usbc_recess_w`, or `usbc_recess_d`,
 limit.
 
 The trial fit spends some parts. Its two inserts stay in the coupon, and the
-stop's crush ribs, once squeezed, don't spring back. So the plate needs two
-more M3 × 3 inserts and a second stop; the mount, the board and the screws
-move across. Undo the stop's screws and slide it out, then lift the mount
-off the coupon with the board still in it, so the roof's ribs keep their
-hold on the socket. Fit it to the plate with steps 1 to 6 and the new stop;
-in step 4 the board is already in, so just push its back edge until its
-front edge is on the plate.
+stop's crush ribs, once squeezed, don't spring back, so a stop is good for
+one fitting: whenever one comes out, a fresh one goes in. So the plate needs
+two more M3 × 3 inserts and a fresh stop, never the coupon's; the mount, the
+board and the screws move across. Undo the stop's screws and slide it out,
+then lift the mount off the coupon with the board still in it, so the roof's
+ribs keep their hold on the socket. Fit it to the plate with steps 1 to 6
+and the fresh stop; in step 4 the board is already in, so just push its back
+edge until its front edge is on the plate. The third stop is the spare, for
+a board that has to be re-seated.
 
 **`power_regulator_tray`** holds the regulator (63 × 27 mm, and 12.3 mm from
 its underside to the top of its tallest capacitor, so about 16 mm off the
