@@ -882,7 +882,7 @@ else if (check=="cable_slot_other_side") {
 // board, locked by two M2 screws through the mount's side walls, presses it
 // forward. Restated for the probes below:
 pwr_m2_pilot=1.65; pwr_m2_csk=2.8; pwr_trig_w=10.72; pwr_trig_proud=2.0;
-pwr_m2_pitch=3.0; pwr_stop_clear=0.15;
+pwr_m2_pitch=3.0; pwr_stop_clear=0.15; pwr_key_l=3.0;
 // The speakers themselves aren't in shell() (only their sleeves and pads), so
 // their bodies are drawn here: 100 x 45 x 21, the face on the sleeve's rim,
 // where the four screw pads hold it. Until 2026-10-29 this drew each one 4 mm
@@ -1139,6 +1139,21 @@ if (check=="power_stop_slides_home")    intersection() { pwr_stop_swept(); power
 // ...and back to front without its key, posed as above, it meets nothing
 // either: the key is what stops it, as nothing did before.
 if (check=="power_stop_key_is_what_blocks") intersection() { pwr_stop_posed([0, 180, 0], pwr_stop_clear, key = false); power_trigger_mount_placed(); }
+// Those two must come out with nothing at all (CLEAR in run-checks.sh), not
+// just under the 1 mm3 the other empty checks allow (2026-10-29). Where the
+// key runs into the wall it is only about 0.36 mm2 across, so under 1 mm3 a
+// slot begun 2.5 mm late passed: the stop jammed 2.35 mm short of home, its
+// ribs off the board. The control: the slot begun 0.5 mm late, the wall
+// left whole for its first 0.5 mm, jams the stop 0.35 mm short of home, and
+// the sweep finds it, about 0.13 mm3 (JAMMED in run-checks.sh).
+module pwr_slot_begun_late(late = 0.5) {
+  translate([usbc_cut_pos[0], usbc_cut_pos[1], pwr_stop_z1() - pwr_key_l - pwr_stop_clear])
+    linear_extrude(height = late) intersection() {
+      pwr_key_slot2d();
+      translate([pwr_stop_hw() + pwr_stop_clear, -50]) square([50, 100]);   // the wall, past the chamber's side
+    }
+}
+if (check=="power_stop_jam_probe_works") intersection() { pwr_stop_swept(); union() { power_trigger_mount_placed(); pwr_slot_begun_late(); } }
 // The regulator's tray has no set place: it goes on the plate's inner face
 // wherever the case has room. All of the power fix at the window keeps to a
 // 70 x 13.5 mm strip of the plate across it, up to 26 mm in from the plate,

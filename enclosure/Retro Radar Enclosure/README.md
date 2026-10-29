@@ -459,12 +459,8 @@ inserts comes out of the outer face), `usbc_inserts_surrounded`,
 `power_stop_vs_shell`, `power_stop_vs_speakers`, `power_parts_vs_stand`,
 `power_parts_in_patch` (everything at the window, and the M2 screwdriver's
 way in either side, stays in its 70 × 13.5 mm strip),
-`power_m2_drivers_clear` (that way in, 6 mm across, meets nothing),
-`power_stop_slides_home` (the stop, slid in the right way round from
-outside the mount all the way home, meets nothing),
-`power_stop_key_is_what_blocks` (back to front without its key, posed as
-below, it meets nothing either), and `usbc_label_cut`,
-`usbc_label_inside_plate`, `usbc_label_off_gauge` and
+`power_m2_drivers_clear` (that way in, 6 mm across, meets nothing), and
+`usbc_label_cut`, `usbc_label_inside_plate`, `usbc_label_off_gauge` and
 `usbc_label_clear_of_holes` (the engraving is cut, lies inside the plate and
 no more than 1 mm deep, keeps off the coupon's patch, and stays 1.5 mm or
 more from every other hole: the pocket, the window, the inserts, the vents,
@@ -492,8 +488,17 @@ wrong way round, turned about its pilots so they stay in line with the
 walls', 4.4 mm short of home, the furthest out a screw could start in it,
 and pushed over by its play to whichever side frees it most. Back to front
 its key runs 0.7 mm into the wall (0.7 mm³); upside down, or end over end,
-its T does (about 2 mm³). `power_stop_slides_home` and
-`power_stop_key_is_what_blocks`, above, are their controls.
+its T does (about 2 mm³). Their controls must meet nothing at all, under
+0.01 mm³ rather than the 1 mm³ the other empty checks allow:
+`power_stop_slides_home` (the stop, slid in the right way round from outside
+the mount all the way home, 0.25 mm at a time) and
+`power_stop_key_is_what_blocks` (back to front without its key, posed as
+above). Where the key runs into the wall it is only about 0.36 mm² across,
+so under 1 mm³ a slot begun 2.5 mm late passed, with the stop jammed
+2.35 mm short of home and its ribs off the board (until 2026-10-29).
+`power_stop_jam_probe_works` shows the limit is tight enough: with the slot
+begun 0.5 mm late, the stop jams 0.35 mm short, and the sweep finds it
+(0.13 mm³).
 
 ## Heat-set inserts
 
@@ -570,7 +575,9 @@ through air); squeezes, which must find a sliver and no more (the power fix's
 crush ribs in its board); contacts, which must find more than a film (the
 power fix's board, tipped, meeting its ribs); blocks, which must run into
 the part they meet (the power fix's stop, the wrong way round, in its
-mount); positive controls that must
+mount); clears, which must meet nothing at all, not just under 1 mm³ (the
+same stop slid home, where a jam is only a sliver), and a control for them
+that must not; positive controls that must
 find geometry (the holes a probe should find open, the paired "same probe,
 wrong place" controls such as `vents_were_under_mount`,
 `top_screw_was_under_mount` and `twin_antennas_probe_works`); and `canary`,
