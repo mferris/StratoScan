@@ -96,14 +96,15 @@ They share the back plate and antenna mount.
 | Back plate, into the shell's back posts | 8 | M3 × 6 | M3 × 8 | Press from the back face |
 | Antenna mount (any of the three), into its flange | 3 | M3 × 5 | M3 × 8 | The screws come from inside the case, through the plate |
 | The trigger board's mount, to the back plate | 2 | M3 × 3 | M3 × 8 button head | The inserts go in the plate beside the USB-C window, flush with both faces, and the screws come from inside the case through the mount's ears. Button heads, not socket caps: one is under a speaker |
-| The stop behind the trigger board, through the mount's side walls | 2 | none | M2 × 8 | They cut their own thread in the walls and in `power_trigger_stop`, which replaced the 1.75 mm filament pin |
+| The stop behind the trigger board, through the mount's side walls | 2 | none | M2 × 8 | They cut their own thread in the walls and in `power_trigger_stop`, which replaced the 1.75 mm filament pin. Drive them snug, not hard: past seating they strip the wall's thread |
+| The trial fit in `usbc_gauge`, before the plate | 2 | M3 × 3 | the mount's own, moved to the plate after | The inserts stay in the coupon, and the trial spends the stop's crush ribs: print a second `power_trigger_stop` for the plate |
 | Older plates only (printed before 2026-10-29): a USB-C panel connector | 2 | none | M3 × 6 with nuts, or the connector's own | Not counted below. Holes 16.5–17 mm apart (short slots); the heads sit in the 2 mm pocket round the connector (plates printed from 2026-10-10 on) |
 | Speakers, to their brackets | 4 each, 8 | optional M2 × 3 | M2 × 6, or M2 self-tapping | 2.6 mm pilots for the self-tappers; drill to 3.0 for inserts |
 | Pi, to the display's back | 4 | none | M2.5 × 6 and standoffs, in the display's box | |
 | FlyCatcher, onto the Pi | 4 | none | M2.5 standoffs, ~16–20 mm, and screws | tall enough to clear the cooler |
 | Twin antenna mount's two SMA bulkheads | 2 | none | the jumpers' own nuts | an 8 mm (5/16") open-ended spanner, a quarter to half a turn past finger tight |
 | Twin antenna mount's cover | 5 | M2 × 3 | M2 × 6 | 3.0 mm holes for a 3.2 mm knurl (measure the kit's) |
-| **To buy per radar** | | **21 × M3 (11 of 5 mm, 8 of 6 mm, 2 of 3 mm); 5 × M2; 8 × M2 optional** | **8 × M3×14, 11 × M3×8, 2 × M3×8 button head, 2 × M2×8, 13 × M2×6, 8 × M2.5** | one M3 kit and one M2/M2.5 kit cover several radars |
+| **To buy per radar** | | **23 × M3 (11 of 5 mm, 8 of 6 mm, 4 of 3 mm); 5 × M2; 8 × M2 optional** | **8 × M3×14, 11 × M3×8, 2 × M3×8 button head, 2 × M2×8, 13 × M2×6, 8 × M2.5** | one M3 kit and one M2/M2.5 kit cover several radars |
 
 **Everything for one radar, totalled:** about **$520** in parts with the 4 GB Pi (about $565 with 8 GB), of which the display is $160, the FlyCatcher $110 and the Pi $85; the forty-odd dollars of cables, standoffs, cells and fasteners, and the thirty or so of the power fix's boards and pigtail, are easy to forget and are all listed above. Printer time: about 20 hours; filament about 700 g.
 
