@@ -1339,3 +1339,30 @@ if (check=="shell_seats_probe_works") intersection() { stand(); shell_dropped(1.
 // one row further back, where they meet holes that are kept.
 if (check=="grille_clear_of_posts")   intersection() { for (a = speaker_angles) speaker_grille(a, grille_post_clear); front_posts(); }
 if (check=="grille_post_probe_works") intersection() { for (a = speaker_angles) speaker_grille(a, grille_post_clear); translate([0, 0, -grille_pitch]) front_posts(); }
+
+// ---- the charger cable's clip on the stand (2026-10-29) -----------------
+// Restated, as above: `use <>` brings in no values.
+stand_cable_d=4; stand_clip_grip=0.2; stand_clip_mouth=stand_cable_d - 0.7;
+stand_clip_x=usbc_cut_pos[0]; stand_clip_y0=52; stand_clip_sink=2.5; stand_clip_bend=4;
+
+// The charger cable's clip, on the cable's path: along the top groove, round
+// the turn over the back edge and down the back face. `lift` raises the part
+// along the top that far out of its groove.
+module clip_cable(d, lift = 0) {
+  zc = base_h - stand_clip_sink; yc = base_d/2 - stand_clip_sink; R = stand_clip_bend; y1 = yc - R;
+  translate([stand_clip_x, stand_clip_y0 + 0.5, zc + lift]) rotate([-90, 0, 0]) cylinder(d = d, h = y1 - stand_clip_y0 - 0.5, $fn = 48);
+  if (lift == 0) {
+    translate([stand_clip_x, y1, zc - R]) rotate([0, 90, 0]) rotate([0, 0, 90])
+      rotate_extrude(angle = 90, $fn = 96) translate([R, 0]) circle(d = d, $fn = 48);
+    translate([stand_clip_x, yc, 0.5]) cylinder(d = d, h = zc - R - 0.5, $fn = 48);
+  }
+}
+// A cable a little under the groove passes all the way with nothing in its
+// way...
+if (check=="stand_clip_takes_cable") intersection() { stand(); clip_cable(stand_cable_d - stand_clip_grip - 0.2); }
+// ...the cable itself is squeezed by the groove along the top and round the
+// turn, so it grips...
+if (check=="stand_clip_grips")       intersection() { stand(); clip_cable(stand_cable_d); }
+// ...and lifted 1mm out of the groove along the top it still meets the lips
+// of the mouth, so it snaps in and stays.
+if (check=="stand_clip_snaps")       intersection() { stand(); clip_cable(stand_cable_d, 1); }

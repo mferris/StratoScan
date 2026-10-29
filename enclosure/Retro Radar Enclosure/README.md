@@ -12,7 +12,7 @@ the rest follows.
 | `shell` | the body: Pi, dongle, wiring, speakers |
 | `front_trim` | bezel in front of the glass, rabbeted so it seats flush |
 | `retainer` | ring behind the glass; the glass rests on its front face. Keyed, so it goes in only one way: its relief at the bottom, over the gap in the shelf ([below](#the-retainer-goes-in-one-way-only)). `retainer.stl` is glass face down, the way it prints |
-| `stand` | desk cradle — two ring-arc arms on a plinth with two ridges all the way round, 4mm proud, their undersides sloped at 45° to a small lip like the case's rings, so they print without support (the old 1mm strips printed rough unsupported, and square 4mm ridges needed supports all round) |
+| `stand` | desk cradle — two ring-arc arms on a plinth with two ridges all the way round, 4mm proud, their undersides sloped at 45° to a small lip like the case's rings, so they print without support (the old 1mm strips printed rough unsupported, and square 4mm ridges needed supports all round). A clip at the back of the plinth, directly under the plug, holds the charger's cable ([below](#the-stand-holds-the-chargers-cable)) |
 | `back_plate` | removable back — locating lip, both vent grilles, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the charger it needs engraved above it, the antenna mount's bolt holes and cable hole |
 | `antenna_mount` | bolt-on arm carrying the antenna socket (identical to the kitten's) |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
@@ -24,10 +24,12 @@ the rest follows.
 | `power_trigger_stop` | the block behind the trigger board in its mount, locked by two M2 screws through the mount's walls, so the board has no play; keyed, so it goes in only the right way round. Print three: one for the trial fit on `usbc_gauge`, one for the plate and a spare. Its crush ribs are spent once squeezed, so a stop that comes out is never fitted again |
 | `power_regulator_tray` | a tray for the power fix's 5 V regulator, stuck to the plate's inner face |
 
-Three extra targets, `test_antenna`, `test_speaker` and `test_rings`, clip
-the real shell geometry to a small piece so a test prints in minutes instead
-of hours. `test_rings` is a 40° slice of both rings, for trying a new material
-on the rings' slope and lip.
+Four extra targets, `test_antenna`, `test_speaker`, `test_rings` and
+`test_clip`, clip the real geometry to a small piece so a test prints in
+minutes instead of hours. `test_rings` is a 40° slice of both rings, for
+trying a new material on the rings' slope and lip. `test_clip` is the stand's
+cable clip in a 24 × 33 mm piece of the plinth's back, for trying the
+charger's cable in it before printing the stand (18 minutes, 4 g).
 
 ## Rendering and exporting
 
@@ -592,6 +594,49 @@ so under 1 mm³ a slot begun 2.5 mm late passed, with the stop jammed
 `power_stop_jam_probe_works` shows the limit is tight enough: with the slot
 begun 0.5 mm late, the stop jams 0.35 mm short, and the sweep finds it
 (0.13 mm³).
+
+### The stand holds the charger's cable
+
+Nothing held the cable, so its weight and every tug levered the plug in the
+trigger board's socket, and a moving cable is what set off the power cuts.
+The plug points straight back from the window, 18° down; its end is about
+69 mm above the desk, and the cable drops from it onto the back of the
+plinth. A clip there takes it (2026-10-29), directly under the plug at
+x = 60:
+
+- **A groove along the plinth's top**, from y 52 to the back edge, round and
+  0.2 mm under the cable, so it grips, with a mouth 0.7 mm narrower than the
+  cable, so it snaps in and stays. The cable lies just under the top face.
+- **Over the back edge** the groove turns down round a 4 mm radius, so the
+  cable bends round a curve rather than over an edge, still behind the mouth.
+- **Down the back face** a channel as wide as the groove, open to the back,
+  and a notch as wide through both ridges, so the cable hangs flat to the
+  back and leaves it wherever it bends away along the desk.
+
+To fit the cable, plug it in with the case in the stand and leave a slack
+loop of 40-50 mm between the plug and the clip, so a pull on the cable moves
+the stand before it reaches the plug. Press the cable into the groove from
+its front end back, round the edge, and let it hang down the channel. **Take
+the cable out of the clip before lifting the case out of the stand:** the
+loop is too short for the case to come out with the cable still in it.
+
+The clip is sized for a cable about 4 mm thick (`stand_cable_d`). Measure
+yours before printing the stand: a thinner one won't grip, and a thicker one
+won't go in. Set `stand_cable_d` to it (in `checks.scad` too), or print
+`test_clip` and try the cable in that first. The clip needs no support.
+Sliced in Bambu Studio 2.08 (X1C 0.4 mm, 0.20 mm Standard, Bambu ASA, tree
+supports at 30°), the ridges, once notched, no longer get support under
+their 0.8 mm lips, which it supported all round before: 8.2 cm³ of support,
+now 1.3 cm³, all of it under the arms, and the print 5.9 h, now 5.1 h. The
+lips are unchanged, and print unsupported like the case's rings.
+
+`stand_clip_takes_cable` must come out empty: a cable 3.6 mm across passes
+all the way along the groove, round the turn and down the back with nothing
+in its way (the stand as it was finds 317 mm³). `stand_clip_grips` and
+`stand_clip_snaps` are its controls: a 4 mm cable is squeezed along the top
+and round the turn (25 mm³; under 1 with no grip), and lifted 1 mm out of the
+groove it still meets the mouth's lips (13 mm³; nothing with a mouth as wide
+as the cable).
 
 ## Heat-set inserts
 
