@@ -390,6 +390,27 @@ base_w = outer_dia*0.86; base_d = 150; base_h = 16;
 plinth_rib_h = 4;           // how far each band stands out from the plinth
 plinth_rib_w = 3;           // height of each band
 plinth_rib_z = [3.5, 9.5];  // bottom of each band: 3.5-6.5 and 9.5-12.5
+// ---------- THE CHARGER CABLE'S CLIP (2026-10-29) ----------
+// Nothing held the cable, so its weight and every tug levered the plug in the
+// trigger board's socket, on a board 19 x 11 mm, and a moving cable is what
+// set off the power cuts. The plug points straight back, 18 degrees down,
+// from the window at usbc_cut_pos; its end is about (60, 49) and 69 mm above
+// the desk, and the cable drops from it onto the plinth at y 55-62. So a
+// groove in the plinth's top, directly under the plug, from y 52 to the back
+// edge, takes it there: round, a little under the cable so it grips, with a
+// mouth narrower than the cable so it snaps in. Over the back edge the groove
+// turns down round a 4mm radius, and carries on down the back face, through
+// both ridges, so the cable hangs flat to the back and leaves along the desk.
+// With a slack loop of 40-50mm left up to the plug, a pull moves the stand
+// before it moves the plug. Measure your cable first: this is for one about
+// 4mm thick.
+stand_cable_d    = 4;                 // the charger's cable: about 4mm, measure yours
+stand_clip_grip  = 0.2;               // the groove is this much under the cable
+stand_clip_mouth = stand_cable_d - 0.7;   // so it snaps in past 0.35mm a side
+stand_clip_x     = usbc_cut_pos[0];   // under the plug
+stand_clip_y0    = 52;                // the groove's front end
+stand_clip_sink  = 2.5;               // from the top face, and the back face, to the cable's axis
+stand_clip_bend  = 4;                 // the radius it turns down over the back edge, on its axis
 // ---------- CRADLE STYLING ----------
 // The arms were bare ring segments ending in sawn-off square faces, which
 // read as unfinished next to the case's riveted, ribbed body -- and the tips
@@ -1029,6 +1050,36 @@ module plinth_ribs() {
     }
 }
 
+// The charger cable's clip, cut from the plinth (2026-10-29): see
+// stand_cable_d. Along the top a round groove a little under the cable, with
+// a mouth narrower than it; then a turn down over the back edge, its mouth on
+// the outside of the turn; then a channel down the back face as wide as the
+// groove but open to the back, so the cable leaves it wherever it bends away
+// to the desk, and a notch as wide through both ridges. None of it needs
+// support: under the mouths' lips the groove's curve is 60 degrees or more
+// from flat, and the channel down the back face is upright.
+module stand_cable_clip() {
+    r  = (stand_cable_d - stand_clip_grip) / 2;
+    zc = base_h - stand_clip_sink;      // the top groove's axis
+    yc = base_d/2 - stand_clip_sink;    // the back channel's axis
+    R  = stand_clip_bend;
+    y1 = yc - R;                        // where the groove starts to turn down
+    translate([stand_clip_x, stand_clip_y0, zc]) {
+        rotate([-90, 0, 0]) cylinder(r = r, h = y1 - stand_clip_y0 + 0.01);
+        sphere(r = r);
+    }
+    hull() for (y = [stand_clip_y0, y1])
+        translate([stand_clip_x, y, zc]) cylinder(d = stand_clip_mouth, h = stand_clip_sink + 1);
+    translate([stand_clip_x, y1, zc - R]) rotate([0, 90, 0]) rotate([0, 0, 90])
+        rotate_extrude(angle = 90) {
+            translate([R, 0]) circle(r = r);
+            translate([R, -stand_clip_mouth/2]) square([2*stand_clip_sink + 1, stand_clip_mouth]);
+        }
+    translate([stand_clip_x, yc, -1]) cylinder(r = r, h = zc - R + 1 + 0.01);
+    translate([stand_clip_x - r, yc, -1]) cube([2*r, base_d/2 - yc + 0.01, zc - R + 1 + 0.01]);
+    translate([stand_clip_x - r, base_d/2 - 0.01, -1]) cube([2*r, plinth_rib_h + 1, base_h + 2]);
+}
+
 module stand() {
     // The arms are ring segments built in the XY plane (axis along Z).
     // To cradle a cylinder lying on its side, that axis has to end up
@@ -1044,7 +1095,9 @@ module stand() {
 
     // everything gets trimmed flat at the desk plane (z=0) -- the keel
     // is generated generously and simply cut off where the desk is,
-    // rather than trying to solve its exact intersection analytically
+    // rather than trying to solve its exact intersection analytically.
+    // The cable's clip is cut from it after (2026-10-29).
+    difference() {
     intersection() {
     translate([-400, -400, 0]) cube([800, 800, 400]);
     union() {
@@ -1073,6 +1126,8 @@ module stand() {
                                 square([keel_reach, arm_gap + 2*arm_w]);
             }
     }
+    }
+    stand_cable_clip();
     }
 }
 
@@ -2637,6 +2692,15 @@ else if (part == "test_rings") {
         shell();
         rotate([0, 0, 45]) rotate_extrude(angle = 40)
             translate([outer_dia/2 - 12, -1]) square([20, 30]);
+    }
+}
+else if (part == "test_clip") {
+    // The stand's cable clip in a 24 x 33 mm piece of the plinth's back, to
+    // try the charger's cable in before printing the stand (2026-10-29).
+    intersection() {
+        stand();
+        translate([stand_clip_x - 12, stand_clip_y0 - 6, -1])
+            cube([24, base_d/2 + plinth_rib_h - stand_clip_y0 + 6 + 1, base_h + 2]);
     }
 }
 else if (part == "test_antenna") {
