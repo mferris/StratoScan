@@ -86,7 +86,8 @@ function alertQuiet() { return true; }
 function scheduleNextAlert() {}
 function markSoundBusy() {}
 function getAudioCtx() { return { currentTime: 0, state: 'running' }; }
-""" + (block.replace("function playCabinDing(t0) {", "function playCabinDing(t0) { played.push('ding'); return;")
+""" + (block.replace("function playCabinDing(t0, f = 1047, scale = 1) {", "function playCabinDing(t0, f = 1047, scale = 1) { played.push('ding'); return;")
+            .replace("function wakeAudioOutput(t, seconds) {", "function wakeAudioOutput(t, seconds) { return;")
             .replace("function playTakeoffSound(t0) {", "function playTakeoffSound(t0) { played.push('take-off'); return;")) + r"""
 const out = {};
 const boot = (id, powerOn, uptimeS) => { netInfo = { boot: { id, powerOn, uptimeS } }; maybePlayBootSound(); return played.join(' '); };
@@ -105,8 +106,8 @@ console.log(JSON.stringify(out));
     except Exception:
         o = {}
         print(r.stderr[-1500:])
-    both = "ding take-off"
-    check(o.get("powerOn") == both, "after a power-on the startup sound plays: the cabin ding, then the take-off")
+    both = "ding ding take-off"
+    check(o.get("powerOn") == both, "after a power-on the startup sound plays: the two-tone chime, then the take-off")
     check(o.get("again") == both, "once: reloading the page in the same boot doesn't play it again")
     check(o.get("reboot") == both, "a reboot or watchdog reset plays nothing")
     check(o.get("late") == both, "nor a power-on more than five minutes ago")
@@ -163,15 +164,15 @@ const planes = new Map([['a1', {}], ['b2', {}], ['e9', {}]]);
 let soundEnds = 0;                   // when the last source scheduled stops
 const param = () => ({ value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} });
 function audioNode(kind) {
-  return { kind, type: 'sine', frequency: param(), gain: param(), Q: param(), connect: n => n,
+  return { kind, type: 'sine', frequency: param(), gain: param(), Q: param(), offset: param(), connect: n => n,
     start(t) {   // the ding is sine partials; the take-off is noise and two other waves
-      const part = kind === 'osc' && this.type === 'sine' ? 'ding' : 'take-off', ms = Math.round(t * 1000);
+      const part = kind === 'const' ? 'wake' : kind === 'osc' && this.type === 'sine' ? 'ding' : 'take-off', ms = Math.round(t * 1000);
       if (!log.some(([w, at]) => w === part && at === ms)) log.push([part, ms]);
     },
     stop(t) { soundEnds = Math.max(soundEnds, Math.round(t * 1000)); } };
 }
 const audio = { get currentTime() { return now / 1000; }, sampleRate: 8000, state: 'running',
-  createOscillator: () => audioNode('osc'), createGain: () => audioNode('gain'), createBiquadFilter: () => audioNode('filter'),
+  createOscillator: () => audioNode('osc'), createConstantSource: () => audioNode('const'), createGain: () => audioNode('gain'), createBiquadFilter: () => audioNode('filter'),
   createBufferSource: () => audioNode('noise'), createBuffer: (c, n) => ({ getChannelData: () => new Float32Array(n) }) };
 function getAudioCtx() { return audio; }
 function getMasterGain() { return audioNode('out'); }
@@ -203,13 +204,16 @@ advance(1000); raiseAlert(alert('e9', true));
 advance(30000); playAirportPhaseSound('landing'); playLightningAlertSound();
 """)
     at = dict(log)
-    ding, takeoff, ends = at.get("ding", 0), at.get("take-off", 0), at.get("sound ends", 0)
-    check(log[:2] == [("ding", ding), ("take-off", takeoff)] and 1000 <= ding <= 1100,
-          "after a power-on the startup sound plays as the answer comes, alone: the cabin ding first")
-    check(200 <= takeoff - ding <= 400,
-          "then the take-off, %d ms after the ding on the audio clock, so its slow swell is heard a second after the ding, not two"
-          % (takeoff - ding))
-    others = [(w, t) for w, t in log if w not in ("ding", "take-off", "sound ends")]
+    wake = [t for w, t in log if w == "wake"]
+    dings = [t for w, t in log if w == "ding"]
+    takeoff, ends = at.get("take-off", 0), at.get("sound ends", 0)
+    check(wake == [1000] and log[:1] == [("wake", 1000)],
+          "after a power-on it starts as the answer comes, alone, with a silent 1.2 s to wake the speakers (HDMI loses a new stream's first second)")
+    check(len(dings) == 2 and dings[0] - 1000 == 1200 and dings[1] - dings[0] == 600,
+          "then the two-tone chime: its first note 1.2 s in, its second 0.6 s after (%s)" % dings)
+    check(len(dings) == 2 and takeoff - dings[0] == 900,
+          "then the take-off, 0.9 s after the chime's first note on the audio clock")
+    others = [(w, t) for w, t in log if w not in ("wake", "ding", "take-off", "sound ends")]
     check(others and all(t >= ends for _, t in others),
           "no alert, chime or words until the whole of it has finished (%.2f s), though an aircraft was in range from the start"
           % ((ends - 1000) / 1000))
@@ -238,7 +242,7 @@ advance(30000); playAirportPhaseSound('landing'); playLightningAlertSound();
     # so no hold at all, whenever the answer comes.
     for label, kw in (("the setting off", dict(setting=False)), ("the panel muted", dict(muted=True))):
         log = run("advance(500); raiseAlert(alert('a1'));\nadvance(9500); answer({ id: 'p', powerOn: true, uptimeS: 30 });\nadvance(100);", **kw)
-        check(log[:1] == [("show a1", 500)] and not {"ding", "take-off"} & set(dict(log)),
+        check(log[:1] == [("show a1", 500)] and not {"wake", "ding", "take-off"} & set(dict(log)),
               f"{label}: no hold, the alert shows the moment it is raised")
 
     # An aircraft squawking an emergency inside the ring at load: the poll
@@ -267,12 +271,12 @@ advance(1000); raiseAlert(alert('b2'));
 advance(30000);
 """)
     at = dict(log)
-    check(at.get("show a1") == 15000 and 19000 <= at.get("ding", 0) <= 19100 and at.get("take-off", 0) > at["ding"],
+    check(at.get("show a1") == 15000 and 19000 <= at.get("wake", 0) <= 19100 and at.get("take-off", 0) > at["wake"],
           "a late answer still plays it, once the alert on screen has finished speaking")
     check(at.get("show b2", 0) >= at.get("sound ends", 10 ** 9), "and the next alert waits for all of it to finish")
 
     log = run("raiseAlert(alert('a1')); answer({ id: 'p', powerOn: true, uptimeS: 30 }); advance(100);", onDevice=False)
-    check(log[:1] == [("show a1", 0)] and not {"ding", "take-off"} & set(dict(log)),
+    check(log[:1] == [("show a1", 0)] and not {"wake", "ding", "take-off"} & set(dict(log)),
           "off the panel nothing waits: the alert shows at once")
 
     # ---- the ding is no louder than the nearby chime (2026-10-28) --------------
@@ -284,8 +288,8 @@ const param = () => ({ value: 0, setValueAtTime() {}, exponentialRampToValueAtTi
 const node = () => ({ frequency: param(), gain: param(), connect: n => n, start() {}, stop() {} });
 function getAudioCtx() { return { currentTime: 0, createOscillator: node, createGain: node }; }
 function getMasterGain() { return node(); }
-""" + function("function playCabinDing(t0) {") + r"""
-playCabinDing(0);
+""" + function("function playCabinDing(t0, f = 1047, scale = 1) {") + r"""
+playCabinDing(0, 831, 1.1);
 console.log(JSON.stringify(peaks));
 """
     r = subprocess.run(["node", "-e", js], capture_output=True, text=True, timeout=60)
@@ -295,7 +299,7 @@ console.log(JSON.stringify(peaks));
         peaks = []
         print(r.stderr[-1500:])
     check(len(peaks) > 1 and sum(peaks) <= 0.25,
-          "the ding is no louder than the nearby chime: its partials peak at %.3f together, the chime at 0.25" % sum(peaks))
+          "each note of the chime is no louder than the nearby chime: the louder second note's partials peak at %.3f together, the chime at 0.25" % sum(peaks))
 
     # The Settings preview: on at 1 s, after a power-on whose sound was off. It
     # plays alone (the alert raised during it waits until it has finished), a
@@ -310,7 +314,7 @@ advance(57000); answer({ id: 'p', powerOn: true, uptimeS: 90 });
 advance(10000);
 """, setting=False)
     dings = [t for w, t in log if w == "ding"]
-    check(dings == [1050], "the preview plays once, and a second tap while it plays adds nothing (dings at %s)" % dings)
+    check(dings == [2200, 2800], "the preview plays once, and a second tap while it plays adds nothing (chime notes at %s)" % dings)
     check(("quiet window %d" % hold, 1000) in log, "it is heard through quiet hours for its whole length")
     check(dict(log).get("show a1", 0) >= 1000 + hold, "an alert raised during it waits until it has finished")
     check(not any(w == "ding" and t > 50000 for w, t in log),

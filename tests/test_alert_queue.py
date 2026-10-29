@@ -38,7 +38,7 @@ end = html.index("function checkNearbyAlert(pl, range)")
 block = html[start:end]
 hide = html[html.index("function hideDetailPanel() {"):]
 hide = hide[:hide.index("\n}\n") + 3]
-hold = html[html.index("// ---- The take-off sound plays alone"):html.index("// ---- The ding, then the take-off")]
+hold = html[html.index("// ---- The take-off sound plays alone"):html.index("// ---- The chime, then the take-off")]
 
 check(html.count("raiseAlert({") == 3, "nearby, notable and emergency alerts all go through the queue")
 check("showDetailPanel(pl, true" not in html, "nothing opens an alert panel around it")
