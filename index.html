@@ -4800,7 +4800,8 @@ const STARTUP_SOUND_MS = 7300;           // the ding, then the 6.5 s take-off 0.
 // wait for, so no hold at all: alerts come as soon as they're raised.
 let bootHoldUntil = ON_DEVICE && alertSettings.bootSound && !alertSettings.muted ? performance.now() + BOOT_HOLD_MAX_MS : 0;
 let bootSoundDecided = !bootHoldUntil;   // the first answer decides, once
-function bootHoldOn() { return performance.now() < bootHoldUntil; }
+let previewHoldUntil = 0;                // the Settings preview's own hold (previewStartupSound)
+function bootHoldOn() { return performance.now() < Math.max(bootHoldUntil, previewHoldUntil); }
 function endBootHold() {
   if (bootSoundDecided) return;
   bootSoundDecided = true;
@@ -4836,6 +4837,24 @@ function playStartupSound() {
     // No Web Audio: nothing to hear. Caught here so neither caller (the
     // /onboard poll, the Settings switch) takes it for its own failure.
   }
+}
+
+// The Settings preview (2026-10-28). It plays alone, like the power-on sound:
+// alerts wait until it has finished, so none sounds through the quiet-hours
+// window it opens either. A tap while it is still playing doesn't start a
+// second one on top. And on the panel it counts as this boot's sound, so
+// switching it on in the first minutes after a power-on isn't followed by the
+// real one at the next status answer. Its hold is its own, so the first
+// /onboard answer ending the power-on hold can't cut it short.
+function previewStartupSound() {
+  const now = performance.now();
+  if (now < previewHoldUntil) return;
+  previewHoldUntil = now + STARTUP_SOUND_MS;
+  const b = netInfo && netInfo.boot;
+  if (ON_DEVICE && b && b.id) { try { localStorage.setItem(BOOT_SOUND_KEY, b.id); } catch (e) {} }
+  allowThroughQuiet(STARTUP_SOUND_MS);
+  scheduleNextAlert();
+  playStartupSound();
 }
 
 // Synthesised too, so again nothing to license: a sine at 1320 Hz with two
@@ -4981,7 +5000,7 @@ function presentAlert(a) {
 function scheduleNextAlert() {
   clearTimeout(nextAlertTimer);
   if (!alertQueue.length) return;
-  const due = Math.max(alertOnScreen ? alertOnScreen.shownAt + ALERT_MIN_SHOW_MS : 0, bootHoldUntil);
+  const due = Math.max(alertOnScreen ? alertOnScreen.shownAt + ALERT_MIN_SHOW_MS : 0, bootHoldUntil, previewHoldUntil);
   nextAlertTimer = setTimeout(showNextAlert, Math.max(0, due - performance.now()));
 }
 function showNextAlert() {
@@ -9089,7 +9108,7 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   if (key === 'nightDim') { nightWakeUntil = 0; applyNightDim(); } // re-evaluate now, don't wait for the next minute tick
   // Switched on, it plays once, as picking a sound theme does: otherwise it
   // is first heard at the next power-on (2026-10-28).
-  if (key === 'bootSound' && alertSettings.bootSound && !alertSettings.muted) { allowThroughQuiet(STARTUP_SOUND_MS); playStartupSound(); }
+  if (key === 'bootSound' && alertSettings.bootSound && !alertSettings.muted) previewStartupSound();
   renderSettingsPanel();
 });
 
