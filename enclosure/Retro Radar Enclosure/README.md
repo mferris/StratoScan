@@ -20,7 +20,7 @@ the rest follows.
 | `antenna_mount_twin_cover_8`, `antenna_mount_twin_cover_11` | the 3 mm cover that closes the twin body's cable channel, on five M2 screws, with each side's frequency engraved in it (`twin_assembled` and `twin_assembled_11` show both parts on the plate, for pictures only) |
 | `antenna_mount_twin_cover_8_twotone.3mf`, `antenna_mount_twin_cover_11_twotone.3mf` | the same covers with the frequencies in a second colour: one object, the cover on filament 1 and the lettering (`antenna_mount_twin_cover_text_8` / `_11`) on filament 2. Built by `make-cover-3mf.py` from binary STL exports |
 | `usbc_gauge` | test coupon: a 36 × 18 mm piece of the back plate round the USB-C window, its window, pocket and insert holes exactly the plate's, so the charger's plug can be tried in the trigger board before a whole plate is printed (about ten minutes) |
-| `power_trigger_mount` | the power fix's 12 V trigger board's mount: a sleeve round the board, on two M3 screws into inserts in the plate, with the board's socket through the plate's USB-C window, so the charger plugs straight into it ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)) |
+| `power_trigger_mount` | the power fix's 12 V trigger board's mount: a sleeve round the board, two crush ribs in its roof holding the board down, on two M3 screws into inserts in the plate, with the board's socket through the plate's USB-C window, so the charger plugs straight into it ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)) |
 | `power_trigger_stop` | the block behind the trigger board in its mount, locked by two M2 screws through the mount's walls, so the board has no play |
 | `power_regulator_tray` | a tray for the power fix's 5 V regulator, stuck to the plate's inner face |
 
@@ -300,9 +300,25 @@ cable moved. Now:
   floor prints as a bridge over the pocket, and a bridge sags, so a floor
   level with the socket's face could stop a moulding just short of it again.
   That leaves 1.6 mm of web round the window, 60 % more than the old 1 mm.
-- **`power_trigger_mount`** is a sleeve round the board, 0.2 mm clear of it a
-  side, its flat face on the plate's inner face, level with the board's front
-  edge: no flange, since the plate is the front stop now. Two **M3 × 8
+- **The pocket's floor bridges in two steps** (since 2026-10-29). Without
+  the steps, Bambu Studio started the floor with the window's two outlines
+  in mid-air, held by nothing, and bridged up to them in short stubs held at
+  one end, so whatever sagged hung into the pocket where a moulding's face
+  lands. Now the first layer over the pocket is open in a slot as tall as the
+  window and as wide as the pocket, so every line of it spans the pocket from
+  wall to wall; the second is open in the window's rectangle, so it bridges
+  only the slot's ends, 3.86 mm; and the window's round ends start on the
+  third. Look into the pocket and you see the two steps: they are meant to be
+  there. Slice with **counterbore hole bridging off**, Bambu Studio's
+  default; that option does worse with this shape.
+- **`power_trigger_mount`** is a sleeve round the board, 0.2 mm clear of it
+  either side, its flat face on the plate's inner face, level with the
+  board's front edge: no flange, since the plate is the front stop now. The
+  board lies on the sleeve's floor, and two crush ribs along its roof, over
+  the socket's flat top for the first 4 mm, press the socket down, so the
+  board cannot rock (since 2026-10-29: until then it had 0.4 mm of room up
+  and down, enough to tip about 2.3° about the window's edge, and each
+  jiggle of the cable worked the stop's ribs). Two **M3 × 8
   button-head** screws come from inside the case, through its two ears and
   into **M3 × 3 heat-set inserts** in the plate, 24 mm apart, so nothing of
   them is in the outer face, and each clamps its ear, 5.5 mm of plastic. They
@@ -319,7 +335,11 @@ cable moved. Now:
   ribs onto the board, before it threads in. The screws thread through the
   walls as well as into the stop, so they have no slack to give, and the stop
   is a T that only goes in the right way up. It replaced a 1.75 mm filament
-  pin, which let the board move.
+  pin, which let the board move. Its ribs, and the roof's, are drawn 0.1 mm
+  taller than the squeeze needs: in Bambu Studio's slice a printed rib's tip
+  comes out about 0.09 mm short, rounded off by the nozzle's line, so the
+  stop's ribs, 0.8 mm until 2026-10-29, squeezed the board by only 0.21 mm,
+  not 0.3. They are 0.9 mm now, and print 0.81.
 
 To fit it (the plate lying outer face down):
 
@@ -332,18 +352,24 @@ To fit it (the plate lying outer face down):
 3. Set the mount on the plate's inner face over the window, ears on the
    inserts, and put in the two M3 × 8 screws from inside, a turn short of
    tight.
-4. Drop the board into the mount from the back, socket first, the wires
-   trailing out of the back, until its socket goes into the window and its
-   front edge rests on the plate. Tighten the two M3 screws.
+4. Drop the board into the mount from the back, socket first, the socket's
+   side toward the roof's two ribs, the wires trailing out of the back. For
+   the last 6 mm or so the socket goes under the ribs: push the board's back
+   edge firmly, with a small flat screwdriver below the wires, until its
+   socket goes into the window and its front edge rests on the plate.
+   Tighten the two M3 screws.
 5. Slide the stop in behind the board, ribs first, until the ribs touch the
    board. It only goes in the right way up.
 6. Drive the two M2 × 8 screws through the mount's side walls into the stop.
    They draw it the last 0.3 mm onto the board.
 
 Print `usbc_gauge` first and fit the mount to it the same way: the
-charger's plug must click fully home, its moulding down in the pocket. It is
-the plate's own geometry round the window, so a plug that seats there seats
-in the plate.
+charger's plug must click fully home, its moulding down in the pocket. Go by
+the click: a plug that stops without one is not home, however close it looks.
+If a strand droops from the pocket's floor round the window, trim it with a
+knife before you try the plug. The coupon is the plate's own geometry round
+the window, bridge steps and all, so a plug that seats there seats in the
+plate.
 
 **`power_regulator_tray`** holds the regulator (63 × 27 mm, and 12.3 mm from
 its underside to the top of its tallest capacitor, so about 16 mm off the
@@ -364,7 +390,9 @@ the coupon outer face down.
 Checks that must come out empty: `power_mount_vs_plate`, `power_board_held`,
 `power_edge_on_plate` (the plate is solid in front of the board's edge below
 the window), `power_socket_clears_window` (the socket, 0.25 mm bigger all
-round, clears the window), `power_plug_reaches` and `power_moulding_reaches`
+round, clears the window), `usbc_bridge_steps_open` (the first layer over the
+pocket is open from wall to wall, and the second across the window's
+rectangle), `power_plug_reaches` and `power_moulding_reaches`
 (an 8.4 × 2.6 mm plug shell and a 13.4 × 9.4 mm moulding reach the socket's
 face), `power_m3_pass`, `power_m3_inside_plate` (nothing of the screws or
 inserts comes out of the outer face), `usbc_inserts_surrounded`,
@@ -374,10 +402,15 @@ inserts comes out of the outer face), `usbc_inserts_surrounded`,
 `power_m2_clear_of_board`, `power_m2_threads_held`, `power_wires_out`,
 `power_stop_vs_shell`, `power_stop_vs_speakers`, `power_parts_vs_stand` and
 `power_parts_in_patch` (everything at the window stays in its 33 × 13.5 mm
-patch). `power_ribs_squeeze_board` must find only a sliver: the ribs in the
-board's edge. Their positive controls: `power_mount_on_plate`,
-`power_plate_holds_board`, `power_edge_strip_works`,
-`power_window_is_close`, `power_plug_probe_works`,
+patch). `power_ribs_squeeze_board` and `power_top_ribs_squeeze_socket` must
+find only a sliver: the stop's ribs in the board's edge, and the roof's in
+the socket's top. `power_board_cannot_rock` must find more than a film: the
+board tipped 1° about the window's edge runs into the roof's ribs (0.16 mm³;
+without them, 0.003). Their positive controls: `power_mount_on_plate`,
+`power_plate_holds_board`, `power_board_on_floor` (the board moved 0.1 mm
+down meets the tube's floor), `power_edge_strip_works`,
+`power_window_is_close`, `usbc_bridge_steps_held` (from the second layer up
+the slot's ends are solid), `power_plug_probe_works`,
 `power_moulding_probe_works` (a moulding 1 mm bigger than the pocket stops on
 the outer face), `power_m3_bite`, `usbc_insert_holes_open`,
 `power_speaker_drawing_works`, `power_stop_takes_push`,
@@ -451,14 +484,16 @@ To replace a cable: back plate off, cover off, nut off, slide the jack out of it
 
 ## Checks
 
-`sh run-checks.sh`. The script keeps three lists: targets that must come
+`sh run-checks.sh`. The script keeps these lists: targets that must come
 out with no real volume (an interference, or a probe that should pass
-through air); positive controls that must find geometry (the holes a probe
-should find open, the paired "same probe, wrong place" controls such as
-`vents_were_under_mount`, `top_screw_was_under_mount` and
-`twin_antennas_probe_works`); and `canary`, which proves the modules are
-being found at all — without it a typo in the `use <>` path makes every
-other check pass against nothing.
+through air); squeezes, which must find a sliver and no more (the power fix's
+crush ribs in its board); contacts, which must find more than a film (the
+power fix's board, tipped, meeting its ribs); positive controls that must
+find geometry (the holes a probe should find open, the paired "same probe,
+wrong place" controls such as `vents_were_under_mount`,
+`top_screw_was_under_mount` and `twin_antennas_probe_works`); and `canary`,
+which proves the modules are being found at all — without it a typo in the
+`use <>` path makes every other check pass against nothing.
 
 ## Smoothness
 

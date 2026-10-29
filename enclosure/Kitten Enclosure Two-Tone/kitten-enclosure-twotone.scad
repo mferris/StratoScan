@@ -1444,9 +1444,11 @@ module back_key_notch() {
 
 // The single pass-through, cut through the plate from below (2026-10-29):
 // the window the trigger board's socket goes out through, the pocket in the
-// outer face for a plug's moulding, and the holes for the two inserts its
-// mount screws into.
+// outer face for a plug's moulding, the two bridge steps between them (see
+// usbc_bridge_layer), and the holes for the two inserts its mount screws
+// into.
 module usbc_cutout() {
+    fl = -back_plate_t + usbc_recess_d;     // the pocket's floor
     translate([usbc_cut_pos[0], usbc_cut_pos[1], 0]) {
         translate([0, 0, -back_plate_t - 1])
             linear_extrude(height = back_plate_t + 2) usbc_window2d();
@@ -1455,6 +1457,15 @@ module usbc_cutout() {
             linear_extrude(height = usbc_recess_d + 1)
                 offset(r = usbc_recess_r) offset(delta = -usbc_recess_r)
                     square([usbc_recess_w, usbc_recess_h], center = true);
+        // the first layer over the pocket: a slot the window's height, from
+        // one side wall of the pocket to the other
+        translate([0, 0, fl - 0.01])
+            linear_extrude(height = usbc_bridge_layer + 0.01)
+                square([usbc_recess_w, usbc_cut_h], center = true);
+        // the second: the window's rectangle, its ends square
+        translate([0, 0, fl + usbc_bridge_layer - 0.01])
+            linear_extrude(height = usbc_bridge_layer + 0.01)
+                square([usbc_cut_w, usbc_cut_h], center = true);
         for (sx = [-1, 1])
             translate([sx * usbc_screw_pitch/2, 0, -back_plate_t - 1])
                 cylinder(d = insert_hole_dia, h = back_plate_t + 2);
@@ -1570,7 +1581,9 @@ module usbc_gauge() {
 //     front edge. Its two M3 screws come from inside, through its ears, into
 //     heat-set inserts in the plate, so nothing of them is in the outer face.
 //   - The stop presses the board's back edge forward, so the board is held
-//     between the plate and the stop with no play.
+//     between the plate and the stop with no play, and two ribs in the
+//     tube's roof press its socket down, so the board lies on the tube's
+//     floor and cannot rock.
 // A first version (2026-10-17) clamped the board with a bezel in the pocket,
 // which needed its front edge inside the window; the board measured 10.72 mm
 // across, too close for a printed hole. It goes the other way now: only the
@@ -1581,7 +1594,8 @@ module usbc_gauge() {
 // the pin bent. The owner put two M2 screws in the pin's holes instead, their
 // tips pressing on the board; it held, but the power cut out twice in two
 // days when the cable was jiggled. Now nothing touches the board but the
-// plate in front and the stop's two crush ribs on its back edge, and the
+// plate in front, the stop's two crush ribs on its back edge, the tube's
+// floor under it and the two ribs in the tube's roof on its socket, and the
 // screws hold everything with no slack:
 //   - The M2 screws thread into the stop: a solid block, so each gets more
 //     than 4 mm of thread, which the mount's thin walls could never give.
@@ -1595,6 +1609,10 @@ module usbc_gauge() {
 //     lands on the countersink and draws the stop the last 0.3 mm forward,
 //     squeezing the ribs onto the board, before it threads in. The ribs take
 //     up the board's and the print's tolerances, about 0.3 mm either way.
+//     They are drawn 0.1 mm longer than that (pwr_rib_tip): in Bambu
+//     Studio's slice of the stop, 0.8 mm ribs printed 0.71 mm proud of its
+//     face, their tips rounded off by the nozzle's line, so they squeezed
+//     the board by 0.21 mm, not 0.3, and a board 0.2 mm short got none.
 //   - The two screws are staggered along the board, one in each wall, so each
 //     can run most of the way across the stop: two on one line would meet in
 //     the middle long before M2 x 8 was in.
@@ -1606,6 +1624,23 @@ module usbc_gauge() {
 //     deeper part either, on its way past, and the walls round the screws are
 //     2.2 mm thick.
 //
+// The ribs in the tube's roof (2026-10-29). The plate and the stop hold the
+// board along its length, but nothing held it from above: it had 0.4 mm of
+// room up and down in the tube, its socket 0.3 either way in the window, and
+// modelled, it could rock about 2.3 degrees about the window's lower edge
+// before its socket met the roof, its back end rising 0.7 mm up the stop's
+// ribs. Plug and socket move together, so that was not the old fault, but
+// every jiggle of the cable worked the crushed ribs. Now the tube's floor is
+// at the board's underside, so the socket sits in the middle of its window,
+// and its roof is 2 x pwr_trig_clear over the socket, the board's room to
+// slide in. Two crush ribs along the roof, over the socket's flat top and
+// from the plate back pwr_top_rib_len, take that room up and press the
+// socket down by pwr_top_rib_squeeze, so the board lies on the floor and
+// cannot rock. They are the stop's 90-degree ribs, drawn pwr_rib_tip longer
+// for the same reason, and their back ends are 45-degree ramps that the
+// socket rides under on its way in. They are clear of the wires: those are
+// soldered at the board's back edge.
+//
 // Measured on the owner's boards, 2026-10-17, except where it says otherwise.
 pwr_trig_l        = 19.19;  // socket face to the board's back edge
 pwr_trig_w        = 10.72;  // across the board
@@ -1614,7 +1649,9 @@ pwr_trig_sock_w   = 8.94;   // the USB-C socket's shell, across: the standard si
 pwr_trig_sock_t   = 3.26;   // and through, its ends round; it sits on top of the board
 pwr_trig_proud    = 2.0;    // how far the socket's face stands past the board's front edge
 // Round the board in the mount, a side: 0.25 until 2026-10-29, closer now
-// that the board's socket goes through a close-fitting window.
+// that the board's socket goes through a close-fitting window. Since then
+// none under the board, which lies on the tube's floor, and twice this over
+// its socket, which the roof's ribs take up.
 pwr_trig_clear    = 0.2;
 pwr_mount_wall    = 1.6;
 // The mount's two ears take its M3 screws (2026-10-29): button heads, from
@@ -1639,9 +1676,16 @@ pwr_m2_pitch      = 3.0;    // between the two screws, along the board
 pwr_m2_csk        = 2.8;    // the countersink round each pilot's mouth in the stop
 pwr_stop_clear    = 0.15;   // round the stop in its chamber, a side
 pwr_stop_step     = 0.6;    // how much narrower, each side, the stop's body is than its top
-pwr_rib_h         = 0.8;    // the stop's two crush ribs: 90-degree ridges across the board's back edge
-pwr_rib_squeeze   = 0.3;    // how far they press into it once the screws are in
+pwr_rib_h         = 0.9;    // the stop's two crush ribs: 90-degree ridges across the board's back edge (0.8 until 2026-10-29)
+pwr_rib_squeeze   = 0.3;    // how far they press into it once the screws are in, as printed
+pwr_rib_tip       = 0.1;    // how much shorter a printed rib comes out than it is drawn: its tip is rounded off
 pwr_rib_x         = 3.0;    // either side of the middle, well inside the board's 10.72
+// The two ribs along the tube's roof (2026-10-29), the same 90-degree
+// ridges, over the socket's flat top: it is flat for 2.84 mm either side of
+// the middle, and the wires' pads are at the board's back edge.
+pwr_top_rib_x       = 1.5;  // either side of the middle
+pwr_top_rib_len     = 4.0;  // along the socket from the plate, then a 45-degree ramp
+pwr_top_rib_squeeze = 0.15; // how far they press into the socket's top, as printed
 pwr_reg_l         = 63;     // the regulator: a 9-36 V to 5.2 V module, 63 x 27 (published)
 pwr_reg_w         = 27;
 pwr_reg_h         = 12.29;  // its tallest capacitor to the board's underside: 16 mm off the plate in the tray
@@ -1669,9 +1713,30 @@ usbc_cut_h        = pwr_trig_sock_t + 2*usbc_cut_clear;    // 3.86
 usbc_cut_r        = usbc_cut_h/2;                          // round ends
 usbc_seat_margin  = 0.4;
 usbc_recess_d     = back_plate_t - pwr_trig_proud + usbc_seat_margin;   // 1.4
+// The pocket's floor prints as a bridge in two steps, a layer each
+// (2026-10-29). Left to itself, a slicer starts that floor with the window's
+// two loops in mid-air, held by nothing, then lays the bridge from the
+// pocket's sides up to them in stubs held at one end only: Bambu Studio's
+// slice of the coupon did exactly that. Whatever sags hangs into the pocket
+// where a moulding's face lands, and the floor is only usbc_seat_margin
+// behind the socket's face. So the first layer over the pocket is open in a
+// slot as tall as the window, right across the pocket: every line of that
+// layer spans the pocket from one side wall to the other. The second is open
+// in the window's rectangle, so its new plastic is two short bridges, 3.86 mm,
+// across the slot's ends. The window's round ends start on the third layer,
+// on solid plastic. Each step is one of the plate's 0.2 mm layers, and the
+// pocket is seven of them deep, so each step is a layer of its own. Bambu
+// Studio's counterbore hole bridging does worse with this shape: leave it off.
+usbc_bridge_layer = 0.2;
 
 assert(back_plate_t - usbc_recess_d < pwr_trig_proud,
        "the socket's face must stand past the pocket's floor, or a moulding stops on the plate short of it");
+assert(abs(usbc_recess_d/usbc_bridge_layer - round(usbc_recess_d/usbc_bridge_layer)) < 1e-6,
+       "the pocket must be a whole number of layers deep, so each bridge step is a layer of its own");
+assert(usbc_cut_h/2 <= usbc_recess_h/2 - usbc_recess_r,
+       "the first bridge step's slot must end on the pocket's straight side walls, not in its corners");
+assert(back_plate_t - usbc_recess_d - 2*usbc_bridge_layer >= 1.0,
+       "the window's round-ended part, above the two bridge steps, must be at least 1 mm of plate");
 assert(pwr_trig_t - pwr_trig_sock_t - usbc_cut_clear >= 1.0,
        "the board's front edge must bear on at least 1 mm of plate below the window");
 assert(usbc_cut_w < pwr_trig_w,
@@ -1697,19 +1762,27 @@ assert(pwr_ear_t + pwr_m3_head[1] <= (shell_depth - speaker_d)/2 - 0.5,
 function pwr_board_y0() = pwr_trig_sock_t/2 - pwr_trig_t;          // the board's underside
 function pwr_pcb_y1()   = pwr_board_y0() + pwr_trig_t - pwr_trig_sock_t;   // its top face, where the wires are soldered
 function pwr_board_z1() = pwr_trig_l - pwr_trig_proud;             // its back edge
+// The board's tube: its floor at the board's underside, where the roof's
+// ribs hold it (2026-10-29: pwr_trig_clear lower until then), and its roof
+// 2 x pwr_trig_clear over the socket, the same all along.
+function pwr_tube_y0()  = pwr_board_y0();
+function pwr_tube_y1()  = pwr_trig_sock_t/2 + 2*pwr_trig_clear;
+// the roof's ribs, from the roof to their tips: its room over the socket,
+// the squeeze, and what a printed tip loses
+function pwr_top_rib_h() = pwr_tube_y1() - pwr_trig_sock_t/2 + pwr_top_rib_squeeze + pwr_rib_tip;
 // The stop, in the same frame. Its top part is the tube's width less its
 // clearance, and reaches 2 x pwr_trig_clear under the board's top face, so
 // the wires soldered there pass over it; below the board's level its body is
 // narrower (pwr_stop_hw) and carries the two M2 pilots, with pwr_m2_wall of
 // plastic past their teardrop roofs too. Its front face stands
-// pwr_rib_h - pwr_rib_squeeze behind the board's back edge, so only the ribs
-// reach the board.
+// pwr_rib_h - pwr_rib_squeeze - pwr_rib_tip behind the board's back edge, so
+// only the ribs reach the board.
 function pwr_tube_w()   = pwr_trig_w + 2*pwr_trig_clear;
 function pwr_stop_hw()  = pwr_tube_w()/2 - pwr_stop_step - pwr_stop_clear;
 function pwr_stop_y1()  = pwr_pcb_y1() - 2*pwr_trig_clear;
 function pwr_m2_y()     = pwr_stop_y1() - pwr_m2_wall - pwr_m2_pilot/2;
 function pwr_stop_y0()  = pwr_m2_y() - pwr_m2_pilot/2*sqrt(2) - pwr_m2_wall;
-function pwr_stop_z0()  = pwr_board_z1() + pwr_rib_h - pwr_rib_squeeze;
+function pwr_stop_z0()  = pwr_board_z1() + pwr_rib_h - pwr_rib_squeeze - pwr_rib_tip;
 // the screws' axes along the board: [the one through the +x wall, the one through the -x wall]
 function pwr_m2_z()     = [pwr_stop_z0() + pwr_m2_wall + pwr_m2_pilot/2,
                            pwr_stop_z0() + pwr_m2_wall + pwr_m2_pilot/2 + pwr_m2_pitch];
@@ -1725,10 +1798,14 @@ assert(pwr_m2_len <= pwr_m2_reach() - 0.5,
        "the M2 screws must end inside the stop, short of the far wall: use a shorter screw");
 assert(pwr_m2_pitch >= pwr_m2_pilot + 1.2,
        "the two M2 pilots need 1.2 mm of plastic between them");
-assert(pwr_rib_squeeze > 0 && pwr_rib_squeeze < pwr_rib_h - 0.3,
+assert(pwr_rib_squeeze > 0 && pwr_rib_squeeze + pwr_rib_tip < pwr_rib_h - 0.3,
        "the ribs must reach into the board's back edge, and the stop's face stay clear of it");
+assert(pwr_rib_squeeze + pwr_rib_tip < (pwr_m2_csk - pwr_m2_pilot)/2,
+       "the countersinks must be able to draw the stop forward as far as its ribs squeeze");
 assert(pwr_stop_hw() + pwr_stop_clear < pwr_trig_w/2 - 0.2,
        "the stop's chamber must be narrower than the board below its level, so the board cannot drop into it");
+assert(pwr_top_rib_squeeze > 0 && pwr_top_rib_x + pwr_top_rib_h() <= pwr_trig_sock_w/2 - pwr_trig_sock_t/2,
+       "the roof's ribs must press on the socket's flat top, not on its round ends");
 
 // A hole along x that prints without support with z up: round, with a
 // 45-degree roof toward +z. The mount prints flat face down, z up; the stop
@@ -1745,16 +1822,33 @@ module pwr_socket2d(grow = 0) {
         translate([sx * (pwr_trig_sock_w/2 - pwr_trig_sock_t/2), 0]) circle(d = pwr_trig_sock_t + 2*grow);
 }
 
+// The roof's two ribs, in the mount's frame (2026-10-29): 90-degree ridges
+// along the tube's roof over the socket's flat top, from the plate back
+// pwr_top_rib_len, each ending in a 45-degree ramp for the socket to ride
+// under on its way in. As the mount prints, z up, they are two ridges up the
+// roof's wall from the bed, and each ramp is the top of its ridge going back
+// into the wall, so nothing overhangs.
+module pwr_top_ribs() {
+    h = pwr_top_rib_h();
+    y1 = pwr_tube_y1();
+    for (sx = [-1, 1]) translate([sx*pwr_top_rib_x, 0, 0]) hull() {
+        linear_extrude(height = pwr_top_rib_len) polygon([[-h, y1 + 0.01], [h, y1 + 0.01], [0, y1 - h]]);
+        translate([0, 0, pwr_top_rib_len + h])
+            linear_extrude(height = 0.01) polygon([[-0.01, y1 + 0.01], [0.01, y1 + 0.01], [0, y1]]);
+    }
+}
+
 // The trigger mount, in place (it goes at usbc_cut_pos). It prints as it
 // sits, flat face down: the face that goes on the plate, with the ears'
 // faces in it. The board's tube is open at the front, the board's front edge
 // level with the face. Behind the board the tube's floor drops to make a
 // chamber for the stop; a 45-degree step underneath carries the deeper part,
 // so nothing overhangs, and the M2 pilots through the walls are teardrops.
-module power_trigger_mount() {
+// ribs = false leaves the roof's ribs off, for the checks.
+module power_trigger_mount(ribs = true) {
     cw = pwr_tube_w();
-    y0 = pwr_board_y0() - pwr_trig_clear;     // the board's floor
-    y1 = pwr_trig_sock_t/2 + pwr_trig_clear;  // the tube's ceiling, the same all along
+    y0 = pwr_tube_y0();                       // the tube's floor, the board on it
+    y1 = pwr_tube_y1();                       // its roof, the same all along
     yk = y0 - pwr_stop_clear;                 // where the chamber narrows, under the stop's top
     yc = pwr_stop_y0() - pwr_stop_clear;      // the stop's floor
     hc = pwr_stop_hw() + pwr_stop_clear;      // the chamber's half-width below yk
@@ -1774,8 +1868,11 @@ module power_trigger_mount() {
             for (sx = [-1, 1]) translate([sx*px, 0, 0]) cylinder(d = pwr_ear_od, h = pwr_ear_t);
             translate([-px, -pwr_ear_od/2, 0]) cube([2*px, pwr_ear_od, pwr_ear_t]);
         }
-        // the board's tube, open at both ends
-        translate([-cw/2, y0, -1]) cube([cw, y1 - y0, len + 2]);
+        // the board's tube, open at both ends, less the roof's ribs
+        difference() {
+            translate([-cw/2, y0, -1]) cube([cw, y1 - y0, len + 2]);
+            if (ribs) pwr_top_ribs();
+        }
         // the stop's chamber behind it: as wide down to just under the board's
         // floor, then narrower and deeper
         translate([-cw/2, yk, zc]) cube([cw, y1 - yk, len]);
@@ -1802,7 +1899,7 @@ module power_trigger_mount() {
     }
 }
 
-module power_trigger_mount_placed() { translate([usbc_cut_pos[0], usbc_cut_pos[1], 0]) power_trigger_mount(); }
+module power_trigger_mount_placed(ribs = true) { translate([usbc_cut_pos[0], usbc_cut_pos[1], 0]) power_trigger_mount(ribs); }
 
 // The stop, in the mount's frame, where the two screws hold it: a T, its top
 // the tube's width and its body narrower. Its crush ribs run up its front
@@ -1813,7 +1910,7 @@ module power_trigger_mount_placed() { translate([usbc_cut_pos[0], usbc_cut_pos[1
 module power_trigger_stop_shape(ribs = true) {
     hw = pwr_stop_hw();
     ht = pwr_tube_w()/2 - pwr_stop_clear;     // the top's half-width
-    yk = pwr_board_y0() - pwr_trig_clear;     // the top's underside, level with the tube's floor
+    yk = pwr_tube_y0();                       // the top's underside, level with the tube's floor
     y0 = pwr_stop_y0(); y1 = pwr_stop_y1();
     z0 = pwr_stop_z0(); z1 = pwr_stop_z1();
     yr = yk + 0.1;

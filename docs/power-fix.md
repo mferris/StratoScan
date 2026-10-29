@@ -124,18 +124,22 @@ question.
   face, so the charger's plug meets the socket and goes fully home. Until then
   the socket sat behind the plate, and a plug had to reach it through the
   plate; one whose moulding stopped short of it made a poor connection that
-  cut out when the cable moved. `power_trigger_mount` holds the board, and
-  `power_trigger_stop` behind it presses it against the plate with no play.
-  No extension is needed. To fit them, with the plate outer face down:
+  cut out when the cable moved. `power_trigger_mount` holds the board, two
+  crush ribs along its roof press the socket down so the board can't rock,
+  and `power_trigger_stop` behind it presses it against the plate with no
+  play. No extension is needed. To fit them, with the plate outer face down:
   1. Press an M3 × 3 insert into each hole beside the window, from the inner
      face, with the outer face on a flat board, until it stops on the board.
   2. Solder the 12 V pair to the trigger board.
   3. Set the mount on the plate over the window, and screw it on with two
      M3 × 8 button-head screws from inside, into the inserts, a turn short of
      tight.
-  4. Drop the board in from the back of the mount, socket first, until its
-     socket goes into the window and its front edge rests on the plate.
-     Tighten the two M3 screws.
+  4. Drop the board in from the back of the mount, socket first, the
+     socket's side toward the two ribs in the mount. For the last 6 mm or so
+     the socket goes under the ribs: push the board's back edge firmly, with
+     a small flat screwdriver below the wires, until the socket goes into the
+     window and the board's front edge rests on the plate. Tighten the two
+     M3 screws.
   5. Slide the stop in behind the board until its ribs touch the board.
   6. Drive two M2 × 8 screws through the mount's side walls into the stop:
      they draw it the last 0.3 mm onto the board.
@@ -144,7 +148,11 @@ question.
   on it before the stop is locked; done on the bench, the socket would rest
   on the bench and the board would end up 2 mm too far back. Try it on
   `usbc_gauge` first, a ten-minute print of the plate round the window: the
-  charger's plug must click fully home. Details and checks are in the
+  charger's plug must click fully home, and the click is the test, not how
+  close the moulding looks. Trim any strand that droops from the pocket's
+  floor round the window first. The two steps in that floor, a slot and a
+  rectangle, are meant to be there: they let it print as a clean bridge, so
+  slice with counterbore hole bridging off. Details and checks are in the
   [retro case's README](../enclosure/Retro%20Radar%20Enclosure/README.md#the-power-fix-the-charger-plugs-into-the-trigger-board).
 - **The regulator goes in `power_regulator_tray`,** stuck to the plate's
   inner face with VHB tape. Put it as far from the FlyCatcher and the antenna

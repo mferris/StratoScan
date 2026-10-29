@@ -75,10 +75,11 @@ CORE = {
     "antenna_mount_twin", "antenna_mount_twin_cover", "ant_twin_frame", "ant_twin_teardrop", "ant_twin_outline2d", "ant_twin_slab", "ant_twin_cover2d", "ant_twin_bore", "ant_twin_cover_placed", "ant_twin_bore_probe", "ant_twin_jack_probe", "ant_twin_barrel_probe", "ant_twin_channel_probe", "ant_twin_screw_probes",
     "ant_twin_envelopes", "ant_twin_panel_ring", "ant_twin_hole_probe",
     # the power fix (roadmap 5.7): the trigger board with its socket through
-    # the USB-C window, held by its mount and the stop behind it, and the
-    # regulator's tray
+    # the USB-C window, held by its mount, the ribs in the mount's roof and
+    # the stop behind it, and the regulator's tray
     "power_trigger_mount", "power_trigger_stop", "power_trigger_stop_shape", "power_regulator_tray",
     "pwr_x_teardrop", "pwr_socket2d", "pwr_board_y0", "pwr_pcb_y1", "pwr_board_z1", "pwr_tube_w",
+    "pwr_tube_y0", "pwr_tube_y1", "pwr_top_rib_h", "pwr_top_ribs",
     "pwr_stop_hw", "pwr_stop_y0", "pwr_stop_y1", "pwr_stop_z0", "pwr_stop_z1", "pwr_m2_y", "pwr_m2_z",
     "pwr_mount_len", "pwr_m2_reach", "pwr_m2_engaged",
     "power_trigger_mount_placed", "power_trigger_stop_placed", "power_trigger_board_placed",

@@ -25,6 +25,7 @@ back_lip_h=4; back_lip_t=2; back_lip_gap=0.35; back_lip_skip=9; post_od=9;
 back_post_h=9; ant_bolt_pcd=30; n_ant_bolts=3; ant_flange_d=40; ant_mount_y=81;
 ant_bolt_d=3.4; usbc_cut_pos=[60,-51]; usbc_screw_pitch=24; usbc_cut_w=9.54; usbc_cut_h=3.86; usbc_cut_r=1.93;
 usbc_recess_w=14; usbc_recess_h=10; usbc_recess_r=2.5; usbc_recess_d=1.4; insert_hole_dia=4.0; usbc_insert_len=3;
+usbc_bridge_layer=0.2;
 mount_hole_x=58; mount_hole_y=49; stand_angle=18;
 base_w=outer_dia*0.86; base_d=150; plinth_rib_h=4; plinth_rib_w=3; plinth_rib_z=[3.5, 9.5];
 ant_stub_len=30; ant_barrel_len=14; ant_socket_dia=33; ant_socket_depth=8;
@@ -915,11 +916,38 @@ module pwr_posed() { translate([0, 0, base_h + cradle_od/2 - 3]) rotate([90 - st
 if (check=="power_mount_vs_plate")    intersection() { power_trigger_mount_placed(); back_plate(); }
 // ...and its face is down on it: moved 0.5 mm into the plate, it meets it.
 if (check=="power_mount_on_plate")    intersection() { translate([0, 0, -0.5]) power_trigger_mount_placed(); back_plate(); }
-// The board and its socket meet neither the plate nor the mount...
-if (check=="power_board_held")        intersection() { power_trigger_board_placed(); union() { back_plate(); power_trigger_mount_placed(); } }
+// The board and its socket meet neither the plate nor the mount, but for the
+// two ribs in the mount's roof (power_top_ribs_squeeze_socket, below)...
+if (check=="power_board_held")        intersection() { power_trigger_board_placed(); union() { back_plate(); power_trigger_mount_placed(ribs = false); } }
 // ...and the plate is what stops the board: moved 1.5 mm forward, its front
 // edge runs into the plate.
 if (check=="power_plate_holds_board") intersection() { translate([0, 0, -1.5]) power_trigger_board_placed(); back_plate(); }
+// The board lies on the tube's floor (2026-10-29): moved 0.1 mm down, it runs
+// into it. Until then the floor was 0.2 mm lower, and the board could rise
+// and fall in the tube.
+if (check=="power_board_on_floor")    intersection() { translate([0, -0.1, 0]) power_trigger_board_placed(); power_trigger_mount_placed(ribs = false); }
+// The roof's two ribs press the socket's top down onto it. This one must come
+// out small but not empty (SQUEEZE in run-checks.sh): the ribs' tips in the
+// socket's top, as drawn 0.25 mm deep.
+if (check=="power_top_ribs_squeeze_socket") intersection() { power_trigger_board_placed(); power_trigger_mount_placed(); }
+// So the board cannot rock. Until 2026-10-29 it could tip about 2.3 degrees,
+// its back end up, about the window's lower edge before its socket met the
+// roof. Tipped 1 degree that way it now runs into the roof's ribs, even with
+// their tips crushed to the socket's top as the board leaves them: this one
+// must find more than a film (MEETS in run-checks.sh). The stop is drawn
+// without its ribs, which press the board's back edge but do not hold it
+// down.
+module pwr_rocked(a) {
+  yp = usbc_cut_pos[1] - usbc_cut_h/2;
+  translate([0, yp, 0]) rotate([-a, 0, 0]) translate([0, -yp, 0]) children();
+}
+if (check=="power_board_cannot_rock") intersection() {
+  pwr_rocked(1) power_trigger_board_placed();
+  difference() {
+    union() { back_plate(); power_trigger_mount_placed(); translate([usbc_cut_pos[0], usbc_cut_pos[1], 0]) power_trigger_stop_shape(ribs = false); }
+    power_trigger_board_placed();
+  }
+}
 // The board's front edge bears on solid plate below the window: in front of
 // the edge, across the board's width and from its underside up to the
 // window, the plate is solid 1.5 mm deep. The control: the same strip, moved
@@ -939,6 +967,28 @@ module pwr_socket_probe(grow) {
 }
 if (check=="power_socket_clears_window") intersection() { pwr_socket_probe(0.25); back_plate(); }
 if (check=="power_window_is_close")      intersection() { pwr_socket_probe(1.0); back_plate(); }
+// The pocket's floor bridges in two steps (2026-10-29). In the first layer
+// over the pocket the opening runs from one side wall of the pocket to the
+// other, as tall as the window, so every line of that layer spans the pocket;
+// in the second it is the window's rectangle. A probe in each, 0.05 mm inside
+// its outline and 0.02 inside the layer, meets no plate...
+module pwr_bridge_probe(w, h, layer) {
+  translate([usbc_cut_pos[0], usbc_cut_pos[1], -back_plate_t + usbc_recess_d + layer*usbc_bridge_layer + 0.02])
+    linear_extrude(height = usbc_bridge_layer - 0.04) square([w - 0.1, h - 0.1], center = true);
+}
+if (check=="usbc_bridge_steps_open") intersection() {
+  union() { pwr_bridge_probe(usbc_recess_w, usbc_cut_h, 0); pwr_bridge_probe(usbc_cut_w, usbc_cut_h, 1); }
+  back_plate();
+}
+// ...and from the second layer up the slot's two ends, beyond the window's
+// rectangle, are solid plate: the slot is one layer and no more.
+if (check=="usbc_bridge_steps_held") intersection() {
+  for (sx = [-1, 1])
+    translate([usbc_cut_pos[0] + sx*(usbc_recess_w + usbc_cut_w)/4, usbc_cut_pos[1], -back_plate_t + usbc_recess_d + usbc_bridge_layer + 0.02])
+      linear_extrude(height = back_plate_t - usbc_recess_d - usbc_bridge_layer - 0.04)
+        square([(usbc_recess_w - usbc_cut_w)/2 - 0.1, usbc_cut_h - 0.1], center = true);
+  back_plate();
+}
 // A plug's shell (8.4 x 2.6) reaches the socket's face, out in the pocket...
 if (check=="power_plug_reaches")      intersection() { power_plug_probe(); union() { back_plate(); power_trigger_mount_placed(); } }
 // ...and the same probe, moved 6 mm up, stops on the plate.
