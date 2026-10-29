@@ -1240,3 +1240,54 @@ module spk_cavity_probe(reach) {
 }
 if (check=="speaker_sleeve_hollow") intersection() { spk_cavity_probe(0); shell(); }
 if (check=="speaker_probe_works")   intersection() { spk_cavity_probe(1.5); shell(); }
+
+// ---- less support inside the shell (2026-10-29) ------------------------
+// Restated, as above: `use <>` brings in no values.
+lip_height=6; arm_gap=26; retain_h=4; retain_w=4; retain_clear=0.5;
+retain_segs=[[207, 38], [295, 38]]; retention_opening=195.34;
+
+// The front rail's underside slopes to a lip, as the rings' do; the rear
+// rail's stays square, because it bears on the rear arm. A ring band at
+// r0-r1 out from the wall's face, z0-z1 from a rail's underside, over the
+// middle of each segment.
+module rail_probe(z_rail, r0, r1, z0, z1) {
+  for (seg = retain_segs)
+    translate([0, 0, z_rail + z0])
+      rotate([0, 0, seg[0] + 5]) rotate_extrude(angle = seg[1] - 10)
+        translate([outer_dia/2 + r0, 0]) square([r1 - r0, z1 - z0]);
+}
+front_rail_z = shell_depth/2 + arm_gap/2 - retain_clear - retain_w;   // 39, its underside
+rear_rail_z  = shell_depth/2 - arm_gap/2 + retain_clear;              // 18
+// The slope is there: just below the front rail, by the wall, is solid...
+if (check=="rail_slope_present")    intersection() { shell(); rail_probe(front_rail_z, 0.3, 1.3, -2, -1); }
+// ...and it stops short of the edge: under the rail's outer half millimetre
+// is air, the shadow line. Fixed numbers, so that a lip of 0 fails.
+if (check=="rail_lip_kept")         intersection() { shell(); rail_probe(front_rail_z, retain_h - 0.55, retain_h - 0.05, -0.45, -0.05); }
+// The rear rail is still square: under it, across its width, is air. The
+// control is the same probe 1 mm up, in the rail, which finds it.
+if (check=="rear_rail_square")      intersection() { shell(); rail_probe(rear_rail_z, 0.3, retain_h - 0.3, -1, -0.05); }
+if (check=="rear_rail_probe_works") intersection() { shell(); rail_probe(rear_rail_z, 0.3, retain_h - 0.3, 0.05, 1); }
+
+// The shelf's underside slopes down to the wall: just under the shelf, by
+// the wall, is solid. Probed in the two lower quarters, between the front
+// posts (solid anyway), where both cases have it; nothing was there before.
+module shelf_slope_probe() {
+  for (w = [[212, 220], [230, 242], [298, 310], [320, 328]])
+    rotate([0, 0, w[0]]) rotate_extrude(angle = w[1] - w[0])
+      translate([outer_dia/2 - wall - 1.5, shell_depth - lip_height - 3]) square([1.2, 1]);
+}
+if (check=="shelf_slope_present") intersection() { shell(); shelf_slope_probe(); }
+
+// Over each speaker the sleeve's top wall reaches the shelf: where the 2mm
+// slot between them was, all is solid, either side of the front post's
+// insert hole. The control is the same probe against the shell, which must
+// find it, since an empty probe would pass the first for nothing.
+module speaker_slot_probe() {
+  for (a = speaker_angles) rotate([0, 0, a]) for (s = [-1, 1])
+    intersection() {
+      translate([retention_opening/2 + 1, s > 0 ? 3.5 : -44, shell_depth - lip_height - 1.8]) cube([10, 40.5, 1.6]);
+      cylinder(r = outer_dia/2 - wall - 0.3, h = shell_depth, $fn = 360);
+    }
+}
+if (check=="speaker_slot_closed")      difference() { speaker_slot_probe(); shell(); }
+if (check=="speaker_slot_probe_works") intersection() { speaker_slot_probe(); shell(); }

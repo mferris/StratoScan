@@ -119,6 +119,16 @@ rabbet_depth = glass_thickness;
 relief_center_deg = 270;
 relief_arc_deg    = 50;
 
+// ---- The shelf's underside (2026-10-29) ------------------------------
+// It slopes at 45 degrees from r 103 down to the wall, so the outer half of
+// the 11mm ledge prints on its own rather than on 55mm-tall supports. Not
+// over the speakers, whose sleeves reach up to the shelf there instead
+// (speaker_bracket()); not over 30-75 degrees, where the Retro with Dials has
+// two screw heads and a wire hole inside the wall at z 49-50; and not in the
+// shelf's own gap at the bottom.
+shelf_slope_r0   = 103;
+shelf_slope_skip = [30, 75];
+
 // How much of the old lip_height is left, once retainer gets its own
 // dedicated shelf to sit on (see shell(), below) instead of overlapping
 // the insert posts. Posts shrink to this height so they stay clear of
@@ -393,6 +403,13 @@ retain_h     = 4;     // proud of the wall: 1mm crosses the bore clearance,
 // split around the keel (which is full-depth at the very bottom), so the
 // rails grab the two flanks of each arm instead of fouling the keel
 retain_segs = [[207, 38], [295, 38]];   // [start angle, arc] per segment
+// The front rail's underside slopes at 45 degrees to a small square lip, as
+// the rings' do (2026-10-29), so it prints without support. Square, it was
+// supported from the top of the rear rail, the ASA-on-ASA weld that tore the
+// rings on 2026-10-24. Its top is the face that bears, on the front arm, so
+// nothing is lost. The rear rail stays square: its underside is the face
+// that bears, on the rear arm, and is what holds the case in the stand.
+retain_lip = 0.8;
 
 // ---------- VENTILATION ----------
 // The active cooler's fan faces INTO the shell cavity (away from
@@ -696,14 +713,23 @@ module fan_grille() {
 // Nothing here changes the stand: the printed cradle still fits.
 // ============================================================
 module cradle_rails() {
-    for (seg = retain_segs)
-        for (z = [arm_a_inner + retain_clear,
-                  arm_b_inner - retain_clear - retain_w])
-            translate([0,0,z])
-                rotate([0,0,seg[0]])
-                    rotate_extrude(angle=seg[1])
-                        translate([outer_dia/2, 0])
-                            square([retain_h, retain_w]);
+    for (seg = retain_segs) {
+        // the rear rail, square: its underside bears on the rear arm
+        translate([0,0,arm_a_inner + retain_clear])
+            rotate([0,0,seg[0]])
+                rotate_extrude(angle=seg[1])
+                    translate([outer_dia/2, 0])
+                        square([retain_h, retain_w]);
+        // the front rail, its underside sloped to a lip (retain_lip). The
+        // profile starts 0.3mm inside the wall so it overlaps it, as the
+        // rings' does.
+        translate([0,0,arm_b_inner - retain_clear - retain_w])
+            rotate([0,0,seg[0]])
+                rotate_extrude(angle=seg[1])
+                    translate([outer_dia/2, 0])
+                        polygon([[-0.3, -(retain_h - retain_lip) - 0.3], [retain_h - retain_lip, 0],
+                                 [retain_h, 0], [retain_h, retain_w], [-0.3, retain_w]]);
+    }
 }
 
 // ============================================================
@@ -735,6 +761,20 @@ module speaker_bracket(angle) {
                 translate([r_face - 1, -speaker_w/2 + t, z0 + t])
                     cube([r_wall + 2 - r_face, speaker_w - 2*t, speaker_d - 2*t]);
                 cylinder(r = r_wall, h = shell_depth);     // the wall itself stays
+            }
+        }
+        // Up to the shelf (2026-10-29): the sleeve's top wall carries on from
+        // the sleeve's top, z 53, to the shelf's underside, z 55, wherever the
+        // shelf is over it. The 2mm slot between the two was supported, and
+        // support in a slot that size can hardly be got out. Outside the
+        // shelf's inner edge it stops at z 53, as before, so nothing comes
+        // any nearer the back of the display.
+        intersection() {
+            translate([r_face, -speaker_w/2, z0 + speaker_d - 0.01])
+                cube([r_wall + 1 - r_face, speaker_w, shell_depth - lip_height - (z0 + speaker_d) + 0.01]);
+            difference() {
+                cylinder(r = r_wall + 0.5, h = shell_depth);
+                translate([0, 0, -1]) cylinder(d = retention_opening, h = shell_depth + 2);
             }
         }
         // the four screw pads, filling the sleeve's corners
@@ -2391,6 +2431,26 @@ module front_post_holes() {
     }
 }
 
+// The shelf's 45-degree underside (2026-10-29): a ring of slope under the
+// shelf, from shelf_slope_r0 at the shelf's underside out and down to the
+// wall, drawn 0.3mm into both so it fuses with them. Cut away over each
+// speaker's sleeve (its full 100mm width), over shelf_slope_skip, and over
+// the shelf's gap at the bottom, where there is no shelf to hold up.
+module shelf_slope() {
+    z1 = shell_depth - lip_height;      // the shelf's underside
+    r1 = outer_dia/2 - wall;            // the bore
+    difference() {
+        rotate_extrude()
+            polygon([[shelf_slope_r0 - 0.3, z1 + 0.3], [r1 + 0.3, z1 + 0.3],
+                     [r1 + 0.3, z1 - (r1 - shelf_slope_r0) - 0.3]]);
+        for (a = speaker_angles)
+            rotate([0, 0, a]) translate([0, -speaker_w/2, -1]) cube([outer_dia, speaker_w, shell_depth + 2]);
+        for (w = [shelf_slope_skip, [relief_center_deg - relief_arc_deg/2, relief_center_deg + relief_arc_deg/2]])
+            rotate([0, 0, w[0]]) rotate_extrude(angle = w[1] - w[0])
+                translate([0, -1]) square([outer_dia, shell_depth + 2]);
+    }
+}
+
 module shell() {
     difference() {
         shell_body();
@@ -2442,6 +2502,9 @@ module shell_body() {
                 translate([retention_opening/2 - 1, shell_depth - lip_height - 1])
                     square([outer_dia/2 - retention_opening/2 + 2, shelf_h + 2]);
     }
+    // Its underside slopes from r 103 to the wall (2026-10-29), so only its
+    // inner 5mm needs support. See shelf_slope_r0.
+    shelf_slope();
 
     // The front insert posts: from the shelf's top face (below the retainer)
     // down, merged into the wall, with a cone under each. Their holes are cut

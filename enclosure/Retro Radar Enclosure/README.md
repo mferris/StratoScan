@@ -258,6 +258,47 @@ square and 4 mm deep.
   checks: `plinth_slopes_present` and `plinth_lip_kept`. They sit only 3 mm
   apart, so the upper ridge's slope fills most of the gap between them.
 
+### The shelf, the sleeves and the front rail need less support
+
+Three more undersides inside the shell were flat and in mid-air as it
+prints, back down (2026-10-29):
+
+- **The shelf** the retainer sits on was an 11 mm flat ledge all round at
+  z 55, supported from the plate 55 mm below. Its underside now slopes at 45°
+  from r 103 out to the wall (`shelf_slope()`), so only its inner 5 mm needs
+  support. Not over the speakers (next), nor over 30-75°, where the Retro
+  with Dials has two screw heads and its wire hole inside the wall at
+  z 49-50, nor in the shelf's gap at the bottom.
+- **Over each speaker**, the sleeve's top wall stopped 2 mm under the shelf,
+  and support in a slot that size can hardly be got out. The top wall now
+  carries on up to the shelf wherever the shelf is over it.
+- **The front rail** (z 39-43) had a square underside, supported from the
+  top of the rear rail: the same ASA-on-ASA weld that tore the rings. It now
+  has the rings' 45° underside and 0.8 mm lip (`retain_lip`); its top, the
+  face that bears on the front arm, is unchanged. The rear rail stays
+  square, because its underside is what bears on the rear arm.
+
+Sliced in Bambu Studio 2.08 (X1C 0.4 mm, 0.20 mm Standard, Bambu ASA, tree
+supports at 30°), the shell's support went from 42.0 to 33.7 cm³ and the
+print from 8.5 to 7.7 hours. Measured on the mesh, the flat overhang went
+from 14,650 to 10,680 mm²: the shelf's from 5,800 to 2,310, and the front
+rail's from 603 to its lip's 122. The speaker sleeves' roofs (2,730 mm²) and
+floors (2,910) are still supported. Fins inside each sleeve, to cut its roof
+into 31 mm bridges, were tried and left out: this profile supports bridges of
+any length, so they saved 0.6 cm³ of support and cost 1.6 g and 4 minutes.
+
+- `shelf_slope_present` finds the slope under the shelf, by the wall. It
+  finds nothing in the old shell.
+- `speaker_slot_closed` must come out empty: where the slot was, all is
+  solid (the old shell leaves 1,632 mm³ there). `speaker_slot_probe_works` is
+  its control.
+- `rail_slope_present` finds the front rail's slope, and `rail_lip_kept` must
+  come out empty, as for the rings: a full slope with no lip puts 13.5 mm³
+  there.
+- `rear_rail_square` must come out empty: under the rear rail is air (a
+  sloped rear rail puts 250 mm³ there). `rear_rail_probe_works` is its
+  control.
+
 ### Speakers: a hollow sleeve, not a solid block
 
 Each speaker used to sit on a solid block 15 mm deep, with the grille drilled

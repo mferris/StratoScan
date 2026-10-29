@@ -152,6 +152,29 @@ angle, so the one plate still fits both cases.
 collides (43.7 mm³ each), each as its own check, because a key that blocked
 only some angles would still let the plate in wrong.
 
+## Less support inside the head
+
+The same three changes as the retro case, which has the details
+(2026-10-29), all in the shared internals:
+
+- the shelf's underside slopes at 45° from r 103 out to the wall, except over
+  the speakers, over 30-75° and in the shelf's gap at the bottom. Here it also
+  stops at z 53 where an ear's hollow opens into the head (about 40-80° and
+  100-140°): the wall below the shelf is gone there, so the slope would start
+  in mid-air;
+- over each speaker, the sleeve's top wall reaches up to the shelf, closing
+  the 2 mm slot between them;
+- the front rail has the retro rings' 45° underside and 0.8 mm lip; the rear
+  rail, which bears on the rear arm, stays square.
+
+Sliced in Bambu Studio 2.08 (X1C 0.4 mm, 0.20 mm Standard, Bambu ASA, tree
+supports at 30°), the head's support went from 58.4 to 49.7 cm³ and the print
+from 10.0 to 9.2 hours. The ear roofs at z 53 (now 4,550 mm²) still need
+support. `shelf_slope_present`, `speaker_slot_closed` (with
+`speaker_slot_probe_works`), `rail_slope_present`, `rail_lip_kept` and
+`rear_rail_square` (with `rear_rail_probe_works`) hold it, and
+`head_in_cradle` still finds the head clear of the stand.
+
 ## Printing it in two colours
 
 The five stand bodies share one coordinate frame, so they occupy their true
