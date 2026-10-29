@@ -119,6 +119,12 @@ rabbet_depth = glass_thickness;
 relief_center_deg = 270;
 relief_arc_deg    = 50;
 
+// ---- Where the front stack sits (2026-10-29) -------------------------
+// Where the trim's face is: the retainer on the shelf with its front face at
+// shell_depth, the glass on the retainer, the trim on the glass.
+// front_stack_placed() puts the three there, for the pictures and checks.
+z_trim_face = shell_depth + glass_thickness + front_trim_h;   // 66.62
+
 // ---- The retainer's key (2026-10-29) ---------------------------------
 // A tab on the retainer's back face, outboard of the glass's edge, that drops
 // into the shelf's gap at the bottom only when the ring's relief is there
@@ -573,6 +579,25 @@ module retainer() {
 // (2026-10-29). retainer.stl is exported this way up.
 module retainer_print() {
     translate([0, 0, retainer_h]) rotate([180, 0, 0]) retainer();
+}
+
+// The front stack where it sits on the shell (2026-10-29): the retainer on
+// the shelf, the glass on the retainer, and the trim on the glass, with its
+// face at z_trim_face. `which` is "retainer", "glass" or "trim" for one of
+// them, so a picture can colour each; anything else gives all three. The
+// pictures put the trim on the panel's whole 6.45mm depth instead of the
+// 1.62mm glass, and the kitten's sat the retainer inside the shelf; placing
+// the stack here once stops that. Worked from shell_depth, not z_trim_face,
+// so a file that includes this one and sets its own z_trim_face (the Retro
+// with Dials does, until its arc's depth is settled) still gets it right.
+module front_stack_placed(which = "all") {
+    all = which != "retainer" && which != "glass" && which != "trim";
+    if (all || which == "retainer")
+        translate([0, 0, shell_depth - retainer_h]) retainer();
+    if (all || which == "glass")
+        translate([0, 0, shell_depth]) cylinder(d = panel_diameter, h = glass_thickness);
+    if (all || which == "trim")
+        translate([0, 0, shell_depth + glass_thickness]) front_trim();
 }
 
 // ============================================================
@@ -2604,14 +2629,16 @@ else if (part == "exploded") {
     color("SteelBlue")  shell();
 }
 else {
-    // assembled preview -- retainer now seats on the shelf (world Z =
+    // assembled preview -- retainer seats on the shelf (world Z =
     // shell_depth - retainer_h to shell_depth), glass sits right on top
     // of retainer, and front_trim's local Z=0 (its inner, glass-overlap
     // band) lines up with the glass's own top face. front_trim's
     // rabbeted outer band then reaches back down exactly to shell_depth
-    // -- the shelf's top face -- with no gap left to force shut.
+    // -- the retainer's front face and the shell's rim -- with no gap left
+    // to force shut. Placed by front_stack_placed() since 2026-10-29: the
+    // trim stood on the panel's whole depth here, 4.83mm too far forward.
     color("SteelBlue") shell();
-    color("SlateGray") translate([0,0,shell_depth - retainer_h + 0.1]) retainer();
-    color("LightBlue",0.4) translate([0,0,shell_depth + 0.1]) cylinder(d=panel_diameter, h=panel_glass_depth);
-    color("DimGray") translate([0,0,shell_depth + panel_glass_depth + 0.1]) front_trim();
+    color("SlateGray") front_stack_placed("retainer");
+    color("LightBlue",0.4) front_stack_placed("glass");
+    color("DimGray") front_stack_placed("trim");
 }

@@ -42,7 +42,13 @@ Binary STL: the shell is 75,000 facets, which is far smaller as binary than
 as ascii for byte-identical geometry, and every slicer reads both.
 
 `part="preview"` shows the whole stack assembled; `part="exploded"` separates
-it.
+it. The preview places the retainer, the glass and the trim with
+`front_stack_placed()`, the one place the stack is worked out, and the
+trim's face is at `z_trim_face`, 66.62 mm (2026-10-29). The trim used to
+stand on the panel's whole 6.45 mm depth there, 4.83 mm too far forward.
+`front_stack_seats`, `front_stack_retainer_down` and `front_stack_trim_down`
+hold it: the stack meets the shell with no volume, and lowered 0.2 mm the
+retainer runs into the shelf and the trim into the rim.
 
 Exporting an STL already forces a full geometry evaluation, and OpenSCAD
 prints the result on stderr — check for `Status: NoError` and the

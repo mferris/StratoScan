@@ -106,6 +106,12 @@ front_post_cone  = 4;
 relief_center_deg = 270;
 relief_arc_deg    = 50;
 
+// ---- Where the front stack sits (2026-10-29) -------------------------
+// Where the trim's face is: the retainer on the shelf with its front face at
+// shell_depth, the glass on the retainer, the trim on the glass.
+// front_stack_placed() puts the three there, for the pictures and checks.
+z_trim_face = shell_depth + glass_thickness + front_trim_h;   // 66.62
+
 // ---- The retainer's key (2026-10-29) ---------------------------------
 // A tab on the retainer's back face, outboard of the glass's edge, that drops
 // into the shelf's gap at the bottom only when the ring's relief is there
@@ -915,6 +921,25 @@ module retainer() {
 // (2026-10-29). retainer.stl is exported this way up.
 module retainer_print() {
     translate([0, 0, retainer_h]) rotate([180, 0, 0]) retainer();
+}
+
+// The front stack where it sits on the shell (2026-10-29): the retainer on
+// the shelf, the glass on the retainer, and the trim on the glass, with its
+// face at z_trim_face. `which` is "retainer", "glass" or "trim" for one of
+// them, so a picture can colour each; anything else gives all three. The
+// pictures put the trim on the panel's whole 6.45mm depth instead of the
+// 1.62mm glass, and the kitten's sat the retainer inside the shelf; placing
+// the stack here once stops that. Worked from shell_depth, not z_trim_face,
+// so a file that includes this one and sets its own z_trim_face (the Retro
+// with Dials does, until its arc's depth is settled) still gets it right.
+module front_stack_placed(which = "all") {
+    all = which != "retainer" && which != "glass" && which != "trim";
+    if (all || which == "retainer")
+        translate([0, 0, shell_depth - retainer_h]) retainer();
+    if (all || which == "glass")
+        translate([0, 0, shell_depth]) cylinder(d = panel_diameter, h = glass_thickness);
+    if (all || which == "trim")
+        translate([0, 0, shell_depth + glass_thickness]) front_trim();
 }
 
 // ============================================================
@@ -2703,7 +2728,11 @@ else if (part == "exploded") {
     color("DimGray")    translate([0,0,-140]) stand();
 }
 else {
+    // the head with its face on: placed by front_stack_placed() since
+    // 2026-10-29, which seats the retainer on the shelf (it was drawn at
+    // shell_depth - lip_height, inside the shelf) and shows the glass
     color("Gainsboro")  shell();
-    color("Gray")       translate([0,0,shell_depth - lip_height]) retainer();
-    color("Pink")       translate([0,0,shell_depth + rabbet_depth]) front_trim();
+    color("Gray")       front_stack_placed("retainer");
+    color("LightBlue",0.4) front_stack_placed("glass");
+    color("Pink")       front_stack_placed("trim");
 }
