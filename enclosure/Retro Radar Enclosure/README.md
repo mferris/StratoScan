@@ -396,9 +396,12 @@ its underside to the top of its tallest capacitor, so about 16 mm off the
 plate in the tray). Both ends stay open for its terminals, input jack and
 USB socket. Stick it to the plate's inner face with VHB tape, away from the
 receiver and its antenna leads, and where the pigtail reaches the Pi's power
-port; keep it off the 33 × 13.5 mm patch round the window that the trigger
-board's mount stands on. Two grooves under its floor take an optional cable
-tie round the board.
+port; keep it off the 70 × 13.5 mm strip across the window. The trigger
+board's mount stands in the middle of the strip, and the rest is the M2
+screwdriver's way in, 25 mm out either side along the screws, so the stop
+can be locked or freed with the tray in place (since 2026-10-29; it was a
+33 × 13.5 mm patch, the mount alone). Two grooves under its floor take an
+optional cable tie round the board.
 
 The trigger board's size was measured: 19.19 × 10.72 × 4.83 mm, from its
 socket's face to its back edge, across it, and from its underside to the top
@@ -421,8 +424,10 @@ inserts comes out of the outer face), `usbc_inserts_surrounded`,
 `power_stop_clear_of_board`, `power_m2_holes_line_up`,
 `power_m2_clear_of_board`, `power_m2_threads_held`, `power_wires_out`,
 `power_stop_vs_shell`, `power_stop_vs_speakers`, `power_parts_vs_stand`,
-`power_parts_in_patch` (everything at the window stays in its 33 × 13.5 mm
-patch), `power_stop_slides_home` (the stop, slid in the right way round from
+`power_parts_in_patch` (everything at the window, and the M2 screwdriver's
+way in either side, stays in its 70 × 13.5 mm strip),
+`power_m2_drivers_clear` (that way in, 6 mm across, meets nothing),
+`power_stop_slides_home` (the stop, slid in the right way round from
 outside the mount all the way home, meets nothing),
 `power_stop_key_is_what_blocks` (back to front without its key, posed as
 below, it meets nothing either), and `usbc_label_cut`,
@@ -443,9 +448,10 @@ the slot's ends are solid), `power_plug_probe_works`,
 `power_moulding_probe_works` (a moulding 1 mm bigger than the pocket stops on
 the outer face), `power_m3_bite`, `usbc_insert_holes_open`,
 `power_speaker_drawing_works`, `power_stop_takes_push`,
-`power_m2_threads_bite`, `power_wire_probe_works`, `usbc_label_present` (the
-letters, 80 mm³) and `usbc_label_probe_works` (the clearance probe, moved
-12 mm down over the pocket, finds it).
+`power_m2_threads_bite`, `power_wire_probe_works`, `power_m2_drivers_reach`
+(the screwdriver's way in, begun 3 mm further in, meets the screws' heads),
+`usbc_label_present` (the letters, 80 mm³) and `usbc_label_probe_works` (the
+clearance probe, moved 12 mm down over the pocket, finds it).
 
 `power_stop_back_to_front_blocked`, `power_stop_upside_down_blocked` and
 `power_stop_end_over_end_blocked` must run into the mount: the stop the

@@ -1165,16 +1165,38 @@ if (check=="power_stop_slides_home")    intersection() { pwr_stop_swept(); power
 if (check=="power_stop_key_is_what_blocks") intersection() { pwr_stop_posed([0, 180, 0], pwr_stop_clear, key = false); power_trigger_mount_placed(); }
 // The regulator's tray has no set place: it goes on the plate's inner face
 // wherever the case has room. All of the power fix at the window keeps to a
-// 33 x 13.5 mm patch of the plate round it, up to 26 mm in from the plate, so
-// the tray, and anything else stuck to the plate, need only keep off that
-// patch (the READMEs say so): nothing of the parts is outside it.
+// 70 x 13.5 mm strip of the plate across it, up to 26 mm in from the plate,
+// so the tray, and anything else stuck to the plate, need only keep off that
+// strip (the READMEs say so): nothing of the parts is outside it, nor of the
+// M2 screwdriver's way in from either side. Until 2026-10-29 it was a 33 x
+// 13.5 mm patch, the parts alone, and a tray stuck beside the mount could
+// have stood in the screwdriver's way.
 module pwr_patch() {
-  translate([usbc_cut_pos[0] - 16.5, usbc_cut_pos[1] - 9, -back_plate_t - 0.01]) cube([33, 13.5, back_plate_t + 26]);
+  translate([usbc_cut_pos[0] - 35, usbc_cut_pos[1] - 9, -back_plate_t - 0.01]) cube([70, 13.5, back_plate_t + 26]);
+}
+// The screwdriver's way in to each M2 screw (2026-10-29): from the screw's
+// head straight out along its axis, 6 mm across, as driver_path_clear allows
+// for the antenna mount's, and 25 mm long, a driver's shaft; `inset` starts
+// it that far back into the head. The stop is locked with the plate off the
+// case, so the shell is not in the way.
+pwr_mount_wall=1.6;
+module pwr_m2_driver_paths(len = 25, inset = 0) {
+  for (i = [0, 1]) let (sx = i == 0 ? 1 : -1)
+    translate([usbc_cut_pos[0] + sx*(pwr_tube_w()/2 + pwr_mount_wall + 2.0 - inset), usbc_cut_pos[1] + pwr_m2_y(), pwr_m2_z()[i]])
+      rotate([0, sx*90, 0]) cylinder(d = 6, h = len, $fn = 24);
 }
 if (check=="power_parts_in_patch")    difference() {
-  union() { power_trigger_mount_placed(); power_trigger_stop_placed(); power_trigger_board_placed(); power_m2_probe(); power_m3_probe(); power_insert_probe(); }
+  union() { power_trigger_mount_placed(); power_trigger_stop_placed(); power_trigger_board_placed(); power_m2_probe(); power_m3_probe(); power_insert_probe(); pwr_m2_driver_paths(); }
   pwr_patch();
 }
+// Those ways in are clear: each meets nothing of the power fix or the plate...
+if (check=="power_m2_drivers_clear")  intersection() {
+  pwr_m2_driver_paths();
+  union() { power_trigger_mount_placed(); power_trigger_stop_placed(); power_trigger_board_placed(); power_m3_probe(); back_plate(); }
+}
+// ...and they start at the screws: begun 3 mm further in, they run into the
+// screws' heads and the mount's walls (the control).
+if (check=="power_m2_drivers_reach")  intersection() { pwr_m2_driver_paths(inset = 3); union() { power_trigger_mount_placed(); power_m2_probe(); } }
 
 // ---- the charger it needs, engraved in the plate (2026-10-29) ----
 // "USB-C PD / 12V 27W", 0.6 mm deep in the outer face above the USB-C
