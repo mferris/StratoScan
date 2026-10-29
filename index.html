@@ -4795,7 +4795,7 @@ function bootSoundPlays() {
 // and the lightning warning still shows, only without its chime.
 // Off the panel there is no hold: bootHoldUntil stays 0.
 const BOOT_HOLD_MAX_MS = 15 * 1000;
-const STARTUP_SOUND_MS = 7300;           // the ding, then the 6.5 s take-off 0.3 s later: 6.85 s in all
+const STARTUP_SOUND_MS = 9050;           // 1.2 s waking the speakers, the chime, the 6.5 s take-off 0.9 s after its first note: 8.6 s in all
 // With the take-off sound switched off or the panel muted, there is nothing to
 // wait for, so no hold at all: alerts come as soon as they're raised.
 let bootHoldUntil = ON_DEVICE && alertSettings.bootSound && !alertSettings.muted ? performance.now() + BOOT_HOLD_MAX_MS : 0;
@@ -4816,27 +4816,52 @@ function playStartupAlone() {
   playStartupSound();
 }
 
-// ---- The ding, then the take-off (#81, 2026-10-28) -------------------------
-// The owner's ask: the "ding" heard inside an airliner, then the take-off,
-// instead of the take-off alone. Both go on the audio clock in one go, so a
-// busy page can't stretch the gap: the take-off starts 0.3 s after the ding.
-// Its roar swells up from nothing and is heard only about 1.5 s in, so the
-// ding rings out alone and the engines follow about a second later. Started
-// 1.3 s after the ding at first, meant to come in as it faded, it left over
-// 2 s of near-silence between them. Settings plays this too, when the sound
-// is switched on.
+// ---- The chime, then the take-off (#81, 2026-10-28/29) --------------------
+// The owner's ask: the chime heard inside an airliner, then the take-off,
+// instead of the take-off alone. On 2026-10-29 the owner chose, by ear, a
+// two-tone chime, high then low (1047 and 831 Hz, 0.6 s apart), over a single
+// ding. The take-off starts 0.9 s after the chime's first note: its roar
+// swells up from nothing and is heard about 1.5 s in, so the engines follow
+// the second note by about a second.
+//
+// The speakers are fed over HDMI, and an HDMI audio stream loses roughly its
+// first second while the display wakes its audio up. The startup sound is the
+// first thing the page plays after a boot, so it was the one that opened that
+// stream, and its first note was lost (the owner heard the take-off without
+// its ding, 2026-10-29). So it opens the stream first, with STARTUP_WAKE_S of
+// a signal far too quiet to hear (not silence, which some sinks take for
+// nothing playing), and starts counting only once the context is running.
+// Everything goes on the audio clock in one go, so a busy page can't stretch
+// the gaps. Settings plays this too, when the sound is switched on.
+const STARTUP_WAKE_S = 1.2;
 function playStartupSound() {
   markSoundBusy(STARTUP_SOUND_MS);
   try {
     const ctx = getAudioCtx();
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-    const t0 = ctx.currentTime + 0.05;
-    playCabinDing(t0);
-    playTakeoffSound(t0 + 0.3);
+    const go = () => {
+      try {
+        const now = ctx.currentTime;
+        wakeAudioOutput(now, STARTUP_WAKE_S);
+        const t0 = now + STARTUP_WAKE_S;
+        playCabinDing(t0, 1047, 1);
+        playCabinDing(t0 + 0.6, 831, 1.1);
+        playTakeoffSound(t0 + 0.9);
+      } catch (e) { /* as below */ }
+    };
+    if (ctx.state === 'suspended') ctx.resume().then(go, go); else go();
   } catch (e) {
     // No Web Audio: nothing to hear. Caught here so neither caller (the
     // /onboard poll, the Settings switch) takes it for its own failure.
   }
+}
+
+// A signal far too quiet to hear (a steady 1/10,000 of full scale, -80 dB)
+// from t for `seconds`: it gets the output going before anything is heard.
+function wakeAudioOutput(t, seconds) {
+  const ctx = getAudioCtx(), s = ctx.createConstantSource();
+  s.offset.value = 0.0001;
+  s.connect(getMasterGain());
+  s.start(t); s.stop(t + seconds);
 }
 
 // The Settings preview (2026-10-28). It plays alone, like the power-on sound:
@@ -4857,18 +4882,18 @@ function previewStartupSound() {
   playStartupSound();
 }
 
-// Synthesised too, so again nothing to license: a sine at 1320 Hz with two
-// quieter overtones a little off the harmonics, which die away first, as a
-// struck chime's do. Struck in 4 ms, rung out over 1.5 s. It peaks at 0.17,
-// below the classic nearby chime's 0.25, and sounds about as loud as that
-// chime, so the take-off stays the loud part.
-function playCabinDing(t0) {
+// One note of the chime. Synthesised too, so again nothing to license: a sine
+// at f with two quieter overtones a little off the harmonics, which die away
+// first, as a struck chime's do. Struck in 4 ms, rung out over 1.5 s. A note
+// peaks at 0.18 (0.2 for the chime's louder second note), below the classic
+// nearby chime's 0.25, so the take-off stays the loud part.
+function playCabinDing(t0, f = 1047, scale = 1) {
   const ctx = getAudioCtx(), out = getMasterGain();
   for (const [ratio, peak, ring] of [[1, 0.14, 1.5], [2.02, 0.03, 0.6], [2.97, 0.013, 0.3]]) {
     const o = ctx.createOscillator(), g = ctx.createGain();
-    o.frequency.value = 1320 * ratio;
+    o.frequency.value = f * ratio;
     g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(peak, t0 + 0.004);
+    g.gain.linearRampToValueAtTime(peak * scale, t0 + 0.004);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + ring);
     o.connect(g).connect(out);
     o.start(t0); o.stop(t0 + ring + 0.05);
@@ -7094,7 +7119,7 @@ function alertSettingsMeta() { return [
       : `Military and unusual aircraft types. Still learning the regular traffic (${sightingCounts.size}/${RARE_FIRST_MIN_CATALOGUE} aircraft) before it can flag first-time visitors`,
   },
   { group: 'alerts', key: 'airportPhase', label: `${AIRPORT.code} landing/takeoff chime`, sub: `Quiet tone when a plane lands or departs at ${AIRPORT.code}` },
-  { group: 'alerts', key: 'bootSound', label: 'Take-off sound when plugged in', sub: 'A cabin ding, then a take-off: once, when the radar is switched on; never after a restart' },
+  { group: 'alerts', key: 'bootSound', label: 'Take-off sound when plugged in', sub: 'A cabin chime, then a take-off: once, when the radar is switched on; never after a restart' },
 
   { group: 'overlays', key: 'storms', label: 'Storm radar overlay', sub: 'Live weather radar over the map (RainViewer)' },
   { group: 'overlays', key: 'heatmap', label: `${AIRPORT.code} approach heatmap`, sub: `Density pattern built from actually observed ${AIRPORT.code} landings` },
