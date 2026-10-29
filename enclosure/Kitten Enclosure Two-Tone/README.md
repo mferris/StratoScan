@@ -316,9 +316,13 @@ board's front edge bears on the plate's inner face, its socket goes out
 through a window its own shape, and a plug's moulding goes into the pocket
 round it to meet the socket, so the plug goes fully home.
 `power_trigger_mount` holds the board there, on two M3 × 8 button-head
-screws from inside the case into two M3 × 3 inserts in the plate, and
-`power_trigger_stop`, behind the board on two M2 × 8 screws through the
-mount's walls, presses it forward with no play. `power_regulator_tray` holds
+screws from inside the case into two M3 × 3 inserts in the plate, with two
+crush ribs along its roof that press the socket down so the board cannot
+rock, and `power_trigger_stop`, behind the board on two M2 × 8 screws through
+the mount's walls, presses it forward with no play. The pocket's floor
+prints as a bridge in two steps, which you can see in the pocket: a slot
+right across it, then the window's rectangle, then the window; slice with
+counterbore hole bridging off, the default. `power_regulator_tray` holds
 the 5 V regulator, stuck to the plate's inner face with VHB tape, off the
 33 × 13.5 mm patch round the window that the mount stands on. Fitting, sizes
 and checks are in the retro case's README
@@ -415,6 +419,10 @@ Alongside the fit checks on the head and cradle, the colour split adds:
   parts share surfaces instead of overlapping, which is the speckling bug.
   Bounded at 1500mm³, which is 0.15mm of thickness over 10,000mm² of shared
   surface — far more than these parts have.
+- `power_ribs_squeeze_board`, `power_top_ribs_squeeze_socket` — must be a
+  sliver, and `power_board_cannot_rock` more than a film: the power fix's
+  crush ribs in its trigger board, and the board, tipped 1°, meeting them
+  (the retro case's README has the power fix's checks).
 - `canary` — must produce geometry. Without it, a typo in the `use <>` path
   makes every check above pass against nothing, which has happened here
   before.

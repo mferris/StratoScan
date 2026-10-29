@@ -24,16 +24,25 @@ EMPTY="twin_vs_stand_11 twin_slot_takes_jack_11 twin_barrel_through_panel_11 twi
        vents_clear_of_mount no_turret ribs_unbroken mount_vs_plate driver_path_clear sma_mount_vs_plate sma_barrel_fits connector_passes
        exhaust_top_only rivets_clear_of_grilles grille_in_front_of_ribs antenna_clears_case mount_vs_stand sma_mount_vs_stand socket_takes_base connector_has_room cable_slot_open power_mount_vs_plate power_board_held power_plug_reaches power_mount_vs_shell power_mount_vs_speakers power_moulding_reaches speaker_sleeve_hollow rib_lip_kept plinth_lip_kept
        power_m3_clear_of_speakers power_speakers_on_pads power_stop_fits_tube power_stop_clear_of_board power_m2_holes_line_up power_m2_clear_of_board power_m2_threads_held power_wires_out power_stop_vs_shell power_stop_vs_speakers power_parts_vs_stand
-       usbc_inserts_clear_pocket usbc_inserts_surrounded power_edge_on_plate power_socket_clears_window power_m3_pass power_m3_inside_plate power_parts_in_patch"
+       usbc_inserts_clear_pocket usbc_inserts_surrounded power_edge_on_plate power_socket_clears_window power_m3_pass power_m3_inside_plate power_parts_in_patch
+       usbc_bridge_steps_open"
 
 # Must come out small but not empty (2026-10-29): the trigger board's stop
-# presses its two crush ribs 0.3 mm into the board's back edge, so the stop
-# and the board overlap by a sliver, about 0.2 mm3. Empty is a gap behind the
-# board, which a plug going in would close; more than SQUEEZE_MAX_MM3 is the
-# stop's body on the board rather than its ribs.
-SQUEEZE="power_ribs_squeeze_board"
+# presses its two crush ribs into the board's back edge, 0.4 mm as drawn (0.3
+# as printed), so the stop and the board overlap by a sliver, about 0.35 mm3;
+# and the two ribs in the mount's roof press 0.25 mm into the socket's top,
+# about 0.45 mm3. Empty is a gap, which a plug going in would close; more than
+# SQUEEZE_MAX_MM3 is the stop's body, or the roof, on the board rather than
+# their ribs.
+SQUEEZE="power_ribs_squeeze_board power_top_ribs_squeeze_socket"
 SQUEEZE_MIN_MM3=0.05
 SQUEEZE_MAX_MM3=1.0
+
+# Must find more than a film (2026-10-29): the trigger board tipped 1 degree
+# in its mount runs into the roof's ribs, about 0.16 mm3, so it cannot rock.
+# Without the ribs the same tip finds a film, 0.003.
+MEETS="power_board_cannot_rock"
+MEETS_MIN_MM3=0.05
 
 # Must come out SMALL but non-zero. These are the colour seams, and they
 # overlap on purpose -- see colour_overlap in the .scad. Cutting each part
@@ -98,13 +107,25 @@ for c in $SQUEEZE; do
     fi
 done
 
+echo "Contacts — must find more than a film (over ${MEETS_MIN_MM3} mm3):"
+for c in $MEETS; do
+    out="$TMP/$c.stl"
+    "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
+    v=$(vol_of "$out")
+    if [ "$(echo "$v > $MEETS_MIN_MM3" | bc -l)" = "1" ]; then
+        printf "  PASS  %-18s %8s mm3\n" "$c" "$v"
+    else
+        printf "  FAIL  %-18s %8s mm3  (nothing there)\n" "$c" "$v"; fail=1
+    fi
+done
+
 # Paired positive control for nose_screw_removed. An empty result there is
 # also what a probe in the wrong place, or a front_trim() that failed to
 # evaluate, would produce -- so a probe at a NORMAL screw position has to
 # find a real hole. A 3.2mm probe through the bezel is about 56mm3; the
 # threshold only has to separate that from nothing.
 echo "Positive controls — must find real geometry:"
-for c in key_blocks_45 key_blocks_90 key_blocks_135 key_blocks_180 key_blocks_225 key_blocks_270 key_blocks_315 back_inserts_open lip_present usbc_open ant_plate_holes_open ant_flange_inserts_open driver_path_was_blocked vents_were_under_mount socket_gauge_works cable_slot_other_side connector_gauge_works turret_probe_works ribs_present exhaust_reaches_inside rivets_present grille_present plinth_ribs_front plinth_ribs_back plinth_ribs_left plinth_ribs_right sma_passage_joins sma_panel_present sma_hole_open front_insert_holes_open twin_panels_present twin_holes_open top_screw_was_under_mount twin_channel_open twin_cover_seats twin_cover_screws_open twin_antennas_probe_works twin_channel_open_11 twin_cover_seats_11 twin_cover_screws_open_11 twin_panels_present_11 twin_cover_text_present usbc_recess_web usbc_plug_probe_works power_plug_probe_works power_moulding_probe_works speaker_probe_works rib_slopes_present plinth_slopes_present power_speaker_drawing_works power_stop_takes_push power_m2_threads_bite power_wire_probe_works usbc_insert_probe_works usbc_insert_holes_open power_mount_on_plate power_plate_holds_board power_edge_strip_works power_window_is_close power_m3_bite; do
+for c in key_blocks_45 key_blocks_90 key_blocks_135 key_blocks_180 key_blocks_225 key_blocks_270 key_blocks_315 back_inserts_open lip_present usbc_open ant_plate_holes_open ant_flange_inserts_open driver_path_was_blocked vents_were_under_mount socket_gauge_works cable_slot_other_side connector_gauge_works turret_probe_works ribs_present exhaust_reaches_inside rivets_present grille_present plinth_ribs_front plinth_ribs_back plinth_ribs_left plinth_ribs_right sma_passage_joins sma_panel_present sma_hole_open front_insert_holes_open twin_panels_present twin_holes_open top_screw_was_under_mount twin_channel_open twin_cover_seats twin_cover_screws_open twin_antennas_probe_works twin_channel_open_11 twin_cover_seats_11 twin_cover_screws_open_11 twin_panels_present_11 twin_cover_text_present usbc_recess_web usbc_plug_probe_works power_plug_probe_works power_moulding_probe_works speaker_probe_works rib_slopes_present plinth_slopes_present power_speaker_drawing_works power_stop_takes_push power_m2_threads_bite power_wire_probe_works usbc_insert_probe_works usbc_insert_holes_open power_mount_on_plate power_plate_holds_board power_edge_strip_works power_window_is_close power_m3_bite usbc_bridge_steps_held power_board_on_floor; do
     out="$TMP/$c.stl"
     "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
     v=$(vol_of "$out")
