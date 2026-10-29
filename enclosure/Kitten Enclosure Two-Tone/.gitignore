@@ -8,3 +8,6 @@
 !*.stl
 # The two-colour cover projects are committed like the meshes (make-cover-3mf.py).
 !antenna_mount_twin_cover_*_twotone.3mf
+# And the stand's, the easiest way to print it (make-3mf.py). It was ignored
+# until 2026-10-29, so no clone had it.
+!kitten-stand-twotone.3mf

@@ -1,0 +1,10 @@
+# The parent enclosure/.gitignore excludes *.stl and *.3mf as build output.
+# This folder's print files ARE committed, as in the retro and kitten
+# folders (2026-10-29): until then none of them was in git, so a fresh clone
+# had none, and `git clean -X` would have deleted the only copies.
+#
+# They are still generated, not authored. If you change the .scad, re-export
+# and commit both together, or the mesh silently stops matching the source.
+!*.stl
+# The arc's two-colour project, built from two of the STLs (make-arc-3mf.py).
+!control_arc_twotone.3mf
