@@ -281,6 +281,17 @@ def folders_and_prints():
         if clash:
             failures.append(f"{name}/{scad} redefines {', '.join(clash)} from {base.name}; "
                             f"change the base design instead, so every case gets it")
+        # ...and sets none of its base's parameters, apart from `part`, set to
+        # "none" to silence the base's own part switch (2026-10-29). OpenSCAD
+        # gives a parameter set twice its last value everywhere, inside the
+        # base's modules too, so the variant's shared parts would change, and
+        # check 8 would only compare them with themselves. The Dials set its
+        # own z_trim_face, 4.9 mm in front of the trim.
+        checks += 1
+        reset = sorted((set(params(f)) & set(params(base))) - {"part"}) if f.exists() else []
+        if reset:
+            failures.append(f"{name}/{scad} sets {', '.join(reset)}, which {base.name} sets; "
+                            f"use the base's value, or change it there")
         checks += 1
         copies = sorted(p.name for p in (ROOT / name).glob("*.stl") if p.stem in SHARED_PRINTS)
         if copies:
