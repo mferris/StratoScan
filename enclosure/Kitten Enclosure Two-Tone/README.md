@@ -36,7 +36,7 @@ The head is one colour and prints as before:
 | `antenna_mount_twin_cover_8`, `antenna_mount_twin_cover_11` | the 3 mm cover that closes the twin body's cable channel, on five M2 screws, with each side's frequency engraved in it (`twin_assembled` and `twin_assembled_11` show both parts on the plate, for pictures only) |
 | `usbc_gauge` | — | test coupon: a 36 × 18 mm piece of the back plate round the USB-C window, exactly the plate's, to try the charger's plug in the trigger board before printing a plate |
 | `power_trigger_mount` | — | the power fix's 12 V trigger board's mount, with the board's socket through the USB-C window ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)); identical to the retro part |
-| `power_trigger_stop` | — | the block behind the trigger board in its mount, on two M2 screws; identical to the retro part |
+| `power_trigger_stop` | — | the block behind the trigger board in its mount, on two M2 screws, keyed so it goes in only the right way round; identical to the retro part |
 | `power_regulator_tray` | — | a tray for the power fix's 5 V regulator, stuck to the plate's inner face |
 
 The stand is split into five bodies, one per colour region:
@@ -319,7 +319,9 @@ round it to meet the socket, so the plug goes fully home.
 screws from inside the case into two M3 × 3 inserts in the plate, with two
 crush ribs along its roof that press the socket down so the board cannot
 rock, and `power_trigger_stop`, behind the board on two M2 × 8 screws through
-the mount's walls, presses it forward with no play. The pocket's floor
+the mount's walls, presses it forward with no play. The stop is keyed: a
+ridge along one bottom edge at its back end runs in a slot in the mount's
+wall, so it goes in only the right way round. The pocket's floor
 prints as a bridge in two steps, which you can see in the pocket: a slot
 right across it, then the window's rectangle, then the window; slice with
 counterbore hole bridging off, the default. `power_regulator_tray` holds
@@ -423,6 +425,9 @@ Alongside the fit checks on the head and cradle, the colour split adds:
   sliver, and `power_board_cannot_rock` more than a film: the power fix's
   crush ribs in its trigger board, and the board, tipped 1°, meeting them
   (the retro case's README has the power fix's checks).
+- `power_stop_back_to_front_blocked`, `power_stop_upside_down_blocked`,
+  `power_stop_end_over_end_blocked` — must run into the mount: the trigger
+  board's stop the wrong way round, as far in as a screw could start in it.
 - `canary` — must produce geometry. Without it, a typo in the `use <>` path
   makes every check above pass against nothing, which has happened here
   before.

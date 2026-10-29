@@ -1623,6 +1623,16 @@ module usbc_gauge() {
 //     enough for its holes to meet the walls'. The board cannot drop into the
 //     deeper part either, on its way past, and the walls round the screws are
 //     2.2 mm thick.
+//   - The stop is keyed, so it goes in only the right way round (2026-10-29).
+//     Back to front it went in as easily, the T being the same either way:
+//     its pilots sit a pitch apart about the middle of its length, and their
+//     countersinks, one on each side, change sides as it turns, so both
+//     screws found one and drew the stop 0.5 mm back off the board, which
+//     they left loose. Now a key runs along the bottom of the stop's +x side
+//     at its back end (pwr_key_*), in a slot in the mount's +x wall. The
+//     right way round the key follows the stop in, into its slot; back to
+//     front it leads, on the side with no slot, and meets the end of the
+//     mount before the stop is in, nowhere near the screws.
 //
 // The ribs in the tube's roof (2026-10-29). The plate and the stop hold the
 // board along its length, but nothing held it from above: it had 0.4 mm of
@@ -1680,6 +1690,17 @@ pwr_rib_h         = 0.9;    // the stop's two crush ribs: 90-degree ridges acros
 pwr_rib_squeeze   = 0.3;    // how far they press into it once the screws are in, as printed
 pwr_rib_tip       = 0.1;    // how much shorter a printed rib comes out than it is drawn: its tip is rounded off
 pwr_rib_x         = 3.0;    // either side of the middle, well inside the board's 10.72
+// The stop's key (2026-10-29): a 45-degree ridge along the bottom of the
+// stop's +x side, pwr_key_t out from it and as far up it, for pwr_key_l
+// forward from its back face. As the stop prints, upside down, the bottom is
+// on top and the ridge's slope faces the bed, so it needs no support. Back
+// to front, pushed over by its 0.15 mm of play, it still runs 0.7 mm into
+// the mount's -x wall. It stays clear of the pilots, which are higher in the
+// stop, and its slot in the mount stops behind the +x screw, so that screw's
+// thread in the wall is whole; the slot, low in the chamber, also keeps the
+// chamber narrower than the board above it.
+pwr_key_t         = 1.0;
+pwr_key_l         = 3.0;
 // The two ribs along the tube's roof (2026-10-29), the same 90-degree
 // ridges, over the socket's flat top: it is flat for 2.84 mm either side of
 // the middle, and the wires' pads are at the board's back edge.
@@ -1806,6 +1827,14 @@ assert(pwr_stop_hw() + pwr_stop_clear < pwr_trig_w/2 - 0.2,
        "the stop's chamber must be narrower than the board below its level, so the board cannot drop into it");
 assert(pwr_top_rib_squeeze > 0 && pwr_top_rib_x + pwr_top_rib_h() <= pwr_trig_sock_w/2 - pwr_trig_sock_t/2,
        "the roof's ribs must press on the socket's flat top, not on its round ends");
+assert(pwr_key_t - 2*pwr_stop_clear >= 0.5,
+       "back to front, the stop's key must still run 0.5 mm into the mount's wall with the stop pushed over by its play");
+assert(pwr_stop_y0() + pwr_key_t <= pwr_m2_y() - pwr_m2_pilot/2*sqrt(2) - 0.2,
+       "the stop's key must stay 0.2 mm below the ends of the pilots in its side");
+assert(pwr_mount_wall + pwr_stop_step - pwr_key_t >= 1.2,
+       "the key's slot must leave 1.2 mm of the mount's wall behind it");
+assert(pwr_stop_z1() - pwr_key_l - pwr_stop_clear >= pwr_m2_z()[0] + pwr_m2_pilot/2*sqrt(2) + 0.5,
+       "the key's slot must stop short of the +x screw's pilot in the wall, so that screw's thread is whole");
 
 // A hole along x that prints without support with z up: round, with a
 // 45-degree roof toward +z. The mount prints flat face down, z up; the stop
@@ -1835,6 +1864,25 @@ module pwr_top_ribs() {
         linear_extrude(height = pwr_top_rib_len) polygon([[-h, y1 + 0.01], [h, y1 + 0.01], [0, y1 - h]]);
         translate([0, 0, pwr_top_rib_len + h])
             linear_extrude(height = 0.01) polygon([[-0.01, y1 + 0.01], [0.01, y1 + 0.01], [0, y1]]);
+    }
+}
+
+// The stop's key, face on, in the mount's frame (2026-10-29): a 45-degree
+// ridge on the bottom corner of the stop's +x side, pwr_key_t out and as far
+// up, its slope facing the stop's top.
+module pwr_key2d() {
+    hw = pwr_stop_hw();
+    y0 = pwr_stop_y0();
+    polygon([[hw - 0.01, y0], [hw + pwr_key_t, y0], [hw - 0.01, y0 + pwr_key_t + 0.01]]);
+}
+
+// Its slot in the mount's +x wall: the key pwr_stop_clear bigger all round,
+// as the rest of the stop is in its chamber, the slot's sharp outer corner
+// cut off square, so the wall behind it keeps 1.2 mm.
+module pwr_key_slot2d() {
+    intersection() {
+        offset(delta = pwr_stop_clear) pwr_key2d();
+        translate([0, -50]) square([pwr_stop_hw() + pwr_key_t + pwr_stop_clear, 100]);
     }
 }
 
@@ -1886,6 +1934,14 @@ module power_trigger_mount(ribs = true) {
             translate([-hc, yc, 0]) cube([2*hc, yk - yc, 0.01]);
             translate([-hc - 0.5, yc - 0.5, 0.51]) cube([2*hc + 1, yk - yc + 1, 0.01]);
         }
+        // the slot for the stop's key (2026-10-29), in the +x wall at the
+        // chamber's floor, from just in front of where the key ends to the
+        // back end, and its own 0.5 mm lead-in there
+        translate([0, 0, pwr_stop_z1() - pwr_key_l - pwr_stop_clear]) linear_extrude(height = len) pwr_key_slot2d();
+        translate([0, 0, len - 0.5]) hull() {
+            linear_extrude(height = 0.01) pwr_key_slot2d();
+            translate([0, 0, 0.51]) linear_extrude(height = 0.01) offset(delta = 0.5) pwr_key_slot2d();
+        }
         // the M2 pilots, one through each side wall, staggered along the board
         for (i = [0, 1]) let (sx = i == 0 ? 1 : -1)
             translate([sx*(hc + cw/2 + w)/2, pwr_m2_y(), pwr_m2_z()[i]]) pwr_x_teardrop(pwr_m2_pilot, cw/2 + w - hc + 1);
@@ -1907,7 +1963,10 @@ module power_trigger_mount_placed(ribs = true) { translate([usbc_cut_pos[0], usb
 // stop's top; ribs = false leaves them off, for the checks. Both pilots run
 // right across, each countersunk on the side its screw comes in from; they
 // are teardrops, roofed toward the stop's bottom, which is up as it prints.
-module power_trigger_stop_shape(ribs = true) {
+// The key along the bottom of its +x side, at its back end, makes it go in
+// only the right way round (2026-10-29); key = false leaves it off, for the
+// checks.
+module power_trigger_stop_shape(ribs = true, key = true) {
     hw = pwr_stop_hw();
     ht = pwr_tube_w()/2 - pwr_stop_clear;     // the top's half-width
     yk = pwr_tube_y0();                       // the top's underside, level with the tube's floor
@@ -1925,6 +1984,7 @@ module power_trigger_stop_shape(ribs = true) {
             if (ribs) for (sx = [-1, 1])
                 translate([sx*pwr_rib_x, yr, z0]) rotate([-90, 0, 0]) linear_extrude(height = y1 - yr)
                     polygon([[-pwr_rib_h, -0.01], [pwr_rib_h, -0.01], [0, pwr_rib_h]]);
+            if (key) translate([0, 0, z1 - pwr_key_l]) linear_extrude(height = pwr_key_l) pwr_key2d();
         }
         for (i = [0, 1]) let (sx = i == 0 ? 1 : -1, z = pwr_m2_z()[i]) {
             translate([0, pwr_m2_y(), z]) rotate([90, 0, 0]) pwr_x_teardrop(pwr_m2_pilot, 2*ht + 2);
@@ -1938,7 +1998,8 @@ module power_trigger_stop_placed() { translate([usbc_cut_pos[0], usbc_cut_pos[1]
 
 // The stop as it prints: on its top face, the T's wide part down, so its
 // narrower body stands on it with nothing overhanging; the ribs rise from the
-// bed up its front face, and the pilots lie level, roofed upward.
+// bed up its front face, the pilots lie level, roofed upward, and the key's
+// 45-degree slope faces the bed, at the top.
 module power_trigger_stop() {
     translate([0, 0, pwr_stop_y1()]) rotate([-90, 0, 0]) translate([0, 0, -pwr_stop_z0()])
         power_trigger_stop_shape();

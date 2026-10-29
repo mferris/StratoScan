@@ -882,6 +882,7 @@ else if (check=="cable_slot_other_side") {
 // board, locked by two M2 screws through the mount's side walls, presses it
 // forward. Restated for the probes below:
 pwr_m2_pilot=1.65; pwr_m2_csk=2.8; pwr_trig_w=10.72; pwr_trig_proud=2.0;
+pwr_m2_pitch=3.0; pwr_stop_clear=0.15;
 // The speakers themselves aren't in shell() (only their sleeves and pads), so
 // their bodies are drawn here: 100 x 45 x 21, the face on the sleeve's rim,
 // where the four screw pads hold it. Until 2026-10-29 this drew each one 4 mm
@@ -1096,6 +1097,43 @@ if (check=="power_parts_vs_stand")    intersection() {
   pwr_posed() union() { power_trigger_mount_placed(); power_trigger_stop_placed(); power_trigger_board_placed(); power_m2_probe(); power_m3_probe(); }
   stand();
 }
+
+// ---- the stop goes in only the right way round (2026-10-29) ----
+// Back to front it used to go in as easily: its pilots sit a pitch apart
+// about the middle of its length, and their countersinks change sides as it
+// turns, so both screws found one and drew it in, 0.5 mm back off the board.
+// Now a key at its back end runs in a slot in the mount's +x wall. Each wrong
+// way round (back to front, upside down, and both at once, end over end) is
+// turned about the middle of the stop's pilots, so they still line up with
+// the walls', and posed pwr_catch further out than home: the furthest out a
+// screw could start in it, its countersink's radius past the next screw's
+// place. There it must run into the mount (BLOCKED in run-checks.sh), even
+// pushed over by its 0.15 mm of play to whichever side frees it most; it
+// cannot go further in without passing there.
+pwr_catch = pwr_m2_pitch + pwr_m2_csk/2;    // 4.4
+module pwr_stop_posed(r, dx = 0, key = true) {
+  ym = pwr_m2_y();
+  zm = (pwr_m2_z()[0] + pwr_m2_z()[1])/2;
+  translate([usbc_cut_pos[0] + dx, usbc_cut_pos[1], pwr_catch])
+    translate([0, ym, zm]) rotate(r) translate([0, -ym, -zm]) power_trigger_stop_shape(key = key);
+}
+// Back to front the key leads, on the -x side, where there is no slot, and
+// meets the end of the mount; pushed +x, it still runs 0.7 mm into the wall.
+if (check=="power_stop_back_to_front_blocked") intersection() { pwr_stop_posed([0, 180, 0], pwr_stop_clear); power_trigger_mount_placed(); }
+// Upside down, or end over end, the T's wide top is down where the chamber
+// is narrower (and the key is up, against the tube's wall).
+if (check=="power_stop_upside_down_blocked")   intersection() { pwr_stop_posed([0, 0, 180], pwr_stop_clear); power_trigger_mount_placed(); }
+if (check=="power_stop_end_over_end_blocked")  intersection() { pwr_stop_posed([180, 0, 0], -pwr_stop_clear); power_trigger_mount_placed(); }
+// Their controls. The right way round, slid in from outside the mount's back
+// end all the way home, 0.25 mm at a time, the stop meets nothing of the
+// mount: the key passes its slot from end to end...
+module pwr_stop_swept(from = 9, step = 0.25) {
+  for (i = [0 : round(from/step)]) translate([0, 0, i*step]) power_trigger_stop_placed();
+}
+if (check=="power_stop_slides_home")    intersection() { pwr_stop_swept(); power_trigger_mount_placed(); }
+// ...and back to front without its key, posed as above, it meets nothing
+// either: the key is what stops it, as nothing did before.
+if (check=="power_stop_key_is_what_blocks") intersection() { pwr_stop_posed([0, 180, 0], pwr_stop_clear, key = false); power_trigger_mount_placed(); }
 // The regulator's tray has no set place: it goes on the plate's inner face
 // wherever the case has room. All of the power fix at the window keeps to a
 // 33 x 13.5 mm patch of the plate round it, up to 26 mm in from the plate, so

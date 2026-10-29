@@ -140,7 +140,11 @@ question.
      a small flat screwdriver below the wires, until the socket goes into the
      window and the board's front edge rests on the plate. Tighten the two
      M3 screws.
-  5. Slide the stop in behind the board until its ribs touch the board.
+  5. Slide the stop in behind the board until its ribs touch the board, ribs
+     first and the ridge along one bottom edge toward the slot in the
+     mount's wall. It only goes in that way round (since 2026-10-29: back to
+     front it used to go in too, and its screws then held it 0.5 mm off the
+     board).
   6. Drive two M2 × 8 screws through the mount's side walls into the stop:
      they draw it the last 0.3 mm onto the board.
 
