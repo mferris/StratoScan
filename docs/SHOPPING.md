@@ -7,7 +7,7 @@ features in progress.
 Claude keeps this current. A part is added when the design or an issue first
 needs one, and moved along as it is ordered and fitted.
 
-*Last updated 2026-10-11. Prices are approximate, in US dollars.*
+*Last updated 2026-10-29. Prices are approximate, in US dollars.*
 
 ## Build one StratoScan
 
@@ -76,30 +76,36 @@ They share the back plate and antenna mount.
 | SMA male to SMA female **bulkhead** jumper, RG316, ~30 cm (12") | 2 | ~$8–10 a pair | One per antenna, for the twin antenna mount: the bulkhead end in the mount, the plug on the FlyCatcher. The mount comes in two styles for the bulkhead's hex body, 8 mm (`antenna_mount_twin_8`) or 11 mm (`_11`); both are 6.35 mm barrels. Buy two of the same kind. **SMA, not RP-SMA** (RP-SMA has no centre pin) |
 | Filament: **ASA** recommended | ~1 kg | $25–30 | Retro: one colour. Kitten: two colours for the head, more for the stand; see its README. **Why ASA:** a radar usually sits in a window for reception, where sun on a dark case can pass 60 °C. PLA starts to soften around 55–60 °C, so it's fine for a test fit but can sag or warp in a sunny window. PETG holds to about 75–80 °C; ASA and ABS hold to about 95–100 °C. ASA also doesn't yellow or go brittle in sunlight, and prints as cleanly as ABS. It needs an enclosed printer (the Bambu H2D is one). On a two-nozzle printer, print the support *interface* in a material that won't bond, so supports lift off cleanly. **For ASA/ABS: Bambu Support for ABS** (Bambu's store only) **or HIPS** (eSUN, on Amazon). Bambu Studio refuses PETG with ASA on one plate (low- and high-temperature filaments can't mix). Without either, ASA can support itself with a 0.2 mm top Z gap. For PETG: PLA, or Bambu Support for PLA/PETG. **Bought on Amazon:** Polymaker ASA, Dark Grey Green for the retro case (Grey if it sits in full sun) |
 | Heat-set inserts and screws | see the table below | $10 in kits | Every hole, counted from the design files |
-| Panel-mount USB-C extension cable, rated 3 A or more, with two M3 screw holes 16.5–17 mm apart (the plate's holes are short slots) | 1 | $10–15 | Brings power in through the back plate, **with the power fix below** ([#53](https://github.com/mferris/StratoScan/issues/53)): the extension then carries 12 V at under 2.5 A, and the regulator makes the 5 V, so the extension's loss doesn't matter. **At 5 V no extension tried is good enough.** A thin one dropped the Pi's 5 V supply to 4.96 V, with under-voltage several times an hour. A 5 A / 100 W e-marked one (2026-10-16) did no better: about 4.85 V, dips to 4.66 V, and 9 under-voltage warnings in 37 minutes. The same supply plugged straight into the Pi gives 5.06–5.14 V, so until the fix is in, plug it in there. It fits back plates printed before 2026-10-29, in their 11 × 8 mm window. **With the power fix it isn't needed:** the charger plugs straight into the trigger board, and back plates printed since 2026-10-29 have the board's socket through their window instead, so the extension doesn't fit them |
+| **Power through the back plate** ([#53](https://github.com/mferris/StratoScan/issues/53)): every case needs these four. The charger plugs into a 12 V trigger board whose socket comes out through the back plate, and a regulator beside the Pi makes 5.2 V from it. At 5 V nothing tried got through a case well enough: through a panel-mount extension, even a 5 A / 100 W one, the Pi got 4.66–4.92 V and under-voltage warnings. Build steps: [power-fix.md](power-fix.md) | | | |
+| · USB-C PD trigger board, **fixed at 12 V** | 1 | $5–10 (often a pack of several voltages) | Check its size before buying: `power_trigger_mount` is built round the board measured for it, 19.2 mm from its socket's face to its back edge, 10.7 mm across, 4.8 mm from its underside to the top of its socket, the socket standing 2 mm past its front edge. Check its voltage before wiring (power-fix.md, step 1). 9 V works with the official supply too; 20 V doesn't, because the official supply has no 20 V. The supply must offer 12 V (the official 27 W one does); a 5 V-only charger can't run this |
+| · 5 V step-down regulator: 9–36 V in, 5.2 V out, 6 A at 9–24 V, 63 × 27 mm | 1 | $10–15 | `power_regulator_tray` is sized for it. Wire it from its screw terminals, never its USB socket, and keep it away from the receiver and its antenna leads. Plus about 15 cm each of red and black 18 AWG silicone wire, from the trigger board to it |
+| · USB-C plug pigtail: two wires, 20 AWG or thicker, rated 5 A, 10–20 cm | 1 | $5–10 | Regulator to the Pi's own USB-C port (its 5 V pins sit under the FlyCatcher). Or cut one from a 5 A USB-C to USB-C cable (sold as 100 W or 240 W); not from a USB-A to USB-C cable, whose power wires are thin. Powered this way the Pi can't ask what the supply offers and limits its USB ports to 600 mA in all, too little for the display and the radios; the installer lifts that limit (`usb_max_current_enable=1` in config.txt) |
+| · Snap-on ferrite clip | 1 | $1–2 | On the pigtail, near its plug |
+| Panel-mount USB-C extension cable | 0 | — | **For back plates printed before 2026-10-29 only**, which took one in their 11 × 8 mm window, and even then only with the power fix. Plates printed since have the trigger board's socket through their window instead, and the extension doesn't fit them: a new build doesn't need one |
 | **Antenna mounting, choose one:** | | | |
 | · puck socket (`antenna_mount`) | — | — | Holds FlightAware's desktop puck antenna directly. Nothing extra to buy |
 | · SMA jack (`antenna_mount_sma`), **recommended** | | | Takes any SMA antenna, such as the whip above, or coax to a better spot |
 | SMA female-to-female bulkhead barrel, with O-ring and nut | 1 | $8 (2-pack) | For example [onelinkmore](https://www.amazon.com/onelinkmore-Female-Waterproof-Bulkhead-Adapter/dp/B0GTV677Z4). **Not RP-SMA** |
 | SMA male-to-male RG316 jumper, about 20 cm | 1 | $8 (2-pack) | Barrel to receiver. For example [HCFeng](https://www.amazon.com/HCFeng-Extension-Coaxail-coaxial-Assembly/dp/B0C2KQB1H3). **Not RP-SMA** |
 
-**Every screw and insert, per hole** (counted from the design files, 2026-10-04). Inserts are brass heat-set, M3 ones 4.5 mm across the knurl (the Kadrick M2–M5 kit fits); holes are 4.0 mm.
+**Every screw and insert, per hole** (counted from the design files, 2026-10-29). Inserts are brass heat-set, M3 ones 4.5 mm across the knurl (the Kadrick M2–M5 kit fits); holes are 4.0 mm.
 
 | Where | Holes | Insert | Screw | Note |
 |---|---|---|---|---|
 | Front: the trim and the retainer, into the shell's front posts | 8 (the kitten uses 7) | M3 × 5 | M3 × 14 socket head | Press from the front, flush with the shelf |
 | Back plate, into the shell's back posts | 8 | M3 × 6 | M3 × 8 | Press from the back face |
 | Antenna mount (any of the three), into its flange | 3 | M3 × 5 | M3 × 8 | The screws come from inside the case, through the plate |
-| USB-C panel connector, to the back plate (plates printed before 2026-10-29) | 2 | none | M3 × 6 with nuts, or the connector's own | Holes 16.5–17 mm apart (short slots); the heads sit in the 2 mm pocket round the connector (plates printed from 2026-10-10 on) |
-| Power fix only: the trigger board's mount, to the back plate, instead of the panel connector | 2 | M3 × 3 | M3 × 8 button head | Since 2026-10-29: the inserts go in the plate beside the USB-C window, flush with both faces, and the screws come from inside the case through the mount's ears. Button heads, not socket caps: one is under a speaker. And two M2 × 8 screws through the mount's side walls into `power_trigger_stop`, behind the board, which replaced the 1.75 mm filament pin |
+| The trigger board's mount, to the back plate | 2 | M3 × 3 | M3 × 8 button head | The inserts go in the plate beside the USB-C window, flush with both faces, and the screws come from inside the case through the mount's ears. Button heads, not socket caps: one is under a speaker |
+| The stop behind the trigger board, through the mount's side walls | 2 | none | M2 × 8 | They cut their own thread in the walls and in `power_trigger_stop`, which replaced the 1.75 mm filament pin |
+| Older plates only (printed before 2026-10-29): a USB-C panel connector | 2 | none | M3 × 6 with nuts, or the connector's own | Not counted below. Holes 16.5–17 mm apart (short slots); the heads sit in the 2 mm pocket round the connector (plates printed from 2026-10-10 on) |
 | Speakers, to their brackets | 4 each, 8 | optional M2 × 3 | M2 × 6, or M2 self-tapping | 2.6 mm pilots for the self-tappers; drill to 3.0 for inserts |
 | Pi, to the display's back | 4 | none | M2.5 × 6 and standoffs, in the display's box | |
 | FlyCatcher, onto the Pi | 4 | none | M2.5 standoffs, ~16–20 mm, and screws | tall enough to clear the cooler |
 | Twin antenna mount's two SMA bulkheads | 2 | none | the jumpers' own nuts | an 8 mm (5/16") open-ended spanner, a quarter to half a turn past finger tight |
 | Twin antenna mount's cover | 5 | M2 × 3 | M2 × 6 | 3.0 mm holes for a 3.2 mm knurl (measure the kit's) |
-| **To buy per radar** | | **19 × M3 (11 of 5 mm, 8 of 6 mm); 5 × M2; 8 × M2 optional** | **8 × M3×14, 11 × M3×8, 2 × M3×6 (+2 nuts), 13 × M2×6, 8 × M2.5** | one M3 kit and one M2/M2.5 kit cover several radars |
+| **To buy per radar** | | **21 × M3 (11 of 5 mm, 8 of 6 mm, 2 of 3 mm); 5 × M2; 8 × M2 optional** | **8 × M3×14, 11 × M3×8, 2 × M3×8 button head, 2 × M2×8, 13 × M2×6, 8 × M2.5** | one M3 kit and one M2/M2.5 kit cover several radars |
 
-**Everything for one radar, totalled:** about **$500** in parts with the 4 GB Pi (about $545 with 8 GB), of which the display is $160, the FlyCatcher $110 and the Pi $85; the forty-odd dollars of cables, standoffs, cells and fasteners are easy to forget and are all listed above. Printer time: about 20 hours; filament about 700 g.
+**Everything for one radar, totalled:** about **$520** in parts with the 4 GB Pi (about $565 with 8 GB), of which the display is $160, the FlyCatcher $110 and the Pi $85; the forty-odd dollars of cables, standoffs, cells and fasteners, and the thirty or so of the power fix's boards and pigtail, are easy to forget and are all listed above. Printer time: about 20 hours; filament about 700 g.
 
 **Tools (once):**
 - a 3D printer (designed on a Bambu Lab printer, with an AMS for the kitten's colours);
@@ -123,8 +129,8 @@ They share the back plate and antenna mount.
 | **To build the app yourself:** a Mac with Xcode, and the Apple Developer Program ($99/yr) | Only needed to build and install the app yourself |
 | **To run your own relay (push alerts):** a free Cloudflare account | See [relay/README.md](../relay/README.md) |
 
-**Rough total for one unit:** about $400, plus filament and the phone you
-already have.
+**Rough total for one unit:** about $520 with the 4 GB Pi, filament
+included (totalled above), plus the phone you already have.
 
 ## Coming later
 
@@ -135,6 +141,5 @@ starts before buying:** the exact part may change.
 |---|---|---|
 | [Adafruit VEML7700 lux sensor (#4162)](https://www.adafruit.com/product/4162) and [STEMMA QT cable (#4397)](https://www.adafruit.com/product/4397) | [5.5 light sensor](https://github.com/mferris/StratoScan/issues/27) | $6 |
 | The control arc's parts (Retro with Dials case): an EC11 rotary encoder with push switch and 20 mm D shaft, a 12 mm momentary metal push button, a 5 mm common-cathode RGB LED (diffused) with three 220 Ω resistors, 2 × M3 x 10 screws and M3 x 5 inserts, 2 × M2.5 x 8 countersunk self-tappers, thin wire and header jumpers; see [its README](../enclosure/Retro%20Radar%20with%20Dials/README.md#buy) | [5.1 control arc](https://github.com/mferris/StratoScan/issues/22) | ~$12 |
-| Power with headroom, one plug: a USB-C PD trigger set to 12 or 15 V ([Adafruit #5807](https://www.adafruit.com/product/5807)) and a 5 V step-down regulator good for 5 A at that input ([Pololu D36V50F5](https://www.pololu.com/product/4091), or a 9–24 V to 5.2 V, 6 A buck module for about $10) feeding the Pi through a short USB-C plug pigtail (two wires, 20 AWG or thicker, rated 5 A) into its own USB-C port, with 18 AWG wire from the trigger and a ferrite clip on the pigtail. The Pi's 5 V pins would work too, but they sit under the FlyCatcher. Either way the Pi can't ask the regulator what it can supply, and then limits its USB ports to 600 mA in all, too little for the display and the radios; the installer lifts that limit (`usb_max_current_enable=1` in config.txt). The official 27 W supply offers 9 V, 12 V and 15 V, each at 27 W; it has no 20 V, so a 20 V trigger gets nothing from it. Keep a switching regulator away from the receiver and its antenna lead. Tried first, for free: the supply straight into the Pi is fine, but through the back plate's extension it isn't, even a 5 A / 100 W one (see the extension above), so a case needs this fix. Build steps: [power-fix.md](power-fix.md) | [5.7 power](https://github.com/mferris/StratoScan/issues/53) | ~$25–60 |
 | Presence sensor: LD2410 mmWave, or a PIR | [5.2 presence wake](https://github.com/mferris/StratoScan/issues/23) | ~$10 |
 | 978 MHz receiver: nothing to buy. The FlyCatcher's second radio is the 978 MHz one, and the Discovery bundle above has the 978 whip. The software has run since 2026-10-10, but RDU hasn't decoded a 978 message yet, not even a ground-station uplink: the antenna or where it sits | [5.3 UAT receiver, US only](https://github.com/mferris/StratoScan/issues/24) | $0 |
