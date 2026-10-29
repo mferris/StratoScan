@@ -21,7 +21,7 @@ the rest follows.
 | `antenna_mount_twin_cover_8_twotone.3mf`, `antenna_mount_twin_cover_11_twotone.3mf` | the same covers with the frequencies in a second colour: one object, the cover on filament 1 and the lettering (`antenna_mount_twin_cover_text_8` / `_11`) on filament 2. Built by `make-cover-3mf.py` from binary STL exports |
 | `usbc_gauge` | test coupon: a 36 × 18 mm piece of the back plate round the USB-C window, its window, pocket and insert holes exactly the plate's, so the charger's plug can be tried in the trigger board before a whole plate is printed (about ten minutes) |
 | `power_trigger_mount` | the power fix's 12 V trigger board's mount: a sleeve round the board, two crush ribs in its roof holding the board down, on two M3 screws into inserts in the plate, with the board's socket through the plate's USB-C window, so the charger plugs straight into it ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)) |
-| `power_trigger_stop` | the block behind the trigger board in its mount, locked by two M2 screws through the mount's walls, so the board has no play |
+| `power_trigger_stop` | the block behind the trigger board in its mount, locked by two M2 screws through the mount's walls, so the board has no play; keyed, so it goes in only the right way round |
 | `power_regulator_tray` | a tray for the power fix's 5 V regulator, stuck to the plate's inner face |
 
 Three extra targets, `test_antenna`, `test_speaker` and `test_rings`, clip
@@ -335,7 +335,18 @@ cable moved. Now:
   ribs onto the board, before it threads in. The screws thread through the
   walls as well as into the stop, so they have no slack to give, and the stop
   is a T that only goes in the right way up. It replaced a 1.75 mm filament
-  pin, which let the board move. Its ribs, and the roof's, are drawn 0.1 mm
+  pin, which let the board move.
+- **The stop only goes in the right way round** (since 2026-10-29). Back to
+  front it used to go in as easily: its two pilots sit a pitch apart about
+  the middle of its length, and their countersinks change sides as it turns,
+  so both screws found one and drew the stop 0.5 mm back off the board,
+  leaving the board loose. Now a key, a 1 mm 45° ridge along the bottom of
+  one side at its back end, runs in a slot in the mount's wall. The right way
+  round the key goes in last, into its slot; back to front it leads, on the
+  side with no slot, and stops at the end of the mount before the stop is in,
+  a long way short of where a screw could start in it. The ridge prints on
+  top, its slope facing the bed, so it needs no support.
+- **The ribs print short.** The stop's ribs, and the roof's, are drawn 0.1 mm
   taller than the squeeze needs: in Bambu Studio's slice a printed rib's tip
   comes out about 0.09 mm short, rounded off by the nozzle's line, so the
   stop's ribs, 0.8 mm until 2026-10-29, squeezed the board by only 0.21 mm,
@@ -358,8 +369,9 @@ To fit it (the plate lying outer face down):
    edge firmly, with a small flat screwdriver below the wires, until its
    socket goes into the window and its front edge rests on the plate.
    Tighten the two M3 screws.
-5. Slide the stop in behind the board, ribs first, until the ribs touch the
-   board. It only goes in the right way up.
+5. Slide the stop in behind the board, ribs first and its ridge toward the
+   slot in the mount's wall, until the ribs touch the board. It only goes in
+   that way.
 6. Drive the two M2 × 8 screws through the mount's side walls into the stop.
    They draw it the last 0.3 mm onto the board.
 
@@ -400,13 +412,17 @@ inserts comes out of the outer face), `usbc_inserts_surrounded`,
 `power_m3_clear_of_speakers`, `power_stop_fits_tube`,
 `power_stop_clear_of_board`, `power_m2_holes_line_up`,
 `power_m2_clear_of_board`, `power_m2_threads_held`, `power_wires_out`,
-`power_stop_vs_shell`, `power_stop_vs_speakers`, `power_parts_vs_stand` and
+`power_stop_vs_shell`, `power_stop_vs_speakers`, `power_parts_vs_stand`,
 `power_parts_in_patch` (everything at the window stays in its 33 × 13.5 mm
-patch). `power_ribs_squeeze_board` and `power_top_ribs_squeeze_socket` must
-find only a sliver: the stop's ribs in the board's edge, and the roof's in
-the socket's top. `power_board_cannot_rock` must find more than a film: the
-board tipped 1° about the window's edge runs into the roof's ribs (0.16 mm³;
-without them, 0.003). Their positive controls: `power_mount_on_plate`,
+patch), `power_stop_slides_home` (the stop, slid in the right way round from
+outside the mount all the way home, meets nothing) and
+`power_stop_key_is_what_blocks` (back to front without its key, posed as
+below, it meets nothing either). `power_ribs_squeeze_board` and
+`power_top_ribs_squeeze_socket` must find only a sliver: the stop's ribs in
+the board's edge, and the roof's in the socket's top.
+`power_board_cannot_rock` must find more than a film: the board tipped 1°
+about the window's edge runs into the roof's ribs (0.16 mm³; without them,
+0.003). Their positive controls: `power_mount_on_plate`,
 `power_plate_holds_board`, `power_board_on_floor` (the board moved 0.1 mm
 down meets the tube's floor), `power_edge_strip_works`,
 `power_window_is_close`, `usbc_bridge_steps_held` (from the second layer up
@@ -415,6 +431,15 @@ the slot's ends are solid), `power_plug_probe_works`,
 the outer face), `power_m3_bite`, `usbc_insert_holes_open`,
 `power_speaker_drawing_works`, `power_stop_takes_push`,
 `power_m2_threads_bite` and `power_wire_probe_works`.
+
+`power_stop_back_to_front_blocked`, `power_stop_upside_down_blocked` and
+`power_stop_end_over_end_blocked` must run into the mount: the stop the
+wrong way round, turned about its pilots so they stay in line with the
+walls', 4.4 mm short of home, the furthest out a screw could start in it,
+and pushed over by its play to whichever side frees it most. Back to front
+its key runs 0.7 mm into the wall (0.7 mm³); upside down, or end over end,
+its T does (about 2 mm³). `power_stop_slides_home` and
+`power_stop_key_is_what_blocks`, above, are their controls.
 
 ## Heat-set inserts
 
@@ -488,7 +513,9 @@ To replace a cable: back plate off, cover off, nut off, slide the jack out of it
 out with no real volume (an interference, or a probe that should pass
 through air); squeezes, which must find a sliver and no more (the power fix's
 crush ribs in its board); contacts, which must find more than a film (the
-power fix's board, tipped, meeting its ribs); positive controls that must
+power fix's board, tipped, meeting its ribs); blocks, which must run into
+the part they meet (the power fix's stop, the wrong way round, in its
+mount); positive controls that must
 find geometry (the holes a probe should find open, the paired "same probe,
 wrong place" controls such as `vents_were_under_mount`,
 `top_screw_was_under_mount` and `twin_antennas_probe_works`); and `canary`,

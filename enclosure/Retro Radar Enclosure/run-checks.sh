@@ -25,7 +25,7 @@ EMPTY="twin_vs_stand_11 twin_slot_takes_jack_11 twin_barrel_through_panel_11 twi
        exhaust_top_only rivets_clear_of_grilles grille_in_front_of_ribs antenna_clears_case mount_vs_stand sma_mount_vs_stand socket_takes_base connector_has_room cable_slot_open power_mount_vs_plate power_board_held power_plug_reaches power_mount_vs_shell power_mount_vs_speakers power_moulding_reaches speaker_sleeve_hollow rib_lip_kept plinth_lip_kept
        power_m3_clear_of_speakers power_speakers_on_pads power_stop_fits_tube power_stop_clear_of_board power_m2_holes_line_up power_m2_clear_of_board power_m2_threads_held power_wires_out power_stop_vs_shell power_stop_vs_speakers power_parts_vs_stand
        usbc_inserts_clear_pocket usbc_inserts_surrounded power_edge_on_plate power_socket_clears_window power_m3_pass power_m3_inside_plate power_parts_in_patch
-       usbc_bridge_steps_open"
+       usbc_bridge_steps_open power_stop_slides_home power_stop_key_is_what_blocks"
 
 # Must come out small but not empty (2026-10-29): the trigger board's stop
 # presses its two crush ribs into the board's back edge, 0.4 mm as drawn (0.3
@@ -43,6 +43,14 @@ SQUEEZE_MAX_MM3=1.0
 # Without the ribs the same tip finds a film, 0.003.
 MEETS="power_board_cannot_rock"
 MEETS_MIN_MM3=0.05
+
+# Must run into the mount (2026-10-29): the trigger board's stop the wrong
+# way round, as far in as a screw could start in it. Back to front its key
+# runs 0.7 mm into the mount's wall, about 0.7 mm3; upside down, or end over
+# end, its T does, about 2 mm3. A film is 0.0; right way round, or back to
+# front without its key, the same poses find nothing.
+BLOCKED="power_stop_back_to_front_blocked power_stop_upside_down_blocked power_stop_end_over_end_blocked"
+BLOCK_MIN_MM3=0.3
 
 # Must come out SMALL but non-zero. These are the colour seams, and they
 # overlap on purpose -- see colour_overlap in the .scad. Cutting each part
@@ -116,6 +124,18 @@ for c in $MEETS; do
         printf "  PASS  %-18s %8s mm3\n" "$c" "$v"
     else
         printf "  FAIL  %-18s %8s mm3  (nothing there)\n" "$c" "$v"; fail=1
+    fi
+done
+
+echo "Blocked — the wrong way round must run into the mount (over ${BLOCK_MIN_MM3} mm3):"
+for c in $BLOCKED; do
+    out="$TMP/$c.stl"
+    "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
+    v=$(vol_of "$out")
+    if [ "$(echo "$v > $BLOCK_MIN_MM3" | bc -l)" = "1" ]; then
+        printf "  PASS  %-18s %8s mm3\n" "$c" "$v"
+    else
+        printf "  FAIL  %-18s %8s mm3  (it goes in)\n" "$c" "$v"; fail=1
     fi
 done
 
