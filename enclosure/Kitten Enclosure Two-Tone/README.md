@@ -22,12 +22,12 @@ want it in a single filament.
 
 ## Parts
 
-The head is one colour and prints as before:
+The head is one colour:
 
 | part | colour | what it is |
 |---|---|---|
 | `shell` | black | the head — body cylinder plus two ears, and all the internals |
-| `front_trim` | black | the face — bezel ring with a nose, whisker grooves and seven screw holes |
+| `front_trim` | black | the face — bezel ring with a nose, whisker grooves and seven screw holes. Prints rabbet-down (face up), as `front_trim.stl` is exported, with support (Support for ABS interface) only under the inner band that presses on the glass: the nose stops it printing face down like the retro case's ([below](#the-trim-prints-face-up)) |
 | `retainer` | — | ring behind the glass (identical to the retro part), keyed so it goes in only one way: its relief at the bottom, over the gap in the shelf ([below](#so-does-the-retainer)). `retainer.stl` is glass face down, the way it prints |
 | `back_plate` | black | removable back — locating lip, vents, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the charger it needs engraved above it, the antenna mount's bolt holes and cable hole |
 | `antenna_mount` | black | bolt-on arm carrying the antenna socket |
@@ -164,6 +164,25 @@ before a screw goes in. So: **relief at the bottom, over the gap in the
 shelf.** `retainer.stl` is glass face down, the way it prints, with the tab
 standing up. `retainer_key_fits` and `retainer_key_blocks_45` …
 `retainer_key_blocks_315` hold it, as for the plate (125.9 mm³ each).
+
+## The trim prints face up
+
+The retro case's trim prints face down, flat on the bed, with nothing to
+support. This one can't: the nose stands 2.6 mm proud of the face, so face
+down the trim would stand on its nose, with the whole face printed on
+support. So it prints rabbet-down, face up, the way `front_trim.stl` is
+exported. The outer band, the rabbet round the glass's edge, is then the
+first 1.62 mm on the bed, and the inner band, the 4 mm that presses on the
+glass, starts 1.62 mm up, over air: 2,505 mm² of it. Support it there and
+nowhere else, with Support for ABS as the interface, as the mounts print: it
+comes away clean and leaves the band's underside flat, to sit evenly on the
+glass. Nothing else on the trim needs support, so tree supports on auto find
+only that band.
+
+Sliced on 2026-10-29 in Bambu Studio 2.08 (X1C 0.4 mm, 0.20 mm Standard,
+Bambu ASA, tree supports at 30°), it takes 1.7 cm³ of support, all of it
+under the inner band, and prints in 1.1 hours (27 g). Face down it would take
+9.2 cm³ and 2.0 hours, with the face printed on it.
 
 ## Less support inside the head
 
