@@ -29,7 +29,7 @@ The head is one colour and prints as before:
 | `shell` | black | the head — body cylinder plus two ears, and all the internals |
 | `front_trim` | black | the face — bezel ring with a nose, whisker grooves and seven screw holes |
 | `retainer` | — | ring behind the glass (identical to the retro part) |
-| `back_plate` | black | removable back — locating lip, vents, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the antenna mount's bolt holes and cable hole |
+| `back_plate` | black | removable back — locating lip, vents, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the charger it needs engraved above it, the antenna mount's bolt holes and cable hole |
 | `antenna_mount` | black | bolt-on arm carrying the antenna socket |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
 | `antenna_mount_twin_8`, `antenna_mount_twin_11` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight. Two styles, for jumpers whose bulkhead body is an 8 mm hex or an 11 mm hex; two parts each, this body and the cover below (`antenna_mount_twin` is whichever `ant_twin_jack_af` names) |
@@ -324,7 +324,9 @@ ridge along one bottom edge at its back end runs in a slot in the mount's
 wall, so it goes in only the right way round. The pocket's floor
 prints as a bridge in two steps, which you can see in the pocket: a slot
 right across it, then the window's rectangle, then the window; slice with
-counterbore hole bridging off, the default. `power_regulator_tray` holds
+counterbore hole bridging off, the default. Above the pocket the plate says
+which charger the board needs, `USB-C PD 12V 27W`, engraved in its outer
+face so it reads from behind the case. `power_regulator_tray` holds
 the 5 V regulator, stuck to the plate's inner face with VHB tape, off the
 33 × 13.5 mm patch round the window that the mount stands on. Fitting, sizes
 and checks are in the retro case's README

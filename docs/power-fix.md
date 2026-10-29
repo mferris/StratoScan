@@ -32,7 +32,7 @@ flowchart LR
 
 | Part | Notes |
 |---|---|
-| A charger that offers **12 V** over USB-C PD | The official Raspberry Pi 27 W supply does (12 V at 2.25 A). A 5 V-only charger, such as a Pi-style 5 V 5 A clone, can't power this: the trigger board gets 5 V, and the regulator needs at least 9 V (found on RDU, 2026-10-23). If the label lists no 12 V output, it won't work |
+| A charger that offers **12 V** over USB-C PD | The official Raspberry Pi 27 W supply does (12 V at 2.25 A). A 5 V-only charger, such as a Pi-style 5 V 5 A clone, can't power this: the trigger board gets 5 V, and the regulator needs at least 9 V (found on RDU, 2026-10-23). If the label lists no 12 V output, it won't work. A back plate printed since 2026-10-29 says so beside its socket: `USB-C PD 12V 27W` |
 | USB-C PD trigger board, **fixed at 12 V** | 9 V also works with the official supply; 20 V doesn't, because the official supply has no 20 V. A 5 V board is no use here. Most come in packs of several voltages that look alike, so check before wiring (step 1) |
 | 5 V step-down regulator: 9–36 V in, 5.2 V out, 6 A at 9–24 V | Wire it from its screw terminals, never its USB socket |
 | 18 AWG silicone wire, red and black | About 15 cm of each |
@@ -127,7 +127,9 @@ question.
   cut out when the cable moved. `power_trigger_mount` holds the board, two
   crush ribs along its roof press the socket down so the board can't rock,
   and `power_trigger_stop` behind it presses it against the plate with no
-  play. No extension is needed. To fit them, with the plate outer face down:
+  play. No extension is needed. Above the socket the plate says which
+  charger it needs, `USB-C PD 12V 27W`, engraved in its outer face (plates
+  printed since 2026-10-29). To fit them, with the plate outer face down:
   1. Press an M3 × 3 insert into each hole beside the window, from the inner
      face, with the outer face on a flat board, until it stops on the board.
   2. Solder the 12 V pair to the trigger board.
