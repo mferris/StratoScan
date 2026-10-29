@@ -526,13 +526,17 @@ cleft_d    = 6;     // how deep the groove cuts
 // black toes reads best, since the toes are already black on white pads).
 //
 // Slightly down as well as forward: a cat's claw curves toward the ground.
-// The tip stays clear of the desk plane on purpose -- a claw that reached
-// z=0 would carry the stand's weight on four little points and rock.
+// The tip comes down onto the desk (2026-10-29). It stopped 1.2mm short of it
+// so the claws would not carry the stand and rock, but the pads are flat on
+// the desk too, so a claw cut flat at z = 0 is level with them and carries
+// nothing; held off, each claw began 1.2mm up in mid-air, on a first layer of
+// 1mm2, and every toe 0.47mm up. Now both start on the bed (claws_on_the_bed
+// in checks.scad).
 claw_len     = 6.5;   // how far it stands off the toe
 claw_base_d  = 3.6;   // where it leaves the toe
 claw_tip_d   = 1.2;   // rounded rather than needle-sharp: printable, and safe
 claw_base_dz = -1.8;  // relative to the toe centre
-claw_tip_dz  = -4.4;  // tip drops this far: the droop
+claw_tip_dz  = -5.6;  // tip drops this far: the droop, through the desk (-4.4 until 2026-10-29)
 
 // TAIL. Thicker at the root and tapering to a rounded tip. It hugs the
 // plinth around the right side, then climbs the right paw's outboard flank
@@ -553,14 +557,24 @@ claw_tip_dz  = -4.4;  // tip drops this far: the droop
 // and would sit lower on a paw that is now taller. The tip carries the white
 // and is the part most meant to be seen, so it stays proud of the foot
 // rather than sinking into it.
+//
+// It lies on the desk until it reaches the paw (2026-10-29). From the plinth's
+// corner it used to rise gently, so it crossed about 25mm of air 3-14mm up
+// before the paw, all of it printed on support. Now the three points before
+// the paw sit 1.2mm into the desk, deep enough that the tube's sides leave it
+// at about 30 degrees and need no support of their own, and from there it
+// climbs at about 40 degrees beside the paw, which prints on its own. Over
+// the paw it is as it was: it rises off the pad and the tip flicks up, and
+// that part still wants a little support. tail_on_the_desk in checks.scad
+// holds it.
 tail_pts = [
     [ 58,  58,  11, 29],   // root, buried in the plinth
     [ 87,  48,  11, 28],
     [102,  22,  11, 25],   // hugging the plinth edge rather than standing off it
     [106, -10,  11, 23],
-    [102, -40,  11, 21],
-    [ 93, -66,  12, 18],
-    [ 82, -85,  16, 16],   // starts climbing as it reaches the right paw
+    [102, -40, 9.3, 21],   // on the desk (11 until 2026-10-29: 0.5mm up)
+    [ 93, -66, 7.8, 18],   // on the desk (was 12)
+    [ 82, -85, 6.8, 16],   // on the desk beside the right paw (was 16), then climbing
     [ 68, -98,  21, 14],   // up the paw's outboard flank
     [ 53, -104, 26, 12],   // draped across the pad
     [ 41, -103, 33, 10],   // and the tip flicked UP off the foot
@@ -2425,10 +2439,13 @@ module plinth() {
 // hull and contributed nothing -- the paws rendered as plain teardrops.
 // The toes now lead, and the pad stops behind them.
 function toe_a(i) = (i - (n_toes - 1) / 2) * toe_splay;
+// The toe's centre is its half-height up, 0.85 of its radius (toe() squashes
+// it so), so its underside is on the bed, level with the pads' flat bottoms
+// (2026-10-29). At 0.46 it began 0.47mm up in mid-air.
 function toe_pos(i, y_front) = [
     sin(toe_a(i)) * paw_w * 0.40,
     y_front + toe_dia * 0.62 + (1 - cos(toe_a(i))) * 6,   // outer toes sit back
-    toe_dia * 0.46
+    toe_dia * 0.425
 ];
 // `shrink` insets the toe slightly. It exists for the colour split: see
 // colour_overlap below.

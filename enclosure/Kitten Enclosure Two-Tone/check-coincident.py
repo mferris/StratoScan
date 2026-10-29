@@ -38,8 +38,22 @@ EXPECTED_LUMPS = {
 }
 
 
+# Every body that stands on the desk must start on the bed (2026-10-29): a
+# lump whose lowest point is above it begins as an island in mid-air. The
+# claws began 1.2mm up and the toes 0.47mm, and no volume, seam or lump count
+# could see it. The white tail tip is left out: it continues the black tail,
+# which carries it.
+ON_BED = ["stand_body.stl", "stand_paws.stl", "stand_toes.stl",
+          "stand_claws.stl", "stand_tail.stl"]
+
+
 def lump_count(path):
     """Connected components, by shared vertices."""
+    return len(lump_bottoms(path))
+
+
+def lump_bottoms(path):
+    """The lowest z of each connected component, by shared vertices."""
     parent = {}
 
     def find(x):
@@ -59,7 +73,11 @@ def lump_count(path):
             parent.setdefault(v, v)
         union(vs[0], vs[1])
         union(vs[1], vs[2])
-    return len({find(v) for v in parent})
+    low = {}
+    for v in parent:
+        r = find(v)
+        low[r] = min(low.get(r, v[2]), v[2])
+    return list(low.values())
 PLACES = 3          # 0.001mm -- finer than any boolean's rounding error
 
 
@@ -139,6 +157,21 @@ def main(argv):
         else:
             print(f"  FAIL  {label:22} {got} lump(s), expected {want}")
             fail = 1
+
+    print()
+    print("Lumps that start on the bed — one above it starts in mid-air:")
+    for n in names:
+        if n not in ON_BED:
+            continue
+        lows = lump_bottoms(paths[n])
+        up = [z for z in lows if z > 0.01]
+        label = n.replace(".stl", "")
+        if up:
+            print(f"  FAIL  {label:22} {len(up)} of {len(lows)} lump(s) start "
+                  f"{min(up):.2f}-{max(up):.2f} mm above the bed")
+            fail = 1
+        else:
+            print(f"  PASS  {label:22} all {len(lows)} on the bed")
 
     print()
     print("No coincident faces: the preview will not stipple." if not fail
