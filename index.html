@@ -4760,7 +4760,7 @@ preloadSoundTheme(soundTheme());
 const BOOT_SOUND_KEY = 'stratoscan.bootSoundFor';
 const BOOT_SOUND_WITHIN_S = 300;
 function maybePlayBootSound() {
-  if (bootSoundPlays()) playTakeoffAlone(); else endBootHold();   // either way, the alerts held for it go on
+  if (bootSoundPlays()) playStartupAlone(); else endBootHold();   // either way, the alerts held for it go on
 }
 function bootSoundPlays() {
   const b = netInfo && netInfo.boot;
@@ -4795,7 +4795,7 @@ function bootSoundPlays() {
 // and the lightning warning still shows, only without its chime.
 // Off the panel there is no hold: bootHoldUntil stays 0.
 const BOOT_HOLD_MAX_MS = 15 * 1000;
-const TAKEOFF_SOUND_MS = 7000;           // the sound is 6.5 s long
+const STARTUP_SOUND_MS = 8300;           // the ding, then the 6.5 s take-off 1.3 s later: 7.85 s in all
 // With the take-off sound switched off or the panel muted, there is nothing to
 // wait for, so no hold at all: alerts come as soon as they're raised.
 let bootHoldUntil = ON_DEVICE && alertSettings.bootSound && !alertSettings.muted ? performance.now() + BOOT_HOLD_MAX_MS : 0;
@@ -4807,17 +4807,53 @@ function endBootHold() {
   bootHoldUntil = 0;
   scheduleNextAlert();
 }
-function playTakeoffAlone() {
+function playStartupAlone() {
   bootSoundDecided = true;
-  if (!alertQuiet()) { setTimeout(playTakeoffAlone, 500); return; }   // a late answer: the alert sounding first
-  bootHoldUntil = performance.now() + TAKEOFF_SOUND_MS;
+  if (!alertQuiet()) { setTimeout(playStartupAlone, 500); return; }   // a late answer: the alert sounding first
+  bootHoldUntil = performance.now() + STARTUP_SOUND_MS;
   scheduleNextAlert();
-  playTakeoffSound();
+  playStartupSound();
 }
 
-function playTakeoffSound() {
-  markSoundBusy(TAKEOFF_SOUND_MS);
-  const ctx = getAudioCtx(), out = getMasterGain(), t0 = ctx.currentTime + 0.05, dur = 6.5;
+// ---- The ding, then the take-off (#81, 2026-10-28) -------------------------
+// The owner's ask: the "ding" heard inside an airliner, then the take-off,
+// instead of the take-off alone. Both go on the audio clock in one go, so a
+// busy page can't stretch the gap: the take-off starts 1.3 s after the ding,
+// as it fades. Settings plays this too, when the sound is switched on.
+function playStartupSound() {
+  markSoundBusy(STARTUP_SOUND_MS);
+  try {
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const t0 = ctx.currentTime + 0.05;
+    playCabinDing(t0);
+    playTakeoffSound(t0 + 1.3);
+  } catch (e) {
+    // No Web Audio: nothing to hear. Caught here so neither caller (the
+    // /onboard poll, the Settings switch) takes it for its own failure.
+  }
+}
+
+// Synthesised too, so again nothing to license: a sine at 1320 Hz with two
+// quieter overtones a little off the harmonics, which die away first, as a
+// struck chime's do. Struck in 4 ms, rung out over 1.5 s. It peaks at 0.17,
+// below the classic nearby chime's 0.25, and sounds about as loud as that
+// chime, so the take-off stays the loud part.
+function playCabinDing(t0) {
+  const ctx = getAudioCtx(), out = getMasterGain();
+  for (const [ratio, peak, ring] of [[1, 0.14, 1.5], [2.02, 0.03, 0.6], [2.97, 0.013, 0.3]]) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.value = 1320 * ratio;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(peak, t0 + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + ring);
+    o.connect(g).connect(out);
+    o.start(t0); o.stop(t0 + ring + 0.05);
+  }
+}
+
+function playTakeoffSound(t0) {
+  const ctx = getAudioCtx(), out = getMasterGain(), dur = 6.5;
   // the roar: two seconds of deep (brown-ish) noise, looped, through a
   // low-pass that opens as the engines spool up and closes as it climbs away
   const noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
@@ -7035,7 +7071,7 @@ function alertSettingsMeta() { return [
       : `Military and unusual aircraft types. Still learning the regular traffic (${sightingCounts.size}/${RARE_FIRST_MIN_CATALOGUE} aircraft) before it can flag first-time visitors`,
   },
   { group: 'alerts', key: 'airportPhase', label: `${AIRPORT.code} landing/takeoff chime`, sub: `Quiet tone when a plane lands or departs at ${AIRPORT.code}` },
-  { group: 'alerts', key: 'bootSound', label: 'Take-off sound when plugged in', sub: 'Once, when the radar is switched on; never after a restart' },
+  { group: 'alerts', key: 'bootSound', label: 'Take-off sound when plugged in', sub: 'A cabin ding, then a take-off: once, when the radar is switched on; never after a restart' },
 
   { group: 'overlays', key: 'storms', label: 'Storm radar overlay', sub: 'Live weather radar over the map (RainViewer)' },
   { group: 'overlays', key: 'heatmap', label: `${AIRPORT.code} approach heatmap`, sub: `Density pattern built from actually observed ${AIRPORT.code} landings` },
@@ -9047,6 +9083,9 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
   if (key === 'networkCompare') refreshNetworkCompare();
   if (key === 'lightning') applyLightningVisibility();
   if (key === 'nightDim') { nightWakeUntil = 0; applyNightDim(); } // re-evaluate now, don't wait for the next minute tick
+  // Switched on, it plays once, as picking a sound theme does: otherwise it
+  // is first heard at the next power-on (2026-10-28).
+  if (key === 'bootSound' && alertSettings.bootSound && !alertSettings.muted) { allowThroughQuiet(STARTUP_SOUND_MS); playStartupSound(); }
   renderSettingsPanel();
 });
 
