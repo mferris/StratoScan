@@ -15,11 +15,17 @@ says whether it plays, and while it plays; then they come in turn, an
 emergency first. Without a power-on they wait only for that answer, and never
 more than 15 s for it.
 
+And a cabin ding first (2026-10-28): the owner asked for the "ding" heard
+inside an airliner, then the take-off. Both go on the audio clock at once,
+the take-off 1.2-1.5 s after the ding, and alerts wait for the whole of it.
+Switching the setting on in Settings plays it once, as a preview.
+
 Run: python3 tests/test_boot_sound.py
 """
 import importlib.util
 import json
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -70,14 +76,18 @@ else:
     js = r"""
 const store = {};
 const localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
-let ON_DEVICE = true, netInfo = null, allowed = true, played = 0;
+let ON_DEVICE = true, netInfo = null, allowed = true;
+const played = [];                   // each part of the startup sound, as it plays
 const alertSettings = { bootSound: true };
 function soundAllowedNow() { return allowed; }
 function alertQuiet() { return true; }
 function scheduleNextAlert() {}
-""" + block.replace("function playTakeoffSound() {", "function playTakeoffSound() { played++; return;") + r"""
+function markSoundBusy() {}
+function getAudioCtx() { return { currentTime: 0, state: 'running' }; }
+""" + (block.replace("function playCabinDing(t0) {", "function playCabinDing(t0) { played.push('ding'); return;")
+            .replace("function playTakeoffSound(t0) {", "function playTakeoffSound(t0) { played.push('take-off'); return;")) + r"""
 const out = {};
-const boot = (id, powerOn, uptimeS) => { netInfo = { boot: { id, powerOn, uptimeS } }; maybePlayBootSound(); return played; };
+const boot = (id, powerOn, uptimeS) => { netInfo = { boot: { id, powerOn, uptimeS } }; maybePlayBootSound(); return played.join(' '); };
 out.powerOn = boot('a', true, 40);
 out.again = boot('a', true, 220);                 // a page reload in the same boot
 out.reboot = boot('b', false, 30);
@@ -93,26 +103,31 @@ console.log(JSON.stringify(out));
     except Exception:
         o = {}
         print(r.stderr[-1500:])
-    check(o.get("powerOn") == 1, "after a power-on the take-off sound plays")
-    check(o.get("again") == 1, "once: reloading the page in the same boot doesn't play it again")
-    check(o.get("reboot") == 1, "a reboot or watchdog reset plays nothing")
-    check(o.get("late") == 1, "nor a power-on more than five minutes ago")
-    check(o.get("off") == 1, "nor anything with the setting off")
-    check(o.get("quiet") == 1 and o.get("quietLater") == 1,
+    both = "ding take-off"
+    check(o.get("powerOn") == both, "after a power-on the startup sound plays: the cabin ding, then the take-off")
+    check(o.get("again") == both, "once: reloading the page in the same boot doesn't play it again")
+    check(o.get("reboot") == both, "a reboot or watchdog reset plays nothing")
+    check(o.get("late") == both, "nor a power-on more than five minutes ago")
+    check(o.get("off") == both, "nor anything with the setting off")
+    check(o.get("quiet") == both and o.get("quietLater") == both,
           "inside quiet hours (or muted) it stays silent, and doesn't play later in that boot")
-    check(o.get("remote") == 1, "and only the panel plays it, not a phone or laptop viewing the page")
+    check(o.get("remote") == both, "and only the panel plays it, not a phone or laptop viewing the page")
 
     # ---- it plays alone (2026-10-28) ------------------------------------------
     # The boot block, the alert queue and the two plain chimes, run under node
-    # with a stand-in clock, panel and speech; every sound, panel and sentence
-    # is logged with its time.
+    # with a stand-in clock, panel, speech and audio context; every sound,
+    # panel and sentence is logged with its time. The startup sound runs as it
+    # is: the stand-in context logs the ding and the take-off at the times they
+    # are put on the audio clock for, and when the last of them stops.
     def function(head):
         f = html[html.index(head):]
         return f[:f.index("\n}\n") + 3]
     queue = html[html.index("// ---- One alert at a time"):html.index("function checkNearbyAlert(pl, range)")]
     chimes = function("function playAirportPhaseSound(") + function("function playLightningAlertSound(")
-    takeoff = "function playTakeoffSound() {\n  markSoundBusy(TAKEOFF_SOUND_MS);"
-    check(takeoff in block, "the take-off sound marks its length as busy")
+    check("function playStartupSound() {\n  markSoundBusy(STARTUP_SOUND_MS);" in block,
+          "the startup sound marks its whole length as busy")
+    m = re.search(r"const STARTUP_SOUND_MS = (\d+);", block)
+    hold = int(m.group(1)) if m else 0
     harness = r"""
 let now = 0; const timers = [];
 const performance = { now: () => now };
@@ -142,11 +157,27 @@ let detailPanelHex = null, detailDismissTimer = null;
 let shownLabel = null;
 function showDetailPanel(p, isAlert, label) { shownLabel = label; classes.add('show'); isAlert ? classes.add('alert') : classes.delete('alert'); log.push(['show ' + p.hex, now]); }
 const planes = new Map([['a1', {}], ['b2', {}], ['e9', {}]]);
-""" + block.replace(takeoff, takeoff + " log.push(['take-off', now]); return;") + chimes + queue + function("function hideDetailPanel() {") + r"""
+let soundEnds = 0;                   // when the last source scheduled stops
+const param = () => ({ value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} });
+function audioNode(kind) {
+  return { kind, type: 'sine', frequency: param(), gain: param(), Q: param(), connect: n => n,
+    start(t) {   // the ding is sine partials; the take-off is noise and two other waves
+      const part = kind === 'osc' && this.type === 'sine' ? 'ding' : 'take-off', ms = Math.round(t * 1000);
+      if (!log.some(([w, at]) => w === part && at === ms)) log.push([part, ms]);
+    },
+    stop(t) { soundEnds = Math.max(soundEnds, Math.round(t * 1000)); } };
+}
+const audio = { get currentTime() { return now / 1000; }, sampleRate: 8000, state: 'running',
+  createOscillator: () => audioNode('osc'), createGain: () => audioNode('gain'), createBiquadFilter: () => audioNode('filter'),
+  createBufferSource: () => audioNode('noise'), createBuffer: (c, n) => ({ getChannelData: () => new Float32Array(n) }) };
+function getAudioCtx() { return audio; }
+function getMasterGain() { return audioNode('out'); }
+""" + block + chimes + queue + function("function hideDetailPanel() {") + r"""
 const alert = (hex, urgent) => ({ pl: { hex }, label: urgent ? 'EMERGENCY' : 'WITHIN 2 MILES', urgent,
   sound: () => { log.push(['chime ' + hex, now]); markSoundBusy(3000); }, speech: () => hex });
 function answer(boot) { netInfo = { boot }; maybePlayBootSound(); }
 SCRIPT
+if (soundEnds) log.push(['sound ends', soundEnds]);
 console.log(JSON.stringify(log));
 """
 
@@ -168,14 +199,22 @@ advance(1000); playAirportPhaseSound('takeoff'); playLightningAlertSound();
 advance(1000); raiseAlert(alert('e9', true));
 advance(30000); playAirportPhaseSound('landing'); playLightningAlertSound();
 """)
-    check(log[:1] == [("take-off", 1000)], "after a power-on the take-off sound plays as the answer comes, alone")
-    check(len(log) > 1 and all(t >= 8000 for _, t in log[1:]),
-          "no alert, chime or words until it has finished (7 s), though an aircraft was in range from the start")
+    at = dict(log)
+    ding, takeoff, ends = at.get("ding", 0), at.get("take-off", 0), at.get("sound ends", 0)
+    check(log[:2] == [("ding", ding), ("take-off", takeoff)] and 1000 <= ding <= 1100,
+          "after a power-on the startup sound plays as the answer comes, alone: the cabin ding first")
+    check(1200 <= takeoff - ding <= 1500,
+          "then the take-off, %d ms after the ding on the audio clock, as the ding fades" % (takeoff - ding))
+    others = [(w, t) for w, t in log if w not in ("ding", "take-off", "sound ends")]
+    check(others and all(t >= ends for _, t in others),
+          "no alert, chime or words until the whole of it has finished (%.2f s), though an aircraft was in range from the start"
+          % ((ends - 1000) / 1000))
+    check(ends <= 1000 + hold <= ends + 1000, "the hold (%d ms) covers all of it, and ends within a second of it" % hold)
     shows = [w for w, _ in log if w.startswith("show ")]
-    check(shows == ["show e9", "show a1"] and ("words a1", 17000) in log,
+    check(shows == ["show e9", "show a1"] and ("words a1", 1000 + hold + 9000) in log,
           "the alerts raised meanwhile wait, not dropped, and come after it in turn, the emergency first")
-    check(("show e9", 8000) in log, "an emergency is shown the moment the hold ends")
-    check(not any(w in ("takeoff chime", "lightning chime") and t < 8000 for w, t in log)
+    check(("show e9", 1000 + hold) in log, "an emergency is shown the moment the hold ends")
+    check(not any(w in ("takeoff chime", "lightning chime") and t < 1000 + hold for w, t in log)
           and ("landing chime", 33000) in log and ("lightning chime", 33000) in log,
           "the airport and lightning chimes during it are dropped; after it they sound as before")
 
@@ -195,7 +234,7 @@ advance(30000); playAirportPhaseSound('landing'); playLightningAlertSound();
     # so no hold at all, whenever the answer comes.
     for label, kw in (("the setting off", dict(setting=False)), ("the panel muted", dict(muted=True))):
         log = run("advance(500); raiseAlert(alert('a1'));\nadvance(9500); answer({ id: 'p', powerOn: true, uptimeS: 30 });\nadvance(100);", **kw)
-        check(log[:1] == [("show a1", 500)] and "take-off" not in dict(log),
+        check(log[:1] == [("show a1", 500)] and not {"ding", "take-off"} & set(dict(log)),
               f"{label}: no hold, the alert shows the moment it is raised")
 
     # An aircraft squawking an emergency inside the ring at load: the poll
@@ -224,13 +263,77 @@ advance(1000); raiseAlert(alert('b2'));
 advance(30000);
 """)
     at = dict(log)
-    check(at.get("show a1") == 15000 and at.get("take-off") == 19000,
+    check(at.get("show a1") == 15000 and 19000 <= at.get("ding", 0) <= 19100 and at.get("take-off", 0) > at["ding"],
           "a late answer still plays it, once the alert on screen has finished speaking")
-    check(at.get("show b2", 0) >= 26000, "and the next alert waits for it to finish")
+    check(at.get("show b2", 0) >= at.get("sound ends", 10 ** 9), "and the next alert waits for all of it to finish")
 
     log = run("raiseAlert(alert('a1')); answer({ id: 'p', powerOn: true, uptimeS: 30 }); advance(100);", onDevice=False)
-    check(log[:1] == [("show a1", 0)] and "take-off" not in dict(log),
+    check(log[:1] == [("show a1", 0)] and not {"ding", "take-off"} & set(dict(log)),
           "off the panel nothing waits: the alert shows at once")
+
+    # ---- the ding is no louder than the nearby chime (2026-10-28) --------------
+    # Its partials' peaks added up are the most it can reach; the nearby
+    # chime's notes peak at 0.25.
+    js = r"""
+const peaks = [];
+const param = () => ({ value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {}, linearRampToValueAtTime(v) { peaks.push(v); } });
+const node = () => ({ frequency: param(), gain: param(), connect: n => n, start() {}, stop() {} });
+function getAudioCtx() { return { currentTime: 0, createOscillator: node, createGain: node }; }
+function getMasterGain() { return node(); }
+""" + function("function playCabinDing(t0) {") + r"""
+playCabinDing(0);
+console.log(JSON.stringify(peaks));
+"""
+    r = subprocess.run(["node", "-e", js], capture_output=True, text=True, timeout=60)
+    try:
+        peaks = json.loads(r.stdout.strip().splitlines()[-1])
+    except Exception:
+        peaks = []
+        print(r.stderr[-1500:])
+    check(len(peaks) > 1 and sum(peaks) <= 0.25,
+          "the ding is no louder than the nearby chime: its partials peak at %.3f together, the chime at 0.25" % sum(peaks))
+
+    # ---- Settings plays it when it is switched on (2026-10-28) ------------------
+    # The settings panel's own tap handler, run with a stand-in row and switch.
+    h = html.index("settingsPanelEl.addEventListener('pointerup', (e) => {")
+    js = r"""
+const handlers = {};
+const settingsPanelEl = { addEventListener: (type, fn) => { handlers[type] = fn; } };
+let settingsPointerStart = null;
+const alertSettings = { bootSound: false, muted: false, nearby: true };
+const heard = [];
+function saveAlertSettings() {}
+function renderSettingsPanel() {}
+function allowThroughQuiet(ms) { heard.push('through quiet hours for ' + ms); }
+function playStartupSound() { heard.push('ding and take-off'); }
+const STARTUP_SOUND_MS = %d;
+""" % hold + html[h:html.index("\n});\n", h) + 5] + r"""
+function tapSwitch(key) {          // a tap on the switch in that setting's row
+  const row = { dataset: { key }, classList: { contains: () => false } };
+  const target = { closest: sel => (sel === '.sp-row' ? row : sel === '.sp-switch' ? {} : null) };
+  handlers.pointerup({ target, clientX: 0, clientY: 0, stopPropagation() {} });
+  return heard.splice(0);
+}
+const out = {};
+out.on = tapSwitch('bootSound');
+out.off = tapSwitch('bootSound');
+alertSettings.muted = true;
+out.muted = tapSwitch('bootSound').concat(tapSwitch('bootSound'));
+alertSettings.muted = false;
+out.other = tapSwitch('nearby').concat(tapSwitch('nearby'));
+console.log(JSON.stringify(out));
+"""
+    r = subprocess.run(["node", "-e", js], capture_output=True, text=True, timeout=60)
+    try:
+        o = json.loads(r.stdout.strip().splitlines()[-1])
+    except Exception:
+        o = {}
+        print(r.stderr[-1500:])
+    check(o.get("on") == ["through quiet hours for %d" % hold, "ding and take-off"],
+          "switching it on in Settings plays it once, as a preview, heard through quiet hours for all of it")
+    check(o.get("off") == [], "switching it off plays nothing")
+    check(o.get("muted") == [], "nor switching it on or off while the panel is muted")
+    check(o.get("other") == [], "and no other switch plays it")
 
 print("boot sound checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)
