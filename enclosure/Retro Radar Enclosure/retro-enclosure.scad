@@ -676,11 +676,18 @@ grille_half_deg = (grille_w/2 + rivet_dia/2 + 1) / (outer_dia/2) * 180 / PI;
 function near_speaker(a) =
     len([for (s = speaker_angles)
          if (abs((a - s + 540) % 360 - 180) < grille_half_deg) s]) > 0;
+// Nor under the stand's front arm (2026-10-29): its arc, 205-335 degrees,
+// plus a rivet's radius and 1mm. The nine there were hidden by the arm, and
+// stood 0.7mm proud into the cradle's 1mm clearance, so the case's front sat
+// on the tips of two or three of them rather than on its wall
+// (shell_seats_in_stand). The ring keeps the nine across the top.
+function under_front_arm(a) =
+    abs((a - 270 + 540) % 360 - 180) < cradle_arc/2 + (rivet_dia/2 + 1) / (outer_dia/2) * 180 / PI;
 
 module rivets() {
     for (i = [0:n_rivets-1]) {
         a = i * 360/n_rivets;
-        if (!near_speaker(a))
+        if (!near_speaker(a) && !under_front_arm(a))
         translate([(outer_dia/2)*cos(a), (outer_dia/2)*sin(a), rivet_z])
             rotate([0,0,a])
                 translate([-rivet_h/2, 0, 0])
@@ -859,12 +866,40 @@ function behind_ribs(z) =
          front = max([for (rz = rib_z_list) rz + rib_w]))
     z - c < front;
 
-module speaker_grille(angle) {
+// Clearance between a grille hole and a front post (2026-10-29).
+grille_post_clear = 0.5;
+
+// Nor any hole at a front post (2026-10-29). The post at each speaker's axis
+// hangs down from the shelf to z 45 and stands in the way of the grille's
+// front rows: it filled 64% of the front row's middle hole, cut into the two
+// beside it, and the tip of its cone reached into the middle hole of the row
+// behind. The holes run parallel to the speaker's axis, past the post, so a
+// hole meets the post wherever the two overlap seen along the hole. Every
+// hole whose edge comes within grille_post_clear of the post's outline, seen
+// that way, is dropped: four a speaker. post_gap(u, z) is how far a point at
+// height z, u from the post's axis across the hole, is from that outline:
+// the 9mm barrel down to z 49, then the 45-degree cone under it.
+function post_gap(u, z) =
+    let (top = shell_depth - lip_height + shelf_h, z1 = top - front_post_h, z0 = z1 - front_post_cone)
+    min([for (zz = [z0 : 0.1 : top]) norm([max(0, u - (post_od/2 - max(0, z1 - zz))), zz - z])]);
+// A hole in the grille at `angle`, dy across it and at height z, is near a
+// front post: one whose barrel reaches the holes' start, x0 (only the post on
+// the speaker's axis does).
+function near_post(angle, dy, z, x0) =
+    len([for (i = [0:n_screws-1])
+         let (b = i*360/n_screws - angle)
+         if (screw_r*cos(b) + post_od/2 > x0
+             && post_gap(abs(dy - screw_r*sin(b)), z) < grille_hole_dia/2 + grille_post_clear) i]) > 0;
+
+// `grow` widens every hole by that much all round, for a check
+// (grille_clear_of_posts); it changes no hole's place.
+module speaker_grille(angle, grow = 0) {
     // Since the bracket became a hollow sleeve (2026-10-23) the holes need
     // cross only the wall. They start inside the sleeve, just past the screw
     // pads, so they never bore into a pad, and end past the outer surface.
     r_mount = outer_dia/2 - wall - speaker_bracket_depth;
     z0 = (shell_depth - speaker_d)/2;
+    x0 = r_mount - speaker_boss_h + speaker_boss_len + 0.1;
     n_y = floor(grille_w / grille_pitch);
     n_z = floor(grille_h / grille_pitch);
     rotate([0,0,angle])
@@ -872,10 +907,10 @@ module speaker_grille(angle) {
             dy = (iy - n_y/2) * grille_pitch;
             for (iz = [0:n_z]) {
                 dz = (iz - n_z/2) * grille_pitch;
-                if (!behind_ribs(z0 + speaker_d/2 + dz))
-                    translate([r_mount - speaker_boss_h + speaker_boss_len + 0.1, dy, z0 + speaker_d/2 + dz])
+                if (!behind_ribs(z0 + speaker_d/2 + dz) && !near_post(angle, dy, z0 + speaker_d/2 + dz, x0))
+                    translate([x0, dy, z0 + speaker_d/2 + dz])
                         rotate([0,90,0])
-                            cylinder(d=grille_hole_dia,
+                            cylinder(d=grille_hole_dia + 2*grow,
                                      h=speaker_bracket_depth + speaker_boss_h - speaker_boss_len - 0.1 + wall + 3, $fn=10);
             }
         }

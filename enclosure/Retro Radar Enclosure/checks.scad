@@ -1319,3 +1319,23 @@ if (check=="retainer_key_blocks_315") intersection() { retainer_seated(315); she
 if (check=="front_stack_seats")          intersection() { front_stack_placed(); shell(); }
 if (check=="front_stack_retainer_down")  intersection() { translate([0, 0, -0.2]) front_stack_placed("retainer"); shell(); }
 if (check=="front_stack_trim_down")      intersection() { translate([0, 0, -0.2]) front_stack_placed("trim"); shell(); }
+
+// ---- the case's seat in the stand, and the grille at the posts (2026-10-29)
+grille_post_clear=0.5;   // restated
+
+// The case sits in the cradle with 1mm all round. Dropped that 1mm, straight
+// down across its axis, it meets the stand with no volume: nothing on it
+// stands proud into the clearance where the arms are. The nine rivets that
+// were under the front arm stood 0.7mm proud, and found 54 mm3 here. The
+// control is a 1.5mm drop, which runs the case's own wall into the arms.
+module shell_dropped(d) { pwr_posed() translate([0, -d, 0]) shell(); }
+if (check=="shell_seats_in_stand")    intersection() { stand(); shell_dropped(1); }
+if (check=="shell_seats_probe_works") intersection() { stand(); shell_dropped(1.5); }
+
+// No grille hole comes within grille_post_clear of a front post: every hole,
+// widened by that much, misses them. The front row's middle hole was 64%
+// post, and the two beside it and the one behind were nicked: the grille as
+// it was finds 182 mm3. The control is the same widened holes with the posts
+// one row further back, where they meet holes that are kept.
+if (check=="grille_clear_of_posts")   intersection() { for (a = speaker_angles) speaker_grille(a, grille_post_clear); front_posts(); }
+if (check=="grille_post_probe_works") intersection() { for (a = speaker_angles) speaker_grille(a, grille_post_clear); translate([0, 0, -grille_pitch]) front_posts(); }
