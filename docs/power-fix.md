@@ -39,7 +39,7 @@ flowchart LR
 | A **USB-C plug pigtail**: two wires, 20 AWG or thicker, rated 5 A | Or cut one from a USB-C to USB-C cable rated 5 A (sold as 100 W or 240 W), as in step 4. Not a USB-A to USB-C cable: its power wires are thin |
 | Snap-on ferrite clip | For the pigtail |
 | Heat-shrink, a soldering iron, a multimeter | |
-| For the case: a back plate printed since 2026-10-29, and `power_trigger_mount`, two `power_trigger_stop`s and `power_regulator_tray`, printed (`usbc_gauge` too, to try the fit first); two M3 × 8 button-head screws and four M3 × 3 heat-set inserts; two M2 × 8 screws; VHB tape | In the case folders; see [In the case](#in-the-case). A trial fit on `usbc_gauge` spends two of the inserts, which stay in it, and one stop's crush ribs |
+| For the case: a back plate printed since 2026-10-29, and `power_trigger_mount`, three `power_trigger_stop`s and `power_regulator_tray`, printed (`usbc_gauge` too, to try the fit first); two M3 × 8 button-head screws and four M3 × 3 heat-set inserts; two M2 × 8 screws; VHB tape | In the case folders; see [In the case](#in-the-case). A trial fit on `usbc_gauge` spends two of the inserts, which stay in it, and one stop's crush ribs. A stop is good for one fitting, so the third is a spare, for a board that has to be re-seated |
 
 The Pi's 5 V pins would also take the regulator's output, but they sit under
 the FlyCatcher, so the 5.2 V goes into the Pi's own USB-C port instead.
@@ -164,8 +164,11 @@ question.
      edge.
   2. Check that the board's front edge is on the plate: from outside, the
      socket's face stands 0.4 mm proud of the pocket's floor. If it doesn't,
-     undo the stop's screws, push the board's back edge home, and screw the
-     stop back.
+     undo the stop's screws and slide it out, push the board's back edge
+     home, and fit a fresh stop. Not the same one: its ribs were squeezed
+     with the board out of place and don't spring back, so the board would
+     be loose, a plug could push it back instead of clicking home, and the
+     test would prove nothing.
   3. Try another cable, one with a slimmer moulding round its plug.
 
   If it still won't, reprint the coupon with a bigger pocket: in the case's
@@ -177,9 +180,10 @@ question.
   allows.
 
   The trial spends two of the inserts, which stay in the coupon, and the
-  stop's crush ribs, which don't spring back. Use the other two inserts and
-  the second stop for the plate, and move the mount across with the board
-  still in it. Details and checks are in the
+  stop's crush ribs, which don't spring back: a stop is good for one
+  fitting. Use the other two inserts and a fresh stop for the plate, never
+  the coupon's, and move the mount across with the board still in it.
+  Details and checks are in the
   [retro case's README](../enclosure/Retro%20Radar%20Enclosure/README.md#the-power-fix-the-charger-plugs-into-the-trigger-board).
 - **The regulator goes in `power_regulator_tray`,** stuck to the plate's
   inner face with VHB tape. Put it as far from the FlyCatcher and the antenna
