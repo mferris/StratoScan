@@ -255,14 +255,30 @@ Now there are nine, across the top between the speakers (`exhaust_a0`..`exhaust_
 
 ### Speaker grilles: one clean block each
 
-Each speaker's grille is now only the rows in front of the ribs: five rows of 21 holes. Two things went:
+Each speaker's grille is now only the rows in front of the ribs: five rows of 21 holes, less the four at the front post. Three things went:
 
 - **The single row between the two ribs.** It read as a stray line of holes, not part of the grille.
-- **The three rivets of the front ring that fell on each grille.** They stood up among the holes. The ring keeps its other 18.
+- **The three rivets of the front ring that fell on each grille.** They stood up among the holes. The ring kept its other 18; since 2026-10-29 it keeps the nine across the top (next section).
+- **The four holes at the front post** (2026-10-29). The front screw post on each speaker's axis hangs from the shelf down to z 45, in the way of the grille's front rows: it filled 64% of the front row's middle hole, cut into the two beside it, and the tip of its cone reached into the middle hole of the row behind. The holes run parallel to the speaker's axis, past the post, so any hole whose edge comes within 0.5 mm of the post, seen along the hole (`grille_post_clear`), is dropped. Each grille keeps 101 holes, 496 mm² of opening where it had 515, and every one is clear right through.
 
 These checks hold the change:
 - `grille_in_front_of_ribs` and `rivets_clear_of_grilles` must come out empty. Both find the old geometry when run against it.
-- `grille_present` and `rivets_present` are their positive controls.
+- `grille_clear_of_posts` must come out empty: every hole, widened by 0.5 mm, misses the front posts. The grille as it was finds 182 mm³.
+- `grille_present`, `rivets_present` and `grille_post_probe_works` are their positive controls; the last is the same widened holes with the posts moved one row back, where they meet holes that are kept (47 mm³).
+
+### The case sits on its wall, not on rivets
+
+The front ring had nine rivets under the case, 205-335°, inside the stand's
+front arm. The arm hid them, and they stood 0.7 mm proud into the cradle's
+1 mm clearance, so the case's front sat on the tips of two or three of them
+rather than on its wall. They are gone (2026-10-29), and the ring keeps the
+nine across the top, where they are seen.
+
+`shell_seats_in_stand` must come out empty: the case dropped 1 mm in the
+cradle, straight down across its axis, meets the stand with no volume, so
+nothing on it stands into the clearance where the arms are. The old rivets
+found 54 mm³. `shell_seats_probe_works` is its control: dropped 1.5 mm, the
+case's own wall runs into the arms (3,071 mm³).
 
 ### The rings print without support
 
