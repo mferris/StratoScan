@@ -1348,3 +1348,28 @@ if (check=="retainer_key_blocks_315") intersection() { retainer_seated(315); she
 if (check=="front_stack_seats")          intersection() { front_stack_placed(); shell(); }
 if (check=="front_stack_retainer_down")  intersection() { translate([0, 0, -0.2]) front_stack_placed("retainer"); shell(); }
 if (check=="front_stack_trim_down")      intersection() { translate([0, 0, -0.2]) front_stack_placed("trim"); shell(); }
+
+// ---- the front posts in the ears stand on wall (2026-10-29) ------------
+// Restated, as above: `use <>` brings in no values.
+front_post_h=8; front_post_cone=4; ear_hollow_top=53; ear_posts=[45, 135];
+// The ears' hollows cut the head wall away from the back collar up to z 53,
+// so the posts at 45 and 135 degrees hung free there, each cone's tip an
+// island 45mm above the bed. ears_hollow() now leaves the wall standing behind
+// them. The head wall behind each of the eight posts, 2 degrees either side of
+// it (the post's width where it meets the wall's inner face), 0.2mm inside
+// both faces, must be all there over the cone and the post below the shelf, z
+// 45-53 (front_posts_on_wall); behind the two posts in the ears, from the back
+// collar's top, z 11, so the wall the cones land on grows from below. The old
+// head lacks 1,554 mm3 of it. The control is the probe behind the 90-degree
+// post, which has always stood on wall, against the head: it finds the wall.
+module post_wall_probe(a, z0) {
+  rotate([0, 0, a - 2]) rotate_extrude(angle = 4)
+    translate([outer_dia/2 - wall + 0.2, z0]) square([wall - 0.4, ear_hollow_top - z0]);
+}
+fp_cone_tip = fi_top - front_post_h - front_post_cone;   // 45
+if (check=="front_posts_on_wall")   difference() {
+  for (i = [0:n_screws-1]) let (a = i*360/n_screws)
+    post_wall_probe(a, len([for (e = ear_posts) if (e == a) e]) > 0 ? back_post_h + 2 : fp_cone_tip);
+  shell();
+}
+if (check=="post_wall_probe_works") intersection() { post_wall_probe(90, fp_cone_tip); shell(); }

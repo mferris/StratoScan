@@ -638,12 +638,56 @@ module ears_solid() {
 // of the front lip zone so the shelf and the 8 posts are untouchable
 // from here regardless of how the ear styling is later adjusted.
 ear_hollow_top = shell_depth - lip_height - 2;
+// The hollow's top is a 45-degree tent (2026-10-29). It was flat at
+// ear_hollow_top, 4,550 mm2 of roof printed on 53mm-tall supports inside each
+// ear. Now, ear_tent_rise below that, every side of the hollow slopes inward
+// at 45 degrees, so its top comes to a point at ear_hollow_top: the hollow's
+// outline is 25.1mm from side to middle at its widest. Nothing of it is
+// flat, so nothing in the ear needs support. The plastic it adds prints as
+// infill, and comes to less than the support it saves.
+ear_tent_rise = 25;
+ear_tent_step = 1;   // each hull spans this much of the rise
+// The two front posts that the hollows open over, at 45 and 135 degrees
+// (2026-10-29). The hollows cut the head wall away from the back collar up to
+// ear_hollow_top, so those two posts hung free there: each cone's tip was an
+// island 45mm above the bed. ears_hollow() leaves the head wall standing from
+// the edge of each ear's opening to ear_post_strip past its post, the whole
+// height, so the cone lands on wall that grows from the back collar, as on
+// the retro case. ear_post_strip past the post rather than either side of
+// it, because the opening's edge is only 4.6-5.3 degrees beyond the post: a
+// strip either side would leave a slit 2-4mm wide between them.
+ear_posts      = [45, 135];   // for the right-hand ear (s = 1) and the left (s = -1)
+ear_post_strip = 3;           // degrees, toward the middle of the ear
+
+// One ear's hollow, face on: the ear's outline, a wall in.
+module ear_hollow_2d(s) { offset(r = -wall) ear_profile_2d(s * ear_lean); }
+
+// The head wall kept beside an ear's post: from the post, 10 degrees outboard
+// (past the opening's edge) to ear_post_strip inboard, out to 0.01 past the
+// head's outer face so no face of it lies on the head's own.
+module ear_post_strip_kept(s) {
+    a = s > 0 ? ear_posts[0] : ear_posts[1];
+    rotate([0, 0, s > 0 ? a - 10 : a - ear_post_strip])
+        rotate_extrude(angle = 10 + ear_post_strip)
+            translate([0, -2]) square([outer_dia/2 + 0.01, shell_depth + 4]);
+}
+
 module ears_hollow() {
+    z_e = ear_hollow_top - ear_tent_rise;   // where the tent's slopes start
     for (s = [-1, 1])
-        rotate([0, 0, -s * ear_angle])
-            translate([0,0,-1])
-                linear_extrude(height = ear_hollow_top + 1)
-                    offset(r = -wall) ear_profile_2d(s * ear_lean);
+        difference() {
+            rotate([0, 0, -s * ear_angle]) {
+                translate([0,0,-1])
+                    linear_extrude(height = z_e + 1 + 0.01) ear_hollow_2d(s);
+                // the tent: the outline shrunk by u at z_e + u, hulled a step at a
+                // time, its top no higher than ear_hollow_top
+                for (t = [0 : ear_tent_step : ear_tent_rise - ear_tent_step])
+                    hull() for (u = [t, t + ear_tent_step])
+                        translate([0, 0, min(z_e + u, ear_hollow_top - 0.01)])
+                            linear_extrude(height = 0.01) offset(r = -u) ear_hollow_2d(s);
+            }
+            ear_post_strip_kept(s);
+        }
 }
 
 // The inner-ear dish, recessed into the front face. Clipped to
@@ -2353,7 +2397,9 @@ module shell_body() {
     // Its underside slopes from r 103 to the wall, as the retro's does
     // (2026-10-29), except where an ear's hollow opens into the head: the
     // wall below the shelf is gone there, so the slope would start in
-    // mid-air. See shelf_slope_r0.
+    // mid-air. See shelf_slope_r0. Since the hollows' tops are tented, none
+    // comes up as far as the slope; this stays so that a taller one can't
+    // leave it hanging.
     difference() { shelf_slope(); ears_hollow(); }
 
     // 8 front insert posts, below the shelf's top face; holes cut in shell()
