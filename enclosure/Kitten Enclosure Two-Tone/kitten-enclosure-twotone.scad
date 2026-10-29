@@ -23,7 +23,7 @@
 // the shell's posts. The head then sets down into the stand.
 // ============================================================
 
-part = "preview";  // front_trim | retainer | shell | stand | preview | exploded | test_ear
+part = "preview";  // front_trim | retainer | shell | stand | preview | exploded | test_ear | test_clip
 // ---- Curve resolution ------------------------------------------------
 // $fa/$fs rather than a fixed $fn, which is what this was before.
 //
@@ -492,6 +492,28 @@ function ang_gap(a, b) = abs(((a - b + 180) % 360 + 360) % 360 - 180);
 // STAND — a sitting cat. Plinth is rounded rather than a slab.
 base_w = outer_dia*0.86; base_d = 150; base_h = 16;
 base_corner_r = 18;
+// ---------- THE CHARGER CABLE'S CLIP (2026-10-29) ----------
+// Nothing held the cable, so its weight and every tug levered the plug in the
+// trigger board's socket, and a moving cable is what set off the power cuts.
+// The plug points straight back, 18 degrees down, from the window at
+// usbc_cut_pos; its end is about (60, 45) and 70mm above the desk, and the
+// cable drops from it onto the back of the plinth, where the tail's root is.
+// The root is solid from the desk up to z 25.5 there, so a groove under it
+// would be a closed tunnel that no plug can be threaded through, and a mouth
+// cut down through it to let the cable in would split the tail. So the groove
+// runs along the root's inboard foot instead, 18mm inboard of the plug, which
+// the slack loop takes up: the retro case's clip, the same section and the
+// same numbers under the same names, from level with the root's front to the
+// back edge, then round the edge and down the back face. With a slack loop of
+// 40-50mm left up to the plug, a pull moves the stand before it moves the
+// plug. Measure your cable first: this is for one about 4mm thick.
+stand_cable_d    = 4;                 // the charger's cable: about 4mm, measure yours
+stand_clip_grip  = 0.2;               // the groove is this much under the cable
+stand_clip_mouth = stand_cable_d - 0.7;   // so it snaps in past 0.35mm a side
+stand_clip_sink  = 2.5;               // from the top face, and the back face, to the cable's axis
+stand_clip_bend  = 4;                 // the radius it turns down over the back edge, on its axis
+cable_clip_x     = 41.4;              // the groove's side 0.2mm clear of the root at its widest (x 43.5)
+cable_clip_y0    = 44;                // the groove's front end, level with the root's front
 // PAWS. A real foreleg is not a flat capsule with domes stuck on: it is
 // narrow and taller at the ankle, spreading and flattening forward into a
 // pad, with four toes splayed across the front and visible clefts between
@@ -2605,11 +2627,43 @@ module cradle_arm(depth_offset) {
     }
 }
 
+// The charger cable's clip, cut from the plinth beside the tail's root
+// (2026-10-29): see stand_cable_d. The retro case's stand_cable_clip() at
+// cable_clip_x, less its notch through the ridges, which this plinth hasn't
+// got. Along the top a round groove a little under the cable, with a mouth
+// narrower than it; then a turn down over the back edge, its mouth on the
+// outside of the turn; then a channel down the back face as wide as the
+// groove but open to the back, so the cable leaves it wherever it bends away
+// to the desk. None of it needs support: under the mouths' lips the groove's
+// curve is 60 degrees or more from flat, and the channel down the back face
+// is upright.
+module root_cable_clip() {
+    r  = (stand_cable_d - stand_clip_grip) / 2;
+    zc = base_h - stand_clip_sink;      // the top groove's axis
+    yc = base_d/2 - stand_clip_sink;    // the back channel's axis
+    R  = stand_clip_bend;
+    y1 = yc - R;                        // where the groove starts to turn down
+    translate([cable_clip_x, cable_clip_y0, zc]) {
+        rotate([-90, 0, 0]) cylinder(r = r, h = y1 - cable_clip_y0 + 0.01);
+        sphere(r = r);
+    }
+    hull() for (y = [cable_clip_y0, y1])
+        translate([cable_clip_x, y, zc]) cylinder(d = stand_clip_mouth, h = stand_clip_sink + 1);
+    translate([cable_clip_x, y1, zc - R]) rotate([0, 90, 0]) rotate([0, 0, 90])
+        rotate_extrude(angle = 90) {
+            translate([R, 0]) circle(r = r);
+            translate([R, -stand_clip_mouth/2]) square([2*stand_clip_sink + 1, stand_clip_mouth]);
+        }
+    translate([cable_clip_x, yc, -1]) cylinder(r = r, h = zc - R + 1 + 0.01);
+    translate([cable_clip_x - r, yc, -1]) cube([2*r, base_d/2 - yc + 0.01, zc - R + 1 + 0.01]);
+}
+
 module stand() {
     difference() {
         stand_solid();
         paw_clefts( paw_x);
         paw_clefts(-paw_x);
+        root_cable_clip();   // the charger cable's clip (2026-10-29)
     }
 }
 
@@ -2688,6 +2742,7 @@ module part_stand_body() {                      // BLACK
         paw_pad(  paw_x, colour_overlap); paw_pad( -paw_x, colour_overlap);
         paw_toes( paw_x, colour_overlap); paw_toes(-paw_x, colour_overlap);
         tail(colour_overlap);
+        root_cable_clip();   // only the plinth: it clears the tail's root
     }
 }
 
@@ -2781,6 +2836,16 @@ else if (part == "test_ear") {
     intersection() {
         shell();
         rotate([0,0,-ear_angle]) translate([-55, 70, -1]) cube([110, 110, shell_depth + 2]);
+    }
+}
+else if (part == "test_clip") {
+    // The stand's cable clip in a 20 x 37 mm piece of the plinth's back, cut
+    // off at the plinth's top, to try the charger's cable in before printing
+    // the stand (2026-10-29).
+    intersection() {
+        stand();
+        translate([cable_clip_x - 10, cable_clip_y0 - 6, -1])
+            cube([20, base_d/2 - cable_clip_y0 + 6 + 1, base_h + 1]);
     }
 }
 else if (part == "exploded") {

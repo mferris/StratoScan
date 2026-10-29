@@ -1386,3 +1386,32 @@ module tail_floor_probes(i0, i1) {
 }
 if (check=="tail_on_the_desk")  difference() { tail_floor_probes(3*tail_smooth_steps, 6*tail_smooth_steps); stand(); }
 if (check=="tail_probe_works")  difference() { tail_floor_probes(6*tail_smooth_steps + 2, 7*tail_smooth_steps + 4); stand(); }
+
+// ---- the charger cable's clip beside the tail's root (2026-10-29) -------
+// Restated, as above: `use <>` brings in no values.
+base_d=150;
+stand_cable_d=4; stand_clip_grip=0.2; stand_clip_mouth=stand_cable_d - 0.7;
+stand_clip_sink=2.5; stand_clip_bend=4; cable_clip_x=41.4; cable_clip_y0=44;
+
+// The charger cable in its clip, on the cable's path: along the top groove,
+// round the turn over the back edge and down the back face. `lift` raises the
+// part along the top that far out of its groove. The retro case's, at the
+// kitten's clip.
+module clip_cable(d, lift = 0) {
+  zc = base_h - stand_clip_sink; yc = base_d/2 - stand_clip_sink; R = stand_clip_bend; y1 = yc - R;
+  translate([cable_clip_x, cable_clip_y0 + 0.5, zc + lift]) rotate([-90, 0, 0]) cylinder(d = d, h = y1 - cable_clip_y0 - 0.5, $fn = 48);
+  if (lift == 0) {
+    translate([cable_clip_x, y1, zc - R]) rotate([0, 90, 0]) rotate([0, 0, 90])
+      rotate_extrude(angle = 90, $fn = 96) translate([R, 0]) circle(d = d, $fn = 48);
+    translate([cable_clip_x, yc, 0.5]) cylinder(d = d, h = zc - R - 0.5, $fn = 48);
+  }
+}
+// A cable a little under the groove passes all the way with nothing in its
+// way...
+if (check=="stand_clip_takes_cable") intersection() { stand(); clip_cable(stand_cable_d - stand_clip_grip - 0.2); }
+// ...the cable itself is squeezed by the groove along the top and round the
+// turn, so it grips...
+if (check=="stand_clip_grips")       intersection() { stand(); clip_cable(stand_cable_d); }
+// ...and lifted 1mm out of the groove along the top it still meets the lips
+// of the mouth, so it snaps in and stays.
+if (check=="stand_clip_snaps")       intersection() { stand(); clip_cable(stand_cable_d, 1); }

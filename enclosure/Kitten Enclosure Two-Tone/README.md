@@ -43,7 +43,7 @@ The stand is split into five bodies, one per colour region:
 
 | part | colour | what it is |
 |---|---|---|
-| `stand_body` | **black** | plinth, cradle arms, keel |
+| `stand_body` | **black** | plinth, cradle arms, keel, and a clip beside the tail's root for the charger's cable ([below](#the-stand-holds-the-chargers-cable)) |
 | `stand_paws` | **white** | both foot pads |
 | `stand_toes` | **black** | the eight toe lobes |
 | `stand_claws` | **white** | eight real claws, one per toe |
@@ -424,6 +424,50 @@ the rest is the M2 screwdriver's way in from either side. Fitting, sizes
 and checks are in the retro case's README
 ([The power fix](../Retro%20Radar%20Enclosure/README.md#the-power-fix-the-charger-plugs-into-the-trigger-board)),
 and the build in [docs/power-fix.md](../../docs/power-fix.md).
+
+### The stand holds the charger's cable
+
+Nothing held the cable, so its weight and every tug levered the plug in the
+trigger board's socket, and a moving cable is what set off the power cuts.
+The plug points straight back from the window, 18° down; its end is about
+70 mm above the desk, and the cable drops from it onto the back of the
+plinth, where the tail's root is. A clip takes it there (2026-10-29): the
+retro case's clip, the same groove for the same cable, along the root's
+inboard foot at x = 41.4, 18 mm inboard of the plug. Not under the plug
+itself: the root is solid from the desk up there, so a groove under it would
+be a tunnel no plug can be threaded through, and a way in cut down through it
+would split the tail.
+
+- **A groove along the plinth's top**, from level with the root's front
+  (y 44) to the back edge, round and 0.2 mm under the cable, so it grips,
+  with a mouth 0.7 mm narrower than the cable, so it snaps in and stays. The
+  cable lies just under the top face.
+- **Over the back edge** the groove turns down round a 4 mm radius, so the
+  cable bends round a curve rather than over an edge, still behind the mouth.
+- **Down the back face** a channel as wide as the groove, open to the back,
+  so the cable hangs flat to the back and leaves it wherever it bends away
+  along the desk.
+
+To fit the cable, plug it in with the case in the stand and leave a slack
+loop of 40-50 mm between the plug and the clip, so a pull on the cable moves
+the stand before it reaches the plug. Press the cable into the groove from
+its front end back, round the edge, and let it hang down the channel. **Take
+the cable out of the clip before lifting the case out of the stand:** the
+loop is too short for the case to come out with the cable still in it.
+
+The clip is sized for a cable about 4 mm thick (`stand_cable_d`). Measure
+yours before printing the stand: a thinner one won't grip, and a thicker one
+won't go in. Set `stand_cable_d` to it here and in the retro case's design
+(the core test holds the two the same, as the cable is) and in
+`checks.scad`, or print `test_clip`, the clip in a 20 × 37 mm piece of the
+plinth's back, and try the cable in that first. The clip needs no support.
+
+`stand_clip_takes_cable` must come out empty: a cable 3.6 mm across passes
+all the way along the groove, round the turn and down the back with nothing
+in its way (the stand as it was finds 399 mm³). `stand_clip_grips` and
+`stand_clip_snaps` are its controls: a 4 mm cable is squeezed along the top
+and round the turn (31 mm³), and lifted 1 mm out of the groove it still meets
+the mouth's lips (19 mm³).
 
 ## Heat-set inserts
 
