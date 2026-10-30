@@ -48,7 +48,7 @@ $fa = 0.5;   // max degrees per fragment
 // ============================================================
 panel_diameter    = 203.34;
 panel_active      = 178.15;
-panel_glass_depth = 6.45;   // whole panel module (preview only, NOT the rabbet)
+panel_glass_depth = 6.45;   // whole panel module (the preview and the HAT's stack, hat_stack; NOT the rabbet)
 glass_thickness   = 1.62;   // the glass sheet alone — this is what the rabbet spans
 
 pcb_w = 108; pcb_h = 72;
@@ -69,6 +69,19 @@ mount_hole_x = 58; mount_hole_y = 49;
 // one number that has had to move every time the internals changed.
 shell_depth_note = "56 -> 61 for the FlyCatcher HAT's pre-amp switches";
 shell_depth = 61;           // front glass face to back of the tallest component
+// The stack, measured on the owner's unit (2026-10-29): the Pi, the FlyCatcher
+// and its switches stand 46 mm from the back of the display. Not said from
+// which back, so this takes the one that leaves the least room, the display
+// module's metal back, panel_glass_depth - glass_thickness (4.83 mm) behind
+// the glass's back face, which sits at shell_depth on the retainer: the
+// switches' tops are then hat_switch_z() above the plate's inner face, about
+// 10.2 mm (15 if it was from the glass). The standoffs' length isn't
+// recorded yet. hat_switch_margin() and the checks keep everything on the
+// plate 2 mm or more short of the switches.
+hat_stack = 46;
+function hat_switch_z() = shell_depth - (panel_glass_depth - glass_thickness) - hat_stack;
+assert(shell_depth >= hat_stack + (panel_glass_depth - glass_thickness) + 2,
+       "shell_depth must leave 2 mm or more between the HAT's switches and the back plate (hat_stack)");
 rim = 10;
 outer_dia = panel_diameter + 2*rim;   // 223.34
 wall = 3;
@@ -315,7 +328,8 @@ back_lip_skip = 9;      // degrees of clearance either side of each post
 // evenly spaced posts, so the plate used to seat at any of eight positions
 // 45 degrees apart -- and only one of them puts the antenna mount at the top.
 // One block on the shell's bore wall, and a matching notch in one arc of the
-// rib, leave exactly one. Placed lower left, between the posts at 225 and
+// rib, leave exactly one. Placed at the lower right seen from behind (the
+// lower left as drawn here, +x to the right), between the posts at 225 and
 // 270: clear of the antenna-mount bosses at the top (which already come
 // within 0.2mm of the rib) and of the USB-C window. Both shells use the same
 // angle, so the one plate still fits both cases.
@@ -395,7 +409,20 @@ fan_grille_dia = 26;
 // y=68 to y=81 -- the vent was underneath the mount, which is no use to
 // anybody. Directly opposite it is clear of the flange, the standoffs, the
 // USB-C window and the screw ring.
-fan_grille_pos = [0, -68];
+// Moved again, from [0, -68] up to just under the central grille (2026-10-29,
+// the owner's OK): the bottom of the plate is the regulator tray's now, the
+// one place far enough from the FlyCatcher and the coax with room for its
+// leads (see "The regulator's place"). The same 19 holes, so the same area of
+// intake, but 22 mm higher: its air has that much less height to rise through
+// the case before it leaves at the top, and nothing lets air in below
+// y = -58, where the regulator now sits. The nearest holes of the two grilles
+// are 10.1 mm apart, centre to centre, so 7 mm of plate between them. The
+// 53-63 C the Pi ran at with no fan were measured with the grille at [0, -68],
+// so measure the Pi's and the regulator's temperatures again once a unit is
+// built this way. It can go no lower: the tray takes the room under it, 2.9 mm
+// from its lowest holes. The 12 V pair crosses it on the decks of two tie
+// bridges, 4.4 mm off the plate, so its holes stay open.
+fan_grille_pos = [6, -46];
 
 // floor intake
 intake_dia = 54; intake_hole = 3; intake_pitch = 6;
@@ -1769,8 +1796,9 @@ module usbc_label_solid(h = usbc_label_depth) {
 // power_trigger_mount is a sleeve round the board, screwed to the plate's
 // inner face; power_trigger_stop slides in behind the board, and two M2
 // screws through the mount's side walls lock it there. power_regulator_tray
-// holds the regulator, stuck to the plate's inner face wherever the case has
-// room.
+// holds the regulator, screwed to two bosses at one fixed place on the
+// plate's inner face (since 2026-10-29; until then it was stuck on with VHB
+// tape wherever the case had room: see "The regulator's place", below).
 //
 // The socket goes through the plate since 2026-10-29. The owner's power kept
 // cutting out when the cable moved: the plug would not make a good
@@ -1927,8 +1955,251 @@ pwr_tray_wall     = 2;
 pwr_tray_wall_h   = 5;      // above the floor: it holds the board's edges, not its parts
 pwr_tray_rib_w    = 3;
 pwr_tray_rib_h    = 1.5;    // the board rests on two ribs; its solder joints stay clear
-pwr_tie_w         = 6;      // grooves under the floor for an optional cable tie
+pwr_tie_w         = 4.6;    // the two grooves under the floor, a tie through each (6 until 2026-10-29)
 pwr_tie_d         = 1.2;
+
+// ---- The regulator's place (2026-10-29, #99) --------------------------------
+// The tray used to be stuck down with VHB tape "wherever the case has room".
+// Nothing checked where that was, every plate removal flexed the tape through
+// the leads, and its only tie, through two 6 mm grooves under its floor, went
+// round the board's middle, 15 mm from the terminals, so a pull on the
+// pigtail landed on the terminal screws. Nothing said where the leads ran
+// either. Now the tray has one place, screwed down, with a tie at each end,
+// the leads and the coax run along set routes tied to the plate, and the
+// checks hold all of it clear of everything else on the plate and 20 mm or
+// more from the antenna leads.
+//
+// Left and right, here and in the guides, are as seen from BEHIND the case,
+// where anyone fitting the plate stands: +x is the viewer's LEFT and -x the
+// RIGHT, +y up (as for the twin mount's towers, below). Seen that way, on the
+// owner's unit (2026-10-29): the trigger board's socket is at the lower left;
+// the Pi's USB-C power plug goes in at the upper right, pointing up; and the
+// FlyCatcher's two SMA jacks are on its right-hand edge, their plugs pointing
+// right, toward the right-hand speaker. The coax comes in at the top, at the
+// cable hole, and runs down the right to those jacks. So the power keeps to
+// the lower half and the left: the regulator across the bottom; the 12 V
+// pair from the trigger board across the lower half, over the top of the low
+// grille, and round the tray's right-hand end to its input; and the pigtail
+// from its output up the left side of the Pi and along its top edge to its
+// port. The two sides come near each other only at the Pi's USB-C port, which
+// the Pi puts 11 mm from the FlyCatcher's right-hand edge (pi_usbc_port2d(),
+// below).
+//
+// Where. The tray goes across the bottom of the plate, turned 8 degrees to
+// follow the rim, its middle 76 mm from the middle of the plate and 157 mm
+// from the cable hole: the farthest the plate allows from the FlyCatcher and
+// the antenna leads (the regulator switches, and the 978 MHz band is the
+// sensitive one). Its +x end, the left seen from behind, is the regulator's
+// OUTPUT, so the pigtail starts on the side it climbs; its -x end, the right,
+// is the INPUT, which the 12 V pair reaches round that end. Every other spot
+// was tried against the speakers, the trigger mount's 70 x 13.5 mm strip,
+// the vents, a 50 mm keep-out round the cable hole, the Pi and its HAT
+// (hat_envelope(), below), the rim and the posts, with room past each end
+// for ferruled leads:
+//   - the lower left (from behind) is the trigger mount's strip;
+//   - the lower right, upright, where the case review first put it, fits the
+//     tray alone with under a millimetre to spare, its ends against the Pi and
+//     the rim, with no room for a lead;
+//   - the bottom centre is the best of all, and the low grille was there, so
+//     it moved up to just under the central one (fan_grille_pos; the owner's
+//     OK, 2026-10-29).
+// Within the bottom the place is a compromise between three things: the
+// output end stays short of the trigger mount's nearer ear (x 35.7 against
+// 44.3), so the pigtail can turn up beside it; the input end stays low
+// enough that the 12 V pair passes above it 20 mm or more from the SMA plugs;
+// and 2.5 mm or more of plate is left to the lip, the posts, the strip and the
+// low grille's holes.
+//
+// The fixing: two ears, one on each long side, each a cap over a boss on the
+// plate, and an M3 x 8 button-head screw down through the cap into an M3 x 5
+// heat-set insert in the boss. Screws rather than locating pegs and VHB: tape
+// on a part whose leads pull on it every time the plate comes off creeps and
+// peels, and pegs stop it sliding but not lifting. A screwed tray comes off
+// with its regulator still in it, and goes back in the same place, as often
+// as needed. The caps fit over the bosses with pwr_tray_cap_clear to spare all
+// round, so the bosses also locate the tray before a screw is in. The ears
+// are not opposite each other (pwr_tray_cap_x): the upper one keeps out of
+// the low grille's holes and the 12 V pair's way above the tray, and the
+// lower one off the post at the bottom of the rim. So the tray goes on one way
+// only. The regulator itself would still lie in it either way round, and
+// reversed, its output would be at the right-hand end, below the SMA plugs,
+// where the pigtail would start on the coax's side: so each end is marked,
+// OUT and IN, engraved in its tongue (pwr_tray_label). The bosses' holes stop
+// 2 mm short of the plate's outer face, so nothing shows outside.
+//
+// The ties: a tongue past each open end of the tray, low enough to pass under
+// the regulator's input jack and USB socket, ends in a saddle, and a slot
+// through the saddle's foot takes a cable tie round the saddle and the leads
+// on it, its head on top, over the leads: on the tray's lower side it would
+// meet the plate's lip, 4 mm away (tray_ties_clear). The saddle starts just
+// past a ferrule's collar, so the tie grips the lead's insulation, not the
+// collar, and its top is level with the terminals' wire entries, less half a
+// lead, so each lead runs straight from its terminal to its tie and a pull on
+// it lands on the tray, not on the terminal's screw. The terminals aren't
+// drawn, and their height and set-back below (pwr_reg_term_*) are estimates:
+// measure the regulator, and its jack's and socket's overhang, before
+// printing. The saddles and the tray's length follow those numbers, and the
+// checks hold the result. Two grooves under the floor, 4.6 mm wide, take a
+// tie each, round the tray and the board: they keep the board in the tray,
+// since in the case the plate stands nearly upright and nothing else holds
+// it.
+pwr_tray_pos      = [-10.5, -75.5]; // the tray's middle on the plate's inner face
+pwr_tray_a        = -8;             // its long axis, from +x: the +x end (the output) points down to the left, seen from behind
+pwr_tray_cap_x    = [-7, 4];        // its two ears, along it from its middle: the one on its +y side, and the one on its -y side
+pwr_tray_boss_od  = 7.5;            // 1.75 mm of plastic round each insert
+pwr_tray_boss_h   = 5;              // above the plate's inner face
+pwr_tray_insert_len = 5;            // M3 x 5, as in the front posts and the antenna flange
+pwr_tray_cap_clear  = 0.3;          // a side, between each boss and the cap over it
+pwr_tray_cap_wall   = 1.6;
+pwr_tray_cap_top    = 3;            // the cap's top, which each screw clamps on its boss
+pwr_tray_tongue_h   = 4.6;          // under the board's top face (5.1 mm up), so under its jack and socket
+// A tie's way through the saddles and the plate's bridges (2026-10-29): along
+// the lead, wide enough for a 3.6 mm tie with room, and up, its walls this
+// tall, then a roof of two 45-degree slopes meeting over its middle. Such a
+// roof prints on its own whether the slicer's supports are on or off. A flat
+// one would be a 4.6 mm bridge, and with supports on, Bambu Studio fills a
+// bridge that short with support that can't be got out of a tunnel.
+pwr_tie_slot_w      = 4.6;
+pwr_tie_slot_h      = 1.1;          // a 3.6 mm tie, 1.3 mm thick, has 1.6 mm at its edges
+pwr_tie_slot_floor  = 1.0;          // under each saddle's slot
+// The regulator's screw terminals and the leads in them (2026-10-29): not
+// drawn, and not yet measured on the regulator, so estimates. Measure them:
+pwr_reg_pcb_t       = 1.6;          // the regulator's circuit board, the usual thickness
+pwr_reg_term_h      = 4.0;          // the terminals' wire entries, their middle above the board's top face (about, for a 5 mm block)
+pwr_reg_term_proud  = 0.5;          // how far each terminal's face stands past the board's end (about)
+pwr_reg_overhang    = 3.0;          // how far the input jack and the USB socket stand past the board's ends, at most (about)
+pwr_ferrule_proud   = 8;            // a bootlace ferrule's collar, out of its terminal's face
+pwr_ferrule_d       = 4.0;          // across a collar (a 1.5 mm2 one is about 3.5)
+pwr_ferrule_clear   = 0.5;          // between the end of a collar and its saddle
+pwr_lead_d          = 2.0;          // the thinnest lead: a wire of the pigtail
+// from the end of the walls to the tie slot, which starts with the saddle,
+// just past a ferrule's collar: 8.5 mm, so 9 mm past the board's end
+pwr_tie_slot_at     = pwr_reg_term_proud + pwr_ferrule_proud + pwr_ferrule_clear - pwr_reg_clear;
+// each tongue, past the end of the walls, with 1.5 mm of saddle past its slot: 14.6
+pwr_tray_tongue_l   = pwr_tie_slot_at + pwr_tie_slot_w + 1.5;
+// the saddles' tops, level with the wire entries less half the thinnest lead: 8.1
+pwr_tray_saddle_h   = pwr_tray_floor + pwr_tray_rib_h + pwr_reg_pcb_t + pwr_reg_term_h - pwr_lead_d/2;
+
+// The plate's own tie bridges (2026-10-29), for the leads and the coax where
+// they run along its inner face: a deck on two legs, the tie through the
+// tunnel between them, across the cable, and round the deck and the cable on
+// it. The tunnel is the saddles' slot, its roof the same 45-degree tent.
+// [x, y, the cable's direction in degrees], each lead's in the order it
+// passes them. Left and right are seen from behind.
+//   - The 12 V pair's four: between the trigger board's mount and the low
+//     grille, where it comes down onto the plate; across the low grille, on
+//     this bridge and the next, so it crosses the grille on their decks and
+//     leaves its holes open; up the plate from the tray's right-hand end, low
+//     enough that the pair keeps 24 mm from the SMA plugs' zone; and on its
+//     loop round that end, so neither the loop nor any of the pair's spare
+//     length can rise toward the SMA plugs.
+pwr_12v_bridge_at = [[22, -38, 180], [-10, -41, 205], [-34, -50, 172], [-63, -60, 265]];
+//   - The pigtail's four: up past the trigger mount's nearer ear from the
+//     regulator's output; into the gap between the trigger board's strip and
+//     the Pi; up the Pi's left side, between its USB ports and the speaker,
+//     where its tie's head goes on the speaker's side, not on top, to stay
+//     under the plugs in those ports; and at the Pi's top left corner, from
+//     where it lies free along the Pi's top edge to its port, between the Pi
+//     and its curb (pwr_5v_curb, below), with the ferrite on it and the slack
+//     that lets the plate be eased back before the plug is reached.
+pwr_5v_top_y      = 35;     // the pigtail's run along the Pi's top edge, its middle: 3.3 mm clear of the Pi's sockets
+pwr_5v_bridge_at  = [[44, -67, 108], [36, -41, 68], [62, -20, 90], [50, pwr_5v_top_y, 180]];
+//   - The coax jumpers' two: both jumpers on each, from the cable hole to the
+//     right and down the right-hand side, 20 mm or more from the Pi's USB-C
+//     plug, with a curb (coax_curb, below) between their free run and it.
+coax_tie_bridge_at = [[-36, 66, 200], [-56, 50, 235]];
+// The deck over each tunnel's apex: 1.0 mm, the five 0.2 mm top layers that
+// Bambu Studio's 0.20 mm Standard prints solid, so the whole deck prints
+// solid. A thicker deck gets sparse infill, 15%, in its middle, which adds
+// nothing: a tie pulled tight squeezes the deck between the tie under it and
+// the cable on it, both along the same line, rather than bending it.
+pwr_tb_deck = 1.0;
+pwr_tb_leg  = 2.0;   // each leg, along the cable
+pwr_tb_len  = 8;     // across the cable: the tunnel's length, the width the cable lies on
+
+// The leads' and the jumpers' sizes, for the routes' checks (2026-10-29).
+pwr_12v_lead_d   = 4.6;   // the twisted 18 AWG pair
+pwr_5v_lead_d    = 5.0;   // the pigtail, a cut USB-C cable
+coax_bundle_d    = 5.0;   // the two RG316 jumpers, 2.5 mm each, side by side
+lead_coax_gap    = 20;    // the least gap between a power lead and an antenna lead or SMA plug
+
+// The two curbs (2026-10-29): low walls on the plate's inner face beside the
+// two runs that are tied at one end only, the pigtail's along the Pi's top
+// edge to its plug, and the jumpers' from their second bridge down to the SMA
+// plugs. Each carries the slack that lets the plate be eased back 5 cm before
+// its plug is undone, and as the plate goes home that slack goes wherever it
+// is pushed. A curb on the side toward the other cable stops it there: the
+// pigtail's slack stays between the Pi's top edge and its curb, or arches off
+// the plate toward the Pi, and the jumpers' between the right-hand speaker
+// and theirs. The checks keep the whole of each strip, not just the line
+// drawn along it, 20 mm from the other cable (pwr_5v_slack2d, coax_slack2d,
+// routes_power_20mm_from_coax), and their controls show that without the
+// curbs the slack, bowed as far as it can go, would come closer. Each curb is
+// [[x, y], [x, y]], its two ends.
+pwr_5v_curb  = [[-10, 43], [44, 43]];
+coax_curb    = [[-48, 25], [-48, 46]];
+slack_curb_t = 2;    // thick
+slack_curb_h = 8;    // tall: well over a 5 mm cable lying on the plate, and over half a ferrite clip
+
+// Each end of the tray is marked (2026-10-29): OUT at the +x end and IN at
+// the -x end, engraved pwr_tray_label_d deep in the tongue's top, between the
+// walls and the saddle, the letters' tops toward that end. Engraved, not
+// raised: raised letters could meet the regulator's jack or USB socket where
+// they overhang the tongues, and letters cut into a top face print with no
+// support.
+pwr_tray_label     = ["OUT", "IN"];   // at the +x end, and at the -x end
+pwr_tray_label_cap = 4.5;             // their capitals' height, along the tray
+pwr_tray_label_d   = 0.6;             // three 0.2 mm layers
+
+// across the tray, from its long centre line to each boss: each cap's bore just
+// meets the wall's outer face
+function pwr_tray_cap_y() = pwr_reg_w/2 + pwr_reg_clear + pwr_tray_wall + pwr_tray_boss_od/2 + pwr_tray_cap_clear;
+// the two ears' places in the tray's frame: [along, across]
+function pwr_tray_ears() = [[pwr_tray_cap_x[0], pwr_tray_cap_y()], [pwr_tray_cap_x[1], -pwr_tray_cap_y()]];
+// each cap's outer radius
+function pwr_tray_cap_r() = pwr_tray_boss_od/2 + pwr_tray_cap_clear + pwr_tray_cap_wall;
+// along the tray, from its middle to the middle of each saddle's tie slot
+function pwr_tray_tie_x() = pwr_reg_l/2 + pwr_reg_clear + pwr_tie_slot_at + pwr_tie_slot_w/2;
+// from the board's end to the far side of the tie: how far out a lead is held
+function pwr_tray_tie_reach() = pwr_tray_tie_x() + pwr_tie_slot_w/2 - pwr_reg_l/2;
+// the terminals' wire entries, their middle, above the plate
+function pwr_reg_entry_z() = pwr_tray_floor + pwr_tray_rib_h + pwr_reg_pcb_t + pwr_reg_term_h;
+// the top of a tie slot's tented roof, above its floor
+function pwr_tie_apex() = pwr_tie_slot_h + pwr_tie_slot_w/2;
+// the plate's tie bridges: the power leads', the coax's, and all of them
+function pwr_bridges() = concat(pwr_12v_bridge_at, pwr_5v_bridge_at);
+function coax_bridges() = coax_tie_bridge_at;
+function tie_bridges_all() = concat(pwr_bridges(), coax_bridges());
+assert(pwr_reg_clear + pwr_tie_slot_at >= pwr_reg_term_proud + pwr_ferrule_proud + pwr_ferrule_clear - 1e-6,
+       "each tie, and the saddle under it, must start past a ferrule's collar");
+assert(pwr_reg_clear + pwr_tie_slot_at >= pwr_reg_overhang + 0.5,
+       "the saddles must start past the regulator's input jack and USB socket");
+assert(pwr_tray_tie_reach() <= 15,
+       "each lead's tie must be close to its terminal: no more than 15 mm past the board's end");
+assert(pwr_tie_slot_at + pwr_tie_slot_w <= pwr_tray_tongue_l - 1.5,
+       "each saddle needs 1.5 mm of plastic past its tie slot");
+assert(pwr_tray_saddle_h - pwr_tie_slot_floor - pwr_tie_apex() >= 1.5 && pwr_tb_deck >= 1.0,
+       "the decks over the tie slots must be at least 1.5 mm thick on the saddles and 1.0 mm, all of it solid, on the bridges");
+assert(slack_curb_h >= max(pwr_5v_lead_d, coax_bundle_d) + 2,
+       "the curbs must stand 2 mm or more above a cable lying on the plate beside them");
+assert(pwr_tray_label_cap <= pwr_tie_slot_at - 2 && pwr_tray_label_d <= pwr_tray_tongue_h - pwr_tray_floor,
+       "the tray's labels must fit the tongues' tops, 1 mm in from the walls and the saddles, and stop above the floor's level");
+assert(pwr_tie_slot_w >= 3.6 + 0.8 && pwr_tie_slot_h + pwr_tie_slot_w/2 - 3.6/2 >= 1.3 + 0.3 - 1e-6,
+       "the tie slots must take a 3.6 mm tie, 1.3 mm thick, under their tented roofs");
+assert(pwr_tie_w >= 3.6 + 0.8 && pwr_tray_floor - pwr_tie_d >= 0.8,
+       "the grooves under the tray's floor must take a 3.6 mm tie, under 0.8 mm of floor or more");
+assert(pwr_tray_tongue_h < pwr_tray_floor + pwr_tray_rib_h + pwr_reg_pcb_t,
+       "the tongues must stay under the board's top face, and so under its jack and USB socket");
+assert(pwr_tray_saddle_h > pwr_tray_tongue_h + 1,
+       "the saddles must stand above the tongues, up to the terminals' wire entries");
+assert(min([for (e = pwr_tray_ears(), g = [-1, 1]) abs(e[0] - g*(pwr_reg_l/2 + pwr_reg_clear)/2)]) >= pwr_tie_w/2 + pwr_tray_cap_r() + 0.5,
+       "each ear must keep 0.5 mm clear of the grooves under the floor, or a tie through one rubs on its cap");
+assert(pwr_m3_len - pwr_tray_cap_top <= pwr_tray_insert_len && pwr_m3_len - pwr_tray_cap_top >= 3,
+       "the tray's M3 x 8 screws must end inside their inserts with at least 3 mm of thread");
+assert(back_plate_t + pwr_tray_boss_h - pwr_tray_insert_len - 1 >= 1.5,
+       "the tray's insert holes must stop at least 1.5 mm short of the plate's outer face");
+assert(pwr_tray_boss_od - insert_hole_dia >= 3,
+       "each of the tray's inserts needs 1.5 mm of boss all round it");
 
 // The back plate's window and the pocket's depth, from the board's sizes
 // (2026-10-29). The window is the socket's outline usbc_cut_clear bigger all
@@ -2282,24 +2553,286 @@ module power_wire_probe(dy = 0) {
             cylinder(d = 2.1, h = pwr_mount_len() - pwr_board_z1() + 13, $fn = 24);
 }
 
-// The regulator's tray, printed and fitted floor down. The board's long axis
-// is x; both ends stay open for its terminals, jack and USB socket.
+// A tie's way through, in its own frame (2026-10-29): w wide along x, its
+// walls h tall from z = 0, then two 45-degree slopes up to its apex over the
+// middle, and len long across, along y, centred. As the parts print, z up,
+// the slopes are the roof, which needs no support.
+module pwr_tie_tent(w = pwr_tie_slot_w, h = pwr_tie_slot_h, len = 10) {
+    rotate([90, 0, 0]) linear_extrude(height = len, center = true)
+        polygon([[-w/2, 0], [w/2, 0], [w/2, h], [0, h + w/2], [-w/2, h]]);
+}
+
+// The tray's two labels, OUT and IN, in plan in its own frame (2026-10-29):
+// each in the middle of its tongue's open top, between the walls' end and
+// the saddle, the letters' tops toward that end of the tray.
+module pwr_tray_labels2d() {
+    x = pwr_reg_l/2 + pwr_reg_clear + pwr_tie_slot_at/2;
+    for (i = [0, 1]) translate([i == 0 ? x : -x, 0]) rotate(i == 0 ? -90 : 90)
+        text(pwr_tray_label[i], size = pwr_tray_label_cap/0.955, font = "Liberation Sans:style=Bold",
+             halign = "center", valign = "center");
+}
+
+// The regulator's tray, in its own frame: the board's long axis along x, the
+// floor on the plate at z = 0. It prints as it sits, floor down: its ears'
+// caps are bridges over the bosses' bores (8.1 mm), the grooves under its
+// floor are 4.6 mm bridges, and the slots through its saddles have tented
+// roofs. Both ends stay open above the tongues for its terminals, jack and
+// USB socket, and the saddles at the tongues' ends stand past them.
 module power_regulator_tray() {
     iw = pwr_reg_w + 2*pwr_reg_clear;
     il = pwr_reg_l + 2*pwr_reg_clear;
     w  = pwr_tray_wall;
+    hw = iw/2 + w;                                        // wall to wall, halved
+    rb = pwr_tray_boss_od/2 + pwr_tray_cap_clear;         // each cap's bore
     difference() {
         union() {
-            translate([-il/2, -iw/2 - w, 0]) cube([il, iw + 2*w, pwr_tray_floor]);
+            translate([-il/2, -hw, 0]) cube([il, 2*hw, pwr_tray_floor]);
             for (sy = [-1, 1])
-                translate([-il/2, sy > 0 ? iw/2 : -iw/2 - w, 0]) cube([il, w, pwr_tray_floor + pwr_tray_wall_h]);
+                translate([-il/2, sy > 0 ? iw/2 : -hw, 0]) cube([il, w, pwr_tray_floor + pwr_tray_wall_h]);
             for (sy = [-1, 1])
                 translate([-il/2, sy > 0 ? iw/2 - pwr_tray_rib_w : -iw/2, 0])
                     cube([il, pwr_tray_rib_w, pwr_tray_floor + pwr_tray_rib_h]);
+            // a tongue past each open end, for the leads' ties (2026-10-29)
+            for (sx = [-1, 1])
+                translate([sx > 0 ? il/2 - 0.01 : -il/2 - pwr_tray_tongue_l, -hw, 0])
+                    cube([pwr_tray_tongue_l + 0.01, 2*hw, pwr_tray_tongue_h]);
+            // and the saddle at its end, from just past a ferrule's collar,
+            // its top level with the terminals' wire entries
+            for (sx = [-1, 1])
+                translate([sx > 0 ? il/2 + pwr_tie_slot_at : -il/2 - pwr_tray_tongue_l, -hw, 0])
+                    cube([pwr_tray_tongue_l - pwr_tie_slot_at, 2*hw, pwr_tray_saddle_h]);
+            // the two ears, a cap over each boss, one on each long side
+            for (e = pwr_tray_ears()) translate([e[0], e[1], 0])
+                cylinder(r = pwr_tray_cap_r(), h = pwr_tray_boss_h + pwr_tray_cap_top);
         }
+        // the two grooves under the floor, a tie through each
         for (x = [-il/4, il/4])
-            translate([x - pwr_tie_w/2, -iw/2 - w - 1, -0.01]) cube([pwr_tie_w, iw + 2*w + 2, pwr_tie_d]);
+            translate([x - pwr_tie_w/2, -hw - 1, -0.01]) cube([pwr_tie_w, 2*hw + 2, pwr_tie_d]);
+        // each saddle's tie slot, right across its foot, its roof tented
+        for (sx = [-1, 1])
+            translate([sx*pwr_tray_tie_x(), 0, pwr_tie_slot_floor]) pwr_tie_tent(len = 2*hw + 2);
+        // OUT and IN, engraved in the tongues' tops (2026-10-29)
+        translate([0, 0, pwr_tray_tongue_h - pwr_tray_label_d])
+            linear_extrude(height = pwr_tray_label_d + 0.01) pwr_tray_labels2d();
+        // each cap's bore over its boss, the screw's clearance hole through its
+        // top, and a 1 mm chamfer under the top: room for any plastic an insert
+        // raises round its hole
+        for (e = pwr_tray_ears()) translate([e[0], e[1], 0]) {
+            translate([0, 0, -0.01]) cylinder(r = rb, h = pwr_tray_boss_h + 0.01);
+            translate([0, 0, -1]) cylinder(d = screw_clear_dia, h = pwr_tray_boss_h + pwr_tray_cap_top + 2);
+            translate([0, 0, pwr_tray_boss_h - 0.01]) cylinder(d1 = screw_clear_dia + 2, d2 = screw_clear_dia, h = 1.01);
+        }
     }
+}
+
+// The tray's place on the plate, and the tray there (2026-10-29). pos and a
+// move it, for the checks' controls.
+module pwr_tray_frame(pos = pwr_tray_pos, a = pwr_tray_a) {
+    translate([pos[0], pos[1], 0]) rotate([0, 0, a]) children();
+}
+module power_regulator_tray_placed(pos = pwr_tray_pos, a = pwr_tray_a) { pwr_tray_frame(pos, a) power_regulator_tray(); }
+// A point in the tray's frame, p, where it is on the plate (2026-10-29).
+function pwr_tray_pt(p) = [pwr_tray_pos[0] + p[0]*cos(pwr_tray_a) - p[1]*sin(pwr_tray_a),
+                           pwr_tray_pos[1] + p[0]*sin(pwr_tray_a) + p[1]*cos(pwr_tray_a)];
+
+// The two bosses on the plate's inner face that the tray's caps go over, and
+// their insert holes, drilled in back_plate() after the union so nothing fills
+// them: each the insert's length deep and 1 mm more, stopping short of the
+// outer face.
+module pwr_tray_bosses() {
+    pwr_tray_frame() for (e = pwr_tray_ears()) translate([e[0], e[1], -0.01])
+        cylinder(d = pwr_tray_boss_od, h = pwr_tray_boss_h + 0.01);
+}
+module pwr_tray_boss_holes() {
+    pwr_tray_frame() for (e = pwr_tray_ears()) translate([e[0], e[1], pwr_tray_boss_h - pwr_tray_insert_len - 1])
+        cylinder(d = insert_hole_dia, h = pwr_tray_insert_len + 1 + 0.01);
+}
+
+// For the checks: the regulator as the tray holds it, one box from the board's
+// underside, on the ribs, to the top of its tallest capacitor...
+module power_regulator_board_placed(pos = pwr_tray_pos, a = pwr_tray_a) {
+    pwr_tray_frame(pos, a) translate([-pwr_reg_l/2, -pwr_reg_w/2, pwr_tray_floor + pwr_tray_rib_h])
+        cube([pwr_reg_l, pwr_reg_w, pwr_reg_h]);
+}
+// ...the tray's two M3 screws, each shank d across and len long down from its
+// cap's top, and its button head on the cap...
+module power_tray_m3_probe(d = 3.0, len = pwr_m3_len, head = true, pos = pwr_tray_pos, a = pwr_tray_a) {
+    pwr_tray_frame(pos, a) for (e = pwr_tray_ears()) translate([e[0], e[1], pwr_tray_boss_h + pwr_tray_cap_top]) {
+        translate([0, 0, -len]) cylinder(d = d, h = len, $fn = 24);
+        if (head) cylinder(d = pwr_m3_head[0], h = pwr_m3_head[1], $fn = 24);
+    }
+}
+// ...its two M3 x 5 inserts, d across (4.5, their knurl), flush with the
+// bosses' tops...
+module power_tray_insert_probe(d = 4.5) {
+    pwr_tray_frame() for (e = pwr_tray_ears()) translate([e[0], e[1], pwr_tray_boss_h - pwr_tray_insert_len])
+        cylinder(d = d, h = pwr_tray_insert_len, $fn = 32);
+}
+// ...a cable tie through each saddle's slot, w wide and t thick, from just
+// over the slot's floor and out past both sides of the tray; dz moves it up...
+module power_tray_tie_probe(w = 3.6, t = 1.3, dz = 0) {
+    pwr_tray_frame() for (sx = [-1, 1])
+        translate([sx*pwr_tray_tie_x() - w/2, -pwr_tray_cap_y() - 10, pwr_tie_slot_floor + 0.1 + dz])
+            cube([w, 2*pwr_tray_cap_y() + 20, t]);
+}
+// ...the room each of those ties takes: its slot's length along the lead,
+// right across the tray and out past both sides, from the plate to over the
+// leads on the saddle...
+module power_tray_tie_zone() {
+    hw = pwr_reg_w/2 + pwr_reg_clear + pwr_tray_wall;
+    pwr_tray_frame() for (sx = [-1, 1])
+        translate([sx*pwr_tray_tie_x() - pwr_tie_slot_w/2, -hw - 5, 0.01])
+            cube([pwr_tie_slot_w, 2*hw + 10, pwr_tray_saddle_h + 4]);
+}
+// ...each of those ties as it is fitted (2026-10-29), its strap w wide and t
+// thick: through the slot, up both sides of the tray and over the leads on
+// the saddle, a 12 V wire 2.5 mm across with its insulation, and its head,
+// 6 x 5.5 x 4.5 mm, on top of the leads; with head = "rim", on the tray's
+// lower side instead, toward the rim, half way up...
+module power_tray_tie_loop(head = "top", w = 3.6, t = 1.3) {
+    hw  = pwr_reg_w/2 + pwr_reg_clear + pwr_tray_wall + 0.05;
+    z0  = pwr_tie_slot_floor + 0.1;
+    top = pwr_tray_saddle_h + 2.5;
+    pwr_tray_frame() for (sx = [-1, 1]) translate([sx*pwr_tray_tie_x() - w/2, 0, 0]) {
+        translate([0, -hw - t, z0]) cube([w, 2*(hw + t), t]);
+        for (sy = [-1, 1]) translate([0, sy > 0 ? hw : -hw - t, z0]) cube([w, t, top + t - z0]);
+        translate([0, -hw - t, top]) cube([w, 2*(hw + t), t]);
+        if (head == "top") translate([w/2 - 3, -2.75, top + t]) cube([6, 5.5, 4.5]);
+        else translate([w/2 - 3, -hw - t - 4.5, 2]) cube([6, 4.5, 5.5]);
+    }
+}
+// ...and the leads in the regulator's terminals (2026-10-29), right across
+// each end of the board, since where along it each terminal is isn't known:
+// the ferrules' collars, d across and len out from the terminals' faces, at
+// the wire entries' height...
+module power_reg_ferrule_probe(len = pwr_ferrule_proud, d = pwr_ferrule_d) {
+    x0 = pwr_reg_l/2 + pwr_reg_term_proud;
+    pwr_tray_frame() for (sx = [-1, 1])
+        translate([sx > 0 ? x0 : -x0 - len, -pwr_reg_w/2, pwr_reg_entry_z() - d/2])
+            cube([len, pwr_reg_w, d]);
+}
+// ...and the leads out of them, d across, straight out at that height to 5 mm
+// past the tray's ends; dz moves them up.
+module power_reg_lead_probe(d = pwr_lead_d, dz = 0) {
+    x0 = pwr_reg_l/2 + pwr_reg_term_proud;
+    len = pwr_reg_l/2 + pwr_reg_clear + pwr_tray_tongue_l + 5 - x0;
+    pwr_tray_frame() for (sx = [-1, 1])
+        translate([sx > 0 ? x0 : -x0 - len, -pwr_reg_w/2, pwr_reg_entry_z() - d/2 + dz])
+            cube([len, pwr_reg_w, d]);
+}
+
+// One of the plate's tie bridges, the cable along x: two legs either side of
+// the tunnel a tie goes through, across the cable, and the deck over it that
+// the cable lies on. It stands on the plate's inner face, and the tunnel's
+// floor is the plate.
+module pwr_tie_bridge() {
+    l = pwr_tie_slot_w + 2*pwr_tb_leg;
+    difference() {
+        translate([-l/2, -pwr_tb_len/2, -0.01]) cube([l, pwr_tb_len, pwr_tie_apex() + pwr_tb_deck + 0.01]);
+        translate([0, 0, -0.02]) pwr_tie_tent(h = pwr_tie_slot_h + 0.02, len = pwr_tb_len + 2);
+    }
+}
+// All of them, the power leads' and the coax's; at chooses which, for the
+// checks.
+module pwr_tie_bridges(at = tie_bridges_all()) {
+    for (b = at) translate([b[0], b[1], 0]) rotate([0, 0, b[2]]) pwr_tie_bridge();
+}
+// For the checks: a cable tie through each bridge's tunnel, w wide and t
+// thick, just over the plate and out past both ends; dz moves it up...
+module pwr_tie_probe(w = 3.6, t = 1.3, dz = 0) {
+    for (b = tie_bridges_all()) translate([b[0], b[1], 0]) rotate([0, 0, b[2]])
+        translate([-w/2, -pwr_tb_len/2 - 3, 0.1 + dz]) cube([w, pwr_tb_len + 6, t]);
+}
+// ...the bottom t of each deck, over the tunnel's apex, the tunnel's whole
+// length and 0.5 mm into the legs...
+module pwr_tie_deck_probe(t = pwr_tb_deck) {
+    for (b = tie_bridges_all()) translate([b[0], b[1], 0]) rotate([0, 0, b[2]])
+        translate([-pwr_tie_slot_w/2 - 0.5, -pwr_tb_len/2 + 0.01, pwr_tie_apex() + 0.01]) cube([pwr_tie_slot_w + 1, pwr_tb_len - 0.02, t - 0.02]);
+}
+// ...and the room each bridge, its cable and its tie take: the bridge grown by
+// grow all round, h tall; dy moves it, and at chooses the bridges.
+module pwr_tie_zone(h = 11, grow = 1, dy = 0, at = tie_bridges_all()) {
+    for (b = at) translate([b[0], b[1] + dy, 0]) rotate([0, 0, b[2]])
+        translate([-pwr_tie_slot_w/2 - pwr_tb_leg - grow, -pwr_tb_len/2 - grow, 0.01])
+            cube([pwr_tie_slot_w + 2*pwr_tb_leg + 2*grow, pwr_tb_len + 2*grow, h]);
+}
+
+// Where the leads and the coax run (2026-10-29), in plan, in the order they
+// go: through their bridges, and round the bends between. Each bridge is three
+// points, its two ends and its middle, along its cable...
+function pwr_tb_pts(b) = let (d = (pwr_tie_slot_w + 2*pwr_tb_leg)/2, c = cos(b[2]), s = sin(b[2]))
+    [[b[0] - d*c, b[1] - d*s], [b[0], b[1]], [b[0] + d*c, b[1] + d*s]];
+// ...the 12 V pair: from where it leaves the trigger board (over the mount,
+// in the air, down onto its first bridge), across the low grille on its first
+// two bridges, down past the tray's upper ear to its third, up the plate from
+// the tray's right-hand end, seen from behind, round that end on its fourth,
+// and along the saddle there to the input terminals...
+function pwr_12v_route() = concat(
+    [[usbc_cut_pos[0], usbc_cut_pos[1] + pwr_pcb_y1() + 1.05], [50, -47.5]],
+    pwr_tb_pts(pwr_12v_bridge_at[0]), pwr_tb_pts(pwr_12v_bridge_at[1]), [[-21, -47]],
+    pwr_tb_pts(pwr_12v_bridge_at[2]), [[-48, -49.6], [-57.5, -50]],
+    pwr_tb_pts(pwr_12v_bridge_at[3]), [[-62.3, -67.4]],
+    [pwr_tray_pt([-pwr_tray_tie_x() - 7, 0]), pwr_tray_pt([-pwr_tray_tie_x(), 0]), pwr_tray_pt([-pwr_reg_l/2, 0])]);
+// ...the pigtail: from the output terminals along the saddle at the tray's
+// left-hand end, round and up past the trigger mount's nearer ear, along the
+// gap over the strip, up the Pi's left side and along its top edge, to where
+// it is clear of its plug (pi_usbc_reach_pt(), below)...
+function pwr_5v_route() = concat(
+    [pwr_tray_pt([pwr_reg_l/2, 0]), pwr_tray_pt([pwr_tray_tie_x(), 0]), pwr_tray_pt([pwr_tray_tie_x() + 4.7, 0]), [41.5, -79.5], [44.8, -75.5]],
+    pwr_tb_pts(pwr_5v_bridge_at[0]), pwr_tb_pts(pwr_5v_bridge_at[1]), [[56, -34.2]],
+    pwr_tb_pts(pwr_5v_bridge_at[2]), [[62, 27], [58.5, 32.6]], pwr_tb_pts(pwr_5v_bridge_at[3]),
+    [[20, pwr_5v_top_y], pi_usbc_reach_pt()]);
+// ...and the two coax jumpers, together: from the cable hole, through their
+// two bridges and down the right-hand side to the top of the SMA plugs' zone.
+function coax_route() = concat([[0, ant_mount_y]], pwr_tb_pts(coax_tie_bridge_at[0]), pwr_tb_pts(coax_tie_bridge_at[1]),
+    [[-61.5, 36], [-62.5, hat_sma_span[1]]]);
+// The strips the two free runs' slack can take (2026-10-29), in plan, the
+// cables' own width included: the pigtail's, from its last bridge to where it
+// is clear of its plug, between the Pi's top edge and its curb; and the
+// jumpers', from their last bridge down to the SMA plugs' zone, between the
+// right-hand speaker and their curb. bow moves the curb's side of each out,
+// toward the other cable, as if the curb were not there, for the controls.
+module pwr_5v_slack2d(bow = 0) {
+    x0 = pi_usbc_reach_pt()[0];
+    x1 = pwr_tb_pts(pwr_5v_bridge_at[3])[2][0];
+    y0 = max(pi_board[1]/2 + pi_side_proud, hat_board[1]/2);
+    translate([x0, y0]) square([x1 - x0, pwr_5v_curb[0][1] - slack_curb_t/2 + bow - y0]);
+}
+module coax_slack2d(bow = 0) {
+    x0 = -(outer_dia/2 - wall - speaker_bracket_depth - speaker_boss_h - speaker_h);
+    y1 = pwr_tb_pts(coax_tie_bridge_at[1])[2][1];
+    translate([x0, hat_sma_span[1]]) square([coax_curb[0][0] - slack_curb_t/2 + bow - x0, y1 - hat_sma_span[1]]);
+}
+// The two curbs on the plate's inner face (2026-10-29), each a wall between
+// its two ends, rounded off.
+module slack_curbs() {
+    for (c = [pwr_5v_curb, coax_curb]) hull() for (p = c)
+        translate([p[0], p[1], -0.01]) cylinder(d = slack_curb_t, h = slack_curb_h + 0.01, $fn = 24);
+}
+// A route in plan, d across.
+module plan_path(pts, d) {
+    for (i = [0 : len(pts) - 2]) hull() { translate(pts[i]) circle(d = d); translate(pts[i + 1]) circle(d = d); }
+}
+// For the checks: a route d across and grow more all round, over the case's
+// whole depth, since how far in each lead runs between the plate and the Pi
+// isn't known...
+module route_probe(pts, d, grow = 0) {
+    translate([0, 0, 0.01]) linear_extrude(height = shell_depth - lip_height) plan_path(pts, d + 2*grow);
+}
+// ...a route lying on the plate, from its point i0 to its point i1, d across
+// and h tall (over a bridge's deck, the cable on it), for the checks that keep
+// each lead clear of everything else there; dy moves it...
+module route_on_plate(pts, d, i0 = 0, i1 = undef, h = 11, dy = 0) {
+    last = is_undef(i1) ? len(pts) - 1 : i1;
+    translate([0, dy, 0.01]) linear_extrude(height = h) plan_path([for (i = [i0 : last]) pts[i]], d);
+}
+// ...and the coax as it runs, with the cable hole it comes in through and
+// the strip its free run's slack can take (coax_slack2d, below), grow bigger
+// all round.
+module coax_probe(grow = 0) {
+    route_probe(coax_route(), coax_bundle_d, grow);
+    translate([0, ant_mount_y, 0.01]) cylinder(d = ant_plate_hole + coax_bundle_d + 2*grow, h = shell_depth - lip_height);
+    translate([0, 0, 0.01]) linear_extrude(height = shell_depth - lip_height) offset(delta = grow) coax_slack2d();
 }
 
 // The Pi's 58x49 mounting posts, M2.5 pilot holes, 8mm tall. Not part of
@@ -2314,6 +2847,102 @@ module pi_posts() {
                 }
 }
 
+// ---- The Pi and its HAT (2026-10-29, #99) ------------------------------------
+// What nothing on the plate may stand in: the checks keep the regulator's
+// tray, the tie bridges and the leads out of it. Drawn from published sizes
+// and the design's own numbers, and generous where they say nothing:
+//   - the Pi 5's 85 x 56 board hangs from the display on the 58 x 49 holes at
+//     the middle (mount_hole_x, mount_hole_y), long side across the case;
+//   - its component side faces the plate, with the HAT on its GPIO header,
+//     and its USB and Ethernet end is at +x, the left seen from behind. The
+//     owner settled that on 2026-10-29: seen from behind, the Pi's USB-C plug
+//     goes in at the upper right, pointing up. A board can't be mirrored, so
+//     its GPIO header is along its bottom edge, and its USB-C socket and two
+//     micro-HDMI sockets along its top edge, standing about 1.2 mm past it,
+//     the USB-C one pi_usbc_at from the -x end (pi_usbc_pos()), the HDMI
+//     ones at about x -6.5 and +7;
+//   - its holes are 3.5 mm in from its -x end and its long sides, so it
+//     reaches 23.5 mm past the +x holes and 3.5 mm past the -x ones; its
+//     ports stand about 3 mm past its +x end, and its microSD card about as
+//     far past the other;
+//   - a HAT (the FlyCatcher is taken as a standard 65 x 56.5 one) sits on the
+//     same holes, its edges 3.5 mm out from them, and its two SMA jacks are on
+//     its -x edge, the right seen from behind, the plugs pointing -x
+//     (sma_plug_zone(), below);
+//   - from the plate's inner face to the shelf under the display.
+// Plugs and cables leaving the Pi's sides are not in it. The USB-C plug and
+// the SMA plugs have zones of their own. The plugs in the Pi's USB ports
+// hang toward the plate with the ports, to somewhere about 11 to 20 mm off it
+// (the stack's 46 mm with 16 to 20 mm standoffs, which aren't measured yet),
+// and the micro-HDMI plug is higher, by the Pi's board. The pigtail passes
+// under them, on the plate or on a bridge's deck, 10.7 mm up at most with its
+// tie, and the guides ask for that to be checked with every plug in.
+pi_board      = [85, 56];     // Raspberry Pi 5, published
+pi_hole_inset = 3.5;          // its mounting holes, in from its edges
+pi_port_proud = 3;            // its USB and Ethernet ports past its +x end, and its microSD card past the other (about)
+pi_side_proud = 1.2;          // its USB-C and micro-HDMI sockets, past its top edge (about)
+hat_board     = [65, 56.5];   // a HAT, published
+pi_usbc_at    = 11.2;         // the USB-C socket's middle, from the board's -x end, published
+// The pigtail's plug (2026-10-29): a right-angle one, its cable leaving
+// across its flat face toward the plate, so the cable comes straight down to
+// the plate beside the HAT's top edge and leaves along it, low and away from
+// the coax. A straight plug's moulding stands about 20 mm out, and the coax's
+// route keeps 20 mm from this one, not from that (routes_port_probe_works).
+pi_usbc_plug  = [12.5, 11];   // its moulding: across, and out from the socket's face
+pi_usbc_reach = 13;           // along the Pi's top edge from the port to where the pigtail is clear of the plug
+// Where along the HAT's -x edge its SMA plugs can be (2026-10-29): not over
+// its mounting holes, 3.5 mm in from its corners, whose 6 mm keep-outs and
+// standoffs no jack can stand on, so each jack's middle is 18 mm or less
+// from the edge's middle and its plug's hex, 9.3 mm across, within 23. Not
+// measured: measure where the two are, and narrow this to them.
+hat_sma_span  = [-23, 23];
+module hat_envelope() {
+    x0 = -mount_hole_x/2 - pi_hole_inset;
+    y1 = max(pi_board[1]/2 + pi_side_proud, hat_board[1]/2);
+    y0 = -max(pi_board[1], hat_board[1])/2;
+    translate([x0 - pi_port_proud, y0, 0]) cube([pi_board[0] + 2*pi_port_proud, y1 - y0, shell_depth - lip_height]);
+}
+// The Pi's USB-C socket, its face's middle, where the pigtail plugs in...
+function pi_usbc_pos() = [-mount_hole_x/2 - pi_hole_inset + pi_usbc_at, pi_board[1]/2 + pi_side_proud];
+// ...and where the pigtail is its own again, along the Pi's top edge...
+function pi_usbc_reach_pt() = [pi_usbc_pos()[0] + pi_usbc_reach, pwr_5v_top_y];
+// ...the plug's moulding there, grow bigger all round, in plan, out stands
+// out from the socket's face...
+module pi_usbc_plug2d(grow = 1, out = pi_usbc_plug[1]) {
+    p = pi_usbc_pos();
+    translate([p[0] - pi_usbc_plug[0]/2 - grow, p[1] - grow]) square([pi_usbc_plug[0] + 2*grow, out + 2*grow]);
+}
+// ...over the case's whole depth, since the Pi's depth in the case isn't
+// known, for the checks, which keep the tie bridges out of it...
+module pi_usbc_plug_zone(grow = 1, out = pi_usbc_plug[1]) {
+    translate([0, 0, 0.01]) linear_extrude(height = shell_depth - lip_height) pi_usbc_plug2d(grow, out);
+}
+// ...and the plug with the pigtail's last run to it: its drop from the plug
+// to the plate, past the SMA jacks' height, and its first 13 mm along the
+// plate, 3 to 4 cm of cable in all. It is the one place a power lead comes
+// within 20 mm of the SMA plugs' zone: the plug's moulding is 7.9 mm from it
+// in plan, 5 mm from the HAT's corner, since the Pi puts its power socket
+// 11 mm from the HAT's -x edge and nothing on the plate can move it. With
+// both jacks below the edge's middle (hat_sma_span [-23, 0]) it would be
+// 29.6 mm. grow makes it bigger all round, in plan, and out is the plug's
+// moulding.
+module pi_usbc_port2d(grow = 0, out = pi_usbc_plug[1]) {
+    offset(r = grow) hull() { pi_usbc_plug2d(1, out); translate(pi_usbc_reach_pt()) circle(d = pwr_5v_lead_d); }
+}
+// The room the FlyCatcher's two SMA plugs take, and their jumpers' bend into
+// them (2026-10-29): from the HAT's -x edge out to the speaker beside it,
+// over hat_sma_span, over the case's whole depth.
+module sma_plug_zone() {
+    x1 = -hat_board[0]/2;
+    x0 = -(outer_dia/2 - wall - speaker_bracket_depth - speaker_boss_h - speaker_h);
+    translate([x0, hat_sma_span[0], 0.01]) cube([x1 - x0, hat_sma_span[1] - hat_sma_span[0], shell_depth - lip_height]);
+}
+// Over the HAT, from 2 mm short of its switches' tops up, h tall: where nothing
+// on the plate may reach (2026-10-29, hat_stack).
+module hat_switch_margin(h = 20) {
+    translate([-hat_board[0]/2, -hat_board[1]/2, hat_switch_z() - 2]) cube([hat_board[0], hat_board[1], h]);
+}
+
 module back_plate() {
     difference() {
         union() {
@@ -2323,6 +2952,12 @@ module back_plate() {
             // (the Pi mounts on the display) and were removed 2026-10-07.
             // pi_posts() is left defined, as the retro case does.
             back_lip();
+            // The regulator's tray screws to two bosses here, ten bridges
+            // take the ties for its leads and the coax, and two curbs keep
+            // the free runs' slack apart (2026-10-29).
+            pwr_tray_bosses();
+            pwr_tie_bridges();
+            slack_curbs();
         }
         for (i = [0:n_screws-1]) {
             a = i * 360/n_screws;
@@ -2345,6 +2980,8 @@ module back_plate() {
         // the receiver, and a sharp printed edge would wear the jackets
         translate([0, ant_mount_y, -1.5])
             cylinder(d1=ant_plate_hole, d2=ant_plate_hole + 3, h=1.5 + 0.01);
+        // the regulator tray's insert holes, after the union (2026-10-29)
+        pwr_tray_boss_holes();
     }
 }
 

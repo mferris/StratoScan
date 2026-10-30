@@ -175,6 +175,59 @@ for c in $JAMMED; do
     fi
 done
 
+# The regulator's place (2026-10-29, #99): its tray screwed to two bosses
+# across the bottom of the plate, ten tie bridges on the plate for the leads
+# and the coax, two curbs that keep the slack of the runs tied at one end only
+# on their own sides, and the routes they all run along. TRAY_EMPTY must come
+# out with no real volume, like EMPTY above: the tray, the regulator in it and
+# its screws clear of the plate, the shell, the speakers, the trigger board's
+# parts and strip, the vents, the coax hole's 50 mm and the Pi's box, its
+# inserts surrounded by plastic and its holes blind, the tie slots and
+# tunnels open under their tented roofs and their decks whole, the leads'
+# ferrules clear of the ties, the leads straight onto the saddles and the
+# saddles' ties, heads on top, clear of the plate and the shell, OUT and IN
+# on the tongues' tops; the curbs on solid plate and clear of everything
+# else; every power lead, the pigtail's slack and the tray 20 mm or more from
+# the coax, its slack and the SMA plugs, the coax 20 mm from the Pi's USB-C
+# plug, each lead and the coax clear of everything else on the plate, and
+# nothing within 2 mm of the HAT's switches. TRAY_FOUND are their controls
+# and must find real geometry, like the positive controls below: each probe,
+# moved to where it should catch something, does.
+TRAY_EMPTY="tray_vs_plate tray_holds_board tray_screws_pass tray_screws_inside_plate tray_inserts_surrounded tray_holes_blind
+       tray_vs_shell tray_vs_speakers tray_vs_trigger tray_off_strip tray_clear_of_grilles tray_clear_of_coax tray_vs_hat
+       tray_tie_slots_open tray_ferrules_clear tray_leads_straight tray_ties_clear tray_labels_on_tongues
+       tie_tunnels_open tie_decks_whole tie_tents_open tie_bridges_on_plate tie_bridges_clear curbs_on_plate curbs_clear coupon_unchanged
+       routes_power_20mm_from_coax routes_port_20mm_from_coax routes_leads_clear routes_coax_clear hat_stack_clear"
+TRAY_FOUND="tray_caps_on_bosses tray_located tray_one_way_round tray_board_on_ribs tray_screws_bite tray_insert_holes_open
+       tray_speaker_probe_works tray_strip_probe_works tray_grille_probe_works tray_coax_probe_works tray_hat_probe_works
+       tray_tie_probe_works tray_ferrule_probe_works tray_leads_on_saddles tray_tie_head_probe_works tray_labels_cut
+       tie_tunnel_probe_works tie_spans_short tie_roofs_tented tie_zone_probe_works tie_bridges_present tray_bosses_present
+       curbs_present curbs_probe_works
+       routes_20mm_probe_works routes_pigtail_slack_probe_works routes_coax_slack_probe_works routes_port_probe_works
+       routes_leads_probe_works routes_coax_probe_works hat_stack_probe_works"
+echo "The regulator's place — must come out with no real volume (threshold ${MAX_MM3} mm3):"
+for c in $TRAY_EMPTY; do
+    out="$TMP/$c.stl"
+    "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
+    v=$(vol_of "$out")
+    if [ "$(echo "$v < $MAX_MM3" | bc -l)" = "1" ]; then
+        printf "  PASS  %-18s %8s mm3\n" "$c" "$v"
+    else
+        printf "  FAIL  %-18s %8s mm3\n" "$c" "$v"; fail=1
+    fi
+done
+echo "The regulator's place — controls, must find real geometry:"
+for c in $TRAY_FOUND; do
+    out="$TMP/$c.stl"
+    "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
+    v=$(vol_of "$out")
+    if [ "$(echo "$v > 10" | bc -l)" = "1" ]; then
+        printf "  PASS  %-18s %8s mm3\n" "$c" "$v"
+    else
+        printf "  FAIL  %-18s %8s mm3  (probe found nothing)\n" "$c" "$v"; fail=1
+    fi
+done
+
 # Paired positive control for nose_screw_removed. An empty result there is
 # also what a probe in the wrong place, or a front_trim() that failed to
 # evaluate, would produce -- so a probe at a NORMAL screw position has to
