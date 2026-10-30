@@ -102,8 +102,12 @@ post_od = 9;                  // outer diameter of each insert post in the shell
 // 2mm of plastic with open air under it, and the wall on one side only.
 // Measured 2026-10-02: 2mm of the ring round the insert was solid; below that,
 // a third of it. Now each post hangs below the shelf, merged into the wall,
-// deep enough for an M3x5 insert with plastic under it. A 45-degree cone
-// under the post means it prints without support. Screws: M3x14 (through the
+// deep enough for an M3x5 insert with plastic under it, with a 45-degree
+// cone under the post. Not quite all of the cone is on the wall (2026-10-30):
+// it is centred 2mm inside the bore, so it meets the wall only from z 46.5,
+// and its lowest 1.5mm, from a 1mm tip at z 45, is a small island that takes
+// one small tree of support. Harmless so far; the README's "For a later shell
+// print" has the change that would remove it. Screws: M3x14 (through the
 // trim's outer band, 5.6mm, and the retainer, 4mm, then 4-5mm of thread).
 front_insert_len = 5;         // M3x5 insert
 front_post_h     = 8;         // from the shelf's top face down
@@ -3419,7 +3423,7 @@ else {
     // rabbeted outer band then reaches back down exactly to shell_depth
     // -- the retainer's front face and the shell's rim -- with no gap left
     // to force shut. Placed by front_stack_placed() since 2026-10-29: the
-    // trim stood on the panel's whole depth here, 4.83mm too far forward.
+    // trim stood on the panel's whole depth here, 4.9mm too far forward.
     color("SteelBlue") shell();
     color("SlateGray") front_stack_placed("retainer");
     color("LightBlue",0.4) front_stack_placed("glass");

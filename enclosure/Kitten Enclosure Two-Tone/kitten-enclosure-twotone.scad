@@ -524,7 +524,7 @@ base_corner_r = 18;
 // Nothing held the cable, so its weight and every tug levered the plug in the
 // trigger board's socket, and a moving cable is what set off the power cuts.
 // The plug points straight back, 18 degrees down, from the window at
-// usbc_cut_pos; its end is about (60, 45) and 70mm above the desk, and the
+// usbc_cut_pos; its end is about (60, 49) and 69mm above the desk, and the
 // cable drops from it onto the back of the plinth, where the tail's root is.
 // The root is solid from the desk up to z 25.5 there, so a groove under it
 // would be a closed tunnel that no plug can be threaded through, and a mouth
@@ -3119,7 +3119,10 @@ module shell_body() {
     // wall below the shelf is gone there, so the slope would start in
     // mid-air. See shelf_slope_r0. Since the hollows' tops are tented, none
     // comes up as far as the slope; this stays so that a taller one can't
-    // leave it hanging.
+    // leave it hanging. It must keep removing nothing, or the kitten's shelf
+    // stops being the retro's: checks.scad's slope_clear_of_ears holds that,
+    // and tests/test_enclosure_core.py requires that check for this cut
+    // (2026-10-30).
     difference() { shelf_slope(); ears_hollow(); }
 
     // 8 front insert posts, below the shelf's top face; holes cut in shell()

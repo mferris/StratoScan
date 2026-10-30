@@ -42,8 +42,10 @@ be a short one ([Buy](#buy)). Its neck, where the wires pass, and the hole
 through it are teardrops, so it needs no support face down. Sliced in Bambu
 Studio 2.08 (X1C 0.4, 0.20 mm Standard, ASA, tree supports at 30°), the
 two-colour arc's support went from 0.3 cm³ to none, its print from 0.84 to
-0.71 h and its filament from 23.2 to 20.0 g. The other print files are
-unchanged.
+0.71 h and its filament from 23.2 to 20.0 g. The cover, knob, lens and
+lettering are unchanged; `shell_dials.stl` changes with the retro shell, as
+it did on 2026-10-29 (its shelf slope, speaker sleeves, front rail,
+rivets and grille holes: see the retro case's README).
 
 ## Buy
 
@@ -90,6 +92,14 @@ toward the back plate, and the case leaves the FlyCatcher's switches only
 so a header would leave 1.7 mm, less than the 2 mm the case needs; that was
 what pushed the shell from 56 to 61 mm deep. Use one only on a unit whose
 switches stand 10.5 mm or more from the plate.
+
+**The wiring route is still open (2026-10-30).** The jumpers pushed onto
+the pins under the FlyCatcher, with the back plate off (Assemble, step 6),
+are the route for now. Two things are not settled: how much room there is
+between the Pi's header and the FlyCatcher for jumper housings, which has
+yet to be measured on a built unit, and whether a keyed 8-way connector
+just inside the wall would be better, so the arc's wires unplug in one
+piece and can't go back on the wrong pins. Both wait on that measurement.
 
 ## Assemble
 

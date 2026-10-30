@@ -1608,6 +1608,15 @@ if (check=="retainer_key_blocks_225") intersection() { retainer_seated(225); she
 if (check=="retainer_key_blocks_270") intersection() { retainer_seated(270); shell(); }
 if (check=="retainer_key_blocks_315") intersection() { retainer_seated(315); shell(); }
 
+// Upside down (2026-10-30): the tab is then on the glass's side, so the ring
+// lies flat on the shelf in all eight positions and the shelf can't warn of
+// it. The trim does: it runs into the tab, about 126 mm3, and stands 2mm
+// proud at one spot, which the READMEs tell the builder to look for. One
+// position is enough, because the trim's rabbeted band covers the tab's
+// radius all the way round. Empty here would mean the trim no longer shows
+// an upside-down ring, and the READMEs' advice would be wrong.
+if (check=="retainer_flipped_meets_trim") intersection() { translate([0, 0, shell_depth - retainer_h]) retainer_print(); front_stack_placed("trim"); }
+
 // ---- the front stack, placed in one place (2026-10-29) -----------------
 // The front stack as front_stack_placed() puts it, for every picture: it
 // meets the shell with no volume (front_stack_seats). Lowered 0.2mm, the
