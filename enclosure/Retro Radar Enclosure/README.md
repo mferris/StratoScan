@@ -59,6 +59,12 @@ notes here said to pass `--render`; as of OpenSCAD 2026.06 that flag takes an
 argument and a bare `--render` just prints the usage text, so a script using
 it silently exports nothing.)
 
+That line is not the slicer's check (2026-10-29). Where two solids in a part
+only touch, along a line or a face, instead of overlapping, the export still
+says manifold, and Bambu Studio reports non-manifold edges and reversed faces
+when it opens it: `shell_dials.stl` did. `python3 tests/test_enclosure_core.py`
+checks every print file's edges as a slicer does, so run it after an export.
+
 ## Things that are easy to get wrong
 
 These are all mistakes that were actually made and fixed here, kept as

@@ -198,8 +198,8 @@ def same_value(a, b):
     return a == b
 
 
-def geometry(path):
-    """(volume mm3, min corner, max corner) of an STL, ASCII or binary."""
+def stl_triangles(path):
+    """An STL's triangles, ASCII or binary, each three (x, y, z) tuples."""
     import struct
     d = pathlib.Path(path).read_bytes()
     tris = []
@@ -210,14 +210,19 @@ def geometry(path):
             if line.startswith("vertex"):
                 v.append(tuple(float(x) for x in line.split()[1:4]))
                 if len(v) == 3:
-                    tris.append(v); v = []
+                    tris.append(tuple(v)); v = []
     else:
         n = struct.unpack("<I", d[80:84])[0]
         for i in range(n):
             f = struct.unpack("<12f", d[84 + 50 * i:84 + 50 * i + 48])
             tris.append((f[3:6], f[6:9], f[9:12]))
+    return tris
+
+
+def geometry(path):
+    """(volume mm3, min corner, max corner) of an STL, ASCII or binary."""
     vol, lo, hi = 0.0, [1e9] * 3, [-1e9] * 3
-    for a, b, c in tris:
+    for a, b, c in stl_triangles(path):
         vol += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
                 + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6
         for pt in (a, b, c):
@@ -355,6 +360,166 @@ def folders_and_prints():
     return failures, checks
 
 
+def threemf_meshes(path):
+    """name -> triangles, for each object in a 3MF with a mesh of its own (an
+    object made only of other objects has none)."""
+    import xml.etree.ElementTree as ET
+    import zipfile
+    out = {}
+    with zipfile.ZipFile(path) as z:
+        for model in (n for n in z.namelist() if n.endswith(".model")):
+            for obj in ET.fromstring(z.read(model)).iter():
+                if obj.tag.split("}")[-1] != "object":
+                    continue
+                verts, tris = [], []
+                for el in obj.iter():
+                    tag = el.tag.split("}")[-1]
+                    if tag == "vertex":
+                        verts.append(tuple(float(el.get(k)) for k in "xyz"))
+                    elif tag == "triangle":
+                        tris.append(tuple(verts[int(el.get(k))] for k in ("v1", "v2", "v3")))
+                if tris:
+                    out[f"object {obj.get('id')}"] = tris
+    return out
+
+
+def print_meshes(path):
+    """label -> triangles, for each mesh in a print file: an STL is one, a
+    3MF one per object."""
+    path = pathlib.Path(path)
+    if path.suffix == ".3mf":
+        return {f"{path.name} {k}": v for k, v in threemf_meshes(path).items()}
+    return {path.name: stl_triangles(path)}
+
+
+def edge_faults(tris):
+    """(bad edges, degenerate triangles) of a mesh, its vertices welded by
+    position, as a slicer welds them. An edge is good when exactly two
+    triangles use it, one each way round; a bad edge is given as its two ends
+    and the number of triangles on it. A degenerate triangle, two of its
+    corners at one point, is not counted in the edges: slicers drop it."""
+    import collections
+    ids, directed, degenerate = {}, collections.Counter(), 0
+    for t in tris:
+        a, b, c = (ids.setdefault(p, len(ids)) for p in t)
+        if a == b or b == c or a == c:
+            degenerate += 1
+            continue
+        for u, v in ((a, b), (b, c), (c, a)):
+            directed[(u, v)] += 1
+    at = {i: p for p, i in ids.items()}
+    bad, seen = [], set()
+    for u, v in directed:
+        if (v, u) in seen:
+            continue
+        seen.add((u, v))
+        if directed[(u, v)] != 1 or directed[(v, u)] != 1:
+            bad.append((at[u], at[v], directed[(u, v)] + directed[(v, u)]))
+    return bad, degenerate
+
+
+def cube_triangles(x0, y0, z0, s=1.0):
+    """A cube's twelve triangles, wound outward: a closed mesh, for the controls."""
+    p = [(x0 + s * (i & 1), y0 + s * (i >> 1 & 1), z0 + s * (i >> 2 & 1)) for i in range(8)]
+    tris = []
+    for a, b, c, d in ((0, 2, 3, 1), (4, 5, 7, 6), (0, 1, 5, 4), (2, 6, 7, 3), (0, 4, 6, 2), (1, 3, 7, 5)):
+        tris += [(p[a], p[b], p[c]), (p[a], p[c], p[d])]
+    return tris
+
+
+def write_control(path, tris):
+    """Write a control mesh as a binary STL, or as a one-object 3MF."""
+    import struct
+    import zipfile
+    path = pathlib.Path(path)
+    if path.suffix == ".stl":
+        d = bytearray(80) + struct.pack("<I", len(tris))
+        for t in tris:
+            d += struct.pack("<12fH", 0, 0, 0, *t[0], *t[1], *t[2], 0)
+        path.write_bytes(bytes(d))
+        return
+    ids = {}
+    tri_ids = [[ids.setdefault(p, len(ids)) for p in t] for t in tris]
+    verts = "".join(f'<vertex x="{x}" y="{y}" z="{z}"/>' for x, y, z in ids)
+    faces = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in tri_ids)
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("3D/3dmodel.model",
+                   '<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" '
+                   'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources>'
+                   f'<object id="1" type="model"><mesh><vertices>{verts}</vertices>'
+                   f'<triangles>{faces}</triangles></mesh></object></resources>'
+                   '<build><item objectid="1"/></build></model>')
+
+
+def print_files_manifold():
+    """Check 10: every print file is a closed mesh with no edge a slicer has to
+    repair."""
+    import tempfile
+    failures, checks = [], 0
+
+    # 10. Every print file (an STL, and every object in a 3MF) in every case
+    #     folder is edge-manifold: once its vertices are welded by position,
+    #     as a slicer welds them, every edge is used by exactly two
+    #     triangles, one each way round (2026-10-29). Bambu Studio opened
+    #     shell_dials.stl with "3 non-manifold edges" and "reversed faces
+    #     detected". Where two solids of a part only touch, along a line or
+    #     a face, instead of overlapping, OpenSCAD's mesh keeps the two
+    #     surfaces there as separate sheets with no gap between them, and
+    #     welded, four triangles share an edge, two of them the same way
+    #     round. Every one of those files passed OpenSCAD's own "manifold"
+    #     line, and only a slicer opening the file says otherwise, so
+    #     nothing here saw it.
+    #
+    #     The controls go through the same reader and check: two cubes that
+    #     share one edge, and a cube with one face turned over, must fail; a
+    #     plain cube must pass; each as an STL and as a 3MF.
+    with tempfile.TemporaryDirectory() as t:
+        t = pathlib.Path(t)
+        clean = cube_triangles(0, 0, 0)
+        controls = [("two cubes sharing an edge", clean + cube_triangles(1, 1, 0), False),
+                    ("a cube with a face turned over", [clean[0][::-1]] + clean[1:], False),
+                    ("a plain cube", clean, True)]
+        for name, tris, good in controls:
+            for ext in (".stl", ".3mf"):
+                checks += 1
+                f = t / f"control{ext}"
+                write_control(f, tris)
+                meshes = print_meshes(f)
+                ok = bool(meshes) and all(not edge_faults(m)[0] for m in meshes.values())
+                if ok != good:
+                    failures.append(f"the manifold check's control, {name} as {ext}, came out "
+                                    f"{'clean' if ok else 'bad'}: the check itself is broken")
+
+    tracked = in_git(ROOT)
+    folders = set(FULL) | set(VARIANTS)
+    if tracked is None:
+        print("note: not a git checkout: every print file on disk checked for edges, not only tracked ones")
+        files = [p for d in folders for p in (ROOT / d).rglob("*") if p.suffix in (".stl", ".3mf")]
+    else:
+        files = [p for p in tracked if p.suffix in (".stl", ".3mf") and p.relative_to(ROOT).parts[0] in folders]
+    for f in sorted(files):
+        rel = f.relative_to(ROOT)
+        meshes = print_meshes(f) if f.exists() else {}
+        if not meshes:
+            checks += 1
+            failures.append(f"{rel}: no mesh could be read from it")
+            continue
+        for label, tris in meshes.items():
+            checks += 1
+            bad, degenerate = edge_faults(tris)
+            where = f"{rel.parent}/{label}"
+            if bad:
+                (p, q, n) = bad[0]
+                failures.append(f"{where}: {len(bad)} edges a slicer reports as non-manifold or reversed, "
+                                f"not used by two triangles one each way round, e.g. "
+                                f"({p[0]:.3f}, {p[1]:.3f}, {p[2]:.3f}) to ({q[0]:.3f}, {q[1]:.3f}, {q[2]:.3f}), "
+                                f"used {n} times. Two solids there meet in a line or a face: make them overlap "
+                                f"a little, or stand clear, and re-export it")
+            if degenerate:
+                print(f"note: {where}: {degenerate} degenerate triangles (zero area; slicers drop them)")
+    return failures, checks
+
+
 def main():
     failures, checks = [], 0
 
@@ -421,6 +586,10 @@ def main():
                                 f"but the design has {dp[name]!r} ({want}): update the copy")
 
     more, n = folders_and_prints()
+    failures += more
+    checks += n
+
+    more, n = print_files_manifold()
     failures += more
     checks += n
 

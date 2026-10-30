@@ -663,6 +663,13 @@ self-contained, but they are generated. Change the `.scad` and both must be
 re-exported and committed together, or the mesh quietly stops matching the
 source it claims to come from.
 
+OpenSCAD's `manifold` line on an export is not the slicer's check
+(2026-10-29). Where two solids in a part only touch, along a line or a face,
+instead of overlapping, the export still says manifold, and Bambu Studio
+reports non-manifold edges and reversed faces when it opens it.
+`python3 tests/test_enclosure_core.py` checks every print file's edges as a
+slicer does, so run it after an export.
+
 ### The connector has to fit through, not just the cable
 
 The bore was 9mm and the coax **connector** is 9.15mm across its widest

@@ -1190,12 +1190,16 @@ module antenna_mount_sma() {
             // the jack's hole, through the panel at the top of the boss
             translate([0, 0, ant_sma_boss_h - ant_sma_panel_t - 0.01])
                 cylinder(d=ant_sma_hole, h=ant_sma_panel_t + 0.02, $fn=48);
-            // the space behind it. Deliberately reaches DOWN to -6 so it
+            // the space behind it. Deliberately reaches DOWN past -6 so it
             // meets the cable bore's sweep rather than relying on the two
             // happening to touch: an unconnected cavity looks identical in
-            // preview and is a solid wall in the print.
-            translate([0, 0, ant_sma_boss_h - ant_sma_panel_t - ant_sma_cavity_d])
-                cylinder(d=ant_sma_cavity, h=ant_sma_cavity_d);
+            // preview and is a solid wall in the print. It starts 1mm below
+            // the boss (2026-10-29), so it cuts clean through the boss's
+            // end. It started on that end, the two faces in one plane, and
+            // the cut left a sheet of no thickness over half the opening,
+            // whose edges a slicer reports as non-manifold.
+            translate([0, 0, ant_sma_boss_h - ant_sma_panel_t - ant_sma_cavity_d - 1])
+                cylinder(d=ant_sma_cavity, h=ant_sma_cavity_d + 1);
         }
         ant_cable_bore(0);
         ant_flange_insert_bores();
@@ -1632,10 +1636,15 @@ module usbc_cutout() {
         translate([0, 0, fl - 0.01])
             linear_extrude(height = usbc_bridge_layer + 0.01)
                 square([usbc_recess_w, usbc_cut_h], center = true);
-        // the second: the window's rectangle, its ends square
+        // the second: the window's rectangle, its ends square, and each end
+        // 0.01mm past the window's (2026-10-29). Drawn the window's length,
+        // one end touched the tip of the window's round end along a line,
+        // and the plate's mesh had edges there that a slicer reports as
+        // non-manifold. At the other end the circle has no corner on the
+        // axis, so that end already stood 0.01 clear.
         translate([0, 0, fl + usbc_bridge_layer - 0.01])
             linear_extrude(height = usbc_bridge_layer + 0.01)
-                square([usbc_cut_w, usbc_cut_h], center = true);
+                square([usbc_cut_w + 0.02, usbc_cut_h], center = true);
         for (sx = [-1, 1])
             translate([sx * usbc_screw_pitch/2, 0, -back_plate_t - 1])
                 cylinder(d = insert_hole_dia, h = back_plate_t + 2);
@@ -2421,9 +2430,14 @@ module shell_body() {
     // rabbeted band lands against. Relieved on the same bottom arc as
     // the retainer for the driver board's cabling.
     difference() {
+        // The shelf runs 1mm into the wall (2026-10-29). It stopped at the
+        // bore, so the two shared the bore's face, and along a few strips of
+        // it the union left that face in place: a sheet of the wall's and a
+        // sheet of the shelf's with nothing between them, edges a slicer
+        // reports as non-manifold and as reversed faces.
         translate([0,0,shell_depth - lip_height])
             difference() {
-                cylinder(d=outer_dia - 2*wall, h=shelf_h);
+                cylinder(d=outer_dia - 2*wall + 2, h=shelf_h);
                 cylinder(d=retention_opening, h=shelf_h+0.02);
             }
         rotate([0,0, relief_center_deg - relief_arc_deg/2])
