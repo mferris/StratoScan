@@ -419,8 +419,9 @@ fan_grille_dia = 26;
 // are 10.1 mm apart, centre to centre, so 7 mm of plate between them. The
 // 53-63 C the Pi ran at with no fan were measured with the grille at [0, -68],
 // so measure the Pi's and the regulator's temperatures again once a unit is
-// built this way. It can go no lower: the tray takes the room under it, 2.9 mm
-// from its lowest holes. The 12 V pair crosses it on the decks of two tie
+// built this way. It can go no lower: the tray takes the room under it, 2.8 mm
+// from its lowest holes (2.9 until the tray grew to the regulator's measured
+// size, 2026-10-30). The 12 V pair crosses it on the decks of two tie
 // bridges, 4.4 mm off the plate, so its holes stay open.
 fan_grille_pos = [6, -46];
 
@@ -1946,10 +1947,19 @@ pwr_key_l         = 3.0;
 pwr_top_rib_x       = 1.5;  // either side of the middle
 pwr_top_rib_len     = 4.0;  // along the socket from the plate, then a 45-degree ramp
 pwr_top_rib_squeeze = 0.15; // how far they press into the socket's top, as printed
-pwr_reg_l         = 63;     // the regulator: a 9-36 V to 5.2 V module, 63 x 27 (published)
-pwr_reg_w         = 27;
+// The regulator: a 9-36 V to 5.2 V module. Its board is 63.5 x 27.25,
+// measured on the owner's regulator on 2026-10-30; until then the tray was
+// drawn for the published 63 x 27.
+pwr_reg_l         = 63.5;
+pwr_reg_w         = 27.25;
 pwr_reg_h         = 12.29;  // its tallest capacitor to the board's underside: 16 mm off the plate in the tray
-pwr_reg_clear     = 0.5;    // a side
+// Round the board in its pocket, a side: the pocket is 64.5 x 28.25. A
+// printed pocket comes out about 0.1 mm a side smaller than it is drawn
+// (usbc_cut_clear, below), which leaves the board 0.4 mm a side; and if the
+// ASA shrinks half a percent as it cools, that takes another 0.3 mm off the
+// pocket's length and 0.15 off its width, which still leaves about 0.25 mm a
+// side along the board and 0.3 across it. So it drops in without forcing.
+pwr_reg_clear     = 0.5;
 pwr_tray_floor    = 2;
 pwr_tray_wall     = 2;
 pwr_tray_wall_h   = 5;      // above the floor: it holds the board's edges, not its parts
@@ -2004,7 +2014,7 @@ pwr_tie_d         = 1.2;
 //     it moved up to just under the central one (fan_grille_pos; the owner's
 //     OK, 2026-10-29).
 // Within the bottom the place is a compromise between three things: the
-// output end stays short of the trigger mount's nearer ear (x 35.7 against
+// output end stays short of the trigger mount's nearer ear (x 35.4 against
 // 44.3), so the pigtail can turn up beside it; the input end stays low
 // enough that the 12 V pair passes above it 20 mm or more from the SMA plugs;
 // and 2.5 mm or more of plate is left to the lip, the posts, the strip and the
@@ -2028,17 +2038,16 @@ pwr_tie_d         = 1.2;
 // 2 mm short of the plate's outer face, so nothing shows outside.
 //
 // The ties: a tongue past each open end of the tray, low enough to pass under
-// the regulator's input jack and USB socket, ends in a saddle, and a slot
-// through the saddle's foot takes a cable tie round the saddle and the leads
-// on it, its head on top, over the leads: on the tray's lower side it would
-// meet the plate's lip, 4 mm away (tray_ties_clear). The saddle starts just
-// past a ferrule's collar, so the tie grips the lead's insulation, not the
-// collar, and its top is level with the terminals' wire entries, less half a
-// lead, so each lead runs straight from its terminal to its tie and a pull on
-// it lands on the tray, not on the terminal's screw. The terminals aren't
-// drawn, and their height and set-back below (pwr_reg_term_*) are estimates:
-// measure the regulator, and its jack's and socket's overhang, before
-// printing. The saddles and the tray's length follow those numbers, and the
+// the leads' ferrules, ends in a saddle, and a slot through the saddle's foot
+// takes a cable tie round the saddle and the leads on it, its head on top,
+// over the leads: on the tray's lower side it would meet the plate's lip,
+// 4 mm away (tray_ties_clear). The saddle starts just past a ferrule's
+// collar, so the tie grips the lead's insulation, not the collar, and its top
+// is level with the terminals' wire entries, less half a lead, so each lead
+// runs straight from its terminal to its tie and a pull on it lands on the
+// tray, not on the terminal's screw. The terminals aren't drawn. Their height
+// and set-back below (pwr_reg_term_*) were measured on the owner's regulator
+// on 2026-10-30, the saddles and the tray's length follow from them, and the
 // checks hold the result. Two grooves under the floor, 4.6 mm wide, take a
 // tie each, round the tray and the board: they keep the board in the tray,
 // since in the case the plate stands nearly upright and nothing else holds
@@ -2052,7 +2061,14 @@ pwr_tray_insert_len = 5;            // M3 x 5, as in the front posts and the ant
 pwr_tray_cap_clear  = 0.3;          // a side, between each boss and the cap over it
 pwr_tray_cap_wall   = 1.6;
 pwr_tray_cap_top    = 3;            // the cap's top, which each screw clamps on its boss
-pwr_tray_tongue_h   = 4.6;          // under the board's top face (5.1 mm up), so under its jack and socket
+// The tongues' tops (2026-10-30): 0.5 mm under the leads' ferrules. A
+// collar, 4 mm across round its wire entry, 2 mm over the board, comes down
+// to the board's top face, 5.1 mm up, so the tongues stay under that face.
+// They were held there before only to pass under an input jack and a USB
+// socket thought to stand past the board's ends, which don't. Their inner
+// faces stand 1.1 mm over the board's underside, so they also keep the board
+// from sliding out of either end, and the asserts below keep 0.5 mm of that.
+pwr_tray_tongue_h   = 4.6;
 // A tie's way through the saddles and the plate's bridges (2026-10-29): along
 // the lead, wide enough for a 3.6 mm tie with room, and up, its walls this
 // tall, then a roof of two 45-degree slopes meeting over its middle. Such a
@@ -2063,21 +2079,33 @@ pwr_tie_slot_w      = 4.6;
 pwr_tie_slot_h      = 1.1;          // a 3.6 mm tie, 1.3 mm thick, has 1.6 mm at its edges
 pwr_tie_slot_floor  = 1.0;          // under each saddle's slot
 // The regulator's screw terminals and the leads in them (2026-10-29): not
-// drawn, and not yet measured on the regulator, so estimates. Measure them:
+// drawn. Measured on the owner's regulator on 2026-10-30, with its leads in:
+// they leave the terminals about 2 mm over the board's top face, to their
+// middle, and nothing stands past either end of the board, neither the
+// terminals nor the input jack and the USB socket. Until then these were
+// estimates: the entries 4 mm up, the terminals 0.5 mm past the board's
+// ends, and the jack and the socket up to 3 mm. The board's thickness isn't
+// measured, so measure it before printing: the entries, and the ferrules and
+// the saddles with them, go up or down with the board's top face. A tray
+// printed for 1.6 mm tips each lead about 3 degrees between its terminal and
+// its saddle on a board 0.4 mm thinner or thicker. Set to 2.0, the asserts
+// below still hold; set to 1.2, two fail, the saddles' decks and the
+// ferrules' room over the tongues, until the tie slots and the tongues come
+// down.
 pwr_reg_pcb_t       = 1.6;          // the regulator's circuit board, the usual thickness
-pwr_reg_term_h      = 4.0;          // the terminals' wire entries, their middle above the board's top face (about, for a 5 mm block)
-pwr_reg_term_proud  = 0.5;          // how far each terminal's face stands past the board's end (about)
-pwr_reg_overhang    = 3.0;          // how far the input jack and the USB socket stand past the board's ends, at most (about)
+pwr_reg_term_h      = 2.0;          // the terminals' wire entries, their middle above the board's top face (measured)
+pwr_reg_term_proud  = 0;            // how far each terminal's face stands past the board's end: none (measured)
+pwr_reg_overhang    = 0;            // how far the input jack and the USB socket stand past the board's ends: none (measured)
 pwr_ferrule_proud   = 8;            // a bootlace ferrule's collar, out of its terminal's face
 pwr_ferrule_d       = 4.0;          // across a collar (a 1.5 mm2 one is about 3.5)
 pwr_ferrule_clear   = 0.5;          // between the end of a collar and its saddle
 pwr_lead_d          = 2.0;          // the thinnest lead: a wire of the pigtail
 // from the end of the walls to the tie slot, which starts with the saddle,
-// just past a ferrule's collar: 8.5 mm, so 9 mm past the board's end
+// just past a ferrule's collar: 8 mm, so 8.5 mm past the board's end
 pwr_tie_slot_at     = pwr_reg_term_proud + pwr_ferrule_proud + pwr_ferrule_clear - pwr_reg_clear;
-// each tongue, past the end of the walls, with 1.5 mm of saddle past its slot: 14.6
+// each tongue, past the end of the walls, with 1.5 mm of saddle past its slot: 14.1
 pwr_tray_tongue_l   = pwr_tie_slot_at + pwr_tie_slot_w + 1.5;
-// the saddles' tops, level with the wire entries less half the thinnest lead: 8.1
+// the saddles' tops, level with the wire entries less half the thinnest lead: 6.1
 pwr_tray_saddle_h   = pwr_tray_floor + pwr_tray_rib_h + pwr_reg_pcb_t + pwr_reg_term_h - pwr_lead_d/2;
 
 // The plate's own tie bridges (2026-10-29), for the leads and the coax where
@@ -2144,8 +2172,8 @@ slack_curb_h = 8;    // tall: well over a 5 mm cable lying on the plate, and ove
 // Each end of the tray is marked (2026-10-29): OUT at the +x end and IN at
 // the -x end, engraved pwr_tray_label_d deep in the tongue's top, between the
 // walls and the saddle, the letters' tops toward that end. Engraved, not
-// raised: raised letters could meet the regulator's jack or USB socket where
-// they overhang the tongues, and letters cut into a top face print with no
+// raised: raised letters would stand up into the 0.5 mm between the tongues
+// and the leads' ferrules, and letters cut into a top face print with no
 // support.
 pwr_tray_label     = ["OUT", "IN"];   // at the +x end, and at the -x end
 pwr_tray_label_cap = 4.5;             // their capitals' height, along the tray
@@ -2188,8 +2216,9 @@ assert(pwr_tie_slot_w >= 3.6 + 0.8 && pwr_tie_slot_h + pwr_tie_slot_w/2 - 3.6/2 
        "the tie slots must take a 3.6 mm tie, 1.3 mm thick, under their tented roofs");
 assert(pwr_tie_w >= 3.6 + 0.8 && pwr_tray_floor - pwr_tie_d >= 0.8,
        "the grooves under the tray's floor must take a 3.6 mm tie, under 0.8 mm of floor or more");
-assert(pwr_tray_tongue_h < pwr_tray_floor + pwr_tray_rib_h + pwr_reg_pcb_t,
-       "the tongues must stay under the board's top face, and so under its jack and USB socket");
+assert(pwr_tray_tongue_h <= pwr_reg_entry_z() - pwr_ferrule_d/2 - pwr_ferrule_clear + 1e-6
+       && pwr_tray_tongue_h >= pwr_tray_floor + pwr_tray_rib_h + 0.5,
+       "the tongues must stay 0.5 mm under the leads' ferrules, and stand 0.5 mm or more over the board's underside, so it can't slide out");
 assert(pwr_tray_saddle_h > pwr_tray_tongue_h + 1,
        "the saddles must stand above the tongues, up to the terminals' wire entries");
 assert(min([for (e = pwr_tray_ears(), g = [-1, 1]) abs(e[0] - g*(pwr_reg_l/2 + pwr_reg_clear)/2)]) >= pwr_tie_w/2 + pwr_tray_cap_r() + 0.5,
@@ -2576,8 +2605,8 @@ module pwr_tray_labels2d() {
 // floor on the plate at z = 0. It prints as it sits, floor down: its ears'
 // caps are bridges over the bosses' bores (8.1 mm), the grooves under its
 // floor are 4.6 mm bridges, and the slots through its saddles have tented
-// roofs. Both ends stay open above the tongues for its terminals, jack and
-// USB socket, and the saddles at the tongues' ends stand past them.
+// roofs. Both ends stay open above the tongues for the leads, and the
+// saddles at the tongues' ends stand past their ferrules.
 module power_regulator_tray() {
     iw = pwr_reg_w + 2*pwr_reg_clear;
     il = pwr_reg_l + 2*pwr_reg_clear;

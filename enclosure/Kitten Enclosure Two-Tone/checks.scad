@@ -1227,7 +1227,7 @@ fan_grille_pos=[6,-46]; pwr_tray_boss_h=5; pwr_tray_insert_len=5; ant_plate_hole
 pwr_ferrule_proud=8; pwr_tray_pos=[-10.5,-75.5]; pwr_tray_a=-8;
 pwr_12v_lead_d=4.6; pwr_5v_lead_d=5.0; coax_bundle_d=5.0; lead_coax_gap=20;
 pwr_tie_slot_w=4.6; pwr_tie_slot_h=1.1; pwr_tb_len=8;
-pwr_reg_l=63; pwr_reg_w=27; pwr_reg_clear=0.5; pwr_tray_wall=2; pwr_tie_slot_at=8.5;
+pwr_reg_l=63.5; pwr_reg_w=27.25; pwr_reg_clear=0.5; pwr_tray_wall=2; pwr_tie_slot_at=8;
 pwr_tray_tongue_h=4.6; pwr_tray_label_d=0.6;
 module pwr_tray_all(pos = undef, a = 0) {
   if (is_undef(pos)) { power_regulator_tray_placed(); power_regulator_board_placed(); power_tray_m3_probe(); }
