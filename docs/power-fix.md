@@ -35,11 +35,12 @@ flowchart LR
 | A charger that offers **12 V** over USB-C PD | The official Raspberry Pi 27 W supply does (12 V at 2.25 A). A 5 V-only charger, such as a Pi-style 5 V 5 A clone, can't power this: the trigger board gets 5 V, and the regulator needs at least 9 V (found on RDU, 2026-10-23). If the label lists no 12 V output, it won't work. A back plate printed since 2026-10-29 says so beside its socket: `USB-C PD 12V 27W` |
 | USB-C PD trigger board, **fixed at 12 V** | 9 V also works with the official supply; 20 V doesn't, because the official supply has no 20 V. A 5 V board is no use here. Most come in packs of several voltages that look alike, so check before wiring (step 1) |
 | 5 V step-down regulator: 9–36 V in, 5.2 V out, 6 A at 9–24 V | Wire it from its screw terminals, never its USB socket |
-| 18 AWG silicone wire, red and black | About 15 cm of each |
-| A **USB-C plug pigtail**: two wires, 20 AWG or thicker, rated 5 A | Or cut one from a USB-C to USB-C cable rated 5 A (sold as 100 W or 240 W), as in step 4. Not a USB-A to USB-C cable: its power wires are thin |
-| Snap-on ferrite clip | For the pigtail |
+| 18 AWG silicone wire, red and black | About 25 cm of each, cut to 21 cm (step 2): in the case the twisted pair takes about 20 cm, from the trigger board across the lower half of the back plate, over the top of the low vent and round the far end of the regulator's tray to its input |
+| A **right-angled USB-C to USB-C cable rated 5 A** (sold as 100 W or 240 W), its plugs the kind sold as "up and down" angled (the cable leaves across the plug's flat face, not out of its side), **30 cm or longer**, to cut a **32 cm** pigtail from (step 4) | Its power wires are usually 20 AWG, rarely stated: over 32 cm at 5 A two of them lose 0.11 V of the regulator's 5.2 V, at the limit, though the Pi seldom draws more than 3 A (0.06 V); 18 AWG ones lose 0.07 V. Step 9's reading under load is the test. Don't use a ready-made right-angled pigtail with bare wires: the ones on sale are 22 AWG and rated 3 A, and lose 0.17 V at 5 A. Not a USB-A to USB-C cable either: its power wires are thin. The case needs the right angle (since 2026-10-29): in the Pi its cable points at the back plate, so it comes straight down to the plate beside the FlyCatcher and runs along it, away from the antenna leads; a straight plug stands 20 mm up toward them |
+| Snap-on ferrite clip | For the pigtail, one that fits a 4-5 mm cable |
+| Bootlace ferrules, a kit with a crimper | One on each wire under the regulator's screw terminals (steps 2 and 5): 0.75-1.0 mm² on the 18 AWG pair and the pigtail's red wire, and one 1.0-1.5 mm² for the pigtail's black wires and braid together. Bare stranded wire splays and loosens under a screw clamp, and one stray strand at OUT+ shorts the 5 V; don't tin the ends either. The tray's saddles are placed for a ferrule's 8 mm collar |
 | Heat-shrink, a soldering iron, a multimeter | |
-| For the case: a back plate printed since 2026-10-29, and `power_trigger_mount`, three `power_trigger_stop`s and `power_regulator_tray`, printed (`usbc_gauge` too, to try the fit first); two M3 × 8 button-head screws and four M3 × 3 heat-set inserts; two M2 × 8 screws; VHB tape | In the case folders; see [In the case](#in-the-case). A trial fit on `usbc_gauge` spends two of the inserts, which stay in it, and one stop's crush ribs. A stop is good for one fitting, so the third is a spare, for a board that has to be re-seated |
+| For the case: a back plate printed from the design of 2026-10-29 or later, with the trigger board's window, the regulator tray's two bosses, ten tie bridges and two curbs, and `power_trigger_mount`, three `power_trigger_stop`s and `power_regulator_tray`, printed (`usbc_gauge` too, to try the fit first); four M3 × 8 button-head screws, four M3 × 3 heat-set inserts and two M3 × 5 ones; two M2 × 8 screws; **14 cable ties, 150 mm long and 3.6 mm wide** | In the case folders; see [In the case](#in-the-case). Two of the M3 × 8s and the M3 × 3 inserts hold the trigger board's mount, the other two and the M3 × 5s the regulator's tray. A trial fit on `usbc_gauge` spends two of the M3 × 3 inserts, which stay in it, and one stop's crush ribs. A stop is good for one fitting, so the third is a spare, for a board that has to be re-seated. The ties: one at each end of the tray, one through each of the two grooves under it, and one at each of the plate's ten tie bridges. The tray's loops are 85-100 mm round, too big for a 100 mm tie to close, so one size, 150 mm, for all |
 
 The Pi's 5 V pins would also take the regulator's output, but they sit under
 the FlyCatcher, so the 5.2 V goes into the Pi's own USB-C port instead.
@@ -66,13 +67,22 @@ The Pi isn't involved until step 6.
 1. **Check the trigger board.** Plug the charger into it, with nothing on its
    output. The meter on its output pads should read about 12 V. If it reads
    5 V, it's a 5 V board, or a charger without 12 V. Unplug.
-2. **Trigger to regulator.** Solder red to the trigger's + pad (sometimes
-   VOUT) and black to − (GND), and heat-shrink both joints. Connect the other
-   ends to the regulator's input: red to IN+, black to IN−.
+2. **Trigger to regulator.** Cut a red and a black wire 21 cm long, and
+   twist them together, about a turn every 2 cm: in the case the pair takes
+   about 20 cm, and a pair cut to length leaves no spare loop near the
+   antenna leads. Solder red to the trigger's + pad (sometimes VOUT) and black
+   to − (GND), and heat-shrink both joints. Crimp a 0.75-1.0 mm² ferrule on
+   each free end and connect them to the regulator's input: red to IN+,
+   black to IN−.
 3. **Check the regulator.** Plug the charger back in. The regulator's output
    terminals should read 5.1–5.3 V, with + where its label says. Unplug.
 4. **Make or check the pigtail.** To cut one from a cable:
-   - cut it about 15 cm from the plug (shorter means less loss);
+   - cut it 32 cm from the plug's tip: in the case it takes about 30 cm, from
+     the regulator's output through its four bridges to the plate under the
+     Pi's USB-C port, up to the plug and into it, and leaves 1 to 2 cm of
+     slack so the back plate can come away 5 cm before the plug is pulled. The
+     plug stands 15 to 25 mm off the plate, depending on the standoffs under
+     the FlyCatcher; if yours are measured, measure that too and adjust;
    - strip about 3 cm of the outer jacket;
    - red is 5 V, and black plus the bare braid are ground. If there are two
      reds, twist them together, and twist the blacks with the braid;
@@ -81,8 +91,12 @@ The Pi isn't involved until step 6.
    Then, with the meter on continuity: black to the plug's metal shell should
    beep, red to the shell should not, and red to black should not. Stop if
    it's any other way: a reversed 5 V wire ruins a Pi.
-5. **Regulator to pigtail.** Red to the regulator's OUT+, black and braid to
-   OUT−. Heat-shrink the cut end, and snap the ferrite on near the plug.
+5. **Regulator to pigtail.** Crimp a 0.75-1.0 mm² ferrule on the red wire,
+   and one 1.0-1.5 mm² ferrule on the black wires and the braid together, with
+   heat-shrink over the braid up to it. Red to the regulator's OUT+, black and
+   braid to OUT−. Heat-shrink the cut end of the jacket, and snap the ferrite
+   on about 5 cm from the plug. Tug-test each ferrule, and re-tighten the
+   screws after a week.
 
 ## Switch the radar over
 
@@ -100,8 +114,11 @@ The Pi isn't involved until step 6.
    lsusb                                 # the display and both radios
    ```
 
-   A switching regulator can add radio noise, so compare the receiver's noise
-   floor (`"noise"` in `/run/readsb/stats.json`) with what it was before.
+   With the panel lit and both radios on, `EXT5V_V` must still read 5.0 V or
+   more (the first unit read 5.01-5.08 V, 5.05 V on average): any lower, and
+   the pigtail's power wires are too thin or a terminal is loose. A switching
+   regulator can add radio noise, so compare the receiver's noise floor
+   (`"noise"` in `/run/readsb/stats.json`) with what it was before.
 
 10. **Soak it for an hour** before it goes into the case or leaves the house.
     Keep the display at its normal brightness and the radar on its everyday
@@ -185,18 +202,97 @@ question.
   the coupon's, and move the mount across with the board still in it.
   Details and checks are in the
   [retro case's README](../enclosure/Retro%20Radar%20Enclosure/README.md#the-power-fix-the-charger-plugs-into-the-trigger-board).
-- **The regulator goes in `power_regulator_tray`,** stuck to the plate's
-  inner face with VHB tape. Put it as far from the FlyCatcher and the antenna
-  leads as the case allows, and where the pigtail reaches the Pi's power
-  port, off the 70 × 13.5 mm strip across the window. The trigger board's
-  mount stands in the middle of it, and the M2 screwdriver needs the rest,
-  25 mm out either side along the screws, so the stop can be locked or
-  freed with the tray in place. Keep the 5 V side short (a 10–20 cm
-  pigtail), and twist the 12 V pair.
+- **The regulator goes in `power_regulator_tray`, at its one place across
+  the bottom of the plate** (since 2026-10-29; until then it was stuck on
+  with VHB tape wherever there was room), and its leads run along set routes,
+  tied to bridges on the plate, away from the antenna leads. **Seen from
+  behind the case**, the trigger board's socket is at the lower left, the
+  Pi's USB-C port at the upper right, and the FlyCatcher's two antenna jacks
+  on its right-hand edge, with the coax coming down to them from the cable
+  hole at the top. So the power keeps to the lower half and the left:
+  - the regulator lies across the bottom, its **output at the left-hand end**
+    and its **input at the right-hand end**, seen from behind; the tray has
+    `OUT` and `IN` engraved at its ends;
+  - the twisted 12 V pair runs from the trigger board across the lower half
+    of the plate: over the top of the low vent on two bridges, off the plate,
+    past the tray's upper ear to a third, up the plate from the tray's
+    right-hand end, and round that end on a fourth, onto the saddle there, to
+    the input. It runs above the tray, never across the regulator;
+  - the pigtail runs from the output up past the trigger board, up the left
+    side of the Pi, between its USB ports and the speaker, and along the top
+    of the Pi to its USB-C port, tied at four bridges, the last at the Pi's
+    top left corner. From there it lies free, with the ferrite on it, between
+    the Pi's top edge and a curb on the plate;
+  - the coax runs from the cable hole to the right and down the right-hand
+    side, tied at two bridges of its own, then free to the SMA jacks between a
+    second curb and the right-hand speaker.
+
+  The two curbs are what hold the slack. The pigtail's run from its last
+  bridge to its plug, and the coax's from its last bridge to the SMA plugs,
+  each carry the slack that lets the plate be eased back 5 cm before the plug
+  comes out; as the plate goes home that slack goes wherever it is pushed, and
+  each curb keeps it on its own side, away from the other cable. Measured on
+  the routes as the design draws them, every power lead, and all the room
+  each free run's slack can take, is 20 mm or more from the coax and from the
+  SMA plugs: the 12 V pair 24 mm from where an SMA plug could be, the pigtail
+  25 mm, the coax 24 mm from the Pi's USB-C plug, and nothing crosses. The one
+  exception is the Pi's own: its USB-C socket is 11 mm from the FlyCatcher's
+  right-hand edge, so the pigtail's plug, its drop from the plug to the
+  plate, past the jacks' height, and its first 13 mm along the plate, 3 to
+  4 cm of cable in all, come within 20 mm of where an SMA plug could be, the
+  plug's moulding 8 mm from it. Where the two jacks really are along the
+  FlyCatcher's edge isn't measured yet, and the design allows for them
+  anywhere they could be: with both below the edge's middle the plug would be
+  about 30 mm from them, and the 12 V pair has only 4 mm to spare over its
+  20 mm. So measure the jacks, and narrow `hat_sma_span` in the case's
+  `.scad` to them.
+
+  To fit the tray, with the plate outer face down (you're looking at its
+  inner face, the mirror of the view from behind, so go by the trigger
+  board's window and the vents, not by left and right):
+  1. Press an M3 × 5 insert into each of the two bosses at the bottom of the
+     plate, flush with the top of the boss.
+  2. Lay the regulator, wired as in steps 2 to 5, in the tray with its output
+     terminals at the end marked `OUT`, the end nearer the trigger board, and
+     put a tie through each of the two grooves under the tray's floor, one tie
+     in each, round the tray and the board: in the case the plate stands
+     nearly upright, and nothing else keeps the board in.
+  3. Set the tray over the bosses, its two caps over them (it fits one way
+     only), and screw it down with two M3 × 8 button-head screws, snug.
+  4. At each end, put a tie through the slot across the saddle, round the
+     saddle and the leads on it, its head on top of the leads (on the tray's
+     lower side it would hit the plate's lip), and pull it tight: the tie
+     grips each lead just past its ferrule, and a pull on it lands on the
+     tray, not on the screw.
+  5. Tie the 12 V pair at its four bridges and the pigtail at its four, as
+     the routes above say, each tie's head on top, except at the pigtail's
+     third bridge, beside the Pi's USB ports: there, put the head on the
+     speaker's side, on the plate, to stay under the plugs in those ports.
+     Leave the pigtail free from its last bridge, at the Pi's top corner, on
+     the Pi's side of its curb.
+
+  When the plate goes on, hold it about 5 cm behind the case. Plug the coax
+  in, its free run down the right-hand side between its curb and the
+  speaker. Plug the pigtail into the Pi with its cable pointing at the
+  plate, its free run along the top of the Pi, between the Pi and its curb,
+  with the ferrite on it about 5 cm from the plug. With every plug in the Pi (the
+  FlyCatcher's USB lead, the display's USB and HDMI leads), check that the
+  pigtail and the tie at its third bridge pass under the USB plugs without
+  touching them, and that no angled USB or HDMI cable points down onto the
+  pigtail or the ferrite; keep the FlyCatcher's USB lead off the pigtail.
+  Then ease the plate home: each run's slack arches off the plate, on its
+  own side of its curb.
+  To open the case: undo the eight screws, ease the plate back about 5 cm,
+  unplug the pigtail and unscrew both SMA plugs, then lift the plate away.
+
+  Details and checks are in the
+  [retro case's README](../enclosure/Retro%20Radar%20Enclosure/README.md#the-regulators-place).
 - **Never run the regulator's leads along an antenna cable.** On the first
   unit (2026-10-18) its lead had ended up wrapped round the external
   antenna's cable: 1090 MHz reception fell to a few messages a minute,
-  against hundreds, and came back as soon as the two were apart.
+  against hundreds, and came back as soon as the two were apart. The routes
+  above keep them 20 mm apart or more, but for the Pi's own plug: tie every
+  lead at its bridges, and keep each free run on its own side of its curb.
 - **Check the boards first.** The trigger board's size is measured, and the
   regulator's is published. Each part is a short print, so print and fit
   them before the final assembly.
