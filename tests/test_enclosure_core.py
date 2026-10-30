@@ -219,16 +219,22 @@ def stl_triangles(path):
     return tris
 
 
+def signed_volume(tris):
+    """A closed mesh's volume, mm3: positive when its faces are wound to point
+    outward, as a slicer reads them, and negative when it is inside out."""
+    return sum(a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
+               + a[2] * (b[0] * c[1] - b[1] * c[0]) for a, b, c in tris) / 6
+
+
 def geometry(path):
     """(volume mm3, min corner, max corner) of an STL, ASCII or binary."""
-    vol, lo, hi = 0.0, [1e9] * 3, [-1e9] * 3
-    for a, b, c in stl_triangles(path):
-        vol += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
-                + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6
-        for pt in (a, b, c):
+    tris = stl_triangles(path)
+    lo, hi = [1e9] * 3, [-1e9] * 3
+    for t in tris:
+        for pt in t:
             for k in range(3):
                 lo[k], hi[k] = min(lo[k], pt[k]), max(hi[k], pt[k])
-    return abs(vol), lo, hi
+    return abs(signed_volume(tris)), lo, hi
 
 
 def same_shape(g1, g2):
@@ -362,7 +368,10 @@ def folders_and_prints():
 
 def threemf_meshes(path):
     """name -> triangles, for each object in a 3MF with a mesh of its own (an
-    object made only of other objects has none)."""
+    object made only of other objects has none). Named by its model file as
+    well as its id: a 3MF can keep its objects in several model files, each
+    numbering its own, and two named by id alone would be one, the other
+    never checked."""
     import xml.etree.ElementTree as ET
     import zipfile
     out = {}
@@ -379,7 +388,7 @@ def threemf_meshes(path):
                     elif tag == "triangle":
                         tris.append(tuple(verts[int(el.get(k))] for k in ("v1", "v2", "v3")))
                 if tris:
-                    out[f"object {obj.get('id')}"] = tris
+                    out[f"object {obj.get('id')} in {model}"] = tris
     return out
 
 
@@ -388,7 +397,7 @@ def print_meshes(path):
     3MF one per object."""
     path = pathlib.Path(path)
     if path.suffix == ".3mf":
-        return {f"{path.name} {k}": v for k, v in threemf_meshes(path).items()}
+        return {f"{path.name}, {k}": v for k, v in threemf_meshes(path).items()}
     return {path.name: stl_triangles(path)}
 
 
@@ -427,33 +436,51 @@ def cube_triangles(x0, y0, z0, s=1.0):
     return tris
 
 
-def write_control(path, tris):
-    """Write a control mesh as a binary STL, or as a one-object 3MF."""
+def write_control(path, *meshes):
+    """Write control meshes as one binary STL, or as a 3MF: one mesh as object
+    1 of its 3dmodel.model, or several, each object 1 of a model file of its
+    own, put together by an object in the 3dmodel.model."""
     import struct
     import zipfile
     path = pathlib.Path(path)
     if path.suffix == ".stl":
+        tris = [t for m in meshes for t in m]
         d = bytearray(80) + struct.pack("<I", len(tris))
         for t in tris:
             d += struct.pack("<12fH", 0, 0, 0, *t[0], *t[1], *t[2], 0)
         path.write_bytes(bytes(d))
         return
-    ids = {}
-    tri_ids = [[ids.setdefault(p, len(ids)) for p in t] for t in tris]
-    verts = "".join(f'<vertex x="{x}" y="{y}" z="{z}"/>' for x, y, z in ids)
-    faces = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in tri_ids)
+
+    def model(resources, build):
+        return ('<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" '
+                'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" '
+                'xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" '
+                f'requiredextensions="p"><resources>{resources}</resources><build>{build}</build></model>')
+
+    def mesh_object(tris):
+        ids = {}
+        tri_ids = [[ids.setdefault(p, len(ids)) for p in t] for t in tris]
+        verts = "".join(f'<vertex x="{x}" y="{y}" z="{z}"/>' for x, y, z in ids)
+        faces = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in tri_ids)
+        return (f'<object id="1" type="model"><mesh><vertices>{verts}</vertices>'
+                f'<triangles>{faces}</triangles></mesh></object>')
+
     with zipfile.ZipFile(path, "w") as z:
-        z.writestr("3D/3dmodel.model",
-                   '<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" '
-                   'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources>'
-                   f'<object id="1" type="model"><mesh><vertices>{verts}</vertices>'
-                   f'<triangles>{faces}</triangles></mesh></object></resources>'
-                   '<build><item objectid="1"/></build></model>')
+        if len(meshes) == 1:
+            z.writestr("3D/3dmodel.model", model(mesh_object(meshes[0]), '<item objectid="1"/>'))
+            return
+        parts = [f"3D/Objects/object_{i + 1}.model" for i in range(len(meshes))]
+        for part, tris in zip(parts, meshes):
+            z.writestr(part, model(mesh_object(tris), ""))
+        top = len(meshes) + 1
+        comps = "".join(f'<component p:path="/{part}" objectid="1"/>' for part in parts)
+        z.writestr("3D/3dmodel.model", model(f'<object id="{top}" type="model"><components>{comps}'
+                                             f'</components></object>', f'<item objectid="{top}"/>'))
 
 
 def print_files_manifold():
     """Check 10: every print file is a closed mesh with no edge a slicer has to
-    repair."""
+    repair, and not inside out."""
     import tempfile
     failures, checks = [], 0
 
@@ -470,22 +497,45 @@ def print_files_manifold():
     #     line, and only a slicer opening the file says otherwise, so
     #     nothing here saw it.
     #
-    #     The controls go through the same reader and check: two cubes that
-    #     share one edge, and a cube with one face turned over, must fail; a
-    #     plain cube must pass; each as an STL and as a 3MF.
+    #     Its volume must also come out above 0 (2026-10-29). A mesh turned
+    #     inside out, every face wound the wrong way round, has every edge
+    #     used once each way, so it passes the edge check, and a slicer has
+    #     to flip it. This is the whole mesh's volume, not each piece's: a
+    #     hollow inside a part is a piece whose faces point inward, and is
+    #     right. So one piece turned inside out, beside others the right way
+    #     out, is not caught here.
+    #
+    #     A 3MF's meshes are named by model file as well as id (2026-10-29):
+    #     a 3MF can keep its objects in several model files, each numbering
+    #     its own, and by id alone a second object 1 hid the first from this
+    #     check.
+    #
+    #     The controls go through the same reader and checks, each as an STL
+    #     and as a 3MF. They must fail: two cubes that share one edge; a cube
+    #     with one face turned over; a cube turned inside out; and two
+    #     meshes, the first of them two cubes sharing an edge, which the 3MF
+    #     keeps in two model files, both as object 1. They must pass: a plain
+    #     cube, and a cube with a hollow in it.
     with tempfile.TemporaryDirectory() as t:
         t = pathlib.Path(t)
         clean = cube_triangles(0, 0, 0)
-        controls = [("two cubes sharing an edge", clean + cube_triangles(1, 1, 0), False),
-                    ("a cube with a face turned over", [clean[0][::-1]] + clean[1:], False),
-                    ("a plain cube", clean, True)]
-        for name, tris, good in controls:
+        pinch = clean + cube_triangles(1, 1, 0)
+        inside_out = [tri[::-1] for tri in clean]
+        hollow = cube_triangles(0, 0, 0, 3) + [tri[::-1] for tri in cube_triangles(1, 1, 1)]
+        controls = [("two cubes sharing an edge", [pinch], False),
+                    ("a cube with a face turned over", [[clean[0][::-1]] + clean[1:]], False),
+                    ("a cube turned inside out", [inside_out], False),
+                    ("two meshes, a pinch in the first", [pinch, cube_triangles(5, 0, 0)], False),
+                    ("a plain cube", [clean], True),
+                    ("a cube with a hollow in it", [hollow], True)]
+        for name, parts, good in controls:
             for ext in (".stl", ".3mf"):
                 checks += 1
                 f = t / f"control{ext}"
-                write_control(f, tris)
+                write_control(f, *parts)
                 meshes = print_meshes(f)
-                ok = bool(meshes) and all(not edge_faults(m)[0] for m in meshes.values())
+                ok = bool(meshes) and all(not edge_faults(m)[0] and signed_volume(m) > 0
+                                          for m in meshes.values())
                 if ok != good:
                     failures.append(f"the manifold check's control, {name} as {ext}, came out "
                                     f"{'clean' if ok else 'bad'}: the check itself is broken")
@@ -515,6 +565,12 @@ def print_files_manifold():
                                 f"({p[0]:.3f}, {p[1]:.3f}, {p[2]:.3f}) to ({q[0]:.3f}, {q[1]:.3f}, {q[2]:.3f}), "
                                 f"used {n} times. Two solids there meet in a line or a face: make them overlap "
                                 f"a little, or stand clear, and re-export it")
+            checks += 1
+            vol = signed_volume(tris)
+            if vol <= 0:
+                failures.append(f"{where}: inside out: its faces point inward, so its volume comes out "
+                                f"{vol:.3f} mm3, and a slicer has to turn it the right way out. Fix the "
+                                f"winding in whatever wrote it, and re-export it")
             if degenerate:
                 print(f"note: {where}: {degenerate} degenerate triangles (zero area; slicers drop them)")
     return failures, checks
