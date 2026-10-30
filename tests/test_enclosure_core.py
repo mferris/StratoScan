@@ -90,6 +90,27 @@ CORE = {
     "pwr_mount_len", "pwr_m2_reach", "pwr_m2_engaged",
     "power_trigger_mount_placed", "power_trigger_stop_placed", "power_trigger_board_placed",
     "power_plug_probe", "power_m2_probe", "power_m3_probe", "power_insert_probe", "power_wire_probe",
+    # the regulator tray's one place on the plate, its bosses, the plate's tie
+    # bridges, their check probes, and the box the Pi and its HAT take
+    # (2026-10-29)
+    "pwr_tray_frame", "power_regulator_tray_placed", "pwr_tray_bosses", "pwr_tray_boss_holes",
+    "pwr_tray_cap_y", "pwr_tray_tie_x", "pwr_tray_tie_reach",
+    "power_regulator_board_placed", "power_tray_m3_probe", "power_tray_insert_probe", "power_tray_tie_probe",
+    "pwr_tie_bridge", "pwr_tie_bridges", "pwr_tie_probe", "pwr_tie_deck_probe", "pwr_tie_zone", "hat_envelope",
+    # the tray's saddles and the leads in the regulator's terminals, its ears,
+    # the tented tie slots, the power leads' and the coax's bridges and
+    # routes, the Pi's USB-C plug and port, the SMA plugs' zone, and the HAT's
+    # stack (2026-10-29)
+    "power_tray_tie_zone", "power_reg_ferrule_probe", "power_reg_lead_probe", "pwr_reg_entry_z",
+    "pwr_tray_ears", "pwr_tray_cap_r", "pwr_tie_apex", "pwr_tie_tent", "pwr_tray_pt", "pwr_tb_pts",
+    "pwr_bridges", "coax_bridges", "tie_bridges_all", "pwr_12v_route", "pwr_5v_route", "coax_route",
+    "plan_path", "route_probe", "route_on_plate", "coax_probe",
+    "pi_usbc_pos", "pi_usbc_reach_pt", "pi_usbc_plug2d", "pi_usbc_plug_zone", "pi_usbc_port2d",
+    "sma_plug_zone", "hat_switch_margin", "hat_switch_z",
+    # the curbs beside the two runs tied at one end only and the strips their
+    # slack can take, the tray's OUT and IN, and each saddle's tie as fitted
+    # (2026-10-29)
+    "slack_curbs", "pwr_5v_slack2d", "coax_slack2d", "pwr_tray_labels2d", "power_tray_tie_loop",
 }
 
 # The only shared names allowed to differ, and why. Anything NOT listed here

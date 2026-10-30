@@ -629,9 +629,11 @@ if (check=="vents_clear_of_mount") {
 // Paired positive control. An empty result above is also what a mistyped
 // grille module or a flange in the wrong place produces, so the SAME probe
 // at the grille's OLD position has to find the overlap that was reported.
+// Moved there from wherever it is now (fan_grille_pos; it moved again on
+// 2026-10-29), so the control does not depend on where that is.
 if (check=="vents_were_under_mount") {
   intersection() {
-    translate([0, 68 - (-68), 0])         // shift the moved grille back to y=+68
+    translate([-fan_grille_pos[0], 68 - fan_grille_pos[1], 0])   // the grille back at y=+68, from wherever it is now
       translate([0,0,-back_plate_t]) fan_grille();
     translate([0, ant_mount_y, -back_plate_t - 1])
       cylinder(d=ant_flange_d, h=back_plate_t + 2);
@@ -1179,14 +1181,13 @@ module pwr_slot_begun_late(late = 0.5) {
     }
 }
 if (check=="power_stop_jam_probe_works") intersection() { pwr_stop_swept(); union() { power_trigger_mount_placed(); pwr_slot_begun_late(); } }
-// The regulator's tray has no set place: it goes on the plate's inner face
-// wherever the case has room. All of the power fix at the window keeps to a
-// 70 x 13.5 mm strip of the plate across it, up to 26 mm in from the plate,
-// so the tray, and anything else stuck to the plate, need only keep off that
-// strip (the READMEs say so): nothing of the parts is outside it, nor of the
-// M2 screwdriver's way in from either side. Until 2026-10-29 it was a 33 x
-// 13.5 mm patch, the parts alone, and a tray stuck beside the mount could
-// have stood in the screwdriver's way.
+// All of the power fix at the window keeps to a 70 x 13.5 mm strip of the
+// plate across it, up to 26 mm in from the plate, so everything else on the
+// plate need only keep off that strip: nothing of the parts is outside it,
+// nor of the M2 screwdriver's way in from either side. Until 2026-10-29 it
+// was a 33 x 13.5 mm patch, the parts alone, and a tray stuck beside the
+// mount could have stood in the screwdriver's way. The regulator's tray has
+// its own place since then, checked against the strip below (tray_off_strip).
 module pwr_patch() {
   translate([usbc_cut_pos[0] - 35, usbc_cut_pos[1] - 9, -back_plate_t - 0.01]) cube([70, 13.5, back_plate_t + 26]);
 }
@@ -1213,6 +1214,303 @@ if (check=="power_m2_drivers_clear")  intersection() {
 // ...and they start at the screws: begun 3 mm further in, they run into the
 // screws' heads and the mount's walls (the control).
 if (check=="power_m2_drivers_reach")  intersection() { pwr_m2_driver_paths(inset = 3); union() { power_trigger_mount_placed(); power_m2_probe(); } }
+
+// ---- the regulator's place (2026-10-29, #99) ----
+// The tray has one place now, across the bottom of the plate, screwed to two
+// bosses, ten bridges on the plate take the ties for the leads and the coax
+// along their routes, and two curbs keep the slack of the two runs tied at
+// one end only on their own sides. Every check here takes the tray with the
+// regulator in it and its two screws, as they sit (pwr_tray_all), and must
+// come out empty; beside each is a control that shows the same probe finds
+// what it is looking for. Restated for the probes below:
+fan_grille_pos=[6,-46]; pwr_tray_boss_h=5; pwr_tray_insert_len=5; ant_plate_hole=13;
+pwr_ferrule_proud=8; pwr_tray_pos=[-10.5,-75.5]; pwr_tray_a=-8;
+pwr_12v_lead_d=4.6; pwr_5v_lead_d=5.0; coax_bundle_d=5.0; lead_coax_gap=20;
+pwr_tie_slot_w=4.6; pwr_tie_slot_h=1.1; pwr_tb_len=8;
+pwr_reg_l=63; pwr_reg_w=27; pwr_reg_clear=0.5; pwr_tray_wall=2; pwr_tie_slot_at=8.5;
+pwr_tray_tongue_h=4.6; pwr_tray_label_d=0.6;
+module pwr_tray_all(pos = undef, a = 0) {
+  if (is_undef(pos)) { power_regulator_tray_placed(); power_regulator_board_placed(); power_tray_m3_probe(); }
+  else { power_regulator_tray_placed(pos, a); power_regulator_board_placed(pos, a); power_tray_m3_probe(pos = pos, a = a); }
+}
+// The tray sits on the plate: nothing of it, the regulator or its screws is in
+// the plate, its bosses or its lip...
+if (check=="tray_vs_plate")        intersection() { pwr_tray_all(); back_plate(); }
+// ...and it is down on them: moved 1 mm down, its caps' tops meet the bosses...
+if (check=="tray_caps_on_bosses")  intersection() { translate([0, 0, -1]) power_regulator_tray_placed(); pwr_tray_bosses(); }
+// ...which locate it before a screw is in: moved 1.5 mm sideways, the caps run
+// into them (both controls)...
+if (check=="tray_located")         intersection() { translate([1.5, 0, 0]) power_regulator_tray_placed(); pwr_tray_bosses(); }
+// ...and only one way round, since its two ears are offset along it: turned
+// end for end, its caps land on the bosses (another control).
+if (check=="tray_one_way_round")   intersection() { power_regulator_tray_placed(a = pwr_tray_a + 180); pwr_tray_bosses(); }
+// The regulator lies in the tray clear of its walls, tongues and caps...
+if (check=="tray_holds_board")     intersection() { power_regulator_board_placed(); power_regulator_tray_placed(); }
+// ...on its two ribs: moved 0.5 mm down, it meets them (the control).
+if (check=="tray_board_on_ribs")   intersection() { translate([0, 0, -0.5]) power_regulator_board_placed(); power_regulator_tray_placed(); }
+// The screws go down through the caps into the inserts, meeting neither the
+// tray nor the plate...
+if (check=="tray_screws_pass")     intersection() { power_tray_m3_probe(head = false); union() { power_regulator_tray_placed(); back_plate(); } }
+// ...each 5 mm into its insert (the control)...
+if (check=="tray_screws_bite")     intersection() { power_tray_m3_probe(head = false); power_tray_insert_probe(insert_hole_dia); }
+// ...and nothing of a screw or an insert comes within 1.5 mm of the plate's
+// outer face.
+if (check=="tray_screws_inside_plate") intersection() { union() { power_tray_m3_probe(); power_tray_insert_probe(); } translate([0, 0, -back_plate_t - 50]) cylinder(r = 150, h = 50 + 1.5); }
+// The inserts' holes are open for the inserts' whole length (the control)...
+if (check=="tray_insert_holes_open") difference() { power_tray_insert_probe(insert_hole_dia - 0.2); back_plate(); }
+// ...with 1.5 mm of boss all round each, that whole length...
+module pwr_tray_insert_rings() {
+  pwr_tray_frame() for (e = pwr_tray_ears()) translate([e[0], e[1], pwr_tray_boss_h - pwr_tray_insert_len + 0.01])
+    difference() { cylinder(d = insert_hole_dia + 3, h = pwr_tray_insert_len - 0.02); translate([0, 0, -1]) cylinder(d = insert_hole_dia + 0.1, h = pwr_tray_insert_len + 2); }
+}
+if (check=="tray_inserts_surrounded") difference() { pwr_tray_insert_rings(); back_plate(); }
+// ...and 1.5 mm of plate under each hole, so the outer face stays whole.
+if (check=="tray_holes_blind")     difference() {
+  pwr_tray_frame() for (e = pwr_tray_ears()) translate([e[0], e[1], -back_plate_t + 0.01]) cylinder(d = insert_hole_dia - 0.2, h = 1.5 - 0.02);
+  back_plate();
+}
+// The tray keeps clear of the shell: its back posts and key, the speakers'
+// sleeves, the wall...
+if (check=="tray_vs_shell")        intersection() { pwr_tray_all(); shell(); }
+// ...of the speakers, drawn where they sit on their pads...
+if (check=="tray_vs_speakers")     intersection() { pwr_tray_all(); pwr_speaker_bodies(); }
+// ...which catch it at the spot one review proposed, (-44, -50) across (the control).
+if (check=="tray_speaker_probe_works") intersection() { pwr_tray_all([-44, -50], 0); pwr_speaker_bodies(); }
+// It keeps clear of everything at the trigger board's window, and off its
+// 70 x 13.5 mm strip...
+module pwr_trigger_parts() {
+  power_trigger_mount_placed(); power_trigger_stop_placed(); power_trigger_board_placed(); power_m2_probe(); power_m3_probe(); power_insert_probe(); power_wire_probe(); pwr_m2_driver_paths();
+}
+if (check=="tray_vs_trigger")      intersection() { union() { pwr_tray_all(); pwr_tray_bosses(); } pwr_trigger_parts(); }
+if (check=="tray_off_strip")       intersection() { union() { pwr_tray_all(); pwr_tray_bosses(); } pwr_patch(); }
+// ...where, upright at (+29, -62), another of the case review's spots, it would
+// stand (the control).
+if (check=="tray_strip_probe_works") intersection() { pwr_tray_all([29, -62], 90); pwr_patch(); }
+// No vent hole is under it or its bosses...
+module pwr_tray_shadow() {
+  translate([0, 0, -back_plate_t - 2]) linear_extrude(height = back_plate_t + 4) projection() union() { power_regulator_tray_placed(); pwr_tray_bosses(); }
+}
+if (check=="tray_clear_of_grilles") intersection() { pwr_tray_shadow(); translate([0, 0, -back_plate_t]) { intake_grille(); fan_grille(); } }
+// ...as there would be with the low grille back where it was, at (0, -68)
+// (the control).
+if (check=="tray_grille_probe_works") intersection() { pwr_tray_shadow(); translate([-fan_grille_pos[0], -68 - fan_grille_pos[1], -back_plate_t]) fan_grille(); }
+// It keeps 50 mm or more from the coax hole...
+module pwr_coax_keepout(r = 50) { translate([0, ant_mount_y, -back_plate_t - 1]) cylinder(r = r, h = shell_depth + back_plate_t + 2, $fn = 180); }
+if (check=="tray_clear_of_coax")   intersection() { union() { pwr_tray_all(); pwr_tray_bosses(); } pwr_coax_keepout(); }
+// ...and it is 130 mm from it at its nearest: 135 mm round takes in its upper
+// cap (the control).
+if (check=="tray_coax_probe_works") intersection() { union() { pwr_tray_all(); pwr_tray_bosses(); } pwr_coax_keepout(135); }
+// It keeps out of the Pi and its HAT (hat_envelope)...
+if (check=="tray_vs_hat")          intersection() { union() { pwr_tray_all(); pwr_tray_bosses(); } hat_envelope(); }
+// ...which it would run into 25 mm further up the plate (the control).
+if (check=="tray_hat_probe_works") intersection() { translate([0, 25, 0]) pwr_tray_all(); hat_envelope(); }
+// Each saddle's tie slot is open right across: a 3.6 mm tie through it, under
+// its tented roof, meets nothing of the tray...
+if (check=="tray_tie_slots_open")  intersection() { power_tray_tie_probe(); power_regulator_tray_placed(); }
+// ...and the roof is down on it: 1.5 mm higher, the same tie meets it (the control).
+if (check=="tray_tie_probe_works") intersection() { power_tray_tie_probe(dz = 1.5); power_regulator_tray_placed(); }
+// The leads' ferrules, at their terminals' wire entries, are clear of the
+// tray and of where each tie goes, so a tie grips a lead, not a collar...
+if (check=="tray_ferrules_clear")  intersection() { power_reg_ferrule_probe(); union() { power_regulator_tray_placed(); power_tray_tie_zone(); } }
+// ...with 0.5 mm to spare: collars 1 mm longer reach both (the control).
+if (check=="tray_ferrule_probe_works") intersection() { power_reg_ferrule_probe(len = pwr_ferrule_proud + 1); union() { power_regulator_tray_placed(); power_tray_tie_zone(); } }
+// Each lead runs straight out of its terminal to its tie, over the tongue
+// and onto the saddle, meeting nothing of the tray on its way...
+if (check=="tray_leads_straight")  intersection() { power_reg_lead_probe(); power_regulator_tray_placed(); }
+// ...and lies on the saddles: 0.5 mm lower, the leads run into them (the control).
+if (check=="tray_leads_on_saddles") intersection() { power_reg_lead_probe(dz = -0.5); power_regulator_tray_placed(); }
+// Each saddle's tie, fitted with its head on top, over the leads, meets
+// neither the plate nor the shell...
+if (check=="tray_ties_clear")      intersection() { power_tray_tie_loop(); union() { back_plate(); shell(); } }
+// ...as it would with its head on the tray's lower side, toward the rim: the
+// plate's lip is 4 mm from that side at both saddles (the control).
+if (check=="tray_tie_head_probe_works") intersection() { power_tray_tie_loop(head = "rim"); back_plate(); }
+// OUT and IN are engraved in the tongues' tops, 0.5 mm in from the walls'
+// ends and the saddles, so neither breaks into them...
+module pwr_tray_label_room() {
+  il = pwr_reg_l + 2*pwr_reg_clear; hw = pwr_reg_w/2 + pwr_reg_clear + pwr_tray_wall;
+  pwr_tray_frame() for (sx = [-1, 1])
+    translate([sx > 0 ? il/2 + 0.5 : -il/2 - pwr_tie_slot_at + 0.5, -hw + 0.5, -1]) cube([pwr_tie_slot_at - 1, 2*hw - 1, 20]);
+}
+if (check=="tray_labels_on_tongues") difference() { pwr_tray_frame() translate([0, 0, 0.5]) linear_extrude(height = 10) pwr_tray_labels2d(); pwr_tray_label_room(); }
+// ...and they are cut: the letters, from 0.5 mm under the tongues' tops, are
+// empty space in the tray (the control).
+if (check=="tray_labels_cut")      difference() {
+  pwr_tray_frame() translate([0, 0, pwr_tray_tongue_h - pwr_tray_label_d + 0.05]) linear_extrude(height = pwr_tray_label_d - 0.1) pwr_tray_labels2d();
+  power_regulator_tray_placed();
+}
+
+// The plate's ten tie bridges. Each tunnel takes a 3.6 mm tie...
+if (check=="tie_tunnels_open")     intersection() { pwr_tie_probe(); back_plate(); }
+// ...under its tented roof: 1.5 mm higher, the same tie meets the roofs (the control)...
+if (check=="tie_tunnel_probe_works") intersection() { pwr_tie_probe(dz = 1.5); back_plate(); }
+// ...each deck is solid, 1.0 mm thick over the tunnel's apex, right across
+// it, all of it the slicer's solid top, so it holds a tie pulled tight...
+if (check=="tie_decks_whole")      difference() { pwr_tie_deck_probe(); back_plate(); }
+// ...each tunnel is narrow: a tie probe 6.4 mm wide runs into the legs either
+// side (the control)...
+if (check=="tie_spans_short")      intersection() { pwr_tie_probe(w = 6.4); back_plate(); }
+// ...and each roof is tented, not flat, so it needs no support (2026-10-29):
+// right across each tunnel, from 0.3 mm over its walls up to its apex, the
+// roof's slopes take the box's top corners (the control; a flat roof as tall
+// as the apex finds nothing), and a tent 0.15 mm inside it finds no plastic.
+module pwr_tie_tent_probe(inset = 0) {
+  for (b = tie_bridges_all()) translate([b[0], b[1], 0]) rotate([0, 0, b[2]])
+    translate([0, 0, 0.01 + inset]) pwr_tie_tent(w = pwr_tie_slot_w - 2*inset*sqrt(2), h = pwr_tie_slot_h - inset, len = pwr_tb_len - 0.2);
+}
+if (check=="tie_roofs_tented")     intersection() {
+  for (b = tie_bridges_all()) translate([b[0], b[1], 0]) rotate([0, 0, b[2]])
+    translate([-pwr_tie_slot_w/2 + 0.05, -pwr_tb_len/2 + 0.1, pwr_tie_slot_h + 0.3]) cube([pwr_tie_slot_w - 0.1, pwr_tb_len - 0.2, pwr_tie_apex() - pwr_tie_slot_h - 0.3]);
+  back_plate();
+}
+if (check=="tie_tents_open")       intersection() { pwr_tie_tent_probe(0.15); back_plate(); }
+// The bridges are on solid plate, with no hole under them...
+if (check=="tie_bridges_on_plate") difference() {
+  translate([0, 0, -back_plate_t + 0.01]) linear_extrude(height = back_plate_t - 0.02) projection() pwr_tie_bridges();
+  back_plate();
+}
+// ...and they are there (the control).
+if (check=="tie_bridges_present")  intersection() { pwr_tie_bridges(); back_plate(); }
+if (check=="tray_bosses_present")  intersection() { pwr_tray_bosses(); back_plate(); }
+// Each bridge, with its cable and tie (a box 1 mm bigger all round and 11 mm
+// tall), keeps clear of the tray, the trigger board's mount, stop, board,
+// screws and wires and the M2 screwdriver's way in, the Pi and its HAT, the
+// Pi's USB-C plug, the speakers, the shell, the cable hole, the antenna
+// mount's screws and the way a driver reaches them, and the curbs. Not of
+// the whole of the trigger board's strip, though: the strip reaches 26 mm in
+// from the plate to take the screwdriver's way, and the pigtail crosses it on
+// the plate, under that way, with one of its bridges at the strip's edge...
+module pwr_tie_obstacles() {
+  pwr_tray_all(); pwr_tray_bosses(); pwr_trigger_parts(); hat_envelope(); pi_usbc_plug_zone(); pwr_speaker_bodies(); shell();
+  translate([0, ant_mount_y, -1]) cylinder(d = ant_plate_hole + 5, h = 30);
+  for (i = [0 : n_ant_bolts - 1]) { a = i*360/n_ant_bolts + 30;
+    translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a), 0]) cylinder(d = 6, h = 45); }
+}
+if (check=="tie_bridges_clear")    intersection() { pwr_tie_zone(); union() { pwr_tie_obstacles(); slack_curbs(); } }
+// ...as the coax's would not be 40 mm lower: in the Pi's box (the control).
+if (check=="tie_zone_probe_works") intersection() { pwr_tie_zone(dy = -40, at = coax_bridges()); pwr_tie_obstacles(); }
+// The two curbs stand on solid plate, with no vent hole under them...
+if (check=="curbs_on_plate")       difference() {
+  translate([0, 0, -back_plate_t + 0.01]) linear_extrude(height = back_plate_t - 0.02) projection() slack_curbs();
+  back_plate();
+}
+// ...and they are there (the control)...
+if (check=="curbs_present")        intersection() { slack_curbs(); back_plate(); }
+// ...clear of everything the bridges keep clear of, and of the bridges with
+// their cables and ties...
+if (check=="curbs_clear")          intersection() { slack_curbs(); union() { pwr_tie_obstacles(); pwr_tie_zone(); } }
+// ...which the pigtail's would not be 15 mm lower, along the Pi's top edge
+// (the control).
+if (check=="curbs_probe_works")    intersection() { translate([0, -15, 0]) slack_curbs(); pwr_tie_obstacles(); }
+
+// The routes (2026-10-29). Seen from behind, the coax runs from the cable hole
+// down the right to the FlyCatcher's SMA plugs, and the power keeps to the
+// lower half and the left: the 12 V pair from the trigger board across the
+// lower half, over the top of the low grille, and round the tray's
+// right-hand end to the regulator's input, and the pigtail from its output
+// at the left-hand end up the Pi's left side and along its top edge to its
+// port. Each lead's route is its path through its bridges and the bends
+// between (pwr_12v_route, pwr_5v_route, coax_route), and each run tied at one
+// end only, with its slack in it, is the whole strip between its curb and
+// what is on its other side (pwr_5v_slack2d, coax_slack2d). Every power lead,
+// the pigtail's strip and the tray keep lead_coax_gap (20 mm) or more from
+// the coax, its strip, the cable hole it comes in through and the zone the
+// SMA plugs take (sma_plug_zone), with no crossing: each lead's route, its own
+// width and 20 mm more all round, over the case's whole depth, meets none of
+// them...
+module pwr_tray_halo(grow) {
+  translate([0, 0, 0.01]) linear_extrude(height = shell_depth - lip_height) offset(r = grow) projection() union() { power_regulator_tray_placed(); pwr_tray_bosses(); }
+}
+module pwr_5v_slack_probe(bow = 0, grow = lead_coax_gap) {
+  translate([0, 0, 0.01]) linear_extrude(height = shell_depth - lip_height) offset(r = grow) pwr_5v_slack2d(bow);
+}
+if (check=="routes_power_20mm_from_coax") intersection() {
+  union() { route_probe(pwr_12v_route(), pwr_12v_lead_d, lead_coax_gap); route_probe(pwr_5v_route(), pwr_5v_lead_d, lead_coax_gap); pwr_5v_slack_probe(); pwr_tray_halo(lead_coax_gap); }
+  union() { coax_probe(); sma_plug_zone(); }
+}
+// ...which, without its curb, the pigtail's slack would not keep: 12 mm of it,
+// what easing the plate back 5 cm takes, lets its 54 mm free run bow 16 mm
+// off its line, 12 mm past where the curb is, toward the cable hole (the
+// control)...
+if (check=="routes_pigtail_slack_probe_works") intersection() { pwr_5v_slack_probe(bow = 12); coax_probe(); }
+// ...nor, without theirs, the jumpers' slack: 10 mm past their curb, toward
+// the Pi's USB-C plug, it comes within 20 mm of it (the control).
+if (check=="routes_coax_slack_probe_works") intersection() {
+  translate([0, 0, 0.01]) linear_extrude(height = shell_depth - lip_height) pi_usbc_port2d(lead_coax_gap);
+  translate([0, 0, 0.01]) linear_extrude(height = shell_depth - lip_height) coax_slack2d(bow = 10);
+}
+// ...but for the one place the Pi puts a power lead near the SMA plugs: its
+// USB-C port, 11 mm from the HAT's right-hand edge. The pigtail's route stops
+// where it is its own again (pi_usbc_reach_pt); carried on into the plug, the
+// same probe finds the SMA plugs' zone (the control, and the exception).
+if (check=="routes_20mm_probe_works") intersection() {
+  route_probe([pi_usbc_reach_pt(), [pi_usbc_pos()[0], pi_usbc_pos()[1] + 5]], pwr_5v_lead_d, lead_coax_gap);
+  sma_plug_zone();
+}
+// The coax, and its strip, keep 20 mm from that plug too, and from the
+// pigtail's last run to it (pi_usbc_port2d)...
+if (check=="routes_port_20mm_from_coax") intersection() {
+  translate([0, 0, 0.01]) linear_extrude(height = shell_depth - lip_height) pi_usbc_port2d(lead_coax_gap);
+  coax_probe();
+}
+// ...which it would not with a straight plug, its moulding 20 mm long, in the
+// port: the pigtail's right-angle plug is what makes room for it (the control).
+if (check=="routes_port_probe_works") intersection() {
+  translate([0, 0, 0.01]) linear_extrude(height = shell_depth - lip_height) pi_usbc_port2d(lead_coax_gap, out = 20);
+  coax_probe();
+}
+// On the plate, each lead lies clear of everything else there: the tray, the
+// regulator and its screws, the trigger board's mount, stop, board and screws
+// and the M2 screwdriver's way, the Pi's box, the Pi's USB-C plug, the
+// speakers, the shell and the curbs, which they lie beside. From where each
+// leaves the trigger board's mount or the tray to where it reaches the tray
+// or the Pi's port, its own width, 11 mm tall (over a bridge, the lead on its
+// deck)...
+module pwr_route_obstacles() {
+  pwr_tray_all(); pwr_tray_bosses(); power_trigger_mount_placed(); power_trigger_stop_placed(); power_trigger_board_placed();
+  power_m2_probe(); power_m3_probe(); pwr_m2_driver_paths(); hat_envelope(); pi_usbc_plug_zone(); pwr_speaker_bodies(); shell(); slack_curbs();
+}
+module pwr_routes_on_plate(dy = 0) {
+  route_on_plate(pwr_12v_route(), pwr_12v_lead_d, i0 = 2, i1 = len(pwr_12v_route()) - 3, dy = dy);
+  route_on_plate(pwr_5v_route(), pwr_5v_lead_d, i0 = 3, dy = dy);
+}
+if (check=="routes_leads_clear")   intersection() { pwr_routes_on_plate(); pwr_route_obstacles(); }
+// ...which they would not, 5 mm lower down the plate: the tray and the
+// trigger board's mount are that close (the control).
+if (check=="routes_leads_probe_works") intersection() { pwr_routes_on_plate(dy = -5); pwr_route_obstacles(); }
+// The coax, from the cable hole on, lies clear of the Pi's box and its
+// USB-C plug, the speakers, the shell, the antenna mount's screws and the
+// curbs...
+module coax_route_obstacles() {
+  hat_envelope(); pi_usbc_plug_zone(); pwr_speaker_bodies(); shell(); slack_curbs();
+  for (i = [0 : n_ant_bolts - 1]) { a = i*360/n_ant_bolts + 30;
+    translate([ant_bolt_pcd/2*cos(a), ant_mount_y + ant_bolt_pcd/2*sin(a), 0]) cylinder(d = 6, h = 45); }
+}
+if (check=="routes_coax_clear")    intersection() { route_on_plate(coax_route(), coax_bundle_d); coax_route_obstacles(); }
+// ...as it would not be, tied at a bridge at (-22, 52), to the right of the
+// cable hole seen from behind, and aimed straight down: it would run over the
+// Pi's USB-C plug (the control).
+if (check=="routes_coax_probe_works") intersection() {
+  route_on_plate(concat([[0, ant_mount_y]], pwr_tb_pts([-22, 52, 270]), [[-22, 28.25]]), coax_bundle_d, i0 = 1);
+  coax_route_obstacles();
+}
+
+// The Pi's stack (2026-10-29, hat_stack): nothing on the plate's inner face,
+// nor on it, inside the HAT's footprint rises to within 2 mm of the HAT's
+// switches...
+if (check=="hat_stack_clear")      intersection() {
+  union() { back_plate(); pwr_tray_all(); pwr_tray_bosses(); power_trigger_mount_placed(); power_trigger_stop_placed(); pwr_routes_on_plate(); slack_curbs(); }
+  hat_switch_margin();
+}
+// ...as a post at the HAT's middle 1 mm taller than that would (the control).
+if (check=="hat_stack_probe_works") intersection() { cylinder(d = 10, h = hat_switch_z() - 1); hat_switch_margin(); }
+
+// The coupon is the plate's own patch round the window, and none of this is
+// in it, so usbc_gauge is unchanged.
+if (check=="coupon_unchanged")     intersection() {
+  union() { pwr_tray_bosses(); pwr_tie_bridges(); slack_curbs(); translate([0, 0, -back_plate_t]) fan_grille(); pwr_tray_boss_holes(); }
+  translate([usbc_cut_pos[0] - usbc_gauge_size[0]/2 - 1, usbc_cut_pos[1] - usbc_gauge_size[1]/2 - 1, -back_plate_t - 2]) cube([usbc_gauge_size[0] + 2, usbc_gauge_size[1] + 2, 30]);
+}
 
 // ---- the charger it needs, engraved in the plate (2026-10-29) ----
 // "USB-C PD / 12V 27W", 0.6 mm deep in the outer face above the USB-C
