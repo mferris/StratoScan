@@ -40,7 +40,7 @@ flowchart LR
 | Snap-on ferrite clip | For the pigtail, one that fits a 4-5 mm cable |
 | Bootlace ferrules, a kit with a crimper | One on each wire under the regulator's screw terminals (steps 2 and 5): 0.75-1.0 mm² on the 18 AWG pair and the pigtail's red wire, and one 1.0-1.5 mm² for the pigtail's black wires and braid together. Bare stranded wire splays and loosens under a screw clamp, and one stray strand at OUT+ shorts the 5 V; don't tin the ends either. The tray's saddles are placed for a ferrule's 8 mm collar |
 | Heat-shrink, a soldering iron, a multimeter | |
-| For the case: a back plate printed from the design of 2026-10-29 or later, with the trigger board's window, the regulator tray's two bosses, ten tie bridges and two curbs, and `power_trigger_mount`, three `power_trigger_stop`s and `power_regulator_tray`, printed (`usbc_gauge` too, to try the fit first); four M3 × 8 button-head screws, four M3 × 3 heat-set inserts and two M3 × 5 ones; two M2 × 8 screws; **14 cable ties, 150 mm long and 3.6 mm wide** | In the case folders; see [In the case](#in-the-case). Two of the M3 × 8s and the M3 × 3 inserts hold the trigger board's mount, the other two and the M3 × 5s the regulator's tray. A trial fit on `usbc_gauge` spends two of the M3 × 3 inserts, which stay in it, and one stop's crush ribs. A stop is good for one fitting, so the third is a spare, for a board that has to be re-seated. The ties: one at each end of the tray, one through each of the two grooves under it, and one at each of the plate's ten tie bridges. The tray's loops are 85-100 mm round, too big for a 100 mm tie to close, so one size, 150 mm, for all |
+| For the case: a back plate printed from the design of 2026-10-29 or later, with the trigger board's window, the regulator tray's two bosses, ten tie bridges and two curbs, and `power_trigger_mount`, three `power_trigger_stop`s and `power_regulator_tray`, printed (`usbc_gauge` too, to try the fit first); four M3 × 8 button-head screws, four M3 × 3 heat-set inserts and two M3 × 5 ones; two M2 × 8 screws; **14 cable ties, 150 mm long and 3.6 mm wide** | In the case folders; see [In the case](#in-the-case). Two of the M3 × 8s and the M3 × 3 inserts hold the trigger board's mount, the other two and the M3 × 5s the regulator's tray. A trial fit on `usbc_gauge` spends two of the M3 × 3 inserts, which stay in it, and one stop's crush ribs. A stop is good for one fitting, so the third is a spare, for a board that has to be re-seated. The ties: one at each end of the tray, one through each of the two grooves under it, and one at each of the plate's ten tie bridges. The tray's loops are 82-100 mm round, too big for a 100 mm tie to close, so one size, 150 mm, for all |
 
 The Pi's 5 V pins would also take the regulator's output, but they sit under
 the FlyCatcher, so the 5.2 V goes into the Pi's own USB-C port instead.
@@ -258,14 +258,21 @@ question.
      terminals at the end marked `OUT`, the end nearer the trigger board, and
      put a tie through each of the two grooves under the tray's floor, one tie
      in each, round the tray and the board: in the case the plate stands
-     nearly upright, and nothing else keeps the board in.
+     nearly upright, and nothing else keeps the board in. The board should
+     drop in without forcing: the tray is drawn for the first unit's
+     regulator, measured on 2026-10-30, a 63.5 × 27.25 mm board with 0.5 mm
+     to spare all round. If yours has to be forced, measure its board.
   3. Set the tray over the bosses, its two caps over them (it fits one way
      only), and screw it down with two M3 × 8 button-head screws, snug.
   4. At each end, put a tie through the slot across the saddle, round the
      saddle and the leads on it, its head on top of the leads (on the tray's
      lower side it would hit the plate's lip), and pull it tight: the tie
      grips each lead just past its ferrule, and a pull on it lands on the
-     tray, not on the screw.
+     tray, not on the screw. Each lead should run straight from its terminal
+     onto the saddle. The saddles are set for leads that leave the terminals
+     2 mm over the board, as the first unit's do, on a 1.6 mm board; if a
+     lead has to bend more than a millimetre up or down to reach its saddle,
+     measure your regulator's terminals and board.
   5. Tie the 12 V pair at its four bridges and the pigtail at its four, as
      the routes above say, each tie's head on top, except at the pigtail's
      third bridge, beside the Pi's USB ports: there, put the head on the
@@ -295,6 +302,10 @@ question.
   against hundreds, and came back as soon as the two were apart. The routes
   above keep them 20 mm apart or more, but for the Pi's own plug: tie every
   lead at its bridges, and keep each free run on its own side of its curb.
-- **Check the boards first.** The trigger board's size is measured, and the
-  regulator's is published. Each part is a short print, so print and fit
-  them before the final assembly.
+- **Check the boards first.** The trigger board's size is measured, and so
+  is the regulator's (2026-10-30): its board is 63.5 × 27.25 mm, its leads
+  leave its terminals about 2 mm over the board, and nothing stands past the
+  board's ends. Its board's thickness isn't measured (the design takes the
+  usual 1.6 mm), so measure that before printing the tray: the saddles'
+  height follows it. Each part is a short print, so print and fit them
+  before the final assembly.
