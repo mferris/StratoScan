@@ -396,15 +396,16 @@ the same probe reaching 1 mm into the wall, is its positive control.
 
 ### The regulator's place
 
-**`power_regulator_tray`** holds the regulator (63 × 27 mm, and 12.3 mm from
-its underside to the top of its tallest capacitor, so about 16 mm off the
-plate in the tray) at one place on the plate's inner face, screwed down, and
-its two leads and the coax run along set routes, tied to bridges on the plate
-(since 2026-10-29). The tray used to be stuck on with VHB tape wherever the
-case had room. Nothing checked where that was, every plate removal flexed
-the tape through the leads, its only tie went round the board's middle,
-15 mm from the terminals, so a pull on the pigtail landed on the terminal
-screws, and nothing said where the leads ran.
+**`power_regulator_tray`** holds the regulator (63.5 × 27.25 mm, measured on
+the first unit's regulator on 2026-10-30, and 12.3 mm from its underside to
+the top of its tallest capacitor, measured on 2026-10-17, so about 16 mm off
+the plate in the tray) at one place on the plate's inner face, screwed down,
+and its two leads and the coax run along set routes, tied to bridges on the
+plate (since 2026-10-29). The tray used to be stuck on with VHB tape wherever
+the case had room. Nothing checked where that was, every plate removal flexed
+the tape through the leads, its only tie went round the board's middle, 15 mm
+from the terminals, so a pull on the pigtail landed on the terminal screws,
+and nothing said where the leads ran.
 
 **Left and right here are as seen from behind the case**, where anyone
 fitting the plate stands. Seen that way, on the first unit: the trigger
@@ -461,8 +462,8 @@ has measured where they are): the 12 V pair is 24 mm from the SMA plugs' zone
 at its nearest and 68 mm from the coax; the pigtail's whole strip under its
 curb is 30 mm from the coax and the cable hole and 25 mm from the SMA plugs'
 zone; the coax is 24 mm from the Pi's USB-C plug, and its whole strip 21 mm;
-and no power lead crosses the coax. In plan the routes are 16.4 cm long for
-the 12 V pair, from the trigger board's pads to IN; 23.7 cm for the pigtail,
+and no power lead crosses the coax. In plan the routes are 16.3 cm long for
+the 12 V pair, from the trigger board's pads to IN; 23.6 cm for the pigtail,
 from OUT to the plate under its plug; and 9.3 cm for the coax, from the cable
 hole to the top of the SMA plugs' zone.
 
@@ -505,17 +506,37 @@ are (below).
   it sliding but not lifting. The tray comes off with the regulator still in
   it and goes back in the same place. The bosses' holes stop 2 mm short of
   the plate's outer face, so nothing shows outside.
+- **The pocket:** 0.5 mm bigger than the board all round, 64.5 × 28.25 mm.
+  A printed pocket comes out about 0.1 mm a side smaller than it is drawn,
+  and if the ASA shrinks half a percent as it cools, that takes another
+  0.3 mm off its length, which still leaves the board about 0.25 mm a side
+  along it and 0.3 across it: it drops in without forcing. Drawn for the
+  published 63 × 27 mm, as it was until 2026-10-30, the pocket would have
+  left the measured board 0.25 mm a side along it before printing, and next
+  to nothing after. The board rests on a rib along each long side, and the
+  tongues' ends stand 1.1 mm over its underside, so it can't slide out of
+  either end.
 - **The ties at its ends:** a tongue past each open end, low enough to pass
-  under the regulator's input jack and USB socket, ends in a saddle with a
-  slot through its foot for a cable tie round the saddle and the leads on
-  it. The saddle starts just past a ferrule's collar (about 8 mm proud), so
-  the tie grips each lead's insulation, not its collar, and its top is level
-  with the terminals' wire entries, so each lead runs straight from its
-  terminal to its tie. A pull on a lead then lands on the tray, not on the
-  terminal's screw. **Put each tie's head on top, over the leads:** the
+  under the leads' ferrules, ends in a saddle with a slot through its foot
+  for a cable tie round the saddle and the leads on it. The saddle starts
+  just past a ferrule's collar (8 mm out of its terminal), so the tie grips
+  each lead's insulation, not its collar, and its top is level with the
+  terminals' wire entries, less half a lead, so each lead runs straight from
+  its terminal to its tie. A pull on a lead then lands on the tray, not on
+  the terminal's screw. **Put each tie's head on top, over the leads:** the
   tray's lower side is 4 mm from the plate's lip, and a head there would hit
-  it. The terminals' height and set-back are estimates (`pwr_reg_term_*`):
-  measure them on your regulator before printing.
+  it. The terminals were measured on the first unit's regulator, with its
+  leads in (2026-10-30): the leads leave them about 2 mm over the board's top
+  face, to their middle, and nothing stands past either end of the board,
+  neither the terminals nor the input jack and the USB socket. So the
+  saddles' tops are 6.1 mm off the plate, and each tie grips its leads 8.5
+  to 13.1 mm past the board's end. Until then the design guessed the entries
+  at 4 mm, which put the saddles 2 mm too high: each lead would have been
+  bent up 2 mm onto its saddle right where it leaves its ferrule. The tongues
+  stay 0.5 mm under the ferrules, whose collars come down to the board's top
+  face. The board's thickness isn't measured (`pwr_reg_pcb_t`, 1.6 mm, the
+  usual): measure it before printing, since the entries go up or down with
+  its top face.
 - **The ties at its middle:** a groove under the floor at each quarter of the
   tray's length, **one tie through each**, round the tray and the board. Fit
   both: in the case the plate stands nearly upright, and nothing else keeps
@@ -533,7 +554,7 @@ are (below).
   regulator lead ended up wrapped round an antenna cable and 1090 MHz fell to
   a few messages a minute; the routes keep them apart.
 - **Ties:** 14 in all, **150 mm long and 3.6 mm wide**: one at each saddle
-  and one through each groove (their loops are 85–100 mm round, more than a
+  and one through each groove (their loops are 82–100 mm round, more than a
   100 mm tie closes on), and one at each bridge. One size for all of them.
 - **Printing:** the plate outer face down and the tray floor down, both with
   **supports off**. The tunnels through the bridges and the saddles have
@@ -555,7 +576,7 @@ leads:
   trigger board's mount, the far side of the plate from the antenna jacks,
   never in the loop round the tray's end.
 - **The pigtail:** 32 cm from the plug's tip (power-fix.md, step 4). It
-  takes about 30 cm: 23.7 cm in plan from OUT to the plate under its plug,
+  takes about 30 cm: 23.6 cm in plan from OUT to the plate under its plug,
   the climb over its bridges, the drop from the plug to the plate and the plug
   itself, and leaves 1 to 2 cm of slack to ease the plate back. How high the
   plug stands off the plate, 15 to 25 mm, depends on the standoffs, so if
@@ -570,14 +591,23 @@ right:
 2. Wire the regulator on the bench first ([power-fix.md](../../docs/power-fix.md),
    steps 2 to 5), with ferrules on its four wires, and lay it in the tray with
    its output terminals at the end marked `OUT`, the end nearer the trigger
-   board.
+   board. It should drop in onto its two ribs, between the walls and the
+   tongues' ends, without forcing. If it has to be forced, or sits on a
+   tongue, measure your regulator's board: the pocket is drawn 0.5 mm bigger
+   all round than the first unit's, 63.5 × 27.25 mm (`pwr_reg_l`,
+   `pwr_reg_w`).
 3. Put a tie through each of the two grooves under the floor, round the tray
    and the board, and pull them snug.
 4. Set the tray over the two bosses (it fits one way only) and screw it down
    with two M3 × 8 button-head screws, snug.
 5. At each end, put a tie through the saddle's slot, round the saddle and the
    leads on it, its head on top of the leads, never on the side toward the
-   rim, and pull it tight.
+   rim, and pull it tight. Each lead should come straight out of its terminal
+   onto the saddle, its ferrule clear of the tongue under it. If a lead has
+   to bend up or down more than a millimetre to reach the saddle, your
+   terminals' wire entries are not 2 mm over the board, as on the first unit,
+   or your board is not 1.6 mm thick: measure them and set `pwr_reg_term_h`
+   and `pwr_reg_pcb_t`.
 6. Run the twisted 12 V pair from the trigger board through its four bridges,
    tying it at each: the one between the trigger board and the low vent; the
    one on the vent's far side, so the pair crosses the vent on the two, off
@@ -615,8 +645,10 @@ before anything is unplugged.
 **Measure on your own unit, before printing if you can:** where the
 FlyCatcher's two SMA jacks are along its edge (then narrow `hat_sma_span` to
 them: it gains the 12 V pair and the pigtail's plug real room), the standoffs
-between the Pi and the FlyCatcher, and the regulator's terminals
-(`pwr_reg_term_*`).
+between the Pi and the FlyCatcher, and the thickness of the regulator's board
+(`pwr_reg_pcb_t`). The regulator's size and its terminals were measured on
+the first unit (2026-10-30); if yours differs, measure those too
+(`pwr_reg_l`, `pwr_reg_w`, `pwr_reg_term_*`, `pwr_reg_overhang`).
 
 `hat_envelope` is the box the checks keep everything on the plate out of, for
 the Pi and its HAT: the Pi 5's 85 × 56 mm board on the display's 58 × 49
@@ -695,10 +727,11 @@ the coax would run over the USB-C plug) and `hat_stack_probe_works`. The
 design asserts the rest: each tie past a ferrule's collar and within 15 mm of
 the board's end, the saddles' decks 1.5 mm or thicker and the bridges'
 1.0 mm, the slots wide and tall enough for a 3.6 mm tie, the ears clear of
-the grooves, the tongues under the board's top face, `OUT` and `IN` inside
-the tongues, the curbs 2 mm or more above a cable lying beside them, the
-screws ending inside their inserts with 3 mm of thread or more, and 2 mm or
-more under the HAT's switches.
+the grooves, the tongues 0.5 mm under the leads' ferrules and 1 mm or more
+over the board's underside, `OUT` and `IN` inside the tongues, the curbs
+2 mm or more above a cable lying beside them, the screws ending inside their
+inserts with 3 mm of thread or more, and 2 mm or more under the HAT's
+switches.
 
 ## The power fix: the charger plugs into the trigger board
 

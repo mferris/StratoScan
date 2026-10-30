@@ -466,10 +466,14 @@ into M3 × 5 inserts in two bosses on the plate, with a saddle and a cable-tie
 slot at each open end, so every lead is tied just past its ferrule, and
 clear of the 70 × 13.5 mm strip across the window, where the mount stands and
 the M2 screwdriver goes in from either side. `OUT` and `IN` are engraved at
-the tray's two ends. Ten bridges and two curbs on the plate hold the leads
-and the coax apart, seen from behind: the 12 V pair from the trigger board
-(lower left) across the lower half of the plate, over the top of the low
-vent and round the tray's right-hand end to the regulator's input; the
+the tray's two ends. Its pocket and saddles are drawn for the first unit's
+regulator, measured on 2026-10-30: a 63.5 × 27.25 mm board, its leads
+leaving the terminals 2 mm over it, and nothing past its ends, so each lead
+runs straight from its terminal to its tie; measure the board's thickness,
+which isn't measured yet, before printing. Ten bridges and two curbs on the
+plate hold the leads and the coax apart, seen from behind: the 12 V pair from
+the trigger board (lower left) across the lower half of the plate, over the
+top of the low vent and round the tray's right-hand end to the regulator's input; the
 pigtail from its output at the left-hand end up the left side of the Pi and
 along its top edge, between the Pi and its curb, to the Pi's USB-C port (upper right);
 and the coax from the cable hole down the right-hand side, between its curb
