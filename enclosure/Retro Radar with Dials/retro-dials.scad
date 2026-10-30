@@ -174,7 +174,12 @@ module pod() {
             intersection() {
                 union() {
                     for (a = pad_a) radial_cyl(a, pad_z, pad_d, R_case - 1, pod_r_in + pod_wall + pad_into);
-                    radial_teardrop(wire_a, wire_z, neck_d, R_case - 1, pod_r_in + pod_wall);
+                    // The neck runs 0.01mm past the arc's inner wall
+                    // (2026-10-29). Its flat end stopped on the wall's inner
+                    // face, which is round, so the two touched along one
+                    // line, and the arc's mesh had edges there that a slicer
+                    // reports as non-manifold.
+                    radial_teardrop(wire_a, wire_z, neck_d, R_case - 1, pod_r_in + pod_wall + 0.01);
                 }
                 translate([-200, -200, pod_z0]) cube([400, 400, 100]);
             }
