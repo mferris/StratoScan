@@ -1600,6 +1600,18 @@ module shelf_slope_probe() {
       translate([outer_dia/2 - wall - 1.5, shell_depth - lip_height - 3]) square([1.2, 1]);
 }
 if (check=="shelf_slope_present") intersection() { shell(); shelf_slope_probe(); }
+// The kitten's shell cuts the ears' hollows out of the shared shelf slope
+// (2026-10-30). Today that removes nothing, so the shelf is the retro case's;
+// this must come out empty, so a later change to the ears that would bite
+// into the slope fails here instead of quietly giving the kitten a different
+// shelf, which the core test, comparing modules by name, cannot see (shell_body
+// differs between the cases anyway). tests/test_enclosure_core.py requires
+// this check for that cut.
+if (check=="slope_clear_of_ears")  intersection() { shelf_slope(); ears_hollow(); }
+// Its control: the hollows raised 8mm, their tents' tops up into the slope,
+// do meet it (about 131 mm3), so an empty result above is the slope and the
+// hollows really clear of each other, not a module that went missing.
+if (check=="slope_ears_probe_works") intersection() { shelf_slope(); translate([0, 0, 8]) ears_hollow(); }
 
 // Over each speaker the sleeve's top wall reaches the shelf: where the 2mm
 // slot between them was, all is solid, either side of the front post's
@@ -1632,6 +1644,15 @@ if (check=="retainer_key_blocks_180") intersection() { retainer_seated(180); she
 if (check=="retainer_key_blocks_225") intersection() { retainer_seated(225); shell(); }
 if (check=="retainer_key_blocks_270") intersection() { retainer_seated(270); shell(); }
 if (check=="retainer_key_blocks_315") intersection() { retainer_seated(315); shell(); }
+
+// Upside down (2026-10-30): the tab is then on the glass's side, so the ring
+// lies flat on the shelf in all eight positions and the shelf can't warn of
+// it. The trim does: it runs into the tab, about 126 mm3, and stands 2mm
+// proud at one spot, which the READMEs tell the builder to look for. One
+// position is enough, because the trim's rabbeted band covers the tab's
+// radius all the way round. Empty here would mean the trim no longer shows
+// an upside-down ring, and the READMEs' advice would be wrong.
+if (check=="retainer_flipped_meets_trim") intersection() { translate([0, 0, shell_depth - retainer_h]) retainer_print(); front_stack_placed("trim"); }
 
 // ---- the front stack, placed in one place (2026-10-29) -----------------
 // The front stack as front_stack_placed() puts it, for every picture: it

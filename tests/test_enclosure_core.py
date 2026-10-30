@@ -123,6 +123,20 @@ COSMETIC = {
     "stand":      "wholly different: a plinth with paws and a tail vs a plain base",
 }
 
+# A cosmetic module may still cut a shared part, and then that part is no
+# longer the same in both cases, though its module is (2026-10-30). The
+# kitten's shell_body cuts the ears' hollows out of the shared shelf slope:
+# today that removes nothing, but checks 2 and 3 compare modules by name, and
+# shell_body differs anyway, so a later change to the ears that bit into the
+# slope would give the kitten a different shelf and still pass. Every such
+# cut -- a core part as the first child of a difference() in a cosmetic
+# module -- is listed here, (case folder, cosmetic module, core part) -> the
+# check in that folder's checks.scad that proves the cut removes nothing. The
+# check must be defined there and in run-checks.sh's EMPTY list (check 11).
+SHARED_CUTS = {
+    ("Kitten Enclosure Two-Tone", "shell_body", "shelf_slope"): "slope_clear_of_ears",
+}
+
 
 def modules(path):
     """name -> normalised body, for every module and function in a .scad file."""
@@ -661,6 +675,37 @@ def main():
             if not same_value(want, got):
                 failures.append(f"{design.parent.name}/checks.scad restates {name}={cp[name]!r} ({got}), "
                                 f"but the design has {dp[name]!r} ({want}): update the copy")
+
+    # 11. A shared part cut inside a cosmetic module is registered in
+    #     SHARED_CUTS, with a check that must come out empty, so the cut can
+    #     never quietly change the part in one case (2026-10-30). A
+    #     registered cut that is no longer there is stale.
+    found = set()
+    for fname, design in FULL.items():
+        mods = modules(design)
+        for name in sorted(COSMETIC):
+            for cut in re.finditer(r"difference\s*\(\s*\)\s*\{\s*([A-Za-z_]\w*)\s*\(", mods.get(name, "")):
+                if cut.group(1) in CORE:
+                    found.add((fname, name, cut.group(1)))
+    for key in sorted(found | set(SHARED_CUTS)):
+        fname, name, part = key
+        checks += 1
+        if key not in SHARED_CUTS:
+            failures.append(f"{fname}: {name} cuts the shared {part}, so {part} may differ between the cases; "
+                            f"add a check that the cut removes nothing and register it in SHARED_CUTS")
+            continue
+        if key not in found:
+            failures.append(f"SHARED_CUTS lists {name} cutting {part} in {fname}, but it no longer does: remove it")
+            continue
+        check = SHARED_CUTS[key]
+        folder = ROOT / fname
+        chk = (folder / "checks.scad").read_text() if (folder / "checks.scad").exists() else ""
+        run = (folder / "run-checks.sh").read_text() if (folder / "run-checks.sh").exists() else ""
+        empty = re.search(r'^EMPTY="([^"]*)"', run, re.M)
+        if f'check=="{check}"' not in chk:
+            failures.append(f"{fname}/checks.scad has no {check}, which proves {name}'s cut of {part} removes nothing")
+        elif not empty or check not in empty.group(1).split():
+            failures.append(f"{fname}/run-checks.sh does not run {check} as a check that must come out empty")
 
     more, n = folders_and_prints()
     failures += more

@@ -12,7 +12,7 @@ the rest follows.
 | `shell` | the body: Pi, dongle, wiring, speakers |
 | `front_trim` | bezel in front of the glass, rabbeted so it seats flush |
 | `retainer` | ring behind the glass; the glass rests on its front face. Keyed, so it goes in only one way: its relief at the bottom, over the gap in the shelf ([below](#the-retainer-goes-in-one-way-only)). `retainer.stl` is glass face down, the way it prints |
-| `stand` | desk cradle — two ring-arc arms on a plinth with two ridges all the way round, 4mm proud, their undersides sloped at 45° to a small lip like the case's rings, so they print without support (the old 1mm strips printed rough unsupported, and square 4mm ridges needed supports all round). A clip at the back of the plinth, directly under the plug, holds the charger's cable ([below](#the-stand-holds-the-chargers-cable)) |
+| `stand` | desk cradle — two ring-arc arms on a plinth with two ridges all the way round, 4mm proud, their undersides sloped at 45° to a small lip like the case's rings (the old 1mm strips printed rough unsupported, and square 4mm ridges needed supports all round). A clip at the back of the plinth, directly under the plug, holds the charger's cable ([below](#the-stand-holds-the-chargers-cable)). **Watch the lips on the first print:** since the clip's notch, the slicer no longer supports the ridges' 0.8 mm lips, and no print has yet shown how they come out (2026-10-30). Print `test_clip` first and look under its lips |
 | `back_plate` | removable back — locating lip, both vent grilles, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the charger it needs engraved above it, the antenna mount's bolt holes and cable hole, two insert bosses for the regulator's tray, ten cable-tie bridges for its leads and the coax, and two low curbs that keep the slack of the pigtail and the coax on their own sides ([below](#the-regulators-place)). Prints outer face down, supports off |
 | `antenna_mount` | bolt-on arm carrying the antenna socket (identical to the kitten's) |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
@@ -47,7 +47,7 @@ as ascii for byte-identical geometry, and every slicer reads both.
 it. The preview places the retainer, the glass and the trim with
 `front_stack_placed()`, the one place the stack is worked out, and the
 trim's face is at `z_trim_face`, 66.62 mm (2026-10-29). The trim used to
-stand on the panel's whole 6.45 mm depth there, 4.83 mm too far forward.
+stand on the panel's whole 6.45 mm depth there, 4.9 mm too far forward.
 `front_stack_seats`, `front_stack_retainer_down` and `front_stack_trim_down`
 hold it: the stack meets the shell with no volume, and lowered 0.2 mm the
 retainer runs into the shelf and the trim into the rim.
@@ -201,6 +201,19 @@ blocked.
 
 `retainer.stl` is exported glass face down, the way it prints: the tab
 stands up off its top, and nothing overhangs.
+
+**Check it is the right way up before the glass goes on (2026-10-30).** The
+tab faces the shelf, away from you as you fit the ring from the front. Seated
+the right way up and round, the ring lies flat with its relief at the
+bottom, and from the front no tab shows anywhere. If you can see a 2 mm tab
+standing up off the ring's front face, it is upside down: take it out and
+turn it over. Flatness alone doesn't prove it: upside down, the tab is on
+the glass's side, so the ring lies flat on the shelf in all eight positions,
+and in seven of them solid ring sits under the driver board. Once the glass
+and trim are on, the only sign is the trim standing about 2 mm proud at one
+spot, over the tab; if it does, take the trim and glass off and turn the
+ring over. `retainer_flipped_meets_trim` holds that sign: the ring upside
+down, under the glass and trim, runs into the trim (about 126 mm³).
 
 `retainer_key_fits` proves the ring seated the right way round meets the
 shell with no volume, and `retainer_key_blocks_45` … `retainer_key_blocks_315`
@@ -361,7 +374,9 @@ prints, back down (2026-10-29):
 
 Sliced in Bambu Studio 2.08 (X1C 0.4 mm, 0.20 mm Standard, Bambu ASA, tree
 supports at 30°), the shell's support went from 42.0 to 33.7 cm³ and the
-print from 8.5 to 7.7 hours. Measured on the mesh, the flat overhang went
+print from 8.5 to 7.7 hours. (Those are the figures for that step. The
+shell as committed now, with the changes after it, slices at 34.0 cm³:
+checked 2026-10-30.) Measured on the mesh, the flat overhang went
 from 14,650 to 10,680 mm²: the shelf's from 5,800 to 2,310, and the front
 rail's from 603 to its lip's 122. The speaker sleeves' roofs (2,730 mm²) and
 floors (2,910) are still supported. Fins inside each sleeve, to cut its roof
@@ -379,6 +394,29 @@ any length, so they saved 0.6 cm³ of support and cost 1.6 g and 4 minutes.
 - `rear_rail_square` must come out empty: under the rear rail is air (a
   sloped rear rail puts 250 mm³ there). `rear_rail_probe_works` is its
   control.
+
+#### For a later shell print
+
+Two changes that would take more support out of the shell, left for a
+later print so that the shells committed now stay as they are (2026-10-30).
+Each changes shared core: make it in both designs, re-export `shell.stl` in both
+case folders and `shell_dials.stl`, and re-run every check.
+
+- **Slope the shelf's inner strip too.** The slope starts at r 103
+  (`shelf_slope_r0`), leaving a 5 mm flat strip, r 97.7-103, that still
+  takes about 6.7-7.4 cm³ of each shell's support outside the speakers and
+  the 30-75° skip. Set `shelf_slope_r0` to `retention_opening/2` and a 45°
+  slope from r 97.67 meets the bore at z 44: 2.75 mm above the side slots'
+  tops at z 41.25, merged with the posts' cones, and still cut away at the
+  speakers, 30-75° and the shelf's gap. Over the kitten's ears the hollows'
+  tents trim it. Check the cable runs inside the wall at z 44-55 first. It
+  would save about 7 cm³ of support and 20 minutes a shell.
+- **Start the front posts' cones on the wall.** For the six posts away from
+  the speakers, a 45° corbel hulled onto the bore in place of the cone would
+  start on the wall at about z 42.5, so no tip begins in mid-air
+  ([Heat-set inserts](#heat-set-inserts)). The posts at 0° and 180° keep
+  their cones, where a corbel would reach into the speaker grilles' rows.
+  That saves only the eight small trees, about 0.5 cm³.
 
 ### Speakers: a hollow sleeve, not a solid block
 
@@ -994,13 +1032,24 @@ loop is too short for the case to come out with the cable still in it.
 
 The clip is sized for a cable about 4 mm thick (`stand_cable_d`). Measure
 yours before printing the stand: a thinner one won't grip, and a thicker one
-won't go in. Set `stand_cable_d` to it (in `checks.scad` too), or print
-`test_clip` and try the cable in that first. The clip needs no support.
-Sliced in Bambu Studio 2.08 (X1C 0.4 mm, 0.20 mm Standard, Bambu ASA, tree
-supports at 30°), the ridges, once notched, no longer get support under
-their 0.8 mm lips, which it supported all round before: 8.2 cm³ of support,
-now 1.3 cm³, all of it under the arms, and the print 5.9 h, now 5.1 h. The
-lips are unchanged, and print unsupported like the case's rings.
+won't go in. Set `stand_cable_d` to it here, in the kitten's design too
+(the core test holds the two stands to one cable, and fails if they differ)
+and in `checks.scad`, or print `test_clip` and try the cable in that first.
+The clip needs no support.
+
+**The ridges' lips now print unsupported, and that is the slicer's choice,
+not the clip's (2026-10-30).** Sliced in Bambu Studio 2.08 (X1C 0.4 mm,
+0.20 mm Standard, Bambu ASA, tree supports at 30°), the stand's support went
+from 8.2 to 1.3 cm³, all of what is left under the arms, and the print from
+5.9 to 5.1 h. Almost all of the saving, 7 cm³, is support the slicer used to
+put under the two ridges' 0.8 mm lips and, once the notch broke the ridges,
+no longer does. The lips' shape is unchanged. At each lip the slicer prints a
+step of about 0.9 mm out from the slope below as bridge and overhang wall,
+with nothing under it. The same lip prints clean on the case's rings, but no
+print of the stand's has been checked yet. Before printing the whole stand,
+print `test_clip` (18 minutes): it has 24 mm of both ridges and their lips
+beside the notch. Look at the lips' undersides. If they come out rough,
+accept it, or paint support under them in the slicer for the stand.
 
 `stand_clip_takes_cable` must come out empty: a cable 3.6 mm across passes
 all the way along the groove, round the turn and down the back with nothing
@@ -1025,7 +1074,7 @@ Every screw that gets undone goes into a brass M3 heat-set insert. The holes are
 | Twin antenna mount's cover | 5 | M2 × 3 | M2 × 6 | 3.0 mm holes in the cover seat (for a 3.2 mm knurl; 3.2 if the kit's inserts are the 3.5 mm kind — measure them). The cover's holes are counterbored 4.4 mm × 1.5 mm, so the cap heads stand only 0.5 mm proud (since 2026-10-10) |
 | Speaker bosses (optional) | 8 | M2 × 3 | M2 × 6 | The 2.6 mm pilot takes the speaker's self-tapping screws; drill it to 3.0 for an M2 insert |
 
-**The front posts are new.** They used to be only 2 mm tall: an insert sat in 2 mm of plastic with open air under it and the wall on one side only (measured: a third of the ring round it was solid). Now each post hangs 8 mm below the shelf, merged into the wall, with a 45° cone under it so it prints without support. The holes are cut after the whole shell is unioned, so the speaker brackets at 0° and 180° can't fill them.
+**The front posts are new.** They used to be only 2 mm tall: an insert sat in 2 mm of plastic with open air under it and the wall on one side only (measured: a third of the ring round it was solid). Now each post hangs 8 mm below the shelf, merged into the wall, with a 45° cone under it. The cone is centred 2 mm inside the bore, so it meets the wall only from z 46.5 up: its lowest 1.5 mm, from its 1 mm tip at z 45, is a small island in mid-air, and the slicer grows one small tree from the bed to each of the eight tips, about 0.5 cm³ of support a shell in all (checked 2026-10-30). Harmless so far; [For a later shell print](#for-a-later-shell-print) has the change that would remove it. The holes are cut after the whole shell is unioned, so the speaker brackets at 0° and 180° can't fill them.
 
 - `front_inserts_surrounded` proves every front insert has a 1.75 mm ring of plastic all round it for its full length. Run against the old shell, it finds 545 mm³ missing.
 - `front_insert_holes_open` is its positive control.

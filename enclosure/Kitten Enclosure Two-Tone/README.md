@@ -176,6 +176,19 @@ shelf.** `retainer.stl` is glass face down, the way it prints, with the tab
 standing up. `retainer_key_fits` and `retainer_key_blocks_45` …
 `retainer_key_blocks_315` hold it, as for the plate (125.9 mm³ each).
 
+**Check it is the right way up before the glass goes on (2026-10-30).** The
+tab faces the shelf, away from you as you fit the ring from the front. Seated
+the right way up and round, the ring lies flat with its relief at the
+bottom, and from the front no tab shows anywhere. If you can see a 2 mm tab
+standing up off the ring's front face, it is upside down: take it out and
+turn it over. Flatness alone doesn't prove it: upside down, the tab is on
+the glass's side, so the ring lies flat on the shelf in all eight positions,
+and in seven of them solid ring sits under the driver board. Once the glass
+and trim are on, the only sign is the trim standing about 2 mm proud at one
+spot, over the tab; if it does, take the trim and glass off and turn the
+ring over. `retainer_flipped_meets_trim` holds that sign: the ring upside
+down, under the glass and trim, runs into the trim (about 126 mm³).
+
 **Check the leads before fitting a keyed ring.** The tab hangs 2 mm into the
 shelf's gap, the channel left for the display's cabling, at 250-258° and
 r 102.7-107 mm, between the glass's edge and the wall, so a display cable or
@@ -229,6 +242,15 @@ from 10.0 to 9.2 hours. `shelf_slope_present`, `speaker_slot_closed` (with
 `rear_rail_square` (with `rear_rail_probe_works`) hold it, and
 `head_in_cradle` still finds the head clear of the stand.
 
+Where an ear's hollow opens into the head, the kitten's shell cuts the
+hollow out of the shared slope. Today that cut removes nothing, so the
+shelf is still the retro case's; `slope_clear_of_ears` must come out empty,
+so a later change to the ears that would bite into the slope fails a check
+instead of quietly giving the kitten a different shelf (2026-10-30). Two
+changes that would take more support out of both shells are left for a
+later print: see the retro case's README,
+[For a later shell print](../Retro%20Radar%20Enclosure/README.md#for-a-later-shell-print).
+
 ### The ears: tented tops, and wall under the two posts in them
 
 Two more changes, to the kitten's own ears (2026-10-29):
@@ -245,7 +267,10 @@ Two more changes, to the kitten's own ears (2026-10-29):
   cone's tip was an island 45 mm above the bed, joined to nothing until z 53.
   The wall is now kept from the edge of each ear's opening to 3° past its
   post, the whole height, so the cone lands on wall growing from the collar,
-  as on the retro case. (3° past the post rather than either side of it: the
+  as on the retro case. As on every post, the cone's lowest 1.5 mm still
+  begins just inside the wall, a tiny island
+  ([Heat-set inserts](#heat-set-inserts)).
+  (3° past the post rather than either side of it: the
   opening's edge is only 5° beyond the post, and a strip either side would
   leave a slit 2-4 mm wide.)
 
@@ -492,7 +517,7 @@ and the build in [docs/power-fix.md](../../docs/power-fix.md).
 Nothing held the cable, so its weight and every tug levered the plug in the
 trigger board's socket, and a moving cable is what set off the power cuts.
 The plug points straight back from the window, 18° down; its end is about
-70 mm above the desk, and the cable drops from it onto the back of the
+69 mm above the desk, and the cable drops from it onto the back of the
 plinth, where the tail's root is. A clip takes it there (2026-10-29): the
 retro case's clip, the same groove for the same cable, along the root's
 inboard foot at x = 41.4, 18 mm inboard of the plug. Not under the plug
@@ -546,7 +571,7 @@ Every screw that gets undone goes into a brass M3 heat-set insert. The holes are
 | Twin antenna mount's cover | 5 | M2 × 3 | M2 × 6 | 3.0 mm holes in the cover seat (for a 3.2 mm knurl; 3.2 if the kit's inserts are the 3.5 mm kind — measure them). No counterbores: a 3 mm cover printed face-down can't roof them, so the cap heads stand 2 mm proud of a face nothing touches |
 | Speaker bosses (optional) | 8 | M2 × 3 | M2 × 6 | The 2.6 mm pilot takes the speaker's self-tapping screws; drill it to 3.0 for an M2 insert |
 
-**The front posts are new.** They used to be only 2 mm tall: an insert sat in 2 mm of plastic with open air under it and the wall on one side only (measured: a third of the ring round it was solid). Now each post hangs 8 mm below the shelf, merged into the wall, with a 45° cone under it that lands on the wall below, so it prints without support. That was not true of all eight until 2026-10-29: the two at 45° and 135° are inside the ears' openings, where the wall was cut away below the shelf, so they hung free and their cones began 45 mm up in mid-air. The wall now stands under them too ([above](#the-ears-tented-tops-and-wall-under-the-two-posts-in-them)). The holes are cut after the whole shell is unioned, so the speaker brackets at 0° and 180° can't fill them.
+**The front posts are new.** They used to be only 2 mm tall: an insert sat in 2 mm of plastic with open air under it and the wall on one side only (measured: a third of the ring round it was solid). Now each post hangs 8 mm below the shelf, merged into the wall, with a 45° cone under it that lands on the wall below. The two at 45° and 135° are inside the ears' openings, where until 2026-10-29 the wall was cut away below the shelf, so they hung free from it; the wall now stands under them too ([above](#the-ears-tented-tops-and-wall-under-the-two-posts-in-them)). Not quite all of each cone is on the wall, though (2026-10-30): it is centred 2 mm inside the bore, so it meets the wall only from z 46.5 up, and its lowest 1.5 mm, from its 1 mm tip at z 45, is a small island in mid-air. The slicer grows one small tree from the bed to each of the eight tips, about 0.5 cm³ of support a shell in all. Harmless so far; the retro case's README has the change a later shell print could make ([For a later shell print](../Retro%20Radar%20Enclosure/README.md#for-a-later-shell-print)). The holes are cut after the whole shell is unioned, so the speaker brackets at 0° and 180° can't fill them.
 
 - `front_inserts_surrounded` proves every front insert has a 1.75 mm ring of plastic all round it for its full length. Run against the old shell, it finds 545 mm³ missing.
 - `front_insert_holes_open` is its positive control.
