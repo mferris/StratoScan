@@ -2430,14 +2430,17 @@ module shell_body() {
     // rabbeted band lands against. Relieved on the same bottom arc as
     // the retainer for the driver board's cabling.
     difference() {
-        // The shelf runs 1mm into the wall (2026-10-29). It stopped at the
-        // bore, so the two shared the bore's face, and along a few strips of
-        // it the union left that face in place: a sheet of the wall's and a
-        // sheet of the shelf's with nothing between them, edges a slicer
-        // reports as non-manifold and as reversed faces.
+        // The shelf runs 0.01mm into the wall (2026-10-29). It stopped at
+        // the bore, so the two shared the bore's face, and along a few
+        // strips of it the union left that face in place: a sheet of the
+        // wall's and a sheet of the shelf's with nothing between them,
+        // edges a slicer reports as non-manifold and as reversed faces.
+        // No more than 0.01: the shelf goes on after the wall's openings
+        // are cut, so whatever of it lies in the wall would fill an opening
+        // later cut at its height.
         translate([0,0,shell_depth - lip_height])
             difference() {
-                cylinder(d=outer_dia - 2*wall + 2, h=shelf_h);
+                cylinder(d=outer_dia - 2*wall + 0.02, h=shelf_h);
                 cylinder(d=retention_opening, h=shelf_h+0.02);
             }
         rotate([0,0, relief_center_deg - relief_arc_deg/2])
