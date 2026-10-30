@@ -82,8 +82,13 @@ These pins leave I2C (GPIO 2 and 3) free for the light sensor (roadmap 5.5),
 and the UART (GPIO 14 and 15) free for the presence sensor (5.2).
 
 **The FlyCatcher sits over the header.** If its board covers the pins you need,
-fit a 2 × 20 stacking header under it, or take the pins out from beside it
-with a short ribbon to a breakout.
+take them out from beside it with a short ribbon to a breakout. Don't fit a
+2 × 20 stacking header under the FlyCatcher: it lifts the board about 8.5 mm
+toward the back plate, and the case leaves the FlyCatcher's switches only
+10.2 mm from the plate (`hat_stack`, measured on the first unit, 2026-10-29),
+so a header would leave 1.7 mm, less than the 2 mm the case needs; that was
+what pushed the shell from 56 to 61 mm deep. Use one only on a unit whose
+switches stand 10.5 mm or more from the plate.
 
 ## Assemble
 

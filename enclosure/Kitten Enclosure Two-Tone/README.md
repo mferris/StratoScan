@@ -29,7 +29,7 @@ The head is one colour:
 | `shell` | black | the head — body cylinder plus two ears, and all the internals |
 | `front_trim` | black | the face — bezel ring with a nose, whisker grooves and seven screw holes. Prints rabbet-down (face up), as `front_trim.stl` is exported, with support (Support for ABS interface) only under the inner band that presses on the glass: the nose stops it printing face down like the retro case's ([below](#the-trim-prints-face-up)) |
 | `retainer` | — | ring behind the glass (identical to the retro part), keyed so it goes in only one way: its relief at the bottom, over the gap in the shelf ([below](#so-does-the-retainer)). `retainer.stl` is glass face down, the way it prints |
-| `back_plate` | black | removable back — locating lip, vents, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the charger it needs engraved above it, the antenna mount's bolt holes and cable hole |
+| `back_plate` | black | removable back — locating lip, vents, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the charger it needs engraved above it, the antenna mount's bolt holes and cable hole, two insert bosses for the regulator's tray, ten cable-tie bridges for its leads and the coax, and two low curbs that keep the slack of the pigtail and the coax on their own sides; identical to the retro part. Prints outer face down, supports off |
 | `antenna_mount` | black | bolt-on arm carrying the antenna socket |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
 | `antenna_mount_twin_8`, `antenna_mount_twin_11` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight. Two styles, for jumpers whose bulkhead body is an 8 mm hex or an 11 mm hex; two parts each, this body and the cover below (`antenna_mount_twin` is whichever `ant_twin_jack_af` names) |
@@ -37,7 +37,7 @@ The head is one colour:
 | `usbc_gauge` | — | test coupon: a 36 × 18 mm piece of the back plate round the USB-C window, exactly the plate's, to try the charger's plug in the trigger board before printing a plate |
 | `power_trigger_mount` | — | the power fix's 12 V trigger board's mount, with the board's socket through the USB-C window ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)); identical to the retro part |
 | `power_trigger_stop` | — | the block behind the trigger board in its mount, on two M2 screws, keyed so it goes in only the right way round; identical to the retro part. Print three: one for the trial fit on `usbc_gauge`, one for the plate and a spare. Its crush ribs are spent once squeezed, so a stop that comes out is never fitted again |
-| `power_regulator_tray` | — | a tray for the power fix's 5 V regulator, stuck to the plate's inner face |
+| `power_regulator_tray` | — | the power fix's 5 V regulator's tray, screwed to two insert bosses at its one place across the bottom of the plate's inner face, a saddle with a cable-tie slot at each open end for the leads, `OUT` and `IN` engraved at its two ends, and a tie groove under each half of its floor (since 2026-10-29); identical to the retro part. Prints floor down, supports off |
 
 The stand is split into five bodies, one per colour region:
 
@@ -100,7 +100,18 @@ The upper vent moved from y=+68 to y=−68. The mount's flange is a 40mm disc
 centred at y=88 (y=81 since 2026-10-07), so at +68 the grille sat underneath it from y=68 to y=81,
 venting into the back of a solid disc — which is what prompted this.
 `vents_clear_of_mount` holds the new position, and `vents_were_under_mount`
-is its paired control, finding the 257mm³ overlap the old one had.
+is its paired control, finding the overlap the old one had (487 mm³ with the
+flange at y=81). On 2026-10-29 the low vent moved again, with the owner's OK,
+up to (6, −46), just under the central one: the bottom of the plate is the
+regulator's tray's now (see the retro case's README,
+[The regulator's place](../Retro%20Radar%20Enclosure/README.md#the-regulators-place)).
+It keeps its 19 holes, so the same area of intake, but 22 mm higher, so its
+air has that much less height to rise through the head, and nothing now lets
+air in below the regulator. The nearest holes of the two vents are 10.1 mm
+apart, centre to centre, 7 mm of plate between them. The Pi's temperatures
+were measured with the vent at the bottom: measure them, and the regulator's,
+again once a unit is built this way. The 12 V pair crosses the low vent on
+the decks of two tie bridges, 4.4 mm off the plate, so its holes stay open.
 
 The Pi is mounted to the LCD panel, so taking the plate off exposes the back
 of the Pi and its cabling rather than removing it. The four 58×49 Pi
@@ -140,7 +151,7 @@ with 6mm of radial slack. `antenna_clears_head` holds it.
 The plate's locating rib is eight identical arcs between eight evenly
 spaced posts, so it used to seat at any of eight positions 45° apart, and
 only one of them puts the antenna mount at the top. A small block on the
-shell's bore wall at 247.5° (lower left, between the posts at 225° and 270°)
+shell's bore wall at 247.5° (lower right seen from behind, between the posts at 225° and 270°)
 now meets a matching notch in one arc of the rib: upright, the plate drops
 in; turned to any other position, the block lands on the rib and the plate
 stands proud before a screw goes in. It sits well clear of the antenna-mount
@@ -449,11 +460,27 @@ right across it, then the window's rectangle, then the window; slice with
 counterbore hole bridging off, the default. Above the pocket the plate says
 which charger the board needs, `USB-C PD 12V 27W`, engraved in its outer
 face so it reads from behind the case. `power_regulator_tray` holds
-the 5 V regulator, stuck to the plate's inner face with VHB tape, off the
-70 × 13.5 mm strip across the window: the mount stands in its middle, and
-the rest is the M2 screwdriver's way in from either side. Fitting, sizes
-and checks are in the retro case's README
-([The power fix](../Retro%20Radar%20Enclosure/README.md#the-power-fix-the-charger-plugs-into-the-trigger-board)),
+the 5 V regulator at its one place across the bottom of the plate's inner
+face (since 2026-10-29), screwed down with two M3 × 8 button-head screws
+into M3 × 5 inserts in two bosses on the plate, with a saddle and a cable-tie
+slot at each open end, so every lead is tied just past its ferrule, and
+clear of the 70 × 13.5 mm strip across the window, where the mount stands and
+the M2 screwdriver goes in from either side. `OUT` and `IN` are engraved at
+the tray's two ends. Ten bridges and two curbs on the plate hold the leads
+and the coax apart, seen from behind: the 12 V pair from the trigger board
+(lower left) across the lower half of the plate, over the top of the low
+vent and round the tray's right-hand end to the regulator's input; the
+pigtail from its output at the left-hand end up the left side of the Pi and
+along its top edge, between the Pi and its curb, to the Pi's USB-C port (upper right);
+and the coax from the cable hole down the right-hand side, between its curb
+and the speaker, to the FlyCatcher's SMA jacks. Every power lead is 20 mm
+or more from the coax and the SMA plugs but at one place, the Pi's own: its
+USB-C socket is 11 mm from the FlyCatcher's right-hand edge, so the
+pigtail's plug and its drop to the plate, 3 to 4 cm of cable, come within
+20 mm of where an SMA plug could be, the plug's moulding 8 mm from it.
+Fitting, sizes and checks are in the retro case's README
+([The power fix](../Retro%20Radar%20Enclosure/README.md#the-power-fix-the-charger-plugs-into-the-trigger-board)
+and [The regulator's place](../Retro%20Radar%20Enclosure/README.md#the-regulators-place)),
 and the build in [docs/power-fix.md](../../docs/power-fix.md).
 
 ### The stand holds the charger's cable
@@ -510,6 +537,7 @@ Every screw that gets undone goes into a brass M3 heat-set insert. The holes are
 | Back posts in the shell (back plate screws into these) | 8 | M3 × 6 | M3 × 8 | Pressed from the back face, flush |
 | Antenna mount flange | 3 | M3 × 5 | M3 × 8 | The pocket is in the mount; the screws come from inside the case, through the back plate |
 | Back plate, beside the USB-C window (the trigger board's mount screws into these) | 2 | M3 × 3 | M3 × 8 button head | Pressed from the inner face with the outer face on a flat board, so each ends flush with both faces; the screws come from inside the case, through the mount's ears (since 2026-10-29) |
+| Back plate, the regulator tray's two bosses | 2 | M3 × 5 | M3 × 8 button head | Pressed from the top of each boss, flush with it; the holes stop 2 mm short of the outer face. The screws go down through the tray's two caps (since 2026-10-29) |
 | `usbc_gauge`, for the trial fit before the plate | 2 | M3 × 3 | the mount's own two M3 × 8 | Pressed the same way. They stay in the coupon, so the plate needs two of its own |
 | Twin antenna mount's cover | 5 | M2 × 3 | M2 × 6 | 3.0 mm holes in the cover seat (for a 3.2 mm knurl; 3.2 if the kit's inserts are the 3.5 mm kind — measure them). No counterbores: a 3 mm cover printed face-down can't roof them, so the cap heads stand 2 mm proud of a face nothing touches |
 | Speaker bosses (optional) | 8 | M2 × 3 | M2 × 6 | The 2.6 mm pilot takes the speaker's self-tapping screws; drill it to 3.0 for an M2 insert |
@@ -535,7 +563,7 @@ The FlyCatcher has two antenna inputs, 1090 and 978 MHz, and the Nooelec bundle 
 - **A crossbar** with a bulkhead jack at each end, 80 mm apart. Antennas this close in frequency detune each other when bunched together.
 - **Counter-tilted,** like the single mounts, so the whips stand vertical with their hinges straight. Hinges hold firmly only at their stops, and part-way they sag over time.
 
-**Cables:** two SMA male to SMA female bulkhead jumpers, RG316, about 30 cm (SMA, not RP-SMA): a bulkhead end has a threaded barrel with a nut and washer, which is what holds the antenna. The small right-angle pigtails in the antenna bundle are MCX, for Nooelec's USB sticks, and aren't used.
+**Cables:** two SMA male to SMA female bulkhead jumpers, RG316, about 40 cm (16") (SMA, not RP-SMA): a bulkhead end has a threaded barrel with a nut and washer, which is what holds the antenna. 40 cm since 2026-10-29: inside the case each takes 18 to 21 cm, its route down the right-hand side and the slack to ease the plate back, and a 30 cm one gives only about 18 cm once the mount has its share. The small right-angle pigtails in the antenna bundle are MCX, for Nooelec's USB sticks, and aren't used.
 
 **Whip or external antenna, the user's choice:** each tower's jack is an ordinary SMA socket on the outside of the case. Screw on the Nooelec whip, or the coax from an antenna mounted outside or in a window; nothing inside changes. An outdoor antenna with an N-type connector needs an N-male to SMA-male cable. Leave the FlyCatcher's bias-tee switch off unless the outdoor antenna has a powered amplifier that needs it.
 
@@ -549,13 +577,13 @@ The FlyCatcher has two antenna inputs, 1090 and 978 MHz, and the Nooelec bundle 
 
 **Printing:** body flange-down with tree supports (Bambu Support for ABS interface), as the other mounts print. The towers and bar have 6 mm corners and rounded edges, like the cases, rather than a box. The channel, slots, insert holes and jack holes all face up or sideways and need nothing; the towers' outboard ends and the bar's top edge start in mid-air, so the supports go on the face toward the case, where nobody sees the scars. Cover flat, counterbored face down, no support. ASA on a clean Engineering plate, no glue.
 
-**Fitting the cables** (cover off, body held channel-up — or the flange hanging over the bench edge, since the plugs come out of its underside):
-1. Push each plug end into the bore at the centre of the channel, straight down the arm and out through the flange — the second plug goes in beside the first cable with a wiggle. Leave about 10 cm of each cable beyond the bore's mouth.
+**Fitting the cables** (cover off, body held channel-up — or the flange hanging over the bench edge, since the plugs come out of its underside). First mark the two jumpers at both ends, so they can't be swapped later: one band of heat-shrink on the 1090 one, two on the 978 one (2026-10-29).
+1. Push each plug end into the bore at the centre of the channel, straight down the arm and out through the flange — the second plug goes in beside the first cable with a wiggle. Pull each cable through beyond the bore's mouth as far as it goes once the mount has its share, about 28 cm of a 40 cm jumper (it was 10 cm until 2026-10-29). Inside the case the route takes 15 to 19 cm to the jack, depending on how low the jack is on the FlyCatcher's edge, and 2 to 3 cm more is the slack that lets the plate come back 5 cm before the plugs are undone; the rest lies in the jumpers' free run (step 5). A 30 cm jumper gives only about 18 cm: keep one only if, with the plate held 5 cm back, its plug still reaches its jack.
 2. Lay one cable along the channel to each tower. Hold the jack's hex body with the barrel pointing up its tower and slide it sideways into the open slot until it stops.
 3. Push the jack up with a fingertip through the open channel: the top of the slot is a closed pocket the hex's size, and the barrel comes through the panel when the body is in it. Washer and nut on from the top, finger tight, then a quarter turn with an 8 mm (5/16") spanner — the pocket holds the jack, so nothing inside has to be held. Don't crank it; the panel is 2 mm of ASA. Check the nuts again after a week; ASA relaxes a little.
    Set each whip so its hinge folds towards or away from the wall, not towards the other whip: that's the direction the mount is weakest, so the hinge gives before the panel does, and a folded whip then clears the other tower.
 4. Tidy the cables into the channel and fit the cover: five M2 × 6 into the M2 inserts.
-5. Pass both plugs through the plate's 13 mm hole, bolt the flange on from inside the plate with the three M3 × 8, plug 1090 and 978 into the FlyCatcher, and screw the whips on (the 1090 whip is the shorter one). For an outdoor antenna, screw its coax onto the same barrel instead, and give the coax its own strain relief within a few centimetres of the tower.
+5. Pass both plugs through the plate's 13 mm hole, bolt the flange on from inside the plate with the three M3 × 8, plug 1090 and 978 into the FlyCatcher, and screw the whips on (the 1090 whip is the shorter one). Inside, tie both jumpers together at the two bridges that lead from the cable hole to the right and down the right-hand side, seen from behind, with 150 × 3.6 mm cable ties. Below the second bridge they run free down the right-hand side, between their curb and the speaker, to the FlyCatcher: leave their spare length there, as a loose loop on the speaker's side of the curb, never across it (since 2026-10-29; [the regulator's place](../Retro%20Radar%20Enclosure/README.md#the-regulators-place)). That keeps them 20 mm or more from the regulator's leads, which keep to the lower half and the left, and from the Pi's USB-C plug. For an outdoor antenna, screw its coax onto the same barrel instead, and give the coax its own strain relief within a few centimetres of the tower.
 
 To replace a cable: back plate off, cover off, nut off, slide the jack out of its slot, pull the plug back up through the bore. The mount stays bolted to the plate.
 

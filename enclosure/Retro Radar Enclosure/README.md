@@ -13,7 +13,7 @@ the rest follows.
 | `front_trim` | bezel in front of the glass, rabbeted so it seats flush |
 | `retainer` | ring behind the glass; the glass rests on its front face. Keyed, so it goes in only one way: its relief at the bottom, over the gap in the shelf ([below](#the-retainer-goes-in-one-way-only)). `retainer.stl` is glass face down, the way it prints |
 | `stand` | desk cradle — two ring-arc arms on a plinth with two ridges all the way round, 4mm proud, their undersides sloped at 45° to a small lip like the case's rings, so they print without support (the old 1mm strips printed rough unsupported, and square 4mm ridges needed supports all round). A clip at the back of the plinth, directly under the plug, holds the charger's cable ([below](#the-stand-holds-the-chargers-cable)) |
-| `back_plate` | removable back — locating lip, both vent grilles, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the charger it needs engraved above it, the antenna mount's bolt holes and cable hole |
+| `back_plate` | removable back — locating lip, both vent grilles, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the charger it needs engraved above it, the antenna mount's bolt holes and cable hole, two insert bosses for the regulator's tray, ten cable-tie bridges for its leads and the coax, and two low curbs that keep the slack of the pigtail and the coax on their own sides ([below](#the-regulators-place)). Prints outer face down, supports off |
 | `antenna_mount` | bolt-on arm carrying the antenna socket (identical to the kitten's) |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
 | `antenna_mount_twin_8`, `antenna_mount_twin_11` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight. Two styles, for jumpers whose bulkhead body is an 8 mm hex or an 11 mm hex; two parts each, this body and the cover below (`antenna_mount_twin` is whichever `ant_twin_jack_af` names) |
@@ -22,7 +22,7 @@ the rest follows.
 | `usbc_gauge` | test coupon: a 36 × 18 mm piece of the back plate round the USB-C window, its window, pocket and insert holes exactly the plate's, so the charger's plug can be tried in the trigger board before a whole plate is printed (about ten minutes) |
 | `power_trigger_mount` | the power fix's 12 V trigger board's mount: a sleeve round the board, two crush ribs in its roof holding the board down, on two M3 screws into inserts in the plate, with the board's socket through the plate's USB-C window, so the charger plugs straight into it ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)) |
 | `power_trigger_stop` | the block behind the trigger board in its mount, locked by two M2 screws through the mount's walls, so the board has no play; keyed, so it goes in only the right way round. Print three: one for the trial fit on `usbc_gauge`, one for the plate and a spare. Its crush ribs are spent once squeezed, so a stop that comes out is never fitted again |
-| `power_regulator_tray` | a tray for the power fix's 5 V regulator, stuck to the plate's inner face |
+| `power_regulator_tray` | the power fix's 5 V regulator's tray, screwed to two insert bosses at its one place across the bottom of the plate's inner face, a saddle with a cable-tie slot at each open end for the leads, `OUT` and `IN` engraved at its two ends, and a tie groove under each half of its floor (since 2026-10-29, [below](#the-regulators-place)). Prints floor down, supports off |
 
 Four extra targets, `test_antenna`, `test_speaker`, `test_rings` and
 `test_clip`, clip the real geometry to a small piece so a test prints in
@@ -212,7 +212,7 @@ each), each as its own check, as for the plate's key below.
 The plate's locating rib is eight identical arcs between eight evenly
 spaced posts, so it used to seat at any of eight positions 45° apart, and
 only one of them puts the antenna mount at the top. A small block on the
-shell's bore wall at 247.5° (lower left, between the posts at 225° and 270°)
+shell's bore wall at 247.5° (lower right seen from behind, between the posts at 225° and 270°)
 now meets a matching notch in one arc of the rib: upright, the plate drops
 in; turned to any other position, the block lands on the rib and the plate
 stands proud before a screw goes in. It sits well clear of the antenna-mount
@@ -261,8 +261,23 @@ Both grille patterns stay as plain vents, but the upper one moved from
 y=+68 to y=−68. The antenna mount's flange is a 40mm disc centred at y=88 (y=81 since 2026-10-07, see below), so
 at +68 the grille sat underneath it from y=68 to y=81 — venting into the back
 of a solid disc. `vents_clear_of_mount` holds the new position and
-`vents_were_under_mount` is its paired control, finding the 257mm³ overlap
-the old position had.
+`vents_were_under_mount` is its paired control, finding the overlap the old
+position had (487 mm³ with the flange at y=81).
+
+**The low grille moved again on 2026-10-29,** from (0, −68) up to (6, −46),
+just under the central grille, with the owner's OK: the bottom of the plate is
+the regulator's tray's now ([The regulator's place](#the-regulators-place)).
+It keeps its 19 holes, so the same area of intake, but 22 mm higher: its air
+has that much less height to rise through the case before it leaves at the
+top, and nothing now lets air in below the regulator, which loses 1-1.5 W
+there. The nearest holes of the two grilles are 10.1 mm apart, centre to
+centre, so 7 mm of plate between them. The 53-63 °C the Pi ran at with no
+fan were measured with the grille at the bottom, so **measure the Pi's and
+the regulator's temperatures again** once a unit is built this way, with the
+panel lit. The 12 V pair crosses the low grille on the decks of two tie
+bridges, 4.4 mm off the plate, so its holes stay open. `tray_clear_of_grilles` keeps the tray off
+both grilles; its control, `tray_grille_probe_works`, puts the low grille back
+where it was and finds it under the tray.
 
 ### Side slots: top only, and cut through
 
@@ -378,6 +393,311 @@ pads in its corners take the same 92 × 36 mm screws. The shell went from
 `speaker_sleeve_hollow` must come out empty: nothing in the sleeve between
 the speaker's face and the wall, clear of the pads. `speaker_probe_works`,
 the same probe reaching 1 mm into the wall, is its positive control.
+
+### The regulator's place
+
+**`power_regulator_tray`** holds the regulator (63 × 27 mm, and 12.3 mm from
+its underside to the top of its tallest capacitor, so about 16 mm off the
+plate in the tray) at one place on the plate's inner face, screwed down, and
+its two leads and the coax run along set routes, tied to bridges on the plate
+(since 2026-10-29). The tray used to be stuck on with VHB tape wherever the
+case had room. Nothing checked where that was, every plate removal flexed
+the tape through the leads, its only tie went round the board's middle,
+15 mm from the terminals, so a pull on the pigtail landed on the terminal
+screws, and nothing said where the leads ran.
+
+**Left and right here are as seen from behind the case**, where anyone
+fitting the plate stands. Seen that way, on the first unit: the trigger
+board's socket is at the lower left; the Pi's USB-C power plug goes in at the
+upper right, pointing up; and the FlyCatcher's two SMA jacks are on its
+right-hand edge, their plugs pointing right, toward the right-hand speaker.
+The coax comes in at the top, at the cable hole, and has to get down the
+right to those jacks. So the power keeps to the lower half and the left:
+
+- **The regulator** lies across the bottom of the plate, turned 8° to follow
+  the rim, its middle at (−10.5, −75.5) in the design: 76 mm below the
+  middle of the plate and 157 mm from the cable hole, as far from the
+  FlyCatcher and the antenna leads as the plate allows. The regulator
+  switches, and the 978 MHz band is the sensitive one. Its **output (OUT) is
+  at the left-hand end** and its **input (IN) at the right-hand end**, seen
+  from behind, and the tray says so: `OUT` and `IN` are engraved in its two
+  tongues.
+- **The 12 V pair** leaves the trigger board's mount, crosses over the
+  pigtail once (both are power) and comes down onto its first bridge, between
+  the trigger board and the low vent. It crosses the vent on the decks of that
+  bridge and the next, 4.4 mm off the plate, so the vent's holes stay open
+  under it, drops past the tray's upper ear to a third bridge, up the plate
+  from the tray's right-hand end, and goes round that end on a fourth, onto
+  the saddle there, to IN. It runs above the tray, never across the
+  regulator, and the fourth bridge holds its loop round the end, so the loop
+  can't rise toward the SMA plugs.
+- **The pigtail** leaves OUT at the tray's left-hand end, turns up past the
+  trigger board's mount on a bridge, crosses the gap between the mount and
+  the Pi on another, runs up the left side of the Pi, between its USB ports
+  and the left-hand speaker, on a third, and turns along the Pi's top edge at
+  a fourth, at the Pi's top left corner. From there it lies free along the
+  top of the Pi, between the Pi and its curb, with the ferrite on it, to
+  the plate under its plug, and up into the Pi's USB-C port.
+- **The coax**, both jumpers together, goes from the cable hole to the right
+  through two bridges, then down the right-hand side, between its curb and
+  the right-hand speaker, to the SMA jacks.
+
+**The curbs** are two low walls on the plate, 8 mm tall, beside the two runs
+that are tied at one end only: the pigtail's, from its last bridge to its
+plug, and the jumpers', from their last bridge to the SMA plugs. Each of
+those runs carries the slack that lets the plate be eased back 5 cm before
+its plug comes out, and as the plate goes home the slack goes wherever it is
+pushed. Each curb stands on the side toward the other cable. The pigtail's
+slack stays between the Pi's top edge and its curb, or arches off the plate
+toward the Pi; the jumpers' stays between their curb and the right-hand
+speaker, or loops down beside the SMA plugs. Nobody has to judge a bow by
+eye, and the checks hold the whole strip each run can take, not just the line
+drawn along it, 20 mm from the other cable.
+
+Measured between the cables' surfaces on the routes as the design draws them,
+with the SMA jacks anywhere along the FlyCatcher's edge they could be (nobody
+has measured where they are): the 12 V pair is 24 mm from the SMA plugs' zone
+at its nearest and 68 mm from the coax; the pigtail's whole strip under its
+curb is 30 mm from the coax and the cable hole and 25 mm from the SMA plugs'
+zone; the coax is 24 mm from the Pi's USB-C plug, and its whole strip 21 mm;
+and no power lead crosses the coax. In plan the routes are 16.4 cm long for
+the 12 V pair, from the trigger board's pads to IN; 23.7 cm for the pigtail,
+from OUT to the plate under its plug; and 9.3 cm for the coax, from the cable
+hole to the top of the SMA plugs' zone.
+
+**The one exception is the Pi's own.** Its USB-C socket is 11 mm from the
+FlyCatcher's right-hand edge, and nothing on the plate can move either. The
+pigtail's plug, its drop from the plug to the plate, past the height of the
+SMA jacks, and its first 13 mm along the plate, 3 to 4 cm of cable in all,
+come within 20 mm of where an SMA plug could be: the plug's moulding is 8 mm
+from the SMA plugs' zone in plan (5 mm from the HAT's corner). That is with
+a jack as high on the edge as one can stand. With both jacks below the edge's
+middle it is about 30 mm, and there is no exception; so measure where yours
+are (below).
+
+- **Why there:** every spot was tried against the speakers, the trigger
+  board's 70 × 13.5 mm strip
+  ([the power fix](#the-power-fix-the-charger-plugs-into-the-trigger-board)),
+  the vents, 50 mm round the cable hole, the Pi and its HAT
+  (`hat_envelope`, below), the rim and the posts, leaving room past each end
+  for ferruled leads. The lower left is the trigger board's strip; the lower
+  right, upright, where the case review first put it, fits the tray alone
+  with under a millimetre to spare, its ends against the Pi and the rim. The
+  bottom centre is the best place, and the low grille was there, so the
+  grille moved up under the central one ([The vents moved](#the-vents-moved))
+  and the tray took the bottom. Within the bottom, the place is the one that
+  keeps OUT short of the trigger mount's nearer ear, so the pigtail can turn
+  up beside it, and IN low enough that the 12 V pair passes above it 20 mm or
+  more from the SMA plugs, with 2.5 mm or more of plate to the lip, the
+  posts, the strip and the low vent's holes.
+- **The fixing:** two ears, one on each long side. Each is a cap over a
+  7.5 mm boss on the plate, and an **M3 × 8 button-head** screw goes down
+  through the cap into an **M3 × 5 heat-set insert** in the boss, with 5 mm of
+  thread. The caps fit over the bosses with 0.3 mm to spare, so the tray is
+  in its place before a screw goes in. The ears are offset along the tray, the
+  upper one clear of the low vent and the 12 V pair's way, the lower one off
+  the post at the bottom of the rim, so the tray goes on one way only. The
+  regulator itself would still lie in it either way round, and reversed, the
+  pigtail would start below the SMA plugs: hence `OUT` and `IN` on the
+  tongues. Screws, not VHB tape and locating pegs: tape on a part whose leads
+  pull on it every time the plate comes off creeps and peels, and pegs stop
+  it sliding but not lifting. The tray comes off with the regulator still in
+  it and goes back in the same place. The bosses' holes stop 2 mm short of
+  the plate's outer face, so nothing shows outside.
+- **The ties at its ends:** a tongue past each open end, low enough to pass
+  under the regulator's input jack and USB socket, ends in a saddle with a
+  slot through its foot for a cable tie round the saddle and the leads on
+  it. The saddle starts just past a ferrule's collar (about 8 mm proud), so
+  the tie grips each lead's insulation, not its collar, and its top is level
+  with the terminals' wire entries, so each lead runs straight from its
+  terminal to its tie. A pull on a lead then lands on the tray, not on the
+  terminal's screw. **Put each tie's head on top, over the leads:** the
+  tray's lower side is 4 mm from the plate's lip, and a head there would hit
+  it. The terminals' height and set-back are estimates (`pwr_reg_term_*`):
+  measure them on your regulator before printing.
+- **The ties at its middle:** a groove under the floor at each quarter of the
+  tray's length, **one tie through each**, round the tray and the board. Fit
+  both: in the case the plate stands nearly upright, and nothing else keeps
+  the board in the tray.
+- **The plate's tie bridges:** ten on the inner face, each a deck on two legs
+  with a tunnel under it for a tie: four for the 12 V pair, four for the
+  pigtail and two for the coax, where the routes above say. The deck over
+  each tunnel is 1.0 mm, the five top layers a slicer prints solid, so all of
+  it prints solid; a thicker deck would only get sparse infill in its middle,
+  and a tie pulled tight squeezes the deck between itself and the cable
+  rather than bending it. **Put each tie's head on top, over the cable,
+  except at the pigtail's third bridge,** beside the Pi's USB ports: there,
+  put it on the speaker's side, on the plate, so nothing there stands more
+  than 10.7 mm up, under the plugs in those ports. On the first unit a
+  regulator lead ended up wrapped round an antenna cable and 1090 MHz fell to
+  a few messages a minute; the routes keep them apart.
+- **Ties:** 14 in all, **150 mm long and 3.6 mm wide**: one at each saddle
+  and one through each groove (their loops are 85–100 mm round, more than a
+  100 mm tie closes on), and one at each bridge. One size for all of them.
+- **Printing:** the plate outer face down and the tray floor down, both with
+  **supports off**. The tunnels through the bridges and the saddles have
+  tented roofs, two 45° slopes, so they need no support whatever the setting:
+  with supports on, Bambu Studio puts none in them. The plate needs supports
+  off for the USB-C pocket's stepped floor (with supports on, Bambu Studio
+  fills the pocket, 56 mm³), and the tray for its two grooves and the caps'
+  bores, which are bridges (with supports on, 234 mm³ in them). Nothing else
+  needs setting: the bridges' decks print solid. Sliced in Bambu Studio 2.08
+  (X1C, 0.4 mm nozzle, 0.20 mm Standard, Bambu ASA, supports off): the plate
+  2.6 h and 81 g, the tray 22 minutes and 9 g.
+
+**Cut the leads to length**, so no spare length ends up near the antenna
+leads:
+- **The 12 V pair:** cut each wire 21 cm and twist them together before
+  soldering ([power-fix.md](../../docs/power-fix.md), step 2). In the case the
+  pair takes about 20 cm, from the trigger board's pads through its four
+  bridges to IN. If any is left over, leave it as a gentle bend above the
+  trigger board's mount, the far side of the plate from the antenna jacks,
+  never in the loop round the tray's end.
+- **The pigtail:** 32 cm from the plug's tip (power-fix.md, step 4). It
+  takes about 30 cm: 23.7 cm in plan from OUT to the plate under its plug,
+  the climb over its bridges, the drop from the plug to the plate and the plug
+  itself, and leaves 1 to 2 cm of slack to ease the plate back. How high the
+  plug stands off the plate, 15 to 25 mm, depends on the standoffs, so if
+  yours are measured, measure that too and adjust.
+
+To fit it, with the plate outer face down on the bench: you're looking at its
+inner face, the mirror image of what you see behind the case, so go by the
+trigger board's window, the vents and the cable hole rather than by left and
+right:
+1. Press an M3 × 5 insert into each of the two bosses at the bottom of the
+   plate, flush with the top of the boss.
+2. Wire the regulator on the bench first ([power-fix.md](../../docs/power-fix.md),
+   steps 2 to 5), with ferrules on its four wires, and lay it in the tray with
+   its output terminals at the end marked `OUT`, the end nearer the trigger
+   board.
+3. Put a tie through each of the two grooves under the floor, round the tray
+   and the board, and pull them snug.
+4. Set the tray over the two bosses (it fits one way only) and screw it down
+   with two M3 × 8 button-head screws, snug.
+5. At each end, put a tie through the saddle's slot, round the saddle and the
+   leads on it, its head on top of the leads, never on the side toward the
+   rim, and pull it tight.
+6. Run the twisted 12 V pair from the trigger board through its four bridges,
+   tying it at each: the one between the trigger board and the low vent; the
+   one on the vent's far side, so the pair crosses the vent on the two, off
+   the plate; the one up the plate from the tray's far end, past the tray's
+   upper ear; and the one beside that end, round which it turns onto the
+   saddle there. It runs above the tray, never across the regulator.
+7. Run the pigtail from `OUT` through its four bridges: just past that end of
+   the tray, beside the trigger board's mount; between the mount and the
+   central vent; up beside where the Pi's USB ports will be, inboard of the
+   speaker; and at that top corner of the Pi. Tie it at each, the third tie's
+   head on the speaker's side, and leave the rest free for now, on the Pi's
+   side of its curb.
+
+When the plate goes on, hold it about 5 cm behind the case:
+1. Plug the coax into the FlyCatcher, 1090 and 978 as marked
+   ([the twin mount](#the-twin-mount-1090-and-978-mhz)), its free run down the
+   right-hand side, between its curb and the speaker.
+2. Plug the pigtail into the Pi, its plug's cable pointing at the plate, and
+   lay its free run along the top of the Pi, between the Pi and its curb,
+   with the ferrite on it about 5 cm from the plug.
+3. With every plug in the Pi (the FlyCatcher's USB lead, and the display's
+   USB and HDMI leads), check that the pigtail, and the tie at its third
+   bridge, pass under the USB plugs without touching them, and that no
+   angled USB or HDMI cable points down onto the pigtail or the ferrite. Keep
+   the FlyCatcher's USB lead off the pigtail: on the first unit a disturbed
+   USB plug has already dropped the receiver.
+4. Ease the plate home. Each run's slack arches off the plate on its own side
+   of its curb.
+
+**To open the case again:** undo the eight screws, ease the plate back about
+5 cm, unplug the pigtail and unscrew both SMA plugs, then lift the plate away.
+The slack in the pigtail and the coax is what lets the plate come that far
+before anything is unplugged.
+
+**Measure on your own unit, before printing if you can:** where the
+FlyCatcher's two SMA jacks are along its edge (then narrow `hat_sma_span` to
+them: it gains the 12 V pair and the pigtail's plug real room), the standoffs
+between the Pi and the FlyCatcher, and the regulator's terminals
+(`pwr_reg_term_*`).
+
+`hat_envelope` is the box the checks keep everything on the plate out of, for
+the Pi and its HAT: the Pi 5's 85 × 56 mm board on the display's 58 × 49
+holes, long side across the case, its USB and Ethernet end on the left seen
+from behind (the owner's unit, 2026-10-29), its ports standing about 3 mm
+past that end and its USB-C and micro-HDMI sockets 1.2 mm past its top edge,
+and a standard 65 × 56.5 mm HAT for the FlyCatcher, from the plate's inner face
+to the shelf under the display. The plugs in the Pi's USB ports aren't in it:
+they hang toward the plate with the ports, to somewhere about 11 to 20 mm off
+it, depending on the standoffs, and the pigtail passes under them, 10.7 mm up
+at most at its third bridge (step 3 above checks it). `sma_plug_zone` is where
+the FlyCatcher's two SMA plugs can be: from its right-hand edge (seen from
+behind) out to the speaker, and within 23 mm of the edge's middle, since a
+jack can't stand over the HAT's mounting holes. `hat_stack` is the stack's
+height, measured on the first unit (2026-10-29): the Pi, the FlyCatcher and
+its switches stand 46 mm from the back of the display. Taken from the display
+module's metal back, the reading that leaves the least room, the switches'
+tops are 10.2 mm off the plate's inner face (15 mm if it was from the glass);
+the design asserts that `shell_depth` leaves 2 mm or more, and
+`hat_stack_clear` that nothing on the plate rises within 2 mm of them.
+
+Checks that must come out empty: `tray_vs_plate`, `tray_holds_board` (the
+regulator lies clear of the tray's walls, tongues and caps), `tray_screws_pass`,
+`tray_screws_inside_plate` (nothing of a screw or an insert within 1.5 mm of
+the outer face), `tray_inserts_surrounded` (1.5 mm of boss all round each
+insert, its whole length), `tray_holes_blind` (1.5 mm of plate under each
+hole), `tray_vs_shell`, `tray_vs_speakers`, `tray_vs_trigger` (the mount, the
+stop, the board, the screws, the wires and the M2 screwdriver's way in),
+`tray_off_strip`, `tray_clear_of_grilles` (no vent hole under the tray or its
+bosses), `tray_clear_of_coax` (50 mm), `tray_vs_hat`, `tray_tie_slots_open`,
+`tray_ferrules_clear` (the collars are clear of the tray and of the ties),
+`tray_leads_straight`, `tray_ties_clear` (each saddle's tie, its head on top,
+clears the plate and the shell), `tray_labels_on_tongues` (`OUT` and `IN`
+stay on the tongues' tops), `tie_tunnels_open`, `tie_decks_whole` (each deck
+1.0 mm thick over its tunnel's apex, right across it), `tie_tents_open`,
+`tie_bridges_on_plate` (no hole under a bridge), `tie_bridges_clear` (each
+bridge, with room for its cable and tie, clears the tray, the trigger board's
+parts and the screwdriver's way, the Pi's box, the USB-C plug, the speakers,
+the shell, the cable hole, the antenna mount's screws and the curbs),
+`curbs_on_plate` (no hole under a curb), `curbs_clear`, `coupon_unchanged`,
+`routes_power_20mm_from_coax` (every power lead, the pigtail's whole slack
+strip and the tray, 20 mm or more from the coax and its slack strip, the
+cable hole and the SMA plugs' zone, over the case's whole depth),
+`routes_port_20mm_from_coax` (the coax and its strip 20 mm from the USB-C plug
+and the pigtail's last run to it), `routes_leads_clear` and
+`routes_coax_clear` (each route clear of everything else on the plate, the
+curbs included) and `hat_stack_clear`. Their controls must find real
+geometry: `tray_caps_on_bosses`, `tray_located` (moved 1.5 mm sideways, the
+caps run into the bosses), `tray_one_way_round` (turned end for end, they
+land on them), `tray_board_on_ribs`, `tray_screws_bite`,
+`tray_insert_holes_open`, `tray_speaker_probe_works` (the tray at (−44, −50),
+across, where one review proposed it, lands on the speaker),
+`tray_strip_probe_works` (upright at (+29, −62), another of the review's
+spots, it lands on the strip), `tray_grille_probe_works` (the low grille back
+at (0, −68) is under it), `tray_coax_probe_works` (it is 131 mm from the cable
+hole at its nearest), `tray_hat_probe_works` (25 mm further up it meets the
+Pi's box), `tray_tie_probe_works`, `tray_ferrule_probe_works`,
+`tray_leads_on_saddles`, `tray_tie_head_probe_works` (a saddle's tie with its
+head toward the rim hits the plate's lip), `tray_labels_cut`,
+`tie_tunnel_probe_works`, `tie_spans_short`, `tie_roofs_tented` (each
+tunnel's roof is two slopes, not flat), `tie_zone_probe_works` (40 mm lower,
+a coax bridge is in the Pi's box), `tie_bridges_present`,
+`tray_bosses_present`, `curbs_present`, `curbs_probe_works` (the pigtail's
+curb 15 mm lower runs into the Pi's box), `routes_20mm_probe_works` (the
+pigtail carried on into its plug comes within 20 mm of the SMA plugs' zone:
+the probe sees the one exception), `routes_pigtail_slack_probe_works`
+(without its curb, the pigtail's slack, bowed as far as 12 mm of it lets it,
+comes within 20 mm of the coax), `routes_coax_slack_probe_works` (without
+theirs, the jumpers' slack 10 mm toward the Pi's USB-C plug comes within
+20 mm of it), `routes_port_probe_works` (a straight plug, 20 mm long, would
+be within 20 mm of the coax: the right-angle plug is what makes room),
+`routes_leads_probe_works` (5 mm lower, the leads meet the tray and the
+trigger board's mount), `routes_coax_probe_works` (tied at a bridge at
+(−22, 52), right of the cable hole seen from behind, and aimed straight down,
+the coax would run over the USB-C plug) and `hat_stack_probe_works`. The
+design asserts the rest: each tie past a ferrule's collar and within 15 mm of
+the board's end, the saddles' decks 1.5 mm or thicker and the bridges'
+1.0 mm, the slots wide and tall enough for a 3.6 mm tie, the ears clear of
+the grooves, the tongues under the board's top face, `OUT` and `IN` inside
+the tongues, the curbs 2 mm or more above a cable lying beside them, the
+screws ending inside their inserts with 3 mm of thread or more, and 2 mm or
+more under the HAT's switches.
 
 ## The power fix: the charger plugs into the trigger board
 
@@ -536,24 +856,24 @@ and the fresh stop; in step 4 the board is already in, so just push its back
 edge until its front edge is on the plate. The third stop is the spare, for
 a board that has to be re-seated.
 
-**`power_regulator_tray`** holds the regulator (63 × 27 mm, and 12.3 mm from
-its underside to the top of its tallest capacitor, so about 16 mm off the
-plate in the tray). Both ends stay open for its terminals, input jack and
-USB socket. Stick it to the plate's inner face with VHB tape, away from the
-receiver and its antenna leads, and where the pigtail reaches the Pi's power
-port; keep it off the 70 × 13.5 mm strip across the window. The trigger
-board's mount stands in the middle of the strip, and the rest is the M2
-screwdriver's way in, 25 mm out either side along the screws, so the stop
-can be locked or freed with the tray in place (since 2026-10-29; it was a
-33 × 13.5 mm patch, the mount alone). Two grooves under its floor take an
-optional cable tie round the board.
+**`power_regulator_tray`** holds the regulator at its own place on the plate,
+screwed down: see [The regulator's place](#the-regulators-place), above. The
+70 × 13.5 mm strip across the window stays clear of it: the trigger board's
+mount stands in the middle of the strip, and the rest is the M2 screwdriver's
+way in, 25 mm out either side along the screws, so the stop can be locked or
+freed with the tray in place (since 2026-10-29; it was a 33 × 13.5 mm patch,
+the mount alone). The pigtail crosses the strip at its end nearer the middle
+of the plate, lying on the plate under the screwdriver's way, 15 mm below
+it, and one of its tie bridges stands at the strip's edge there: the checks
+keep both clear of the mount, its screws and the way itself.
 
 The trigger board's size was measured: 19.19 × 10.72 × 4.83 mm, from its
 socket's face to its back edge, across it, and from its underside to the top
 of the socket. Its socket stands about 2 mm past the board's front edge
 (`pwr_trig_proud`). All three parts print in minutes and need no supports:
 print the mount flat face down, the stop on its wide face, and the plate and
-the coupon outer face down.
+the coupon outer face down, supports off (with supports on, the slicer fills
+the pocket).
 
 Checks that must come out empty: `power_mount_vs_plate`, `power_board_held`,
 `power_edge_on_plate` (the plate is solid in front of the board's edge below
@@ -666,6 +986,7 @@ Every screw that gets undone goes into a brass M3 heat-set insert. The holes are
 | Back posts in the shell (back plate screws into these) | 8 | M3 × 6 | M3 × 8 | Pressed from the back face, flush |
 | Antenna mount flange | 3 | M3 × 5 | M3 × 8 | The pocket is in the mount; the screws come from inside the case, through the back plate |
 | Back plate, beside the USB-C window (the trigger board's mount screws into these) | 2 | M3 × 3 | M3 × 8 button head | Pressed from the inner face with the outer face on a flat board, so each ends flush with both faces; the screws come from inside the case, through the mount's ears (since 2026-10-29) |
+| Back plate, the regulator tray's two bosses | 2 | M3 × 5 | M3 × 8 button head | Pressed from the top of each boss, flush with it; the holes stop 2 mm short of the outer face. The screws go down through the tray's two caps (since 2026-10-29) |
 | `usbc_gauge`, for the trial fit before the plate | 2 | M3 × 3 | the mount's own two M3 × 8 | Pressed the same way. They stay in the coupon, so the plate needs two of its own |
 | Twin antenna mount's cover | 5 | M2 × 3 | M2 × 6 | 3.0 mm holes in the cover seat (for a 3.2 mm knurl; 3.2 if the kit's inserts are the 3.5 mm kind — measure them). The cover's holes are counterbored 4.4 mm × 1.5 mm, so the cap heads stand only 0.5 mm proud (since 2026-10-10) |
 | Speaker bosses (optional) | 8 | M2 × 3 | M2 × 6 | The 2.6 mm pilot takes the speaker's self-tapping screws; drill it to 3.0 for an M2 insert |
@@ -688,7 +1009,7 @@ The FlyCatcher has two antenna inputs, 1090 and 978 MHz, and the Nooelec bundle 
 - **A crossbar** with a bulkhead jack at each end, 80 mm apart. Antennas this close in frequency detune each other when bunched together.
 - **Counter-tilted,** like the single mounts, so the whips stand vertical with their hinges straight. Hinges hold firmly only at their stops, and part-way they sag over time.
 
-**Cables:** two SMA male to SMA female bulkhead jumpers, RG316, about 30 cm (SMA, not RP-SMA): a bulkhead end has a threaded barrel with a nut and washer, which is what holds the antenna. The small right-angle pigtails in the antenna bundle are MCX, for Nooelec's USB sticks, and aren't used.
+**Cables:** two SMA male to SMA female bulkhead jumpers, RG316, about 40 cm (16") (SMA, not RP-SMA): a bulkhead end has a threaded barrel with a nut and washer, which is what holds the antenna. 40 cm since 2026-10-29: inside the case each takes 18 to 21 cm, its route down the right-hand side and the slack to ease the plate back, and a 30 cm one gives only about 18 cm once the mount has its share. The small right-angle pigtails in the antenna bundle are MCX, for Nooelec's USB sticks, and aren't used.
 
 **Whip or external antenna, the user's choice:** each tower's jack is an ordinary SMA socket on the outside of the case. Screw on the Nooelec whip, or the coax from an antenna mounted outside or in a window; nothing inside changes. An outdoor antenna with an N-type connector needs an N-male to SMA-male cable. Leave the FlyCatcher's bias-tee switch off unless the outdoor antenna has a powered amplifier that needs it.
 
@@ -702,15 +1023,15 @@ The FlyCatcher has two antenna inputs, 1090 and 978 MHz, and the Nooelec bundle 
 
 **Printing:** body flange-down with tree supports (Bambu Support for ABS interface), as the other mounts print. The towers and bar have 6 mm corners and rounded edges, like the cases, rather than a box. The channel, slots, insert holes and jack holes all face up or sideways and need nothing; the towers' outboard ends and the bar's top edge start in mid-air, so the supports go on the face toward the case, where nobody sees the scars. Cover flat, counterbored face down, no support. ASA on a clean Engineering plate, no glue.
 
-**Fitting the cables** (cover off, body held channel-up — or the flange hanging over the bench edge, since the plugs come out of its underside):
-1. Push each plug end into the bore at the centre of the channel, straight down the arm and out through the flange — the second plug goes in beside the first cable with a wiggle. Leave about 10 cm of each cable beyond the bore's mouth.
+**Fitting the cables** (cover off, body held channel-up — or the flange hanging over the bench edge, since the plugs come out of its underside). First mark the two jumpers at both ends, so they can't be swapped later: one band of heat-shrink on the 1090 one, two on the 978 one (2026-10-29).
+1. Push each plug end into the bore at the centre of the channel, straight down the arm and out through the flange — the second plug goes in beside the first cable with a wiggle. Pull each cable through beyond the bore's mouth as far as it goes once the mount has its share, about 28 cm of a 40 cm jumper (it was 10 cm until 2026-10-29). Inside the case the route takes 15 to 19 cm to the jack, depending on how low the jack is on the FlyCatcher's edge, and 2 to 3 cm more is the slack that lets the plate come back 5 cm before the plugs are undone; the rest lies in the jumpers' free run (step 5). A 30 cm jumper gives only about 18 cm: keep one only if, with the plate held 5 cm back, its plug still reaches its jack.
 2. Lay one cable along the channel to each tower. Hold the jack's hex body with the barrel pointing up its tower and slide it sideways into the open slot until it stops.
 3. Push the jack up with a fingertip through the open channel: the top of the slot is a closed pocket the hex's size, and the barrel comes through the panel when the body is in it. Washer and nut on from the top, finger tight, then a quarter turn with an 8 mm (5/16") spanner — the pocket holds the jack, so nothing inside has to be held. Don't crank it; the panel is 2 mm of ASA. Check the nuts again after a week; ASA relaxes a little.
    Set each whip so its hinge folds towards or away from the wall, not towards the other whip: that's the direction the mount is weakest, so the hinge gives before the panel does, and a folded whip then clears the other tower.
 4. Tidy the cables into the channel and fit the cover: five M2 × 6 into the M2 inserts.
 
 **Lettering in a second colour.** Open the cover's `_twotone.3mf` rather than its STL. The lettering is many separate letters, and a slicer splits a multi-lump STL into one part per letter, so picking a colour for "the text" would colour one letter; the project file already has the cover on filament 1 and every letter on filament 2. Change either in the slicer. The cover prints outer face down, so the lettering is its first 0.6 mm, three 0.2 mm layers: three filament changes, nothing after. The plain STL still prints the engraved, one-colour cover.
-5. Pass both plugs through the plate's 13 mm hole, bolt the flange on from inside the plate with the three M3 × 8, plug 1090 and 978 into the FlyCatcher, and screw the whips on (the 1090 whip is the shorter one). For an outdoor antenna, screw its coax onto the same barrel instead, and give the coax its own strain relief within a few centimetres of the tower.
+5. Pass both plugs through the plate's 13 mm hole, bolt the flange on from inside the plate with the three M3 × 8, plug 1090 and 978 into the FlyCatcher, and screw the whips on (the 1090 whip is the shorter one). Inside, tie both jumpers together at the two bridges that lead from the cable hole to the right and down the right-hand side, seen from behind, with 150 × 3.6 mm cable ties. Below the second bridge they run free down the right-hand side, between their curb and the speaker, to the FlyCatcher: leave their spare length there, as a loose loop on the speaker's side of the curb, never across it (since 2026-10-29; [the regulator's place](#the-regulators-place)). That keeps them 20 mm or more from the regulator's leads, which keep to the lower half and the left, and from the Pi's USB-C plug. For an outdoor antenna, screw its coax onto the same barrel instead, and give the coax its own strain relief within a few centimetres of the tower.
 
 To replace a cable: back plate off, cover off, nut off, slide the jack out of its slot, pull the plug back up through the bore. The mount stays bolted to the plate.
 
