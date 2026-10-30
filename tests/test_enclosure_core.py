@@ -679,12 +679,20 @@ def main():
     # 11. A shared part cut inside a cosmetic module is registered in
     #     SHARED_CUTS, with a check that must come out empty, so the cut can
     #     never quietly change the part in one case (2026-10-30). A
-    #     registered cut that is no longer there is stale.
+    #     registered cut that is no longer found is reported, but not as
+    #     surely gone: the match reads the source, so it sees the shared part
+    #     as difference()'s first child, bare or behind plain transforms such
+    #     as translate([...]) or rotate(...), but not one reached through a
+    #     transform with a call in its arguments, or through intersection().
     found = set()
+    first_child = re.compile(
+        r"difference\s*\(\s*\)\s*\{\s*"
+        r"(?:[A-Za-z_]\w*\s*\([^()]*\)\s*\{?\s*)*"   # transforms before it, if any
+        r"([A-Za-z_]\w*)\s*\(")
     for fname, design in FULL.items():
         mods = modules(design)
         for name in sorted(COSMETIC):
-            for cut in re.finditer(r"difference\s*\(\s*\)\s*\{\s*([A-Za-z_]\w*)\s*\(", mods.get(name, "")):
+            for cut in first_child.finditer(mods.get(name, "")):
                 if cut.group(1) in CORE:
                     found.add((fname, name, cut.group(1)))
     for key in sorted(found | set(SHARED_CUTS)):
@@ -695,7 +703,9 @@ def main():
                             f"add a check that the cut removes nothing and register it in SHARED_CUTS")
             continue
         if key not in found:
-            failures.append(f"SHARED_CUTS lists {name} cutting {part} in {fname}, but it no longer does: remove it")
+            failures.append(f"SHARED_CUTS lists {name} cutting {part} in {fname}, but the test no longer finds "
+                            f"that cut: if it was removed, remove the entry; if it was only reshaped, "
+                            f"keep the entry and widen the match in check 11")
             continue
         check = SHARED_CUTS[key]
         folder = ROOT / fname

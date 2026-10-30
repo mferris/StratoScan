@@ -268,7 +268,7 @@ Two more changes, to the kitten's own ears (2026-10-29):
   The wall is now kept from the edge of each ear's opening to 3° past its
   post, the whole height, so the cone lands on wall growing from the collar,
   as on the retro case. As on every post, the cone's lowest 1.5 mm still
-  begins just inside the wall, a tiny island
+  begins 2 mm in from the wall, in mid-air: a tiny island
   ([Heat-set inserts](#heat-set-inserts)).
   (3° past the post rather than either side of it: the
   opening's edge is only 5° beyond the post, and a strip either side would
@@ -544,10 +544,11 @@ loop is too short for the case to come out with the cable still in it.
 
 The clip is sized for a cable about 4 mm thick (`stand_cable_d`). Measure
 yours before printing the stand: a thinner one won't grip, and a thicker one
-won't go in. Set `stand_cable_d` to it here and in the retro case's design
-(the core test holds the two the same, as the cable is) and in
-`checks.scad`, or print `test_clip`, the clip in a 20 × 37 mm piece of the
-plinth's back, and try the cable in that first. The clip needs no support.
+won't go in. Set `stand_cable_d` to it in four places: this design, the
+retro case's design, and the `checks.scad` in both folders (the core test
+holds all four to one cable, as the cable is one). Or print `test_clip`, the
+clip in a 20 × 37 mm piece of the plinth's back, and try the cable in that
+first. The clip needs no support.
 
 `stand_clip_takes_cable` must come out empty: a cable 3.6 mm across passes
 all the way along the groove, round the turn and down the back with nothing

@@ -1032,9 +1032,10 @@ loop is too short for the case to come out with the cable still in it.
 
 The clip is sized for a cable about 4 mm thick (`stand_cable_d`). Measure
 yours before printing the stand: a thinner one won't grip, and a thicker one
-won't go in. Set `stand_cable_d` to it here, in the kitten's design too
-(the core test holds the two stands to one cable, and fails if they differ)
-and in `checks.scad`, or print `test_clip` and try the cable in that first.
+won't go in. Set `stand_cable_d` to it in four places: this design, the
+kitten's design, and the `checks.scad` in both folders (the core test holds
+all four to one cable, and fails if any differs). Or print `test_clip` and
+try the cable in that first.
 The clip needs no support.
 
 **The ridges' lips now print unsupported, and that is the slicer's choice,
