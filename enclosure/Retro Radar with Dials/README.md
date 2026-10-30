@@ -15,7 +15,8 @@ Everything except the arc is the retro case, unchanged:
 `retro-dials.scad` includes `../Retro Radar Enclosure/retro-enclosure.scad`.
 The shell gains three holes through its wall: two screws and a wire hole.
 Print the front trim, retainer, back plate, antenna mount and stand from the
-retro folder.
+retro folder, and the power fix's parts with them: `power_trigger_mount`,
+the `power_trigger_stop`s and `power_regulator_tray`.
 
 | Front | The arc | Exploded |
 |---|---|---|

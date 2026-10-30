@@ -36,7 +36,7 @@ flowchart LR
 | USB-C PD trigger board, **fixed at 12 V** | 9 V also works with the official supply; 20 V doesn't, because the official supply has no 20 V. A 5 V board is no use here. Most come in packs of several voltages that look alike, so check before wiring (step 1) |
 | 5 V step-down regulator: 9–36 V in, 5.2 V out, 6 A at 9–24 V | Wire it from its screw terminals, never its USB socket |
 | 18 AWG silicone wire, red and black | About 25 cm of each, cut to 21 cm (step 2): in the case the twisted pair takes about 20 cm, from the trigger board across the lower half of the back plate, over the top of the low vent and round the far end of the regulator's tray to its input |
-| A **right-angled USB-C to USB-C cable rated 5 A** (sold as 100 W or 240 W), its plugs the kind sold as "up and down" angled (the cable leaves across the plug's flat face, not out of its side), **30 cm or longer**, to cut a **32 cm** pigtail from (step 4) | Its power wires are usually 20 AWG, rarely stated: over 32 cm at 5 A two of them lose 0.11 V of the regulator's 5.2 V, at the limit, though the Pi seldom draws more than 3 A (0.06 V); 18 AWG ones lose 0.07 V. Step 9's reading under load is the test. Don't use a ready-made right-angled pigtail with bare wires: the ones on sale are 22 AWG and rated 3 A, and lose 0.17 V at 5 A. Not a USB-A to USB-C cable either: its power wires are thin. The case needs the right angle (since 2026-10-29): in the Pi its cable points at the back plate, so it comes straight down to the plate beside the FlyCatcher and runs along it, away from the antenna leads; a straight plug stands 20 mm up toward them |
+| A **right-angled USB-C to USB-C cable rated 5 A** (sold as 100 W or 240 W), its plugs the kind sold as "up and down" angled (the cable leaves across the plug's flat face, not out of its side), **50 cm or longer** (30 cm is too short for a 32 cm cut), to cut a **32 cm** pigtail from (step 4) | Its power wires are usually 20 AWG, rarely stated: over 32 cm at 5 A two of them lose 0.11 V of the regulator's 5.2 V, at the limit, though the Pi seldom draws more than 3 A (0.06 V); 18 AWG ones lose 0.07 V. Step 9's reading under load is the test. Don't use a ready-made right-angled pigtail with bare wires: the ones on sale are 22 AWG and rated 3 A, and lose 0.17 V at 5 A. Not a USB-A to USB-C cable either: its power wires are thin. The case needs the right angle (since 2026-10-29): in the Pi its cable points at the back plate, so it comes straight down to the plate beside the FlyCatcher and runs along it, away from the antenna leads; a straight plug stands 20 mm up toward them |
 | Snap-on ferrite clip | For the pigtail, one that fits a 4-5 mm cable |
 | Bootlace ferrules, a kit with a crimper | One on each wire under the regulator's screw terminals (steps 2 and 5): 0.75-1.0 mm² on the 18 AWG pair and the pigtail's red wire, and one 1.0-1.5 mm² for the pigtail's black wires and braid together. Bare stranded wire splays and loosens under a screw clamp, and one stray strand at OUT+ shorts the 5 V; don't tin the ends either. The tray's saddles are placed for a ferrule's 8 mm collar |
 | Heat-shrink, a soldering iron, a multimeter | |
@@ -225,7 +225,9 @@ question.
     the Pi's top edge and a curb on the plate;
   - the coax runs from the cable hole to the right and down the right-hand
     side, tied at two bridges of its own, then free to the SMA jacks between a
-    second curb and the right-hand speaker.
+    second curb and the right-hand speaker. Any length beyond the planned
+    slack is folded back just below the second bridge and taken into its tie,
+    never left as a loop, which would sag toward the 12 V pair.
 
   The two curbs are what hold the slack. The pigtail's run from its last
   bridge to its plug, and the coax's from its last bridge to the SMA plugs,
