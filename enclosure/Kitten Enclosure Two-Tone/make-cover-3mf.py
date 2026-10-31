@@ -16,10 +16,14 @@ so the two meshes meet face to face as they come.
 The file keeps the structure Bambu Studio's desktop app is known to load
 with the filaments in place (2026-10-31): the four files below, and in
 Metadata/model_settings.config only the object's name and, per part, its
-name and extruder. The meshes keep their parts' frame, so the test can
-compare them with their STLs (check 12 in tests/test_enclosure_core.py), and
-the build item has no transform, as in the file that loaded; the slicer
-places the object on the bed when it opens it.
+name and extruder. The build item has no transform, as in the file that
+loaded. The meshes keep their parts' frame in x and y, but are raised or
+lowered together so the object's lowest point is at z 0, as the file that
+loaded was: the back plate and its coupon are exported from z -3, and
+nothing shows the app stands an object on the bed rather than leaving it
+sunk, which would cut off the face and its lettering. The test compares
+each part with its STL moved by the same amount (check 12 in
+tests/test_enclosure_core.py).
 
 For a while (2026-10-31) the files also carried per-object process settings
 (Arachne walls, no elephant-foot compensation, monotonic bottom lines) and a
@@ -74,8 +78,12 @@ def read_stl(path):
 
 def build(out, what, parts):
     objects, ids = [], []
-    for oid, (name, extruder) in enumerate(parts, start=1):
-        verts, tris = read_stl(name + ".stl")
+    meshes = [read_stl(name + ".stl") for name, _ in parts]
+    # Stand the object on z 0 by moving its vertices, not by a transform.
+    lift = -min(z for verts, _ in meshes for _, _, z in verts)
+    for oid, ((name, extruder), (verts, tris)) in enumerate(zip(parts, meshes), start=1):
+        if lift:
+            verts = [(x, y, round(z + lift, 5)) for x, y, z in verts]
         v = "".join(f'<vertex x="{x}" y="{y}" z="{z}"/>' for x, y, z in verts)
         t = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in tris)
         objects.append(f'<object id="{oid}" type="model"><mesh><vertices>{v}</vertices>'
@@ -105,6 +113,8 @@ def build(out, what, parts):
         z.writestr("Metadata/model_settings.config", cfg)
     for i, n, e, nt in ids:
         print(f"  {n:34} filament {e}  {nt:6,} tris")
+    if lift:
+        print(f"  raised {lift:g} mm to stand on z 0")
     print(f"  -> {out}")
 
 
