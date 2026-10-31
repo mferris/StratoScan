@@ -3,8 +3,8 @@
 lettering on filament 2, as one object, and the same for the arc's lettering
 test coupon (2026-10-31). The builder is the retro case's make-cover-3mf.py
 (same reason: a slicer splits lettering into one part per letter, so the
-colour assignment belongs in the file), and so are the per-object Bambu
-Studio settings each object carries (its OBJECT_SETTINGS).
+colour assignment belongs in the file), so the file has the structure the
+desktop app loads: name and extruder per part, no process settings.
 
 The arc prints face down, so the lettering is its first 0.6 mm.
 Usage: python3 make-arc-3mf.py [project.3mf ...]   (after exporting the STLs
