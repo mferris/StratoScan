@@ -18,6 +18,12 @@ The claws had slot 3 to themselves until 2026-10-29, so they could be a
 third colour. On the paws' white the print needs one filament change fewer
 in each of the 29 layers the claws are in. For a third colour, set
 stand_claws to 3 below, or pick another filament for them in the slicer.
+
+Keep the file's structure as it is: only names and filaments in
+Metadata/model_settings.config, no build transform, the stand on z 0. That
+is the structure Bambu Studio's desktop app loads with the filaments in
+place; per-object process settings made it load geometry only (2026-10-31).
+tests/test_enclosure_core.py checks it (check 12).
 """
 import struct, sys, zipfile
 from xml.sax.saxutils import escape

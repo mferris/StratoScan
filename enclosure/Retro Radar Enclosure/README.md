@@ -48,16 +48,17 @@ print a coupon (below) to see whether these settings cure it.
 
 Two things changed. The lettering is larger and bolder, with every stroke at
 least 1.0 mm wide and every counter and gap between letters at least 0.8 mm
-open (`tests/test_enclosure_core.py` measures them, check 13). And the
-first three settings below go on the part, set by hand once the 3MF is
-open: Arachne walls, elephant-foot compensation 0 and a monotonic line
-bottom surface. For a few hours on 2026-10-31 the 3MFs carried them as
-per-object settings, but Bambu Studio's desktop app then opened the files
-as geometry only ("The 3mf file has invalid config"), losing the filaments,
-so the 3MFs now hold only the parts and their filaments. Sliced with the
-settings, the first layer now lays two lines or more across most of each
-stroke, and one wider Arachne line, up to 0.7 mm, across most of the rest. Arachne walls and the larger lettering
-are what fill the first layer.
+open (`tests/test_enclosure_core.py` measures them, check 13). And the first
+three settings below go on the part, set by hand once the 3MF is open:
+Arachne walls, elephant-foot compensation 0 and a monotonic line bottom
+surface. For a few hours on 2026-10-31 the 3MFs carried them as per-object
+settings, but Bambu Studio's desktop app then opened the files as geometry
+only ("The 3mf file has invalid config"), losing the filaments, so the 3MFs
+now hold only the parts and their filaments, with the face at z 0, on the
+bed. Sliced with the settings, the first layer now lays two lines or more
+across most of each stroke, and one wider Arachne line, up to 0.7 mm, across
+most of the rest. Arachne walls and the larger lettering are what fill the
+first layer.
 
 **Print a coupon first.** `test_lettering_plate.3mf` and
 `test_lettering_cover.3mf` (in the Retro and Kitten folders) and

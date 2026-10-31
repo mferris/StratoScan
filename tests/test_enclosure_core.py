@@ -670,8 +670,22 @@ def threemf_parts(path):
 # with its filaments in place: the control arc's, as built before 2026-10-31
 # and printed. Anything more in Metadata/model_settings.config (per-object
 # process settings, 2026-10-31) made the app say "The 3mf file has invalid
-# config, load geometry data only", which drops the filaments.
+# config, load geometry data only", which drops the filaments. The package
+# files and the model's root are that file's, text for text, and its object
+# stood on z 0, so every one must.
 THREEMF_FILES = {"[Content_Types].xml", "_rels/.rels", "3D/3dmodel.model", "Metadata/model_settings.config"}
+THREEMF_TEXT = {
+    "[Content_Types].xml": '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>',
+    "_rels/.rels": '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rel0" Target="/3D/3dmodel.model" '
+        'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>',
+}
+THREEMF_MODEL_HEAD = ('<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" '
+                      'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><metadata name="Application">')
 THREEMF_OBJECT_KEYS = {"name"}
 THREEMF_PART_KEYS = {"name", "extruder"}
 
@@ -692,8 +706,24 @@ def threemf_structure(source):
                        + (f"; missing: {', '.join(less)}" if less else ""))
             if less:
                 return out
-        model = ET.fromstring(z.read("3D/3dmodel.model"))
+        for name, text in THREEMF_TEXT.items():
+            if z.read(name).decode(errors="replace").replace("\r\n", "\n").replace("\n", "") \
+                    != text.replace("\n", ""):
+                out.append(f"its {name} is not the proven file's")
+        raw = z.read("3D/3dmodel.model").decode(errors="replace")
+        model = ET.fromstring(raw)
         cfg = ET.fromstring(z.read("Metadata/model_settings.config"))
+    if not raw.startswith(THREEMF_MODEL_HEAD):
+        out.append("its model does not open as the proven file's does (the same <model> attributes and "
+                   "namespace, then only the Application metadata)")
+    kids = [el.tag.split("}")[-1] for el in model]
+    if kids != ["metadata", "resources", "build"] or model[0].get("name") != "Application":
+        out.append(f"its model holds {', '.join(kids)}, not just the Application metadata, the resources "
+                   f"and the build")
+    zs = [float(el.get("z")) for el in model.iter() if el.tag.split("}")[-1] == "vertex"]
+    if zs and abs(min(zs)) > 1e-4:
+        out.append(f"its lowest point is at z {min(zs):.2f}, not 0 as in the proven file (a slicer that keeps "
+                   f"it there sinks it into the bed, face and lettering first)")
     objs = list(cfg)
     if cfg.tag != "config" or len(objs) != 1 or objs[0].tag != "object" or set(objs[0].attrib) != {"id"}:
         out.append("its model_settings.config is not one <object id> in <config>")
@@ -720,25 +750,50 @@ def threemf_structure(source):
     items = [el for el in model.iter() if el.tag.split("}")[-1] == "item"]
     if len(items) != 1 or set(items[0].attrib) != {"objectid"} or items[0].get("objectid") != objs[0].get("id"):
         out.append("its build is not one item with only an objectid, the config's object (the proven file "
-                   "has no transform; the slicer places it)")
+                   "has no transform)")
     return out
 
 
-def threemf_with_setting(path, key, value):
-    """A copy of a 3MF, in memory, whose object carries one more setting."""
+def threemf_mutated(path, name, change):
+    """A copy of a 3MF, in memory, with one file's text passed through
+    change(text): the structure check's controls."""
     import io
     import zipfile
     buf = io.BytesIO()
     with zipfile.ZipFile(path) as src, zipfile.ZipFile(buf, "w") as dst:
-        for name in src.namelist():
-            data = src.read(name)
-            if name == "Metadata/model_settings.config":
-                text = data.decode()
-                i = text.index("/>", text.index('<metadata key="name"')) + 2
-                data = (text[:i] + f'<metadata key="{key}" value="{value}"/>' + text[i:]).encode()
-            dst.writestr(name, data)
+        for n in src.namelist():
+            data = src.read(n)
+            if n == name:
+                data = change(data.decode()).encode()
+            dst.writestr(n, data)
     buf.seek(0)
     return buf
+
+
+def _after(text, anchor, insert):
+    """text with insert placed after the first tag that starts with anchor."""
+    i = text.index(">", text.index(anchor)) + 1
+    return text[:i] + insert + text[i:]
+
+
+def _sink_first_vertex(text):
+    import re
+    return re.sub(r'(<vertex [^>]*z=")[^"]*', r"\g<1>-1", text, count=1)
+
+
+# The structure check's controls: each a change to a good 3MF that must fail.
+THREEMF_CONTROLS = [
+    ("a wall_generator setting on its object", "Metadata/model_settings.config",
+     lambda t: _after(t, '<metadata key="name"', '<metadata key="wall_generator" value="arachne"/>')),
+    ("a second metadata line on its model", "3D/3dmodel.model",
+     lambda t: t.replace("</metadata>", '</metadata><metadata name="Title">x</metadata>', 1)),
+    ("another namespace on its model", "3D/3dmodel.model",
+     lambda t: t.replace("<model unit=", '<model xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" '
+                         "unit=", 1)),
+    ("another content type", "[Content_Types].xml",
+     lambda t: t.replace("</Types>", '<Default Extension="png" ContentType="image/png"/></Types>')),
+    ("a vertex 1 mm below the bed", "3D/3dmodel.model", _sink_first_vertex),
+]
 
 
 def two_colour_projects():
@@ -762,15 +817,22 @@ def two_colour_projects():
     #     vertex moved 0.01 mm must not count as the same. A variant's 3MFs (VARIANT_3MF_SCRIPTS)
     #     are checked the same way in its folder, since 2026-10-31: the
     #     Dials' make-arc-3mf.py had been calling the builder the old way,
-    #     and nothing ran it. And every 3MF has exactly the structure of the
-    #     control arc 3MF the desktop app loaded and printed (threemf_structure):
-    #     the same four files, in model_settings.config only the object's
-    #     name and each part's name and extruder, and a build item with no
-    #     transform. On 2026-10-31 the files carried per-object process
-    #     settings and a bed transform; the command line sliced them, but the
-    #     desktop app loaded geometry only, without the filaments. Those
-    #     settings are now set by hand (the READMEs). The control: the first
-    #     3MF with a wall_generator setting added must fail.
+    #     and nothing ran it. The builder stands each object on z 0 by
+    #     moving its meshes together, so a part is compared with its STL
+    #     moved by the same amount: minus the lowest z of the project's STLs.
+    #     And every tracked 3MF in a case folder (the kitten stand's too,
+    #     from its own make-3mf.py) has exactly the structure of the
+    #     control arc 3MF the desktop app loaded and printed
+    #     (threemf_structure): the same four files, the same package files
+    #     and model root text for text, in model_settings.config only the
+    #     object's name and each part's name and extruder, a build item with
+    #     no transform, and its lowest point at z 0. On 2026-10-31 the files
+    #     carried per-object process settings and a bed transform; the
+    #     command line sliced them, but the desktop app loaded geometry only,
+    #     without the filaments. Those settings are now set by hand (the
+    #     READMEs). The controls (THREEMF_CONTROLS): the first 3MF with a
+    #     wall_generator setting, a second model metadata line, another
+    #     namespace, another content type or a vertex below the bed must fail.
     checks += 1
     t = cube_triangles(0, 0, 0)
     moved = [((a[0] + 0.01, a[1], a[2]), b, c) if i == 0 else (a, b, c) for i, (a, b, c) in enumerate(t)]
@@ -780,7 +842,7 @@ def two_colour_projects():
     tracked = in_git(ROOT)
     shapes = {}
     sources = {}
-    control_done = False
+    projects = set()
     scripts = [(fname, "make-cover-3mf.py") for fname in FULL] + sorted(VARIANT_3MF_SCRIPTS.items())
     for n_script, (fname, script_name) in enumerate(scripts):
         folder = ROOT / fname
@@ -806,16 +868,12 @@ def two_colour_projects():
                 continue
             if tracked is not None and path not in tracked:
                 failures.append(f"{fname}/{out} is not in git: `git add` it")
+            projects.add(path)
             parts, _ = threemf_parts(path)
-            checks += 1
-            if not control_done:
-                control_done = True
-                if not threemf_structure(threemf_with_setting(path, "wall_generator", "arachne")):
-                    failures.append("the 3MF structure check passed a file with a wall_generator setting: "
-                                    "the check itself is broken")
-            for problem in threemf_structure(path):
-                failures.append(f"{fname}/{out}: {problem}, not the structure Bambu Studio's desktop app is known "
-                                f"to load with its filaments: rebuild it with `python3 {script_name} {out}`")
+            stls = {name: stl_triangles(folder / f"{name}.stl") for name, _ in wanted
+                    if (folder / f"{name}.stl").exists()}
+            zs = [round(v[2], 5) for tris in stls.values() for t in tris for v in t]
+            lift = -min(zs) if zs else 0.0
             for name, filament in wanted:
                 checks += 1
                 stl = folder / f"{name}.stl"
@@ -825,7 +883,8 @@ def two_colour_projects():
                 got_filament, tris = parts[name]
                 if got_filament != filament:
                     failures.append(f"{fname}/{out}: {name} is on filament {got_filament}, the script says {filament}")
-                if not stl.exists() or canonical_mesh(tris) != canonical_mesh(stl_triangles(stl)):
+                if name not in stls or canonical_mesh(tris) != canonical_mesh(
+                        [tuple((x, y, round(round(z, 5) + lift, 5)) for x, y, z in t) for t in stls[name]]):
                     failures.append(f"{fname}/{out}: {name} is not today's {name}.stl: the STL was re-exported "
                                     f"since the 3MF was built. Run `python3 {script_name} {out}` there")
                     continue
@@ -833,6 +892,23 @@ def two_colour_projects():
             extra = sorted(set(parts) - {n for n, _ in wanted})
             if extra:
                 failures.append(f"{fname}/{out} holds parts the script does not list: {', '.join(extra)}")
+
+    every = set(projects)
+    if tracked is not None:
+        every |= {p for p in tracked if p.suffix == ".3mf" and p.relative_to(ROOT).parts[0] in set(FULL) | set(VARIANTS)}
+    for n, path in enumerate(sorted(every)):
+        rel = path.relative_to(ROOT)
+        if not path.exists():
+            continue
+        if n == 0:
+            for what, name, change in THREEMF_CONTROLS:
+                checks += 1
+                if not threemf_structure(threemf_mutated(path, name, change)):
+                    failures.append(f"the 3MF structure check passed {rel} with {what}: the check itself is broken")
+        checks += 1
+        for problem in threemf_structure(path):
+            failures.append(f"{rel}: {problem}, not the structure Bambu Studio's desktop app is known to load "
+                            f"with its filaments: rebuild it with the make script in its folder")
     if len(set(sources.values())) > 1:
         checks += 1
         failures.append("make-cover-3mf.py differs between the case folders: keep one copy of it in each, the same")
