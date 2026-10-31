@@ -14,25 +14,74 @@ the same trap shm-guard.sh hit and solved by waking the panel first.
 
 Run: python3 tests/test_ota_auto.py
 """
+import http.server
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import textwrap
+import threading
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "deploy" / "ota-auto.sh"
 
 
-def run_case(name, *, update_available, paint_behaviour):
-    """Run ota-auto.sh against a fake ota.py and a controllable paint stamp.
+class WakeServer:
+    """A stand-in for lighttpd in front of the wake listener (2026-10-30).
+
+    Like lighttpd, it answers 411 Length Required to a POST that carries no
+    Content-Length and never passes it on -- the refusal that kept the panel
+    dark on a real unit. A POST it accepts "wakes the panel": when the
+    display is meant to work, the paint stamp is touched as a painted frame
+    would. `answers` is the list of statuses to give accepted POSTs in turn
+    (the last one repeats), so a refused first wake can be played.
+    """
+
+    def __init__(self, stamp, paints, answers=(204,)):
+        self.stamp, self.paints, self.answers = stamp, paints, list(answers)
+        self.requests = []   # (path, content-length or None, status)
+        outer = self
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                length = self.headers.get("Content-Length")
+                if length is None:
+                    status = 411
+                else:
+                    self.rfile.read(int(length))
+                    status = outer.answers.pop(0) if len(outer.answers) > 1 else outer.answers[0]
+                    if 200 <= status < 300 and outer.paints:
+                        outer.stamp.write_text("x")
+                outer.requests.append((self.path, length, status))
+                self.send_response(status)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        self.url = f"http://127.0.0.1:{self.httpd.server_address[1]}/wake?why=update"
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+
+def run_case(name, *, update_available, paint_behaviour, answers=(204,),
+             wait_s=6, wake_every_s=15):
+    """Run ota-auto.sh against a fake ota.py, a controllable paint stamp and a
+    wake endpoint that behaves like lighttpd.
 
     paint_behaviour: 'advances' | 'never' | 'absent'
-    Returns (exit_code, stdout, applied_bool)
+    Returns (exit_code, stdout, applied_bool, wake_requests)
     """
     td = pathlib.Path(tempfile.mkdtemp())
+    server = None
     try:
         stamp = td / "painted"
         applied = td / "applied.marker"
@@ -41,9 +90,7 @@ def run_case(name, *, update_available, paint_behaviour):
             stamp.write_text("x")
             os.utime(stamp, (1000, 1000))
 
-        # A fake ota.py: reports availability, records that apply ran, and --
-        # when the display is meant to be working -- advances the stamp the way
-        # a real painted frame would.
+        # A fake ota.py: reports availability, records that apply ran.
         fake = td / "ota.py"
         fake.write_text(textwrap.dedent(f"""\
             #!/usr/bin/env python3
@@ -60,34 +107,28 @@ def run_case(name, *, update_available, paint_behaviour):
             """))
         fake.chmod(0o755)
 
-        # The wake endpoint. A real POST /wake powers the panel on and the page
-        # starts reporting frames again; here that is a stamp touch.
-        wake = td / "wake.sh"
-        if paint_behaviour == "advances":
-            wake.write_text(f"#!/bin/sh\ntouch {stamp}\n")
-        else:
-            wake.write_text("#!/bin/sh\nexit 0\n")
-        wake.chmod(0o755)
-
-        # curl stand-in, so the script's real call path is exercised.
-        bindir = td / "bin"
-        bindir.mkdir()
-        curl = bindir / "curl"
-        curl.write_text(f"#!/bin/sh\nexec {wake}\n")
-        curl.chmod(0o755)
+        # The wake endpoint: the real curl talks to it, so the request the
+        # script actually sends is what gets judged.
+        server = WakeServer(stamp, paint_behaviour == "advances", answers)
 
         env = dict(os.environ)
         env.update({
-            "PATH": f"{bindir}:{env['PATH']}",
             "STRATOSCAN_OTA": str(fake),
             "STRATOSCAN_PAINT_STAMP": str(stamp),
-            "STRATOSCAN_PAINT_WAIT_S": "6",
-            "STRATOSCAN_WAKE_URL": "http://127.0.0.1/wake",
+            "STRATOSCAN_PAINT_WAIT_S": str(wait_s),
+            "STRATOSCAN_WAKE_EVERY_S": str(wake_every_s),
+            "STRATOSCAN_WAKE_URL": server.url,
         })
+        env.pop("http_proxy", None)
+        env.pop("HTTP_PROXY", None)
+        env.pop("ALL_PROXY", None)
+        env.pop("all_proxy", None)
         p = subprocess.run(["sh", str(SCRIPT)], env=env,
                            capture_output=True, text=True, timeout=90)
-        return p.returncode, p.stdout + p.stderr, applied.exists()
+        return p.returncode, p.stdout + p.stderr, applied.exists(), list(server.requests)
     finally:
+        if server:
+            server.close()
         shutil.rmtree(td, ignore_errors=True)
 
 
@@ -99,12 +140,12 @@ def main():
     #    A unit that is up to date lighting its own display every evening in
     #    someone's living room is a bug, not a cosmetic issue.
     checks += 1
-    rc, out, applied = run_case("up-to-date", update_available=False,
-                                paint_behaviour="advances")
+    rc, out, applied, reqs = run_case("up-to-date", update_available=False,
+                                      paint_behaviour="advances")
     if applied:
         failures.append("applied an update when none was available")
     checks += 1
-    if "waking the panel" in out:
+    if "waking the panel" in out or reqs:
         failures.append("woke the display when there was nothing to install")
     checks += 1
     if rc != 0:
@@ -112,7 +153,7 @@ def main():
 
     # 2. Update available and the display comes back: must apply.
     checks += 1
-    rc, out, applied = run_case("paints", update_available=True,
+    rc, out, applied, _ = run_case("paints", update_available=True,
                                 paint_behaviour="advances")
     if not applied:
         failures.append("did NOT apply an available update even though the "
@@ -125,7 +166,7 @@ def main():
     #    whole point. Applying here rolls the release back and can leave a
     #    windowed browser on a device nobody is sitting in front of.
     checks += 1
-    rc, out, applied = run_case("never-paints", update_available=True,
+    rc, out, applied, _ = run_case("never-paints", update_available=True,
                                 paint_behaviour="never")
     if applied:
         failures.append("APPLIED with no painted frame -- this is the exact "
@@ -141,13 +182,65 @@ def main():
 
     # 4. No stamp at all (wake service down) is the same refusal, not a crash.
     checks += 1
-    rc, out, applied = run_case("no-stamp", update_available=True,
+    rc, out, applied, _ = run_case("no-stamp", update_available=True,
                                 paint_behaviour="absent")
     if applied:
         failures.append("applied with no paint stamp at all")
     checks += 1
     if rc != 0:
         failures.append(f"missing-stamp run exited {rc}, expected a soft skip")
+
+    # 5. The wake must reach the listener through lighttpd (2026-10-30, #81).
+    #    A bare `curl -X POST` has no Content-Length; lighttpd answers 411 and
+    #    the listener never hears it, so the panel stays dark and nothing ever
+    #    installs. The wake must carry an (empty) body and be accepted.
+    checks += 1
+    rc, out, applied, reqs = run_case("wake-body", update_available=True,
+                                      paint_behaviour="advances")
+    if not reqs:
+        failures.append("no wake request reached the endpoint at all")
+    elif any(r[1] is None for r in reqs):
+        failures.append("the wake POST has no Content-Length; lighttpd "
+                        "refuses that with 411 and the panel stays dark")
+    checks += 1
+    if not applied:
+        failures.append("did not apply behind a lighttpd-like endpoint")
+    checks += 1
+    if reqs and not all(r[0].startswith("/wake?") and "why=update" in r[0] for r in reqs):
+        failures.append(f"wake did not name its reason: {[r[0] for r in reqs]}")
+    checks += 1
+    m = re.search(r'^WAKE_URL="\$\{STRATOSCAN_WAKE_URL:-([^}]*)\}"', SCRIPT.read_text(), re.M)
+    if not m or m.group(1) != "http://127.0.0.1/wake?why=update":
+        failures.append("the default wake URL is not /wake?why=update, the "
+                        "reason ota.py gives")
+
+    # 6. A wake that is refused is logged with its status, not passed over
+    #    in silence (curl exits 0 on a 411 or a 503).
+    checks += 1
+    rc, out, applied, reqs = run_case("wake-refused", update_available=True,
+                                      paint_behaviour="advances", answers=(503,))
+    if "503" not in out:
+        failures.append("a wake answered 503 was not logged with its status")
+    checks += 1
+    if applied:
+        failures.append("applied although every wake was refused")
+    checks += 1
+    if rc != 0:
+        failures.append(f"refused-wake run exited {rc}; it must fail soft")
+
+    # 7. The wake is asked again while waiting: a refused first one (or one
+    #    inside the listener's 10 s gap) must not cost the whole run.
+    checks += 1
+    rc, out, applied, reqs = run_case("wake-retry", update_available=True,
+                                      paint_behaviour="advances",
+                                      answers=(503, 204), wait_s=12,
+                                      wake_every_s=3)
+    if not applied:
+        failures.append("did not ask for the wake again after a refusal "
+                        f"(requests: {[r[2] for r in reqs]})")
+    checks += 1
+    if len(reqs) < 2:
+        failures.append(f"only {len(reqs)} wake request(s); expected a retry")
 
     # The kiosk user is found, never assumed (2026-10-13): the script once
     # hard-coded the first unit's user, so a unit from the factory image

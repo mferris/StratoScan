@@ -22,7 +22,9 @@ set_flags() {  # <json or empty>
     else
         ssh -o ConnectTimeout=10 "$HOST" 'sudo rm -f /var/www/html/data/perf-debug.json'
     fi
-    ssh -o ConnectTimeout=10 "$HOST" 'curl -s -o /dev/null -X POST http://127.0.0.1/wake; touch "/run/user/$(id -u)/stratoscan-reload-request"'
+    # The empty body (-d "") matters: lighttpd refuses a POST with no
+    # Content-Length with 411, so the wake never arrives (2026-10-30, #81).
+    ssh -o ConnectTimeout=10 "$HOST" 'curl -s -m 10 -o /dev/null -d "" "http://127.0.0.1/wake?why=perf"; touch "/run/user/$(id -u)/stratoscan-reload-request"'
 }
 
 panel() {
@@ -32,7 +34,7 @@ panel() {
 run() {  # <label> <json>
     set_flags "$2"
     sleep "$SETTLE"
-    ssh -o ConnectTimeout=10 "$HOST" 'curl -s -o /dev/null -X POST http://127.0.0.1/wake'
+    ssh -o ConnectTimeout=10 "$HOST" 'curl -s -m 10 -o /dev/null -d "" "http://127.0.0.1/wake?why=perf"'
     before=$(panel)
     res=$(ssh -o ConnectTimeout=10 "$HOST" python3 - --minutes "$MIN" --every 5 --json < "$HERE/perf-probe.py")
     after=$(panel)
