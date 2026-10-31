@@ -1326,6 +1326,9 @@ ant_twin_screw_hole = 2.4;  // M2 clearance through the cover
 // 1.5mm deeper, 4.5 of the 6mm insert hole.
 ant_twin_cbore_d = 4.4;
 ant_twin_cbore_h = 1.5;
+// The bore's width, for files that `use` this one and so cannot read the
+// variable: checks.scad's twin_cover_text_room (2026-10-31).
+function ant_twin_cbore() = ant_twin_cbore_d;
 ant_twin_back_pad  = 4;     // the bar is thicker on its case side behind the flare under the bore's mouth
 ant_twin_back_pad_w = 40;
 // The lettering, inlaid in a second colour (2026-10-31: see "Inlaid
@@ -1779,9 +1782,8 @@ module usbc_gauge() {
 // colour prints it face down: the back plate's label here, the twin antenna
 // cover's frequencies and the Retro with Dials' control arc. The letters are
 // the part's first three layers, so each stroke is laid down by the first
-// layer's lines, about 0.42-0.5 mm wide, and the slicer's elephant-foot
-// compensation pulls every first-layer outline in by 0.15 mm. A stroke much
-// under two lines wide comes out broken or missing: the arc's 3.3 mm letters
+// layer's lines, about 0.42-0.5 mm wide. A stroke much under two lines
+// wide comes out broken or missing: the arc's 3.3 mm letters
 // had 0.5 mm strokes, and its C and S printed half there. So every inlaid
 // lettering has strokes at least 1.0 mm wide and its counters and the gaps
 // between its letters at least 0.8 mm open, which tests/test_enclosure_core.py

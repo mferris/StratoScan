@@ -43,9 +43,10 @@ BED_CENTRE = (128.0, 128.0)
 
 # Bambu Studio settings each object carries, as its own per-object settings:
 # Arachne walls, which vary a line's width to fill a stroke where classic
-# walls leave a narrow one out; no elephant-foot compensation, which pulls
-# every first-layer outline in by 0.15 mm and so thins each stroke by
-# 0.3 mm; and a bottom surface of straight monotonic lines, the face's look.
+# walls leave a narrow one out; no elephant-foot compensation, which would
+# pull the face's outer edge in by 0.15 mm (it acts only on the part's
+# outside, not on the lettering: checked by slicing, 2026-10-31); and a
+# bottom surface of straight monotonic lines, the face's look.
 OBJECT_SETTINGS = {
     "wall_generator": "arachne",
     "elefant_foot_compensation": "0",
