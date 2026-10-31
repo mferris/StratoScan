@@ -8,7 +8,7 @@ does nothing. That is how ota-auto.sh's wake never reached the wake listener:
 the panel stayed dark and no unattended update could install.
 
 So every curl in a shell script (or a systemd unit's shell line) that POSTs
-must also send a body (-d/--data*, --json, -F/--form, -T) or set the
+must also send a body (the same goes for PUT, which lighttpd treats alike) (-d/--data*, --json, -F/--form, -T) or set the
 Content-Length header itself. -d '' is enough: it sends Content-Length: 0.
 
 Run: python3 tests/test_curl_posts.py
@@ -20,7 +20,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-POST = re.compile(r"(?:^|\s)(?:-X\s*|--request[\s=]+)['\"]?POST\b")
+POST = re.compile(r"(?:^|\s)(?:-X\s*|--request[\s=]+)['\"]?(?:POST|PUT)\b")
 BODY = re.compile(r"(?:^|\s)(?:-d|--data(?:-raw|-binary|-urlencode|-ascii)?|--json|-F|--form|-T|--upload-file)(?=[\s='\"]|$)"
                   r"|(?:^|\s)-d\S"
                   r"|Content-Length:")
@@ -69,6 +69,8 @@ def main():
         "curl -s -m 10 -X POST \"$WAKE_URL\" >/dev/null": True,
         "curl -s -X POST http://127.0.0.1/wake; touch x": True,
         "curl -s --request POST http://x": True,
+        "curl -s -X PUT http://x": True,
+        "curl -s -X PUT -d '' http://x": False,
         "curl -s -m 10 -d '' \"$WAKE_URL\"": False,
         "curl -s -X POST -d '' http://x": False,
         "curl -s -X POST --data '{}' http://x": False,
