@@ -23,9 +23,21 @@
 #
 # If the page never starts painting, this exits without applying. That is the
 # safe outcome -- the release stays staged and the next run tries again.
+#
+# THE WAKE CARRIES AN EMPTY BODY (2026-10-30, #81). lighttpd answers a POST
+# with no Content-Length with 411 Length Required and never passes it on, so
+# the bare `curl -X POST` this used to send never reached the wake listener:
+# the panel stayed dark, nothing painted, and no unattended update could
+# install unless the page happened to be painting already. curl still exits 0
+# on a 411, so the failure was silent. Now the POST has an empty body
+# (Content-Length: 0), any answer that is not 2xx is logged with its status,
+# and the wake is sent again every WAKE_EVERY_S while waiting, in case one is
+# refused or lands inside the listener's 10 s gap after another wake. "why"
+# is "update", the reason ota.py gives, so the journal says who asked.
 set -eu
 
-WAKE_URL="${STRATOSCAN_WAKE_URL:-http://127.0.0.1/wake}"
+WAKE_URL="${STRATOSCAN_WAKE_URL:-http://127.0.0.1/wake?why=update}"
+WAKE_EVERY_S="${STRATOSCAN_WAKE_EVERY_S:-15}"
 # The desktop user the kiosk runs as, found the way ota.py's
 # detect_kiosk_user finds it: an explicit override, then the display
 # manager's autologin user (that IS the kiosk session; later files win),
@@ -58,6 +70,16 @@ stamp_mtime() {
 
 log() { echo "ota-auto: $*"; }
 
+# Ask for the panel to be woken. The empty body (-d '') is what makes curl send
+# Content-Length: 0; without it lighttpd refuses the request (see the top).
+wake() {
+    code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' -d '' "$WAKE_URL" 2>/dev/null) || true
+    case "$code" in
+        2??) return 0 ;;
+    esac
+    log "wake request answered HTTP ${code:-000} (not 2xx); will ask again"
+}
+
 # Nothing to do at all? Ask first, so a unit that is up to date never wakes its
 # own screen in the middle of someone's evening.
 if ! "$OTA" check 2>&1 | grep -q "update available"; then
@@ -67,19 +89,27 @@ fi
 
 before=$(stamp_mtime)
 log "update available; waking the panel (stamp was $before)"
-curl -s -m 10 -X POST "$WAKE_URL" >/dev/null 2>&1 || log "wake request failed; continuing anyway"
+wake
 
 # Wait for the stamp to MOVE. Panel-on is not the same as page-painting, and it
 # is the painting that the rollback check measures.
+# The wake is repeated while waiting: a refused one, or one swallowed by the
+# listener's rate limit, would otherwise cost the whole run.
 waited=0
+since_wake=0
 while [ "$waited" -lt "$PAINT_WAIT_S" ]; do
     now=$(stamp_mtime)
     if [ "$now" != "0" ] && [ "$now" != "$before" ]; then
         log "display is painting after ${waited}s; applying"
         exec "$OTA" apply
     fi
+    if [ "$since_wake" -ge "$WAKE_EVERY_S" ]; then
+        wake
+        since_wake=0
+    fi
     sleep 3
     waited=$((waited + 3))
+    since_wake=$((since_wake + 3))
 done
 
 log "display never reported a frame in ${PAINT_WAIT_S}s -- not applying."
