@@ -637,7 +637,8 @@ def canonical_mesh(tris):
 
 def threemf_parts(path):
     """part name -> (filament, triangles), and the build item's transform as
-    12 numbers (None without one), for a 3MF written by make-cover-3mf.py."""
+    12 numbers (None without one, as the builder now writes it), for a 3MF
+    written by make-cover-3mf.py."""
     import xml.etree.ElementTree as ET
     import zipfile
     with zipfile.ZipFile(path) as z:
@@ -665,24 +666,86 @@ def threemf_parts(path):
     return parts, ([float(x) for x in tf.split()] if tf else None)
 
 
-def threemf_object_settings(path):
-    """The metadata of the first object in a 3MF's model_settings.config, as
-    key -> value: its name and the per-object slicer settings."""
+# The structure of a two-colour 3MF that Bambu Studio's desktop app loads
+# with its filaments in place: the control arc's, as built before 2026-10-31
+# and printed. Anything more in Metadata/model_settings.config (per-object
+# process settings, 2026-10-31) made the app say "The 3mf file has invalid
+# config, load geometry data only", which drops the filaments.
+THREEMF_FILES = {"[Content_Types].xml", "_rels/.rels", "3D/3dmodel.model", "Metadata/model_settings.config"}
+THREEMF_OBJECT_KEYS = {"name"}
+THREEMF_PART_KEYS = {"name", "extruder"}
+
+
+def threemf_structure(source):
+    """What in a two-colour 3MF (a path or a file object) goes beyond the
+    structure the desktop app loads, as a list of sentences: none if it is
+    that structure."""
     import xml.etree.ElementTree as ET
     import zipfile
-    with zipfile.ZipFile(path) as z:
+    out = []
+    with zipfile.ZipFile(source) as z:
+        names = set(z.namelist())
+        if names != THREEMF_FILES:
+            more, less = sorted(names - THREEMF_FILES), sorted(THREEMF_FILES - names)
+            out.append("its files are not the proven four"
+                       + (f"; extra: {', '.join(more)}" if more else "")
+                       + (f"; missing: {', '.join(less)}" if less else ""))
+            if less:
+                return out
+        model = ET.fromstring(z.read("3D/3dmodel.model"))
         cfg = ET.fromstring(z.read("Metadata/model_settings.config"))
-    obj = next(cfg.iter("object"), None)
-    if obj is None:
-        return {}
-    return {m.get("key"): m.get("value") for m in obj.findall("metadata")}
+    objs = list(cfg)
+    if cfg.tag != "config" or len(objs) != 1 or objs[0].tag != "object" or set(objs[0].attrib) != {"id"}:
+        out.append("its model_settings.config is not one <object id> in <config>")
+        return out
+    for el in objs[0]:
+        if el.tag == "metadata":
+            if el.get("key") not in THREEMF_OBJECT_KEYS:
+                out.append(f"its object carries the setting {el.get('key')} (object metadata may be only "
+                           f"{', '.join(sorted(THREEMF_OBJECT_KEYS))})")
+        elif el.tag == "part":
+            if set(el.attrib) != {"id", "subtype"} or el.get("subtype") != "normal_part":
+                out.append(f"part {el.get('id')} is not a plain <part id subtype=\"normal_part\">")
+            keys = []
+            for m in el:
+                if m.tag != "metadata":
+                    out.append(f"part {el.get('id')} holds a <{m.tag}>")
+                    continue
+                keys.append(m.get("key"))
+            if sorted(keys) != sorted(THREEMF_PART_KEYS):
+                out.append(f"part {el.get('id')} carries {', '.join(sorted(map(str, keys)))}, "
+                           f"not just {', '.join(sorted(THREEMF_PART_KEYS))}")
+        else:
+            out.append(f"its object holds a <{el.tag}>")
+    items = [el for el in model.iter() if el.tag.split("}")[-1] == "item"]
+    if len(items) != 1 or set(items[0].attrib) != {"objectid"} or items[0].get("objectid") != objs[0].get("id"):
+        out.append("its build is not one item with only an objectid, the config's object (the proven file "
+                   "has no transform; the slicer places it)")
+    return out
+
+
+def threemf_with_setting(path, key, value):
+    """A copy of a 3MF, in memory, whose object carries one more setting."""
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(path) as src, zipfile.ZipFile(buf, "w") as dst:
+        for name in src.namelist():
+            data = src.read(name)
+            if name == "Metadata/model_settings.config":
+                text = data.decode()
+                i = text.index("/>", text.index('<metadata key="name"')) + 2
+                data = (text[:i] + f'<metadata key="{key}" value="{value}"/>' + text[i:]).encode()
+            dst.writestr(name, data)
+    buf.seek(0)
+    return buf
 
 
 def two_colour_projects():
     """Check 12: every two-colour 3MF that make-cover-3mf.py builds still
     holds its STLs, on their filaments, in every full design's folder, and
-    so does every one a variant's own script builds; and each carries the
-    builder's per-object slicer settings."""
+    so does every one a variant's own script builds; and each has the
+    structure Bambu Studio's desktop app loads with its filaments."""
     import importlib.util
     failures, checks = [], 0
 
@@ -694,15 +757,20 @@ def two_colour_projects():
     #     in each full design folder's make-cover-3mf.py (its own PROJECTS,
     #     so the list lives in one place): the 3MF is there and in git; each
     #     part is the triangles of its STL in that folder, triangle for
-    #     triangle, on the filament the script gives it; its build item
-    #     stands it on a 256 mm bed; and the same 3MF is the same shape in
-    #     every folder. The control: a mesh with one vertex moved 0.01 mm
-    #     must not count as the same. A variant's 3MFs (VARIANT_3MF_SCRIPTS)
+    #     triangle, on the filament the script gives it; and the same 3MF
+    #     is the same shape in every folder. The control: a mesh with one
+    #     vertex moved 0.01 mm must not count as the same. A variant's 3MFs (VARIANT_3MF_SCRIPTS)
     #     are checked the same way in its folder, since 2026-10-31: the
     #     Dials' make-arc-3mf.py had been calling the builder the old way,
-    #     and nothing ran it. And every object carries the builder's
-    #     OBJECT_SETTINGS, the per-object Bambu Studio settings that let
-    #     face-down lettering print whole (check 13 measures the lettering).
+    #     and nothing ran it. And every 3MF has exactly the structure of the
+    #     control arc 3MF the desktop app loaded and printed (threemf_structure):
+    #     the same four files, in model_settings.config only the object's
+    #     name and each part's name and extruder, and a build item with no
+    #     transform. On 2026-10-31 the files carried per-object process
+    #     settings and a bed transform; the command line sliced them, but the
+    #     desktop app loaded geometry only, without the filaments. Those
+    #     settings are now set by hand (the READMEs). The control: the first
+    #     3MF with a wall_generator setting added must fail.
     checks += 1
     t = cube_triangles(0, 0, 0)
     moved = [((a[0] + 0.01, a[1], a[2]), b, c) if i == 0 else (a, b, c) for i, (a, b, c) in enumerate(t)]
@@ -712,6 +780,7 @@ def two_colour_projects():
     tracked = in_git(ROOT)
     shapes = {}
     sources = {}
+    control_done = False
     scripts = [(fname, "make-cover-3mf.py") for fname in FULL] + sorted(VARIANT_3MF_SCRIPTS.items())
     for n_script, (fname, script_name) in enumerate(scripts):
         folder = ROOT / fname
@@ -725,10 +794,10 @@ def two_colour_projects():
         spec = importlib.util.spec_from_file_location(f"two_colour_3mf_{n_script}", script)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-        settings = getattr(mod, "OBJECT_SETTINGS", None) or getattr(getattr(mod, "m", None), "OBJECT_SETTINGS", {})
         checks += 1
-        if not settings:
-            failures.append(f"{fname}/{script_name} gives its objects no slicer settings (OBJECT_SETTINGS)")
+        if getattr(mod, "OBJECT_SETTINGS", None) or getattr(getattr(mod, "m", None), "OBJECT_SETTINGS", None):
+            failures.append(f"{fname}/{script_name} gives its objects slicer settings (OBJECT_SETTINGS): "
+                            f"the desktop app then loads the 3MF as geometry only")
         for out, (_, wanted) in mod.PROJECTS.items():
             path = folder / out
             checks += 1
@@ -737,13 +806,16 @@ def two_colour_projects():
                 continue
             if tracked is not None and path not in tracked:
                 failures.append(f"{fname}/{out} is not in git: `git add` it")
-            parts, tf = threemf_parts(path)
+            parts, _ = threemf_parts(path)
             checks += 1
-            got = threemf_object_settings(path)
-            wrong = sorted(k for k, v in settings.items() if got.get(k) != v)
-            if wrong:
-                failures.append(f"{fname}/{out} does not carry the slicer settings {', '.join(wrong)}: "
-                                f"run `python3 {script_name} {out}` there")
+            if not control_done:
+                control_done = True
+                if not threemf_structure(threemf_with_setting(path, "wall_generator", "arachne")):
+                    failures.append("the 3MF structure check passed a file with a wall_generator setting: "
+                                    "the check itself is broken")
+            for problem in threemf_structure(path):
+                failures.append(f"{fname}/{out}: {problem}, not the structure Bambu Studio's desktop app is known "
+                                f"to load with its filaments: rebuild it with `python3 {script_name} {out}`")
             for name, filament in wanted:
                 checks += 1
                 stl = folder / f"{name}.stl"
@@ -761,18 +833,6 @@ def two_colour_projects():
             extra = sorted(set(parts) - {n for n, _ in wanted})
             if extra:
                 failures.append(f"{fname}/{out} holds parts the script does not list: {', '.join(extra)}")
-            checks += 1
-            pts = [v for _, tris in parts.values() for tri in tris for v in tri]
-            if tf is None or not pts:
-                failures.append(f"{fname}/{out}: its build item has no transform, so it sits where its "
-                                f"mesh is, part off the bed: rebuild it")
-            else:
-                moved_pts = [(x + tf[9], y + tf[10], z + tf[11]) for x, y, z in pts]
-                lo = [min(p[k] for p in moved_pts) for k in range(3)]
-                hi = [max(p[k] for p in moved_pts) for k in range(3)]
-                if abs(lo[2]) > 0.01 or lo[0] < 0 or lo[1] < 0 or hi[0] > 256 or hi[1] > 256:
-                    failures.append(f"{fname}/{out}: its build transform puts it at x {lo[0]:.1f}..{hi[0]:.1f}, "
-                                    f"y {lo[1]:.1f}..{hi[1]:.1f}, z from {lo[2]:.2f}, not on a 256 mm bed")
     if len(set(sources.values())) > 1:
         checks += 1
         failures.append("make-cover-3mf.py differs between the case folders: keep one copy of it in each, the same")

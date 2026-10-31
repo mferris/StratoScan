@@ -65,11 +65,15 @@ print a coupon (below) to see whether these settings cure it.
 
 Two things changed. The lettering is larger and bolder, with every stroke at
 least 1.0 mm wide and every counter and gap between letters at least 0.8 mm
-open (`tests/test_enclosure_core.py` measures them, check 13). And each
-two-colour 3MF now carries the three settings Bambu Studio takes per object,
-so it opens with them set. Sliced the same way, the first layer now lays
-two lines or more across most of each stroke, and one wider Arachne line, up
-to 0.7 mm, across most of the rest. Arachne walls and the larger lettering
+open (`tests/test_enclosure_core.py` measures them, check 13). And the
+first three settings below go on the part, set by hand once the 3MF is
+open: Arachne walls, elephant-foot compensation 0 and a monotonic line
+bottom surface. For a few hours on 2026-10-31 the 3MFs carried them as
+per-object settings, but Bambu Studio's desktop app then opened the files
+as geometry only ("The 3mf file has invalid config"), losing the filaments,
+so the 3MFs now hold only the parts and their filaments. Sliced with the
+settings, the first layer now lays two lines or more across most of each
+stroke, and one wider Arachne line, up to 0.7 mm, across most of the rest. Arachne walls and the larger lettering
 are what fill the first layer.
 
 **Print a coupon first.** `test_lettering_plate.3mf` and
@@ -81,13 +85,15 @@ and 2 h 40 min for the plate. When a coupon's letters come out whole with
 clean edges, its part will too.
 
 The settings, with their names in Bambu Studio 2.08 and the keys in its own
-profiles:
+profiles. Set the first three on the object (right-click it in the object
+list, then Process, and add them under Quality and Strength) or, with only
+the face on the plate, in the print settings; the 3MF does not set them.
 
 | Setting | Where | Value | Key | Who sets it |
 |---|---|---|---|---|
-| Wall generator | Quality | Arachne | `wall_generator` | the 3MF, per object |
-| Elephant foot compensation | Quality > Precision | 0: keeps the face's outer edge from being pulled in 0.15 mm; it does not touch the lettering | `elefant_foot_compensation` | the 3MF, per object |
-| Bottom surface pattern | Strength | Monotonic line | `bottom_surface_pattern` = `monotonicline` | the 3MF, per object |
+| Wall generator | Quality | Arachne | `wall_generator` | you, per object or for the plate |
+| Elephant foot compensation | Quality > Precision | 0: keeps the face's outer edge from being pulled in 0.15 mm; it does not touch the lettering | `elefant_foot_compensation` | you, per object or for the plate |
+| Bottom surface pattern | Strength | Monotonic line | `bottom_surface_pattern` = `monotonicline` | you, per object or for the plate |
 | First layer line width | Quality > Line width | 0.42 mm | `initial_layer_line_width` | you, in the print settings |
 | First layer speed, and first layer infill | Speed | 30 to 40 mm/s | `initial_layer_speed`, `initial_layer_infill_speed` | you, in the print settings |
 | Prime tower | Others | on (the default) | `enable_prime_tower` | you, in the print settings |
