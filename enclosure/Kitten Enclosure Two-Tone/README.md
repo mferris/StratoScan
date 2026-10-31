@@ -712,7 +712,7 @@ for p in shell front_trim retainer stand back_plate usbc_gauge \
            -D "part=\"$p\"" -o "$p.stl" kitten-enclosure-twotone.scad
 done
 python3 make-3mf.py   # kitten-stand-twotone.3mf, from the six stand_* meshes
-python3 make-cover-3mf.py   # the covers' and the back plate's two-colour 3MFs
+python3 make-cover-3mf.py   # the covers' and the back plate's two-colour 3MFs (test check 12 fails until they are rebuilt)
 ```
 
 **The exporter is not deterministic.** Two consecutive exports of unchanged

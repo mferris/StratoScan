@@ -612,6 +612,139 @@ def print_files_manifold():
     return failures, checks
 
 
+def canonical_mesh(tris):
+    """A mesh as a sorted list of triangles, each vertex rounded to 5
+    decimals (as make-cover-3mf.py writes them) and each triangle turned to
+    start at its smallest vertex, which keeps its winding. Triangles that
+    rounding collapses are dropped, as the script drops them."""
+    out = []
+    for t in tris:
+        t = [tuple(round(c, 5) for c in v) for v in t]
+        if len(set(t)) < 3:
+            continue
+        k = t.index(min(t))
+        out.append(tuple(t[k:] + t[:k]))
+    return sorted(out)
+
+
+def threemf_parts(path):
+    """part name -> (filament, triangles), and the build item's transform as
+    12 numbers (None without one), for a 3MF written by make-cover-3mf.py."""
+    import xml.etree.ElementTree as ET
+    import zipfile
+    with zipfile.ZipFile(path) as z:
+        model = ET.fromstring(z.read("3D/3dmodel.model"))
+        cfg = ET.fromstring(z.read("Metadata/model_settings.config"))
+    meshes = {}
+    for obj in model.iter():
+        if obj.tag.split("}")[-1] != "object":
+            continue
+        verts, tris = [], []
+        for el in obj.iter():
+            tag = el.tag.split("}")[-1]
+            if tag == "vertex":
+                verts.append(tuple(float(el.get(k)) for k in "xyz"))
+            elif tag == "triangle":
+                tris.append(tuple(verts[int(el.get(k))] for k in ("v1", "v2", "v3")))
+        if tris:
+            meshes[obj.get("id")] = tris
+    parts = {}
+    for part in cfg.iter("part"):
+        meta = {m.get("key"): m.get("value") for m in part.iter("metadata")}
+        parts[meta.get("name")] = (int(meta.get("extruder", 0)), meshes.get(part.get("id"), []))
+    item = next((el for el in model.iter() if el.tag.split("}")[-1] == "item"), None)
+    tf = item.get("transform") if item is not None else None
+    return parts, ([float(x) for x in tf.split()] if tf else None)
+
+
+def two_colour_projects():
+    """Check 12: every two-colour 3MF that make-cover-3mf.py builds still
+    holds its STLs, on their filaments, in every full design's folder."""
+    import importlib.util
+    failures, checks = [], 0
+
+    # 12. A two-colour 3MF is the same meshes as its STLs (2026-10-31).
+    #     Checks 7 and 8 compare STLs only, and check 10 reads a 3MF's meshes
+    #     only for their edges, so a back plate re-exported without its 3MF
+    #     rebuilt would leave the 3MF, the file the README says to print,
+    #     holding the old plate, and nothing would say so. For each project
+    #     in each full design folder's make-cover-3mf.py (its own PROJECTS,
+    #     so the list lives in one place): the 3MF is there and in git; each
+    #     part is the triangles of its STL in that folder, triangle for
+    #     triangle, on the filament the script gives it; its build item
+    #     stands it on a 256 mm bed; and the same 3MF is the same shape in
+    #     every folder. The control: a mesh with one vertex moved 0.01 mm
+    #     must not count as the same.
+    checks += 1
+    t = cube_triangles(0, 0, 0)
+    moved = [((a[0] + 0.01, a[1], a[2]), b, c) if i == 0 else (a, b, c) for i, (a, b, c) in enumerate(t)]
+    if canonical_mesh(t) == canonical_mesh(moved) or canonical_mesh(t) != canonical_mesh([x[1:] + x[:1] for x in t]):
+        failures.append("the 3MF comparison's control came out wrong: the check itself is broken")
+
+    tracked = in_git(ROOT)
+    shapes = {}
+    sources = {}
+    for fname in FULL:
+        folder = ROOT / fname
+        script = folder / "make-cover-3mf.py"
+        checks += 1
+        if not script.exists():
+            failures.append(f"{fname} has no make-cover-3mf.py")
+            continue
+        sources[fname] = script.read_text()
+        spec = importlib.util.spec_from_file_location(f"make_cover_3mf_{len(sources)}", script)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        for out, (_, wanted) in mod.PROJECTS.items():
+            path = folder / out
+            checks += 1
+            if not path.exists():
+                failures.append(f"{fname}/{out} is missing: run `python3 make-cover-3mf.py {out}` there")
+                continue
+            if tracked is not None and path not in tracked:
+                failures.append(f"{fname}/{out} is not in git: `git add` it")
+            parts, tf = threemf_parts(path)
+            for name, filament in wanted:
+                checks += 1
+                stl = folder / f"{name}.stl"
+                if name not in parts:
+                    failures.append(f"{fname}/{out} has no part named {name}: rebuild it")
+                    continue
+                got_filament, tris = parts[name]
+                if got_filament != filament:
+                    failures.append(f"{fname}/{out}: {name} is on filament {got_filament}, the script says {filament}")
+                if not stl.exists() or canonical_mesh(tris) != canonical_mesh(stl_triangles(stl)):
+                    failures.append(f"{fname}/{out}: {name} is not today's {name}.stl: the STL was re-exported "
+                                    f"since the 3MF was built. Run `python3 make-cover-3mf.py {out}` there")
+                    continue
+                shapes.setdefault((out, name), {})[fname] = geometry(stl)
+            extra = sorted(set(parts) - {n for n, _ in wanted})
+            if extra:
+                failures.append(f"{fname}/{out} holds parts the script does not list: {', '.join(extra)}")
+            checks += 1
+            pts = [v for _, tris in parts.values() for tri in tris for v in tri]
+            if tf is None or not pts:
+                failures.append(f"{fname}/{out}: its build item has no transform, so it sits where its "
+                                f"mesh is, part off the bed: rebuild it")
+            else:
+                moved_pts = [(x + tf[9], y + tf[10], z + tf[11]) for x, y, z in pts]
+                lo = [min(p[k] for p in moved_pts) for k in range(3)]
+                hi = [max(p[k] for p in moved_pts) for k in range(3)]
+                if abs(lo[2]) > 0.01 or lo[0] < 0 or lo[1] < 0 or hi[0] > 256 or hi[1] > 256:
+                    failures.append(f"{fname}/{out}: its build transform puts it at x {lo[0]:.1f}..{hi[0]:.1f}, "
+                                    f"y {lo[1]:.1f}..{hi[1]:.1f}, z from {lo[2]:.2f}, not on a 256 mm bed")
+    if len(set(sources.values())) > 1:
+        checks += 1
+        failures.append("make-cover-3mf.py differs between the case folders: keep one copy of it in each, the same")
+    for (out, name), per in sorted(shapes.items()):
+        if len(per) > 1:
+            checks += 1
+            first = next(iter(per.values()))
+            if not all(same_shape(first, g) for g in per.values()):
+                failures.append(f"{out}'s {name} is not the same shape in every case folder")
+    return failures, checks
+
+
 def main():
     failures, checks = [], 0
 
@@ -723,6 +856,10 @@ def main():
     checks += n
 
     more, n = print_files_manifold()
+    failures += more
+    checks += n
+
+    more, n = two_colour_projects()
     failures += more
     checks += n
 

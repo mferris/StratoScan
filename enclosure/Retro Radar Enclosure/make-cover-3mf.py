@@ -13,6 +13,13 @@ their first 0.6 mm (three 0.2 mm layers): one filament change per layer,
 nothing after that. Each lettering STL is exported in its part's own frame,
 so the two meshes meet face to face as they come.
 
+The meshes keep that frame, so the test can compare them with their STLs
+(check 12 in tests/test_enclosure_core.py), and the build item carries a
+transform that stands the object on the bed and centres it at BED_CENTRE
+(2026-10-31). Without one the plate sat centred on (0, 0), half off the
+bed, and 3 mm below it, and Bambu Studio's command line refused to slice it
+unless told to arrange it; the GUI moves it either way.
+
 Usage: python3 make-cover-3mf.py [project.3mf ...]   (after exporting the
 STLs as BINARY: openscad --export-format binstl). With no names it builds
 them all; name one to build only that one, since a rebuilt file differs in
@@ -20,6 +27,10 @@ its zip timestamps even when nothing in it has changed.
 """
 import struct, sys, zipfile
 from xml.sax.saxutils import escape
+
+# Where the build item puts the object's middle, mm: the middle of a
+# 256 mm Bambu bed. Any slicer can move it from there.
+BED_CENTRE = (128.0, 128.0)
 
 # project -> (what it is, [(STL, filament), ...])
 PROJECTS = {
@@ -53,21 +64,26 @@ def read_stl(path):
 
 
 def build(out, what, parts):
-    objects, ids = [], []
+    objects, ids, every = [], [], []
     for oid, (name, extruder) in enumerate(parts, start=1):
         verts, tris = read_stl(name + ".stl")
+        every += verts
         v = "".join(f'<vertex x="{x}" y="{y}" z="{z}"/>' for x, y, z in verts)
         t = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in tris)
         objects.append(f'<object id="{oid}" type="model"><mesh><vertices>{v}</vertices>'
                        f'<triangles>{t}</triangles></mesh></object>')
         ids.append((oid, name, extruder, len(tris)))
+    lo = [min(v[k] for v in every) for k in range(3)]
+    hi = [max(v[k] for v in every) for k in range(3)]
+    move = (BED_CENTRE[0] - (lo[0] + hi[0]) / 2, BED_CENTRE[1] - (lo[1] + hi[1]) / 2, -lo[2])
+    transform = "1 0 0 0 1 0 0 0 1 " + " ".join(f"{round(m, 5):g}" for m in move)
     aid = len(parts) + 1
     objects.append(f'<object id="{aid}" type="model"><components>'
                    + "".join(f'<component objectid="{i}"/>' for i, *_ in ids) + '</components></object>')
     model = ('<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" '
              'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
              f'<metadata name="Application">StratoScan {escape(what)}</metadata>'
-             f'<resources>{"".join(objects)}</resources><build><item objectid="{aid}"/></build></model>')
+             f'<resources>{"".join(objects)}</resources><build><item objectid="{aid}" transform="{transform}"/></build></model>')
     cfg = ('<?xml version="1.0" encoding="UTF-8"?>\n<config>'
            f'<object id="{aid}"><metadata key="name" value="{escape(out[:-4])}"/>'
            + "".join(f'<part id="{i}" subtype="normal_part"><metadata key="name" value="{escape(n)}"/>'
