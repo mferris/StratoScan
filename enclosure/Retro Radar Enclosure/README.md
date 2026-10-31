@@ -47,7 +47,9 @@ as ascii for byte-identical geometry, and every slicer reads both.
 The two-colour projects are built from those exports: after exporting
 `back_plate` and `back_plate_text`, or a cover and its `_text_` part,
 `python3 make-cover-3mf.py back_plate_twotone.3mf` (or a cover's 3MF; no
-name builds them all).
+name builds them all). `tests/test_enclosure_core.py` (check 12) fails
+while a 3MF no longer holds its folder's STLs, so rebuild it after any
+re-export of its parts.
 
 `part="preview"` shows the whole stack assembled; `part="exploded"` separates
 it. The preview places the retainer, the glass and the trim with
@@ -832,9 +834,15 @@ cable moved. Now:
   outer face down, as the plate always prints. The lettering fills the
   engraving exactly, so the two colours change only in the first three
   layers, 0.6 mm; above that the plate is all filament 1. Bambu Studio on an
-  X1C (0.20 mm, ASA) gives 2 h 41 min and four filament changes, against
-  2 h 33 min for the one-colour plate, with a prime tower: under 0.1 g of
-  lettering and 1.3 g of filament 2 in all, the rest purge and tower. The checks
+  X1C (0.20 mm, ASA, prime tower on) gives about 2 h 41 min, against 2 h 33
+  min for the one-colour plate. It swaps filament at the start of each of
+  the three lettering layers and once more, back to filament 1, at the
+  fourth; its own summary counts three changes, not the first load. The
+  lettering itself is under 0.1 g, and filament 2 comes to about 1.5 g in
+  all, the rest purge and tower, more or less with the colours chosen.
+  The project stands the plate on the bed, centred on a 256 mm bed (since
+  2026-10-31), so it slices as it opens; on another printer, arrange or
+  centre it. The checks
   `plate_text_vs_plate`, `plate_text_fills_engraving` (with its control
   `plate_text_gap_probe_works`) and `plate_text_on_face` prove the lettering
   meets the plate face to face, no overlap and no gap. `back_plate.stl` is
@@ -1135,7 +1143,7 @@ The FlyCatcher has two antenna inputs, 1090 and 978 MHz, and the Nooelec bundle 
    Set each whip so its hinge folds towards or away from the wall, not towards the other whip: that's the direction the mount is weakest, so the hinge gives before the panel does, and a folded whip then clears the other tower.
 4. Tidy the cables into the channel and fit the cover: five M2 × 6 into the M2 inserts.
 
-**Lettering in a second colour.** Open the cover's `_twotone.3mf` rather than its STL. The lettering is many separate letters, and a slicer splits a multi-lump STL into one part per letter, so picking a colour for "the text" would colour one letter; the project file already has the cover on filament 1 and every letter on filament 2. Change either in the slicer. The cover prints outer face down, so the lettering is its first 0.6 mm, three 0.2 mm layers: three filament changes, nothing after. The plain STL still prints the engraved, one-colour cover.
+**Lettering in a second colour.** Open the cover's `_twotone.3mf` rather than its STL. The lettering is many separate letters, and a slicer splits a multi-lump STL into one part per letter, so picking a colour for "the text" would colour one letter; the project file already has the cover on filament 1 and every letter on filament 2. Change either in the slicer. The cover prints outer face down, so the lettering is its first 0.6 mm, three 0.2 mm layers: a change at the start of each, and one back to filament 1 above them, nothing after. The plain STL still prints the engraved, one-colour cover.
 5. Pass both plugs through the plate's 13 mm hole, bolt the flange on from inside the plate with the three M3 × 8, plug 1090 and 978 into the FlyCatcher, and screw the whips on (the 1090 whip is the shorter one). Inside, tie both jumpers together at the two bridges that lead from the cable hole to the right and down the right-hand side, seen from behind, with 150 × 3.6 mm cable ties. Below the second bridge they run free down the right-hand side, between their curb and the speaker, to the FlyCatcher: fold any spare length back on itself just below the second bridge and take it into that bridge's tie, so only the planned slack runs on to the SMA plugs, on the speaker's side of the curb, never across it. Never leave the spare as a loose loop: the plate stands nearly upright, and a loop that sags below the SMA plugs comes within 20 mm of the 12 V pair at the lower right (since 2026-10-29; [the regulator's place](#the-regulators-place)). That keeps them 20 mm or more from the regulator's leads, which keep to the lower half and the left, and from the Pi's USB-C plug. For an outdoor antenna, screw its coax onto the same barrel instead, and give the coax its own strain relief within a few centimetres of the tower.
 
 To replace a cable: back plate off, cover off, nut off, slide the jack out of its slot, pull the plug back up through the bore. The mount stays bolted to the plate.
