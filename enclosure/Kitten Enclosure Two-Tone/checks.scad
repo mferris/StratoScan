@@ -1548,6 +1548,27 @@ module plate_holes_but_label() {
 if (check=="usbc_label_clear_of_holes") intersection() { usbc_label_probe(); plate_holes_but_label(); }
 if (check=="usbc_label_probe_works")    intersection() { usbc_label_probe(-12); plate_holes_but_label(); }
 
+// ---- the label in a second colour (2026-10-31) ----
+// back_plate_text.stl is the engraving's fill, on filament 2 in
+// back_plate_twotone.3mf, in the plate's own frame. It meets the plate face
+// to face. No overlap: where the lettering is, there is no plate...
+if (check=="plate_text_vs_plate")        intersection() { usbc_label_solid(); back_plate(); }
+// ...and no gap: over the label's patch (its outline grown 1.5 mm, which
+// usbc_label_clear_of_holes keeps clear of every other hole), the plate's
+// first 0.6 mm is plate or lettering, nothing else...
+module plate_text_patch() {
+  translate([0, 0, -back_plate_t]) linear_extrude(height = usbc_label_depth) offset(r = 1.5) projection() usbc_label_solid();
+}
+if (check=="plate_text_fills_engraving") difference() { plate_text_patch(); back_plate(); usbc_label_solid(); }
+// ...which the control proves it can see: lettering 0.2 mm short of the
+// engraving's floor leaves a gap of about a third of its volume.
+if (check=="plate_text_gap_probe_works") difference() { plate_text_patch(); back_plate(); usbc_label_solid(usbc_label_depth - 0.2); }
+// It lies on the outer face's plane, the plate's lowest, which goes on the
+// bed: none of it outside the plate's first 0.6 mm. With fills_engraving
+// empty, that puts its bottom on the face, as three first layers.
+if (check=="plate_text_on_face")         difference() { usbc_label_solid(); translate([0, 0, -back_plate_t]) cylinder(d = outer_dia, h = usbc_label_depth); }
+if (check=="plate_text_present")         usbc_label_solid();   // positive control: about 80 mm3
+
 // The speaker sleeve is hollow (2026-10-23): inside it, from the speaker's
 // face to the wall and clear of the four screw pads, there is no plastic. It
 // was a solid block with the grille drilled through it as tubes. The control

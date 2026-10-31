@@ -146,7 +146,8 @@ question.
   and `power_trigger_stop` behind it presses it against the plate with no
   play. No extension is needed. Above the socket the plate says which
   charger it needs, `USB-C PD 12V 27W`, engraved in its outer face (plates
-  printed since 2026-10-29). To fit them, with the plate outer face down:
+  printed since 2026-10-29); `back_plate_twotone.3mf` prints it in a second
+  colour (since 2026-10-31). To fit them, with the plate outer face down:
   1. Press an M3 × 3 insert into each hole beside the window, from the inner
      face, with the outer face on a flat board, until it stops on the board.
   2. Solder the 12 V pair to the trigger board.

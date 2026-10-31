@@ -30,6 +30,7 @@ The head is one colour:
 | `front_trim` | black | the face — bezel ring with a nose, whisker grooves and seven screw holes. Prints rabbet-down (face up), as `front_trim.stl` is exported, with support (Support for ABS interface) only under the inner band that presses on the glass: the nose stops it printing face down like the retro case's ([below](#the-trim-prints-face-up)) |
 | `retainer` | — | ring behind the glass (identical to the retro part), keyed so it goes in only one way: its relief at the bottom, over the gap in the shelf ([below](#so-does-the-retainer)). `retainer.stl` is glass face down, the way it prints |
 | `back_plate` | black | removable back — locating lip, vents, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the charger it needs engraved above it, the antenna mount's bolt holes and cable hole, two insert bosses for the regulator's tray, ten cable-tie bridges for its leads and the coax, and two low curbs that keep the slack of the pigtail and the coax on their own sides; identical to the retro part. Prints outer face down, supports off |
+| `back_plate_twotone.3mf` | black + a contrast | the same plate with its charger label in a second colour: one object, the plate on filament 1 and the lettering (`back_plate_text`) on filament 2, built by `make-cover-3mf.py`; identical to the retro part ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)) |
 | `antenna_mount` | black | bolt-on arm carrying the antenna socket |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
 | `antenna_mount_twin_8`, `antenna_mount_twin_11` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight. Two styles, for jumpers whose bulkhead body is an 8 mm hex or an 11 mm hex; two parts each, this body and the cover below (`antenna_mount_twin` is whichever `ant_twin_jack_af` names) |
@@ -484,7 +485,13 @@ prints as a bridge in two steps, which you can see in the pocket: a slot
 right across it, then the window's rectangle, then the window; slice with
 counterbore hole bridging off, the default. Above the pocket the plate says
 which charger the board needs, `USB-C PD 12V 27W`, engraved in its outer
-face so it reads from behind the case. `power_regulator_tray` holds
+face so it reads from behind the case. For the label in a second colour
+(since 2026-10-31), print `back_plate_twotone.3mf` instead of
+`back_plate.stl`: one object, the plate on filament 1 and the lettering on
+filament 2, which wants a colour that stands out from the plate's. Supports
+off, outer face down as always; the colours change only in the first three
+layers, 0.6 mm, the lettering filling the engraving exactly (the retro
+README has the slice). `power_regulator_tray` holds
 the 5 V regulator at its one place across the bottom of the plate's inner
 face (since 2026-10-29), screwed down with two M3 × 8 button-head screws
 into M3 × 5 inserts in two bosses on the plate, with a saddle and a cable-tie
@@ -699,11 +706,13 @@ for p in shell front_trim retainer stand back_plate usbc_gauge \
            power_trigger_mount power_trigger_stop power_regulator_tray \
            antenna_mount antenna_mount_sma antenna_mount_twin_8 antenna_mount_twin_11 \
            antenna_mount_twin_cover_8 antenna_mount_twin_cover_11 \
+           antenna_mount_twin_cover_text_8 antenna_mount_twin_cover_text_11 back_plate_text \
            stand_body stand_paws stand_toes stand_claws stand_tail stand_tail_tip; do
   openscad --backend=manifold --export-format binstl \
            -D "part=\"$p\"" -o "$p.stl" kitten-enclosure-twotone.scad
 done
 python3 make-3mf.py   # kitten-stand-twotone.3mf, from the six stand_* meshes
+python3 make-cover-3mf.py   # the covers' and the back plate's two-colour 3MFs
 ```
 
 **The exporter is not deterministic.** Two consecutive exports of unchanged
