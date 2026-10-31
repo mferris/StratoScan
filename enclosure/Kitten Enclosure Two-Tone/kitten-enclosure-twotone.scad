@@ -1784,7 +1784,11 @@ module usbc_label2d() {
 }
 
 // Its letters as a solid h deep from the plate's outer face in, mirrored to
-// read from behind: cut from back_plate(), and probed by the checks.
+// read from behind: cut from back_plate(), and probed by the checks. Printed
+// on its own too, as the lettering that fills the engraving in a second
+// colour (back_plate_text.stl, in back_plate_twotone.3mf, 2026-10-31), the
+// way the antenna cover's lettering is: in the plate's own frame, its first
+// 0.6 mm from the outer face, meeting the plate face to face.
 module usbc_label_solid(h = usbc_label_depth) {
     translate([usbc_label_pos[0], usbc_label_pos[1], -back_plate_t]) mirror([1, 0, 0])
         linear_extrude(height = h) usbc_label2d();
@@ -3493,6 +3497,7 @@ else if (part == "retainer") retainer_print();   // glass face down, as it print
 else if (part == "shell") shell();
 else if (part == "stand") stand();
 else if (part == "back_plate") back_plate();
+else if (part == "back_plate_text") usbc_label_solid();   // the label's lettering, for a second colour
 else if (part == "antenna_mount") antenna_mount();
 else if (part == "antenna_mount_sma") antenna_mount_sma();
 else if (part == "antenna_mount_twin") antenna_mount_twin();                 // the default style (ant_twin_jack_af)

@@ -1,24 +1,34 @@
 #!/usr/bin/env python3
-"""Builds a two-colour 3MF project for each twin antenna mount cover: the
-cover on filament 1 and its engraved lettering on filament 2, as one object.
+"""Builds the two-colour 3MF projects: each twin antenna mount cover, and
+the back plate (since 2026-10-31), with the part on filament 1 and its
+engraved lettering on filament 2, as one object.
 
 Why a project file rather than two STLs: the lettering is many separate
 letters, and a slicer splits a multi-lump mesh into one part per lump on
 import, so choosing a colour for "the text" would colour one letter. The
 assignment belongs in the file (the kitten stand's make-3mf.py, same reason).
 
-The cover prints outer face down, so the lettering is its first 0.6 mm
-(three 0.2 mm layers): one filament change per layer, nothing after that.
+The cover and the plate both print outer face down, so the lettering is
+their first 0.6 mm (three 0.2 mm layers): one filament change per layer,
+nothing after that. Each lettering STL is exported in its part's own frame,
+so the two meshes meet face to face as they come.
 
-Usage: python3 make-cover-3mf.py   (after exporting the four STLs as BINARY:
-openscad --export-format binstl)
+Usage: python3 make-cover-3mf.py [project.3mf ...]   (after exporting the
+STLs as BINARY: openscad --export-format binstl). With no names it builds
+them all; name one to build only that one, since a rebuilt file differs in
+its zip timestamps even when nothing in it has changed.
 """
-import struct, zipfile
+import struct, sys, zipfile
 from xml.sax.saxutils import escape
 
-COVERS = {
-    "antenna_mount_twin_cover_8_twotone.3mf":  [("antenna_mount_twin_cover_8", 1), ("antenna_mount_twin_cover_text_8", 2)],
-    "antenna_mount_twin_cover_11_twotone.3mf": [("antenna_mount_twin_cover_11", 1), ("antenna_mount_twin_cover_text_11", 2)],
+# project -> (what it is, [(STL, filament), ...])
+PROJECTS = {
+    "antenna_mount_twin_cover_8_twotone.3mf":  ("twin antenna mount cover",
+        [("antenna_mount_twin_cover_8", 1), ("antenna_mount_twin_cover_text_8", 2)]),
+    "antenna_mount_twin_cover_11_twotone.3mf": ("twin antenna mount cover",
+        [("antenna_mount_twin_cover_11", 1), ("antenna_mount_twin_cover_text_11", 2)]),
+    "back_plate_twotone.3mf":                  ("back plate",
+        [("back_plate", 1), ("back_plate_text", 2)]),
 }
 
 
@@ -42,7 +52,7 @@ def read_stl(path):
     return verts, tris
 
 
-def build(out, parts):
+def build(out, what, parts):
     objects, ids = [], []
     for oid, (name, extruder) in enumerate(parts, start=1):
         verts, tris = read_stl(name + ".stl")
@@ -56,7 +66,7 @@ def build(out, parts):
                    + "".join(f'<component objectid="{i}"/>' for i, *_ in ids) + '</components></object>')
     model = ('<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" '
              'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
-             '<metadata name="Application">StratoScan twin antenna mount cover</metadata>'
+             f'<metadata name="Application">StratoScan {escape(what)}</metadata>'
              f'<resources>{"".join(objects)}</resources><build><item objectid="{aid}"/></build></model>')
     cfg = ('<?xml version="1.0" encoding="UTF-8"?>\n<config>'
            f'<object id="{aid}"><metadata key="name" value="{escape(out[:-4])}"/>'
@@ -79,5 +89,8 @@ def build(out, parts):
 
 
 if __name__ == "__main__":
-    for out, parts in COVERS.items():
-        build(out, parts)
+    names = sys.argv[1:] or list(PROJECTS)
+    for out in names:
+        if out not in PROJECTS:
+            sys.exit(f"unknown project {out}; known: {', '.join(PROJECTS)}")
+        build(out, *PROJECTS[out])

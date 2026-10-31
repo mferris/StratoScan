@@ -43,6 +43,7 @@ SHARED_PRINTS = ["back_plate", "retainer", "usbc_gauge", "antenna_socket_gauge",
                  "antenna_mount", "antenna_mount_sma", "antenna_mount_twin_8", "antenna_mount_twin_11",
                  "antenna_mount_twin_cover_8", "antenna_mount_twin_cover_11",
                  "antenna_mount_twin_cover_text_8", "antenna_mount_twin_cover_text_11",
+                 "back_plate_text",
                  "power_trigger_mount", "power_trigger_stop", "power_regulator_tray"]
 OPENSCAD = "/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD"
 

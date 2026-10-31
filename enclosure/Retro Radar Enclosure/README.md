@@ -14,6 +14,7 @@ the rest follows.
 | `retainer` | ring behind the glass; the glass rests on its front face. Keyed, so it goes in only one way: its relief at the bottom, over the gap in the shelf ([below](#the-retainer-goes-in-one-way-only)). `retainer.stl` is glass face down, the way it prints |
 | `stand` | desk cradle — two ring-arc arms on a plinth with two ridges all the way round, 4mm proud, their undersides sloped at 45° to a small lip like the case's rings (the old 1mm strips printed rough unsupported, and square 4mm ridges needed supports all round). A clip at the back of the plinth, directly under the plug, holds the charger's cable ([below](#the-stand-holds-the-chargers-cable)). **Watch the lips on the first print:** since the clip's notch, the slicer no longer supports the ridges' 0.8 mm lips, and no print has yet shown how they come out (2026-10-30). Print `test_clip` first and look under its lips |
 | `back_plate` | removable back — locating lip, both vent grilles, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the charger it needs engraved above it, the antenna mount's bolt holes and cable hole, two insert bosses for the regulator's tray, ten cable-tie bridges for its leads and the coax, and two low curbs that keep the slack of the pigtail and the coax on their own sides ([below](#the-regulators-place)). Prints outer face down, supports off |
+| `back_plate_twotone.3mf` | the same plate with its charger label in a second colour: one object, the plate on filament 1 and the lettering (`back_plate_text`) on filament 2. Built by `make-cover-3mf.py` from binary STL exports ([below](#the-label-in-a-second-colour)) |
 | `antenna_mount` | bolt-on arm carrying the antenna socket (identical to the kitten's) |
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
 | `antenna_mount_twin_8`, `antenna_mount_twin_11` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight. Two styles, for jumpers whose bulkhead body is an 8 mm hex or an 11 mm hex; two parts each, this body and the cover below (`antenna_mount_twin` is whichever `ant_twin_jack_af` names) |
@@ -42,6 +43,11 @@ openscad --backend=manifold --export-format binstl \
 
 Binary STL: the shell is 75,000 facets, which is far smaller as binary than
 as ascii for byte-identical geometry, and every slicer reads both.
+
+The two-colour projects are built from those exports: after exporting
+`back_plate` and `back_plate_text`, or a cover and its `_text_` part,
+`python3 make-cover-3mf.py back_plate_twotone.3mf` (or a cover's 3MF; no
+name builds them all).
 
 `part="preview"` shows the whole stack assembled; `part="exploded"` separates
 it. The preview places the retainer, the glass and the trim with
@@ -818,6 +824,21 @@ cable moved. Now:
   face down, so the letters are its first three layers and need no support.
   They stand 1.5 mm above the coupon's 36 × 18 mm patch, so `usbc_gauge` is
   unchanged.
+- <a id="the-label-in-a-second-colour"></a>**The label in a second colour**
+  (since 2026-10-31), the way the antenna cover's lettering is: print
+  `back_plate_twotone.3mf` instead of `back_plate.stl`. It is one object, the
+  plate on filament 1 and the lettering, `back_plate_text`, on filament 2;
+  give filament 2 a colour that stands out from the plate's. Supports off,
+  outer face down, as the plate always prints. The lettering fills the
+  engraving exactly, so the two colours change only in the first three
+  layers, 0.6 mm; above that the plate is all filament 1. Bambu Studio on an
+  X1C (0.20 mm, ASA) gives 2 h 41 min and four filament changes, against
+  2 h 33 min for the one-colour plate, with a prime tower: under 0.1 g of
+  lettering and 1.3 g of filament 2 in all, the rest purge and tower. The checks
+  `plate_text_vs_plate`, `plate_text_fills_engraving` (with its control
+  `plate_text_gap_probe_works`) and `plate_text_on_face` prove the lettering
+  meets the plate face to face, no overlap and no gap. `back_plate.stl` is
+  unchanged, so a plate already printed in one colour is the same plate.
 - **`power_trigger_mount`** is a sleeve round the board, 0.2 mm clear of it
   either side, its flat face on the plate's inner face, level with the
   board's front edge: no flange, since the plate is the front stop now. The

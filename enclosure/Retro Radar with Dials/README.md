@@ -16,7 +16,8 @@ Everything except the arc is the retro case, unchanged:
 The shell gains three holes through its wall: two screws and a wire hole.
 Print the front trim, retainer, back plate, antenna mount and stand from the
 retro folder, and the power fix's parts with them: `power_trigger_mount`,
-the `power_trigger_stop`s and `power_regulator_tray`.
+the `power_trigger_stop`s and `power_regulator_tray`. For the back plate's
+charger label in a second colour, print its `back_plate_twotone.3mf`.
 
 | Front | The arc | Exploded |
 |---|---|---|
