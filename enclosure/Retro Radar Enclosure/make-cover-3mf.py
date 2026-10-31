@@ -20,6 +20,15 @@ transform that stands the object on the bed and centres it at BED_CENTRE
 bed, and 3 mm below it, and Bambu Studio's command line refused to slice it
 unless told to arrange it; the GUI moves it either way.
 
+Each object also carries the Bambu Studio settings that face-down lettering
+needs (OBJECT_SETTINGS, 2026-10-31), as per-object settings, which the
+project opens with. Slicing with Bambu Studio 2.08's command line showed it
+honours these three per object, and that the rest of the README's two-colour
+settings (first-layer line width and speed, prime tower, plate, Z-hop) are
+the print's, the printer's or the filament's, which a project cannot set per
+object. With its default classic walls, the cover's old lettering laid down
+67 of its 118 mm2 on the first layer; with Arachne, all of it.
+
 Usage: python3 make-cover-3mf.py [project.3mf ...]   (after exporting the
 STLs as BINARY: openscad --export-format binstl). With no names it builds
 them all; name one to build only that one, since a rebuilt file differs in
@@ -32,6 +41,17 @@ from xml.sax.saxutils import escape
 # 256 mm Bambu bed. Any slicer can move it from there.
 BED_CENTRE = (128.0, 128.0)
 
+# Bambu Studio settings each object carries, as its own per-object settings:
+# Arachne walls, which vary a line's width to fill a stroke where classic
+# walls leave a narrow one out; no elephant-foot compensation, which pulls
+# every first-layer outline in by 0.15 mm and so thins each stroke by
+# 0.3 mm; and a bottom surface of straight monotonic lines, the face's look.
+OBJECT_SETTINGS = {
+    "wall_generator": "arachne",
+    "elefant_foot_compensation": "0",
+    "bottom_surface_pattern": "monotonicline",
+}
+
 # project -> (what it is, [(STL, filament), ...])
 PROJECTS = {
     "antenna_mount_twin_cover_8_twotone.3mf":  ("twin antenna mount cover",
@@ -40,6 +60,11 @@ PROJECTS = {
         [("antenna_mount_twin_cover_11", 1), ("antenna_mount_twin_cover_text_11", 2)]),
     "back_plate_twotone.3mf":                  ("back plate",
         [("back_plate", 1), ("back_plate_text", 2)]),
+    # the lettering test coupons (2026-10-31): a few minutes each
+    "test_lettering_plate.3mf":                ("back plate lettering coupon",
+        [("test_lettering_plate", 1), ("test_lettering_plate_text", 2)]),
+    "test_lettering_cover.3mf":                ("twin antenna cover lettering coupon",
+        [("test_lettering_cover", 1), ("test_lettering_cover_text", 2)]),
 }
 
 
@@ -63,7 +88,7 @@ def read_stl(path):
     return verts, tris
 
 
-def build(out, what, parts):
+def build(out, what, parts, settings=OBJECT_SETTINGS):
     objects, ids, every = [], [], []
     for oid, (name, extruder) in enumerate(parts, start=1):
         verts, tris = read_stl(name + ".stl")
@@ -86,6 +111,7 @@ def build(out, what, parts):
              f'<resources>{"".join(objects)}</resources><build><item objectid="{aid}" transform="{transform}"/></build></model>')
     cfg = ('<?xml version="1.0" encoding="UTF-8"?>\n<config>'
            f'<object id="{aid}"><metadata key="name" value="{escape(out[:-4])}"/>'
+           + "".join(f'<metadata key="{escape(k)}" value="{escape(v)}"/>' for k, v in settings.items())
            + "".join(f'<part id="{i}" subtype="normal_part"><metadata key="name" value="{escape(n)}"/>'
                      f'<metadata key="extruder" value="{e}"/></part>' for i, n, e, _ in ids)
            + '</object></config>')

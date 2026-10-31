@@ -1328,8 +1328,17 @@ ant_twin_cbore_d = 4.4;
 ant_twin_cbore_h = 1.5;
 ant_twin_back_pad  = 4;     // the bar is thicker on its case side behind the flare under the bore's mouth
 ant_twin_back_pad_w = 40;
-ant_twin_label_size = 6;
+// The lettering, inlaid in a second colour (2026-10-31: see "Inlaid
+// lettering" at usbc_label below). It was size 6, with MHz at 0.55 of that,
+// and MHz's strokes were 0.45 mm, too thin to print. ant_twin_label_mhz is
+// the MHz line's size as a fraction of the number's; ant_twin_label_y the two
+// lines' heights, number then MHz, from the cover's middle.
+ant_twin_label_size = 7;
 ant_twin_label_depth = 0.6;
+ant_twin_label_bold    = 0.13;   // each stroke fattened by this much a side
+ant_twin_label_spacing = 1.12;
+ant_twin_label_mhz     = 0.8;
+ant_twin_label_y       = [3.5, -5.5];
 ant_twin_plug_d    = 9.3;   // an SMA plug's hex across its corners
 
 // Everything sized from a jack body `a` (across flats), and from a pair
@@ -1500,13 +1509,21 @@ module antenna_mount_twin_cover(af = ant_twin_jack_af) {
 // fills the engraving in a second colour (antenna_mount_twin_cover_text_*,
 // 2026-10-10). Mirrored, since the face is read from behind the case.
 module ant_twin_label_solid(af = ant_twin_jack_af, h = ant_twin_label_depth) {
+    linear_extrude(height = h) ant_twin_label2d();
+}
+
+// Both sides' lettering in plan, mirrored as it is cut (2026-10-31: drawn
+// here once, so the test can measure its strokes; see "Inlaid lettering").
+module ant_twin_label2d() {
     for (s = [-1, 1]) let (i = s > 0 ? 0 : 1) if (ant_twin_labels[i] != "")
-        translate([s * (ant_twin_sep/2 - 6), 0, 0]) mirror([1, 0, 0])
-            linear_extrude(height = h) {
-                translate([0, 2.5]) text(ant_twin_labels[i], size=ant_twin_label_size,
-                    font="Liberation Sans:style=Bold", halign="center", valign="center");
-                translate([0, -5.5]) text("MHz", size=ant_twin_label_size * 0.55,
-                    font="Liberation Sans:style=Bold", halign="center", valign="center");
+        translate([s * (ant_twin_sep/2 - 6), 0]) mirror([1, 0])
+            offset(delta = ant_twin_label_bold) {
+                translate([0, ant_twin_label_y[0]]) text(ant_twin_labels[i], size = ant_twin_label_size,
+                    font = "Liberation Sans:style=Bold", halign = "center", valign = "center",
+                    spacing = ant_twin_label_spacing);
+                translate([0, ant_twin_label_y[1]]) text("MHz", size = ant_twin_label_size * ant_twin_label_mhz,
+                    font = "Liberation Sans:style=Bold", halign = "center", valign = "center",
+                    spacing = ant_twin_label_spacing);
             }
 }
 
@@ -1758,20 +1775,37 @@ module usbc_gauge() {
         }
 }
 
+// Inlaid lettering (2026-10-31). Every part with lettering in a second
+// colour prints it face down: the back plate's label here, the twin antenna
+// cover's frequencies and the Retro with Dials' control arc. The letters are
+// the part's first three layers, so each stroke is laid down by the first
+// layer's lines, about 0.42-0.5 mm wide, and the slicer's elephant-foot
+// compensation pulls every first-layer outline in by 0.15 mm. A stroke much
+// under two lines wide comes out broken or missing: the arc's 3.3 mm letters
+// had 0.5 mm strokes, and its C and S printed half there. So every inlaid
+// lettering has strokes at least 1.0 mm wide and its counters and the gaps
+// between its letters at least 0.8 mm open, which tests/test_enclosure_core.py
+// measures (check 13). Liberation Sans Bold's own strokes are about a seventh
+// of its size, so the letters are larger, and offset() fattens each stroke;
+// the letters are spaced wider to keep their gaps open.
+//
 // The charger it needs, engraved in the plate's outer face above the USB-C
 // pocket (2026-10-29). The trigger board asks the charger for 12 V, and one
 // that has no 12 V, such as a Pi-style 5 V 5 A supply, never starts the
-// radar and gives no sign why. Two lines of capitals 5 mm tall, 0.6 mm deep,
+// radar and gives no sign why. Two lines of capitals 6 mm tall (5 mm until
+// 2026-10-31, whose 0.67 mm strokes were too thin), 0.6 mm deep,
 // in the font of the antenna cover's lettering. It is read from behind the
 // case, so it is mirrored here. The plate prints outer face down, so the
 // letters are its first three layers, open to the bed: they need no support.
 // It stands 1.5 mm above the coupon's patch, so usbc_gauge is unchanged, and
 // is well clear of every hole in the plate.
 usbc_label       = ["USB-C PD", "12V 27W"];
-usbc_label_cap   = 5;       // the capitals' height
+usbc_label_cap   = 6;       // the capitals' height
 usbc_label_size  = usbc_label_cap / 0.955;   // the text size for that: Liberation Sans Bold's capitals are 0.955 of it
-usbc_label_pitch = 7.5;     // line to line, 2.5 mm between them
+usbc_label_pitch = 8.5;     // line to line, 2.5 mm between them
 usbc_label_depth = 0.6;
+usbc_label_bold    = 0.12;  // each stroke fattened by this much a side
+usbc_label_spacing = 1.12;  // letter spacing, as text()'s spacing
 usbc_label_pos   = [usbc_cut_pos[0],
                     usbc_cut_pos[1] + usbc_gauge_size[1]/2 + 1.5 + (usbc_label_pitch*(len(usbc_label) - 1) + usbc_label_cap)/2];
 
@@ -1779,8 +1813,9 @@ usbc_label_pos   = [usbc_cut_pos[0],
 module usbc_label2d() {
     for (i = [0 : len(usbc_label) - 1])
         translate([0, ((len(usbc_label) - 1)/2 - i) * usbc_label_pitch])
-            text(usbc_label[i], size = usbc_label_size, font = "Liberation Sans:style=Bold",
-                 halign = "center", valign = "center");
+            offset(delta = usbc_label_bold)
+                text(usbc_label[i], size = usbc_label_size, font = "Liberation Sans:style=Bold",
+                     halign = "center", valign = "center", spacing = usbc_label_spacing);
 }
 
 // Its letters as a solid h deep from the plate's outer face in, mirrored to
@@ -1792,6 +1827,31 @@ module usbc_label2d() {
 module usbc_label_solid(h = usbc_label_depth) {
     translate([usbc_label_pos[0], usbc_label_pos[1], -back_plate_t]) mirror([1, 0, 0])
         linear_extrude(height = h) usbc_label2d();
+}
+
+// Lettering test coupons (2026-10-31): a 1.2 mm slice of each face round its
+// lettering, cut from the part itself, for a few minutes' two-colour print
+// before a whole plate or cover. They print face down as the parts do, so
+// their first three layers are the lettering, and show whether the
+// slicer's settings lay every stroke down whole (see the README's two-colour
+// settings). The Retro with Dials has one of its arc too.
+lettering_coupon_t = 1.2;
+module test_lettering_plate() {
+    intersection() {
+        back_plate();
+        translate([usbc_label_pos[0], usbc_label_pos[1], -back_plate_t - 1]) mirror([1, 0, 0])
+            linear_extrude(height = lettering_coupon_t + 1) offset(r = 3) hull() usbc_label2d();
+    }
+}
+module test_lettering_cover() {
+    intersection() {
+        antenna_mount_twin_cover([8, 8]);
+        translate([0, 0, -1]) linear_extrude(height = lettering_coupon_t + 1)
+            for (s = [-1, 1]) offset(r = 3) hull() intersection() {
+                ant_twin_label2d();
+                translate([s > 0 ? 0 : -200, -200]) square([200, 400]);
+            }
+    }
 }
 
 // ---- The power fix (roadmap 5.7, #53), 2026-10-17 ------------------------
@@ -3498,6 +3558,10 @@ else if (part == "shell") shell();
 else if (part == "stand") stand();
 else if (part == "back_plate") back_plate();
 else if (part == "back_plate_text") usbc_label_solid();   // the label's lettering, for a second colour
+else if (part == "test_lettering_plate") test_lettering_plate();         // the coupons, and their lettering
+else if (part == "test_lettering_plate_text") usbc_label_solid();
+else if (part == "test_lettering_cover") test_lettering_cover();
+else if (part == "test_lettering_cover_text") ant_twin_label_solid([8, 8]);
 else if (part == "antenna_mount") antenna_mount();
 else if (part == "antenna_mount_sma") antenna_mount_sma();
 else if (part == "antenna_mount_twin") antenna_mount_twin();                 // the default style (ant_twin_jack_af)

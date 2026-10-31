@@ -13,3 +13,5 @@
 # And the stand's, the easiest way to print it (make-3mf.py). It was ignored
 # until 2026-10-29, so no clone had it.
 !kitten-stand-twotone.3mf
+# And the lettering test coupons, a few minutes each (2026-10-31).
+!test_lettering_*.3mf

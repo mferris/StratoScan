@@ -10,6 +10,7 @@
 // every check "passes" against nothing -- which is why `canary` exists and
 // must be run.
 use <retro-enclosure.scad>
+ant_twin_cbore_d = 4.4;   // the cover screws' counterbores, for twin_cover_text_room
 $fs = 0.4;
 $fa = 0.5;
 check = "none";
@@ -281,6 +282,21 @@ else if (check=="twin_cover_text_inside" || check=="twin_cover_text_inside_11") 
   difference() { ant_twin_label_solid(af); translate([0, 0, -1]) linear_extrude(height=3) ant_twin_cover2d(af); }
 }
 else if (check=="twin_cover_text_present") ant_twin_label_solid([11, 11]);   // positive control: must have volume
+// It keeps 1 mm inside the cover's edge and 1 mm clear of the screws'
+// counterbores (2026-10-31, when it grew so its strokes print: see "Inlaid
+// lettering" in the design). The control: moved 8 mm down the cover, it
+// runs off the bottom edge.
+else if (check=="twin_cover_text_room" || check=="twin_cover_text_room_11" || check=="twin_cover_text_room_probe_works") {
+  af = check=="twin_cover_text_room_11" ? [11, 11] : [8, 8];
+  dy = check=="twin_cover_text_room_probe_works" ? -8 : 0;
+  difference() {
+    translate([0, dy, 0]) ant_twin_label_solid(af);
+    translate([0, 0, -1]) linear_extrude(height=3) difference() {
+      offset(delta=-1) ant_twin_cover2d(af);
+      for (q = ant_twin_screw_xz(af)) translate([q[0], q[1]]) circle(d=ant_twin_cbore_d + 2, $fn=32);
+    }
+  }
+}
 else if (check=="twin_cover_screws_open") {
   difference() { ant_twin_screw_probes(); union() { antenna_mount_twin(); ant_twin_cover_placed(); } }
 }
