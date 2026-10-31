@@ -28,7 +28,9 @@ charger label in a second colour, print its `back_plate_twotone.3mf`.
 | File | What | Notes |
 |---|---|---|
 | `shell_dials.stl` | The retro shell with the arc's three holes | Replaces `shell.stl`. Print it the same way, in ASA. |
-| `control_arc_twotone.3mf` | The arc, with its lettering and two rivet dots in a second colour | Face down, no support. The lettering is the first 0.6 mm, so there is one filament change per layer for three layers. |
+| `control_arc_twotone.3mf` | The arc, with its lettering and two rivet dots in a second colour | Face down, no support. The lettering is the first 0.6 mm, so there is one filament change per layer for three layers. Use the [two-colour settings](#lettering-in-two-colours-print-settings), and print the coupon first. |
+| `test_lettering_arc.3mf` | A two-colour test coupon: a 1.2 mm slice of the arc's face round each word, with its lettering | About 12 minutes, face down. Tune the slicer on this before the arc. |
+| `test_lettering_arc.stl`, `test_lettering_arc_text.stl` | The coupon and its lettering as separate meshes | |
 | `control_arc.stl`, `control_arc_text.stl` | The same arc and lettering as separate meshes | For a printer without two colours: print `control_arc.stl` and paint the lettering. |
 | `control_arc_cover.stl` | The flat cover that closes the arc's back | Flat side down. |
 | `knob.stl` | The RANGE knob, for a 6 mm D shaft | Skirt down. Print it in ASA or PETG. |
@@ -47,6 +49,77 @@ two-colour arc's support went from 0.3 cm³ to none, its print from 0.84 to
 lettering are unchanged; `shell_dials.stl` changes with the retro shell, as
 it did on 2026-10-29 (its shelf slope, speaker sleeves, front rail,
 rivets and grille holes: see the retro case's README).
+
+## Lettering in two colours: print settings
+
+The back plate's charger label, the twin antenna covers' frequencies and the
+Retro with Dials' control arc are inlaid in a second colour, and each part
+prints face down, so its letters are its first three layers (2026-10-31).
+The first two-colour arc printed with broken letters: SCREEN's C almost gone,
+STATUS's S half there, and a pale ring round each word. Its strokes were
+0.5 mm wide, one first-layer line, and two Bambu Studio defaults made it
+worse. Classic walls leave out a stroke too narrow for two of them, and
+elephant-foot compensation pulls every first-layer outline in by 0.15 mm, so
+it pulls both colours back from the edge they share. Sliced with the
+defaults, the old arc's first layer covered 29% of its letters' area, the old
+cover's 26% and the old plate's 19%.
+
+Two things changed. The lettering is larger and bolder, with every stroke at
+least 1.0 mm wide and every counter and gap between letters at least 0.8 mm
+open (`tests/test_enclosure_core.py` measures them, check 13). And each
+two-colour 3MF now carries the three settings Bambu Studio takes per object,
+so it opens with them set. Sliced the same way, the first layer now covers
+91 to 94% of the letters, and 72 to 88% of the cross-sections through a
+stroke have two lines or more on them. Most of the rest are crossed by one
+wider Arachne line, up to 0.7 mm. About 1% have none, against 53 to 85%
+before.
+
+**Print a coupon first.** `test_lettering_plate.3mf` and
+`test_lettering_cover.3mf` (in the Retro and Kitten folders) and
+`test_lettering_arc.3mf` (Retro with Dials) are 1.2 mm slices of the faces
+round their lettering, cut from the parts themselves. Each prints in about
+11 to 12 minutes on an X1C, against 25 minutes for a cover, 52 for the arc
+and 2 h 40 min for the plate. When a coupon's letters come out whole with
+clean edges, its part will too.
+
+The settings, with their names in Bambu Studio 2.08 and the keys in its own
+profiles:
+
+| Setting | Where | Value | Key | Who sets it |
+|---|---|---|---|---|
+| Wall generator | Quality | Arachne | `wall_generator` | the 3MF, per object |
+| Elephant foot compensation | Quality > Precision | 0 | `elefant_foot_compensation` | the 3MF, per object |
+| Bottom surface pattern | Strength | Monotonic line | `bottom_surface_pattern` = `monotonicline` | the 3MF, per object |
+| First layer line width | Quality > Line width | 0.42 mm | `initial_layer_line_width` | you, in the print settings |
+| First layer speed, and first layer infill | Speed | 30 to 40 mm/s | `initial_layer_speed`, `initial_layer_infill_speed` | you, in the print settings |
+| Prime tower | Others | on (the default) | `enable_prime_tower` | you, in the print settings |
+| Z-hop | Printer > Extruder | 0.4 mm, Auto Lift (the X1C's default) | `z_hop`, `z_hop_types`; a filament can override it with `filament_z_hop` | the printer |
+| Plate | the plate's type | Smooth PEI ("Smooth PEI Plate / High Temp Plate"), clean, preferred over the Engineering plate for a face | `curr_bed_type` | you |
+| Filament | | dry ASA: Bambu's ASA profile dries it at 80 °C for 8 h | | you |
+
+What slicing with Bambu Studio 2.08's command line showed:
+
+- Bambu Studio honours the first three settings per object. With Arachne
+  alone, the old cover's first layer laid down all 118 mm² of its lettering
+  instead of 67 mm².
+- Set per object, first-layer line width and speed did nothing. They work
+  only as print settings, so set them there.
+- A first-layer width of 0.42 instead of 0.5 hardly changed the coverage:
+  90 to 94% either way. It lays a third line in more of the wider strokes,
+  at the cost of more short lines under 0.4 mm. Arachne's walls do the
+  work.
+- The slow first layer and the Z-hop keep the nozzle from catching the
+  first layer's edges. The gouge beside the SCREEN hole on the first arc
+  looks like that kind of drag. Wet ASA strings and blobs on those travels.
+- The prime tower takes each colour change's purge, three changes on the
+  way up and one back to filament 1, off the part.
+
+The arc's lettering was 3.3 mm until 2026-10-31. It is 5.6 mm now, each
+stroke fattened 0.11 mm a side: strokes 1.04 mm, narrowest gap 0.87 mm.
+At that size the three words no longer fit centred on their controls,
+12.5° apart, so STATUS stands 2.4° beyond its lamp and RANGE 2° short of
+its knob, still over them, with about 3.5 mm between the words. The checks
+`labels_on_face`, `labels_clear_of_controls` and `labels_apart` hold that.
 
 ## Buy
 
@@ -136,7 +209,7 @@ down on a flat bench.
 
 ## Checks
 
-`sh run-checks.sh` runs 24 fit checks; each measures volume, as the retro
+`sh run-checks.sh` runs 30 fit checks; each measures volume, as the retro
 case's checks do. They check that:
 
 - the arc clears the shell, front trim, stand, side vents and speaker grille;
@@ -146,11 +219,19 @@ case's checks do. They check that:
 - the button, encoder and lamp fit behind the face and clear the cover, and
   the common 21 mm button does not;
 - the pads really land on the drum, the holes are really open, and the
-  lettering is present.
+  lettering is present;
+- the lettering keeps 1 mm inside the face's edge, 1 mm clear of the lamp,
+  the button, the knob's skirt and the rivet dots, and its words 2 mm
+  apart, each with a control that proves its probe is near enough to bite
+  (`labels_near_edge`, `labels_near_controls`, `labels_near_each_other`).
 
 `sh render-views.sh` remakes the pictures in `images/`.
-`python3 make-arc-3mf.py` remakes the two-colour file, after exporting
-`control_arc.stl` and `control_arc_text.stl` as binary STL.
+`python3 make-arc-3mf.py` remakes the two-colour files, after exporting
+`control_arc.stl`, `control_arc_text.stl`, `test_lettering_arc.stl` and
+`test_lettering_arc_text.stl` as binary STL (`dpart` `pod_print`,
+`pod_text_print`, `coupon_print` and `coupon_text_print`).
+`tests/test_enclosure_core.py` (check 12) fails while a 3MF no longer holds
+its STLs, or lacks its slicer settings.
 
 ## Design references
 

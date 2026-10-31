@@ -20,6 +20,7 @@ the rest follows.
 | `antenna_mount_twin_8`, `antenna_mount_twin_11` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight. Two styles, for jumpers whose bulkhead body is an 8 mm hex or an 11 mm hex; two parts each, this body and the cover below (`antenna_mount_twin` is whichever `ant_twin_jack_af` names) |
 | `antenna_mount_twin_cover_8`, `antenna_mount_twin_cover_11` | the 3 mm cover that closes the twin body's cable channel, on five M2 screws, with each side's frequency engraved in it (`twin_assembled` and `twin_assembled_11` show both parts on the plate, for pictures only) |
 | `antenna_mount_twin_cover_8_twotone.3mf`, `antenna_mount_twin_cover_11_twotone.3mf` | the same covers with the frequencies in a second colour: one object, the cover on filament 1 and the lettering (`antenna_mount_twin_cover_text_8` / `_11`) on filament 2. Built by `make-cover-3mf.py` from binary STL exports |
+| `test_lettering_plate.3mf`, `test_lettering_cover.3mf` | two-colour test coupons, a 1.2 mm slice of the plate's and the cover's faces round their lettering, about 11 minutes each: print one before a whole plate or cover, to see the slicer lay every letter down whole ([below](#lettering-in-two-colours-print-settings)) |
 | `usbc_gauge` | test coupon: a 36 × 18 mm piece of the back plate round the USB-C window, its window, pocket and insert holes exactly the plate's, so the charger's plug can be tried in the trigger board before a whole plate is printed (about ten minutes) |
 | `power_trigger_mount` | the power fix's 12 V trigger board's mount: a sleeve round the board, two crush ribs in its roof holding the board down, on two M3 screws into inserts in the plate, with the board's socket through the plate's USB-C window, so the charger plugs straight into it ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)) |
 | `power_trigger_stop` | the block behind the trigger board in its mount, locked by two M2 screws through the mount's walls, so the board has no play; keyed, so it goes in only the right way round. Print three: one for the trial fit on `usbc_gauge`, one for the plate and a spare. Its crush ribs are spent once squeezed, so a stop that comes out is never fitted again |
@@ -31,6 +32,70 @@ minutes instead of hours. `test_rings` is a 40° slice of both rings, for
 trying a new material on the rings' slope and lip. `test_clip` is the stand's
 cable clip in a 24 × 33 mm piece of the plinth's back, for trying the
 charger's cable in it before printing the stand (18 minutes, 4 g).
+
+## Lettering in two colours: print settings
+
+The back plate's charger label, the twin antenna covers' frequencies and the
+Retro with Dials' control arc are inlaid in a second colour, and each part
+prints face down, so its letters are its first three layers (2026-10-31).
+The first two-colour arc printed with broken letters: SCREEN's C almost gone,
+STATUS's S half there, and a pale ring round each word. Its strokes were
+0.5 mm wide, one first-layer line, and two Bambu Studio defaults made it
+worse. Classic walls leave out a stroke too narrow for two of them, and
+elephant-foot compensation pulls every first-layer outline in by 0.15 mm, so
+it pulls both colours back from the edge they share. Sliced with the
+defaults, the old arc's first layer covered 29% of its letters' area, the old
+cover's 26% and the old plate's 19%.
+
+Two things changed. The lettering is larger and bolder, with every stroke at
+least 1.0 mm wide and every counter and gap between letters at least 0.8 mm
+open (`tests/test_enclosure_core.py` measures them, check 13). And each
+two-colour 3MF now carries the three settings Bambu Studio takes per object,
+so it opens with them set. Sliced the same way, the first layer now covers
+91 to 94% of the letters, and 72 to 88% of the cross-sections through a
+stroke have two lines or more on them. Most of the rest are crossed by one
+wider Arachne line, up to 0.7 mm. About 1% have none, against 53 to 85%
+before.
+
+**Print a coupon first.** `test_lettering_plate.3mf` and
+`test_lettering_cover.3mf` (in the Retro and Kitten folders) and
+`test_lettering_arc.3mf` (Retro with Dials) are 1.2 mm slices of the faces
+round their lettering, cut from the parts themselves. Each prints in about
+11 to 12 minutes on an X1C, against 25 minutes for a cover, 52 for the arc
+and 2 h 40 min for the plate. When a coupon's letters come out whole with
+clean edges, its part will too.
+
+The settings, with their names in Bambu Studio 2.08 and the keys in its own
+profiles:
+
+| Setting | Where | Value | Key | Who sets it |
+|---|---|---|---|---|
+| Wall generator | Quality | Arachne | `wall_generator` | the 3MF, per object |
+| Elephant foot compensation | Quality > Precision | 0 | `elefant_foot_compensation` | the 3MF, per object |
+| Bottom surface pattern | Strength | Monotonic line | `bottom_surface_pattern` = `monotonicline` | the 3MF, per object |
+| First layer line width | Quality > Line width | 0.42 mm | `initial_layer_line_width` | you, in the print settings |
+| First layer speed, and first layer infill | Speed | 30 to 40 mm/s | `initial_layer_speed`, `initial_layer_infill_speed` | you, in the print settings |
+| Prime tower | Others | on (the default) | `enable_prime_tower` | you, in the print settings |
+| Z-hop | Printer > Extruder | 0.4 mm, Auto Lift (the X1C's default) | `z_hop`, `z_hop_types`; a filament can override it with `filament_z_hop` | the printer |
+| Plate | the plate's type | Smooth PEI ("Smooth PEI Plate / High Temp Plate"), clean, preferred over the Engineering plate for a face | `curr_bed_type` | you |
+| Filament | | dry ASA: Bambu's ASA profile dries it at 80 °C for 8 h | | you |
+
+What slicing with Bambu Studio 2.08's command line showed:
+
+- Bambu Studio honours the first three settings per object. With Arachne
+  alone, the old cover's first layer laid down all 118 mm² of its lettering
+  instead of 67 mm².
+- Set per object, first-layer line width and speed did nothing. They work
+  only as print settings, so set them there.
+- A first-layer width of 0.42 instead of 0.5 hardly changed the coverage:
+  90 to 94% either way. It lays a third line in more of the wider strokes,
+  at the cost of more short lines under 0.4 mm. Arachne's walls do the
+  work.
+- The slow first layer and the Z-hop keep the nozzle from catching the
+  first layer's edges. The gouge beside the SCREEN hole on the first arc
+  looks like that kind of drag. Wet ASA strings and blobs on those travels.
+- The prime tower takes each colour change's purge, three changes on the
+  way up and one back to filament 1, off the part.
 
 ## Rendering and exporting
 
@@ -46,8 +111,8 @@ as ascii for byte-identical geometry, and every slicer reads both.
 
 The two-colour projects are built from those exports: after exporting
 `back_plate` and `back_plate_text`, or a cover and its `_text_` part,
-`python3 make-cover-3mf.py back_plate_twotone.3mf` (or a cover's 3MF; no
-name builds them all). `tests/test_enclosure_core.py` (check 12) fails
+`python3 make-cover-3mf.py back_plate_twotone.3mf` (or a cover's or a
+coupon's 3MF; no name builds them all). `tests/test_enclosure_core.py` (check 12) fails
 while a 3MF no longer holds its folder's STLs, so rebuild it after any
 re-export of its parts.
 
@@ -820,7 +885,10 @@ cable moved. Now:
   default; that option does worse with this shape.
 - **The plate says which charger it needs** (since 2026-10-29): `USB-C PD`
   over `12V 27W`, engraved 0.6 mm deep in the outer face above the pocket,
-  in bold capitals 5 mm tall that read the right way from behind the case.
+  in bold capitals 6 mm tall that read the right way from behind the case
+  (5 mm until 2026-10-31, when every stroke was fattened to 1 mm or more so
+  the label prints whole in a second colour: [lettering in two
+  colours](#lettering-in-two-colours-print-settings)).
   The trigger board asks the charger for 12 V, and one without it, such as
   a 5 V-only Pi-style supply, never starts the radar. The plate prints outer
   face down, so the letters are its first three layers and need no support.
@@ -834,8 +902,9 @@ cable moved. Now:
   outer face down, as the plate always prints. The lettering fills the
   engraving exactly, so the two colours change only in the first three
   layers, 0.6 mm; above that the plate is all filament 1. Bambu Studio on an
-  X1C (0.20 mm, ASA, prime tower on) gives about 2 h 41 min, against 2 h 33
-  min for the one-colour plate. It swaps filament at the start of each of
+  X1C (0.20 mm, ASA, prime tower on) gives about 2 h 40 min, against 2 h 33
+  min for the one-colour plate. Its settings and its coupon are in
+  [lettering in two colours](#lettering-in-two-colours-print-settings). It swaps filament at the start of each of
   the three lettering layers and once more, back to filament 1, at the
   fourth; its own summary counts three changes, not the first load. The
   lettering itself is under 0.1 g, and filament 2 comes to about 1.5 g in
@@ -845,8 +914,9 @@ cable moved. Now:
   centre it. The checks
   `plate_text_vs_plate`, `plate_text_fills_engraving` (with its control
   `plate_text_gap_probe_works`) and `plate_text_on_face` prove the lettering
-  meets the plate face to face, no overlap and no gap. `back_plate.stl` is
-  unchanged, so a plate already printed in one colour is the same plate.
+  meets the plate face to face, no overlap and no gap. Since 2026-10-31 the
+  label is larger, so `back_plate.stl` is too: a plate printed before then
+  fits and works the same, with the old, smaller label.
 - **`power_trigger_mount`** is a sleeve round the board, 0.2 mm clear of it
   either side, its flat face on the plate's inner face, level with the
   board's front edge: no flange, since the plate is the front stop now. The
@@ -1143,7 +1213,7 @@ The FlyCatcher has two antenna inputs, 1090 and 978 MHz, and the Nooelec bundle 
    Set each whip so its hinge folds towards or away from the wall, not towards the other whip: that's the direction the mount is weakest, so the hinge gives before the panel does, and a folded whip then clears the other tower.
 4. Tidy the cables into the channel and fit the cover: five M2 × 6 into the M2 inserts.
 
-**Lettering in a second colour.** Open the cover's `_twotone.3mf` rather than its STL. The lettering is many separate letters, and a slicer splits a multi-lump STL into one part per letter, so picking a colour for "the text" would colour one letter; the project file already has the cover on filament 1 and every letter on filament 2. Change either in the slicer. The cover prints outer face down, so the lettering is its first 0.6 mm, three 0.2 mm layers: a change at the start of each, and one back to filament 1 above them, nothing after. The plain STL still prints the engraved, one-colour cover.
+**Lettering in a second colour.** Open the cover's `_twotone.3mf` rather than its STL, and see [lettering in two colours](#lettering-in-two-colours-print-settings) for its settings and its test coupon. Since 2026-10-31 the numbers are 7 mm and MHz 5.6 mm, fattened so every stroke is 1 mm or more; MHz's strokes were 0.45 mm. The lettering is many separate letters, and a slicer splits a multi-lump STL into one part per letter, so picking a colour for "the text" would colour one letter; the project file already has the cover on filament 1 and every letter on filament 2. Change either in the slicer. The cover prints outer face down, so the lettering is its first 0.6 mm, three 0.2 mm layers: a change at the start of each, and one back to filament 1 above them, nothing after. The plain STL still prints the engraved, one-colour cover.
 5. Pass both plugs through the plate's 13 mm hole, bolt the flange on from inside the plate with the three M3 × 8, plug 1090 and 978 into the FlyCatcher, and screw the whips on (the 1090 whip is the shorter one). Inside, tie both jumpers together at the two bridges that lead from the cable hole to the right and down the right-hand side, seen from behind, with 150 × 3.6 mm cable ties. Below the second bridge they run free down the right-hand side, between their curb and the speaker, to the FlyCatcher: fold any spare length back on itself just below the second bridge and take it into that bridge's tie, so only the planned slack runs on to the SMA plugs, on the speaker's side of the curb, never across it. Never leave the spare as a loose loop: the plate stands nearly upright, and a loop that sags below the SMA plugs comes within 20 mm of the 12 V pair at the lower right (since 2026-10-29; [the regulator's place](#the-regulators-place)). That keeps them 20 mm or more from the regulator's leads, which keep to the lower half and the left, and from the Pi's USB-C plug. For an outdoor antenna, screw its coax onto the same barrel instead, and give the coax its own strain relief within a few centimetres of the tower.
 
 To replace a cable: back plate off, cover off, nut off, slide the jack out of its slot, pull the plug back up through the bore. The mount stays bolted to the plate.
@@ -1156,6 +1226,7 @@ To replace a cable: back plate off, cover off, nut off, slide the jack out of it
 - `twin_antennas_clear_case`: both whips, swept 220 mm up, miss the case (and the kitten's ears); `twin_antennas_probe_works` (control): the same envelopes moved 60 mm down the axis and 40 mm toward the case do hit it.
 - `twin_vs_plate`, `twin_vs_stand`: no collisions with the back plate or the stand.
 - `twin_panels_present`, `twin_holes_open`: positive controls; the panels are there and the jack holes are open.
+- `twin_cover_text_room`, `twin_cover_text_room_11`: the lettering keeps 1 mm inside the cover's edge and 1 mm clear of the screws' counterbores (since 2026-10-31, when it grew); `twin_cover_text_room_probe_works` (control): moved 8 mm down the cover, it runs off the edge.
 
 ## Checks
 

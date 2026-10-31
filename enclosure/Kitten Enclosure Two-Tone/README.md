@@ -35,6 +35,7 @@ The head is one colour:
 | `antenna_mount_sma` | alternative mount: same flange, arm and counter-tilt, ending in a panel-mount SMA jack instead of a socket cut for one antenna's base |
 | `antenna_mount_twin_8`, `antenna_mount_twin_11` | **the one to print for the FlyCatcher:** same flange and three bolts, ending in a crossbar with two SMA jacks 80 mm apart, for the 1090 and 978 MHz whips; counter-tilted so both stand vertical with their hinges straight. Two styles, for jumpers whose bulkhead body is an 8 mm hex or an 11 mm hex; two parts each, this body and the cover below (`antenna_mount_twin` is whichever `ant_twin_jack_af` names) |
 | `antenna_mount_twin_cover_8`, `antenna_mount_twin_cover_11` | the 3 mm cover that closes the twin body's cable channel, on five M2 screws, with each side's frequency engraved in it (`twin_assembled` and `twin_assembled_11` show both parts on the plate, for pictures only) |
+| `test_lettering_plate.3mf`, `test_lettering_cover.3mf` | black + a contrast | two-colour test coupons, a 1.2 mm slice of the plate's and the cover's faces round their lettering, about 11 minutes each, identical to the retro's ([below](#lettering-in-two-colours-print-settings)) |
 | `usbc_gauge` | — | test coupon: a 36 × 18 mm piece of the back plate round the USB-C window, exactly the plate's, to try the charger's plug in the trigger board before printing a plate |
 | `power_trigger_mount` | — | the power fix's 12 V trigger board's mount, with the board's socket through the USB-C window ([below](#the-power-fix-the-charger-plugs-into-the-trigger-board)); identical to the retro part |
 | `power_trigger_stop` | — | the block behind the trigger board in its mount, on two M2 screws, keyed so it goes in only the right way round; identical to the retro part. Print three: one for the trial fit on `usbc_gauge`, one for the plate and a spare. Its crush ribs are spent once squeezed, so a stop that comes out is never fitted again |
@@ -461,6 +462,70 @@ is its paired positive control — an empty result from the first would also be
 what a probe in the wrong place produces, so a probe at a normal position has
 to find a real hole for the pair to mean anything.
 
+## Lettering in two colours: print settings
+
+The back plate's charger label, the twin antenna covers' frequencies and the
+Retro with Dials' control arc are inlaid in a second colour, and each part
+prints face down, so its letters are its first three layers (2026-10-31).
+The first two-colour arc printed with broken letters: SCREEN's C almost gone,
+STATUS's S half there, and a pale ring round each word. Its strokes were
+0.5 mm wide, one first-layer line, and two Bambu Studio defaults made it
+worse. Classic walls leave out a stroke too narrow for two of them, and
+elephant-foot compensation pulls every first-layer outline in by 0.15 mm, so
+it pulls both colours back from the edge they share. Sliced with the
+defaults, the old arc's first layer covered 29% of its letters' area, the old
+cover's 26% and the old plate's 19%.
+
+Two things changed. The lettering is larger and bolder, with every stroke at
+least 1.0 mm wide and every counter and gap between letters at least 0.8 mm
+open (`tests/test_enclosure_core.py` measures them, check 13). And each
+two-colour 3MF now carries the three settings Bambu Studio takes per object,
+so it opens with them set. Sliced the same way, the first layer now covers
+91 to 94% of the letters, and 72 to 88% of the cross-sections through a
+stroke have two lines or more on them. Most of the rest are crossed by one
+wider Arachne line, up to 0.7 mm. About 1% have none, against 53 to 85%
+before.
+
+**Print a coupon first.** `test_lettering_plate.3mf` and
+`test_lettering_cover.3mf` (here and in the Retro folder) and
+`test_lettering_arc.3mf` (Retro with Dials) are 1.2 mm slices of the faces
+round their lettering, cut from the parts themselves. Each prints in about
+11 to 12 minutes on an X1C, against 25 minutes for a cover, 52 for the arc
+and 2 h 40 min for the plate. When a coupon's letters come out whole with
+clean edges, its part will too.
+
+The settings, with their names in Bambu Studio 2.08 and the keys in its own
+profiles:
+
+| Setting | Where | Value | Key | Who sets it |
+|---|---|---|---|---|
+| Wall generator | Quality | Arachne | `wall_generator` | the 3MF, per object |
+| Elephant foot compensation | Quality > Precision | 0 | `elefant_foot_compensation` | the 3MF, per object |
+| Bottom surface pattern | Strength | Monotonic line | `bottom_surface_pattern` = `monotonicline` | the 3MF, per object |
+| First layer line width | Quality > Line width | 0.42 mm | `initial_layer_line_width` | you, in the print settings |
+| First layer speed, and first layer infill | Speed | 30 to 40 mm/s | `initial_layer_speed`, `initial_layer_infill_speed` | you, in the print settings |
+| Prime tower | Others | on (the default) | `enable_prime_tower` | you, in the print settings |
+| Z-hop | Printer > Extruder | 0.4 mm, Auto Lift (the X1C's default) | `z_hop`, `z_hop_types`; a filament can override it with `filament_z_hop` | the printer |
+| Plate | the plate's type | Smooth PEI ("Smooth PEI Plate / High Temp Plate"), clean, preferred over the Engineering plate for a face | `curr_bed_type` | you |
+| Filament | | dry ASA: Bambu's ASA profile dries it at 80 °C for 8 h | | you |
+
+What slicing with Bambu Studio 2.08's command line showed:
+
+- Bambu Studio honours the first three settings per object. With Arachne
+  alone, the old cover's first layer laid down all 118 mm² of its lettering
+  instead of 67 mm².
+- Set per object, first-layer line width and speed did nothing. They work
+  only as print settings, so set them there.
+- A first-layer width of 0.42 instead of 0.5 hardly changed the coverage:
+  90 to 94% either way. It lays a third line in more of the wider strokes,
+  at the cost of more short lines under 0.4 mm. Arachne's walls do the
+  work.
+- The slow first layer and the Z-hop keep the nozzle from catching the
+  first layer's edges. The gouge beside the SCREEN hole on the first arc
+  looks like that kind of drag. Wet ASA strings and blobs on those travels.
+- The prime tower takes each colour change's purge, three changes on the
+  way up and one back to filament 1, off the part.
+
 ## The power fix: the charger plugs into the trigger board
 
 The same three parts as the retro case, since they fit the shared back plate.
@@ -491,7 +556,8 @@ face so it reads from behind the case. For the label in a second colour
 filament 2, which wants a colour that stands out from the plate's. Supports
 off, outer face down as always; the colours change only in the first three
 layers, 0.6 mm, the lettering filling the engraving exactly (the retro
-README has the slice). `power_regulator_tray` holds
+README has the slice; the settings and a ten-minute coupon are in
+[lettering in two colours](#lettering-in-two-colours-print-settings)). `power_regulator_tray` holds
 the 5 V regulator at its one place across the bottom of the plate's inner
 face (since 2026-10-29), screwed down with two M3 × 8 button-head screws
 into M3 × 5 inserts in two bosses on the plate, with a saddle and a cable-tie
@@ -707,12 +773,13 @@ for p in shell front_trim retainer stand back_plate usbc_gauge \
            antenna_mount antenna_mount_sma antenna_mount_twin_8 antenna_mount_twin_11 \
            antenna_mount_twin_cover_8 antenna_mount_twin_cover_11 \
            antenna_mount_twin_cover_text_8 antenna_mount_twin_cover_text_11 back_plate_text \
+           test_lettering_plate test_lettering_plate_text test_lettering_cover test_lettering_cover_text \
            stand_body stand_paws stand_toes stand_claws stand_tail stand_tail_tip; do
   openscad --backend=manifold --export-format binstl \
            -D "part=\"$p\"" -o "$p.stl" kitten-enclosure-twotone.scad
 done
 python3 make-3mf.py   # kitten-stand-twotone.3mf, from the six stand_* meshes
-python3 make-cover-3mf.py   # the covers' and the back plate's two-colour 3MFs (test check 12 fails until they are rebuilt)
+python3 make-cover-3mf.py   # the covers', the back plate's and the coupons' two-colour 3MFs (test check 12 fails until they are rebuilt)
 ```
 
 **The exporter is not deterministic.** Two consecutive exports of unchanged
