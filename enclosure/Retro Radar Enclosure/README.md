@@ -40,22 +40,20 @@ Retro with Dials' control arc are inlaid in a second colour, and each part
 prints face down, so its letters are its first three layers (2026-10-31).
 The first two-colour arc printed with broken letters: SCREEN's C almost gone,
 STATUS's S half there, and a pale ring round each word. Its strokes were
-0.5 mm wide, one first-layer line, and two Bambu Studio defaults made it
-worse. Classic walls leave out a stroke too narrow for two of them, and
-elephant-foot compensation pulls every first-layer outline in by 0.15 mm, so
-it pulls both colours back from the edge they share. Sliced with the
-defaults, the old arc's first layer covered 29% of its letters' area, the old
-cover's 26% and the old plate's 19%.
+0.5 mm wide, about one first-layer line, and Bambu Studio's default classic
+walls leave out a stroke too narrow for two of them. Sliced with the
+defaults, the old lettering's first layer is thin and patchy in its narrow
+strokes, the C and S among them. What caused the pale ring is not yet known;
+print a coupon (below) to see whether these settings cure it.
 
 Two things changed. The lettering is larger and bolder, with every stroke at
 least 1.0 mm wide and every counter and gap between letters at least 0.8 mm
 open (`tests/test_enclosure_core.py` measures them, check 13). And each
 two-colour 3MF now carries the three settings Bambu Studio takes per object,
-so it opens with them set. Sliced the same way, the first layer now covers
-91 to 94% of the letters, and 72 to 88% of the cross-sections through a
-stroke have two lines or more on them. Most of the rest are crossed by one
-wider Arachne line, up to 0.7 mm. About 1% have none, against 53 to 85%
-before.
+so it opens with them set. Sliced the same way, the first layer now lays
+two lines or more across most of each stroke, and one wider Arachne line, up
+to 0.7 mm, across most of the rest. Arachne walls and the larger lettering
+are what fill the first layer.
 
 **Print a coupon first.** `test_lettering_plate.3mf` and
 `test_lettering_cover.3mf` (in the Retro and Kitten folders) and
@@ -71,20 +69,23 @@ profiles:
 | Setting | Where | Value | Key | Who sets it |
 |---|---|---|---|---|
 | Wall generator | Quality | Arachne | `wall_generator` | the 3MF, per object |
-| Elephant foot compensation | Quality > Precision | 0 | `elefant_foot_compensation` | the 3MF, per object |
+| Elephant foot compensation | Quality > Precision | 0: keeps the face's outer edge from being pulled in 0.15 mm; it does not touch the lettering | `elefant_foot_compensation` | the 3MF, per object |
 | Bottom surface pattern | Strength | Monotonic line | `bottom_surface_pattern` = `monotonicline` | the 3MF, per object |
 | First layer line width | Quality > Line width | 0.42 mm | `initial_layer_line_width` | you, in the print settings |
 | First layer speed, and first layer infill | Speed | 30 to 40 mm/s | `initial_layer_speed`, `initial_layer_infill_speed` | you, in the print settings |
 | Prime tower | Others | on (the default) | `enable_prime_tower` | you, in the print settings |
 | Z-hop | Printer > Extruder | 0.4 mm, Auto Lift (the X1C's default) | `z_hop`, `z_hop_types`; a filament can override it with `filament_z_hop` | the printer |
 | Plate | the plate's type | Smooth PEI ("Smooth PEI Plate / High Temp Plate"), clean, preferred over the Engineering plate for a face | `curr_bed_type` | you |
-| Filament | | dry ASA: Bambu's ASA profile dries it at 80 °C for 8 h | | you |
+| Filament | | dry ASA: 65 °C for 12 h, or 80 °C for 8 h where the dryer allows it (Bambu's ASA profile) | | you |
 
 What slicing with Bambu Studio 2.08's command line showed:
 
 - Bambu Studio honours the first three settings per object. With Arachne
-  alone, the old cover's first layer laid down all 118 mm² of its lettering
-  instead of 67 mm².
+  alone, the old cover's first layer laid down much more of its lettering.
+- Elephant-foot compensation acts only on a part's outside edge, not on the
+  edge the two colours share. Sliced with it at 0.15 and at 0, the
+  lettering's first layer came out the same, and only the face's outline
+  grew 0.15 mm a side. It is off so the face's edge prints true.
 - Set per object, first-layer line width and speed did nothing. They work
   only as print settings, so set them there.
 - A first-layer width of 0.42 instead of 0.5 hardly changed the coverage:

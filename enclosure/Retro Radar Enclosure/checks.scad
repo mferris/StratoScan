@@ -10,7 +10,6 @@
 // every check "passes" against nothing -- which is why `canary` exists and
 // must be run.
 use <retro-enclosure.scad>
-ant_twin_cbore_d = 4.4;   // the cover screws' counterbores, for twin_cover_text_room
 $fs = 0.4;
 $fa = 0.5;
 check = "none";
@@ -293,7 +292,7 @@ else if (check=="twin_cover_text_room" || check=="twin_cover_text_room_11" || ch
     translate([0, dy, 0]) ant_twin_label_solid(af);
     translate([0, 0, -1]) linear_extrude(height=3) difference() {
       offset(delta=-1) ant_twin_cover2d(af);
-      for (q = ant_twin_screw_xz(af)) translate([q[0], q[1]]) circle(d=ant_twin_cbore_d + 2, $fn=32);
+      for (q = ant_twin_screw_xz(af)) translate([q[0], q[1]]) circle(d=ant_twin_cbore() + 2, $fn=32);
     }
   }
 }

@@ -864,9 +864,8 @@ def lettering_widths():
     import tempfile
     failures, checks = [], 0
     # 13. Lettering inlaid face down in a second colour is the part's first
-    #     three layers, laid down by first-layer lines about 0.5 mm wide,
-    #     and pulled in 0.15 mm all round by a slicer's elephant-foot
-    #     compensation. The control arc's 3.3 mm lettering had 0.5 mm
+    #     three layers, laid down by first-layer lines about 0.5 mm wide.
+    #     The control arc's 3.3 mm lettering had 0.5 mm
     #     strokes, and printed with its C almost gone and its S half there
     #     (2026-10-31). Measured in plan, from each design's own lettering
     #     module, so the numbers cannot go stale. The controls, the old
