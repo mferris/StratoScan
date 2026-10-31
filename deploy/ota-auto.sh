@@ -56,6 +56,11 @@ kiosk_user() {
 KIOSK_USER=$(kiosk_user)
 OTA="${STRATOSCAN_OTA:-/opt/stratoscan/ota.py}"
 PAINT_WAIT_S="${STRATOSCAN_PAINT_WAIT_S:-60}"
+# A hand-set override that is not a whole number above zero falls back to the
+# default (2026-10-30): otherwise `[ -lt ]` complains on every pass and the
+# wake is never repeated, or a 0 sends wakes back to back.
+case $WAKE_EVERY_S in ''|*[!0-9]*|0) WAKE_EVERY_S=15 ;; esac
+case $PAINT_WAIT_S in ''|*[!0-9]*|0) PAINT_WAIT_S=60 ;; esac
 
 uid=$(id -u "$KIOSK_USER" 2>/dev/null || echo "")
 STAMP="${STRATOSCAN_PAINT_STAMP:-/run/user/${uid}/stratoscan-painted}"
@@ -77,7 +82,7 @@ wake() {
     case "$code" in
         2??) return 0 ;;
     esac
-    log "wake request answered HTTP ${code:-000} (not 2xx); will ask again"
+    log "wake request answered HTTP ${code:-000} (not 2xx)"
 }
 
 # Nothing to do at all? Ask first, so a unit that is up to date never wakes its
