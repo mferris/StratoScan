@@ -8,3 +8,5 @@
 !*.stl
 # The arc's two-colour project, built from two of the STLs (make-arc-3mf.py).
 !control_arc_twotone.3mf
+# And the lettering test coupons, a few minutes each (2026-10-31).
+!test_lettering_*.3mf

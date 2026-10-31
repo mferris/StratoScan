@@ -34,8 +34,12 @@ VARIANTS = {
     "Retro Radar with Dials": ("retro-dials.scad", RETRO, {
         "shell_dials.stl": "shell_dials", "control_arc.stl": "pod_print",
         "control_arc_text.stl": "pod_text_print", "control_arc_cover.stl": "pod_cover_print",
-        "knob.stl": "knob", "jewel_lens.stl": "jewel_print"}),
+        "knob.stl": "knob", "jewel_lens.stl": "jewel_print",
+        "test_lettering_arc.stl": "coupon_print", "test_lettering_arc_text.stl": "coupon_text_print"}),
 }
+# A variant's own two-colour 3MFs, built by its own script, which reuses a
+# full design's builder (check 12).
+VARIANT_3MF_SCRIPTS = {"Retro Radar with Dials": "make-arc-3mf.py"}
 # Print files for the parts every case shares. Each full design's folder ships
 # them, and they must be the same shape in every folder (compared by volume
 # and extent: two exports of one model differ in triangulation, not shape).
@@ -44,6 +48,8 @@ SHARED_PRINTS = ["back_plate", "retainer", "usbc_gauge", "antenna_socket_gauge",
                  "antenna_mount_twin_cover_8", "antenna_mount_twin_cover_11",
                  "antenna_mount_twin_cover_text_8", "antenna_mount_twin_cover_text_11",
                  "back_plate_text",
+                 "test_lettering_plate", "test_lettering_plate_text",
+                 "test_lettering_cover", "test_lettering_cover_text",
                  "power_trigger_mount", "power_trigger_stop", "power_regulator_tray"]
 OPENSCAD = "/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD"
 
@@ -54,6 +60,8 @@ CORE = {
     # window, and the charger's label engraved above it
     "back_plate", "back_lip", "usbc_cutout", "usbc_window2d", "usbc_gauge",
     "usbc_label2d", "usbc_label_solid",
+    # the lettering test coupons of the plate and the twin cover (2026-10-31)
+    "test_lettering_plate", "test_lettering_cover",
     "intake_grille", "fan_grille",
     # what the Pi, fan and speakers bolt to
     "cradle_rails", "cradle_arm", "fan_mount", "speaker_bracket",
@@ -78,7 +86,7 @@ CORE = {
     "ant_axis_frame", "ant_barrel_base", "ant_bolt_holes", "ant_cable_bore",
     "ant_insert_bores", "ant_insert_bosses",
     # the twin mount (1090 + 978 MHz) and its check helpers
-    "antenna_mount_twin", "antenna_mount_twin_cover", "ant_twin_frame", "ant_twin_teardrop", "ant_twin_outline2d", "ant_twin_slab", "ant_twin_cover2d", "ant_twin_bore", "ant_twin_cover_placed", "ant_twin_bore_probe", "ant_twin_jack_probe", "ant_twin_barrel_probe", "ant_twin_channel_probe", "ant_twin_screw_probes",
+    "antenna_mount_twin", "antenna_mount_twin_cover", "ant_twin_label_solid", "ant_twin_label2d", "ant_twin_frame", "ant_twin_teardrop", "ant_twin_outline2d", "ant_twin_slab", "ant_twin_cover2d", "ant_twin_bore", "ant_twin_cover_placed", "ant_twin_bore_probe", "ant_twin_jack_probe", "ant_twin_barrel_probe", "ant_twin_channel_probe", "ant_twin_screw_probes",
     "ant_twin_envelopes", "ant_twin_panel_ring", "ant_twin_hole_probe",
     # the power fix (roadmap 5.7): the trigger board with its socket through
     # the USB-C window, held by its mount, the ribs in the mount's roof and
@@ -657,9 +665,24 @@ def threemf_parts(path):
     return parts, ([float(x) for x in tf.split()] if tf else None)
 
 
+def threemf_object_settings(path):
+    """The metadata of the first object in a 3MF's model_settings.config, as
+    key -> value: its name and the per-object slicer settings."""
+    import xml.etree.ElementTree as ET
+    import zipfile
+    with zipfile.ZipFile(path) as z:
+        cfg = ET.fromstring(z.read("Metadata/model_settings.config"))
+    obj = next(cfg.iter("object"), None)
+    if obj is None:
+        return {}
+    return {m.get("key"): m.get("value") for m in obj.findall("metadata")}
+
+
 def two_colour_projects():
     """Check 12: every two-colour 3MF that make-cover-3mf.py builds still
-    holds its STLs, on their filaments, in every full design's folder."""
+    holds its STLs, on their filaments, in every full design's folder, and
+    so does every one a variant's own script builds; and each carries the
+    builder's per-object slicer settings."""
     import importlib.util
     failures, checks = [], 0
 
@@ -674,7 +697,12 @@ def two_colour_projects():
     #     triangle, on the filament the script gives it; its build item
     #     stands it on a 256 mm bed; and the same 3MF is the same shape in
     #     every folder. The control: a mesh with one vertex moved 0.01 mm
-    #     must not count as the same.
+    #     must not count as the same. A variant's 3MFs (VARIANT_3MF_SCRIPTS)
+    #     are checked the same way in its folder, since 2026-10-31: the
+    #     Dials' make-arc-3mf.py had been calling the builder the old way,
+    #     and nothing ran it. And every object carries the builder's
+    #     OBJECT_SETTINGS, the per-object Bambu Studio settings that let
+    #     face-down lettering print whole (check 13 measures the lettering).
     checks += 1
     t = cube_triangles(0, 0, 0)
     moved = [((a[0] + 0.01, a[1], a[2]), b, c) if i == 0 else (a, b, c) for i, (a, b, c) in enumerate(t)]
@@ -684,26 +712,38 @@ def two_colour_projects():
     tracked = in_git(ROOT)
     shapes = {}
     sources = {}
-    for fname in FULL:
+    scripts = [(fname, "make-cover-3mf.py") for fname in FULL] + sorted(VARIANT_3MF_SCRIPTS.items())
+    for n_script, (fname, script_name) in enumerate(scripts):
         folder = ROOT / fname
-        script = folder / "make-cover-3mf.py"
+        script = folder / script_name
         checks += 1
         if not script.exists():
-            failures.append(f"{fname} has no make-cover-3mf.py")
+            failures.append(f"{fname} has no {script_name}")
             continue
-        sources[fname] = script.read_text()
-        spec = importlib.util.spec_from_file_location(f"make_cover_3mf_{len(sources)}", script)
+        if fname in FULL:
+            sources[fname] = script.read_text()
+        spec = importlib.util.spec_from_file_location(f"two_colour_3mf_{n_script}", script)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
+        settings = getattr(mod, "OBJECT_SETTINGS", None) or getattr(getattr(mod, "m", None), "OBJECT_SETTINGS", {})
+        checks += 1
+        if not settings:
+            failures.append(f"{fname}/{script_name} gives its objects no slicer settings (OBJECT_SETTINGS)")
         for out, (_, wanted) in mod.PROJECTS.items():
             path = folder / out
             checks += 1
             if not path.exists():
-                failures.append(f"{fname}/{out} is missing: run `python3 make-cover-3mf.py {out}` there")
+                failures.append(f"{fname}/{out} is missing: run `python3 {script_name} {out}` there")
                 continue
             if tracked is not None and path not in tracked:
                 failures.append(f"{fname}/{out} is not in git: `git add` it")
             parts, tf = threemf_parts(path)
+            checks += 1
+            got = threemf_object_settings(path)
+            wrong = sorted(k for k, v in settings.items() if got.get(k) != v)
+            if wrong:
+                failures.append(f"{fname}/{out} does not carry the slicer settings {', '.join(wrong)}: "
+                                f"run `python3 {script_name} {out}` there")
             for name, filament in wanted:
                 checks += 1
                 stl = folder / f"{name}.stl"
@@ -715,7 +755,7 @@ def two_colour_projects():
                     failures.append(f"{fname}/{out}: {name} is on filament {got_filament}, the script says {filament}")
                 if not stl.exists() or canonical_mesh(tris) != canonical_mesh(stl_triangles(stl)):
                     failures.append(f"{fname}/{out}: {name} is not today's {name}.stl: the STL was re-exported "
-                                    f"since the 3MF was built. Run `python3 make-cover-3mf.py {out}` there")
+                                    f"since the 3MF was built. Run `python3 {script_name} {out}` there")
                     continue
                 shapes.setdefault((out, name), {})[fname] = geometry(stl)
             extra = sorted(set(parts) - {n for n, _ in wanted})
@@ -742,6 +782,122 @@ def two_colour_projects():
             first = next(iter(per.values()))
             if not all(same_shape(first, g) for g in per.values()):
                 failures.append(f"{out}'s {name} is not the same shape in every case folder")
+    return failures, checks
+
+
+# Every lettering inlaid in a second colour, face down (check 13): its
+# design, the variable that silences the design's own part switch, and the
+# module that draws the lettering in plan. The shared modules are the same
+# in both full designs (checks 1-3), so the retro's stand for the kitten's.
+DIALS = ROOT / "Retro Radar with Dials" / "retro-dials.scad"
+LETTERING = {
+    "the back plate's charger label": (RETRO, "part", "usbc_label2d();"),
+    "the twin antenna cover's frequencies": (RETRO, "part", "ant_twin_label2d();"),
+    "the control arc's lettering": (DIALS, "dpart", "labels2d();"),
+}
+MIN_STROKE = 1.0    # mm: about two and a half 0.4 mm nozzle lines
+MIN_GAP = 0.8       # mm: counters, and the gaps between letters
+# The positive controls: the lettering as it was until 2026-10-31, which
+# printed broken. Each must fail both measures.
+LETTERING_CONTROLS = {
+    "the control arc's lettering at its old 3.3 mm": (DIALS, "dpart", "labels2d();", {
+        "label_size": "3.3", "label_bold": "0", "label_spacing": "1.08", "label_r": "143.6",
+        "labels": '[[lamp_a, "STATUS"], [button_a, "SCREEN"], [knob_a, "RANGE"]]'}),
+    "the back plate's label at its old 5 mm": (RETRO, "part", "usbc_label2d();", {
+        "usbc_label_cap": "5", "usbc_label_bold": "0", "usbc_label_spacing": "1", "usbc_label_pitch": "7.5"}),
+}
+# How the lettering is measured, in OpenSCAD. A stroke thinner than w goes
+# when the lettering is opened (shrunk by w/2, then grown back by w/2): what
+# the opening loses is the thin strokes, and slivers at sharp corners, which
+# no stroke width cures. A gap narrower than g fills when the lettering is
+# closed (grown by g/2, then shrunk back): what closing adds is the narrow
+# gaps, and slivers in sharp inside corners. Each loss or gain is opened
+# again by a fraction k of the radius, which removes the slivers (a corner
+# of more than 16 degrees leaves none thicker than 0.75 of the radius) and
+# keeps a thin stroke or a narrow gap only while it is wider than 2k times
+# the radius; so the radius steps down by k, each step catching what the
+# step before let through, to 0.05 mm. What is left must have no area.
+LETTERING_SCAD = """
+include <{design}>
+{var} = "none";
+check = "stroke";
+w = 1.0;
+module L() {call}
+function scales(r, f) = [for (x = r; x >= 0.05; x = x * f) x];
+module thin(r, k) offset(r = k*r, $fn = 24) offset(r = -k*r, $fn = 24)
+    difference() {{ L(); offset(r = r, $fn = 48) offset(r = -r, $fn = 48) L(); }}
+module narrow(r, k) offset(r = k*r, $fn = 24) offset(r = -k*r, $fn = 24)
+    difference() {{ offset(r = -r, $fn = 48) offset(r = r, $fn = 48) L(); L(); }}
+linear_extrude(height = 1) {{
+    if (check == "stroke") for (r = scales(w/2, 0.6)) thin(r, 0.6);
+    else if (check == "gap") for (r = scales(w/2, 0.75)) narrow(r, 0.75);
+    else L();
+}}
+"""
+LETTERING_TOL = 0.05   # mm2 that may be left: tessellation's crumbs
+
+
+def lettering_area(tmp, design, var, call, check, w, overrides=()):
+    """mm2 of what the measure leaves (check "stroke" or "gap" at width w),
+    or of the lettering itself (check "shape"); None if OpenSCAD failed."""
+    import subprocess
+    scad = tmp / f"lettering_{abs(hash((str(design), call))) % 10**8}.scad"
+    if not scad.exists():
+        scad.write_text(LETTERING_SCAD.format(design=design, var=var, call=call))
+    out = tmp / f"{scad.stem}_{check}_{w}_{abs(hash(tuple(overrides))) % 10**8}.stl"
+    cmd = [OPENSCAD, "--backend=manifold", "--export-format", "binstl",
+           "-D", f'check="{check}"', "-D", f"w={w}"]
+    for k, v in overrides:
+        cmd += ["-D", f"{k}={v}"]
+    r = subprocess.run(cmd + ["-o", str(out), str(scad)], capture_output=True, timeout=600)
+    if b"top level object is empty" in r.stderr:
+        return 0.0      # nothing left: OpenSCAD writes no file, and exits 1
+    if r.returncode != 0 or not out.exists():
+        return None
+    return abs(signed_volume(stl_triangles(out)))
+
+
+def lettering_widths():
+    """Check 13: every inlaid lettering's strokes are at least MIN_STROKE
+    wide and its counters and letter gaps at least MIN_GAP open."""
+    import os
+    import tempfile
+    failures, checks = [], 0
+    # 13. Lettering inlaid face down in a second colour is the part's first
+    #     three layers, laid down by first-layer lines about 0.5 mm wide,
+    #     and pulled in 0.15 mm all round by a slicer's elephant-foot
+    #     compensation. The control arc's 3.3 mm lettering had 0.5 mm
+    #     strokes, and printed with its C almost gone and its S half there
+    #     (2026-10-31). Measured in plan, from each design's own lettering
+    #     module, so the numbers cannot go stale. The controls, the old
+    #     lettering, must fail, and a lettering that measures nothing at all
+    #     is a failure too, so a module that draws nothing cannot pass.
+    if not os.path.exists(OPENSCAD) or os.environ.get("ENCLOSURE_QUICK") == "1":
+        print("note: OpenSCAD not found (or ENCLOSURE_QUICK=1): lettering not measured")
+        return failures, checks
+    with tempfile.TemporaryDirectory() as t:
+        t = pathlib.Path(t)
+        for what, (design, var, call) in LETTERING.items():
+            checks += 1
+            shape = lettering_area(t, design, var, call, "shape", 0)
+            if not shape:
+                failures.append(f"{what}: {call} draws no lettering to measure")
+                continue
+            for check, w, rule in (("stroke", MIN_STROKE, f"strokes under {MIN_STROKE} mm wide"),
+                                   ("gap", MIN_GAP, f"counters or letter gaps under {MIN_GAP} mm")):
+                checks += 1
+                a = lettering_area(t, design, var, call, check, w)
+                if a is None or a > LETTERING_TOL:
+                    failures.append(f"{what} has {rule} ({a if a is None else round(a, 2)} mm2 of them): "
+                                    f"make the letters larger or bolder (offset), or space them wider; "
+                                    f"see 'Inlaid lettering' in retro-enclosure.scad")
+        for what, (design, var, call, over) in LETTERING_CONTROLS.items():
+            for check, w in (("stroke", MIN_STROKE), ("gap", MIN_GAP)):
+                checks += 1
+                a = lettering_area(t, design, var, call, check, w, sorted(over.items()))
+                if a is None or a <= LETTERING_TOL:
+                    failures.append(f"control: {what} should fail the {check} measure and does not "
+                                    f"({a} mm2): the measure itself is broken")
     return failures, checks
 
 
@@ -860,6 +1016,10 @@ def main():
     checks += n
 
     more, n = two_colour_projects()
+    failures += more
+    checks += n
+
+    more, n = lettering_widths()
     failures += more
     checks += n
 

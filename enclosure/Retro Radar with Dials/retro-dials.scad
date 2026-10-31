@@ -67,10 +67,25 @@ button_hole = 12.2;  // 12 mm momentary panel button: short enough to fit behind
 // 2 mm for the wires to turn off the tags. The common 21 mm button would run
 // through the 2.5 mm cover (button_21mm_meets_cover).
 button_deep = 16;
-label_r    = 143.6;  // lettering round the outer edge
-label_size = 3.3;
-label_depth = 0.6;   // inlaid in a second colour, like the antenna cover's lettering
-labels     = [[lamp_a, "STATUS"], [button_a, "SCREEN"], [knob_a, "RANGE"]];
+// The lettering round the outer edge, inlaid in a second colour like the
+// antenna cover's (see "Inlaid lettering" in the retro file). Until
+// 2026-10-31 it was size 3.3 at r 143.6, centred on its controls, and its
+// 0.5 mm strokes printed broken: SCREEN's C almost gone, STATUS's S half
+// there. At 5.6, fattened 0.11 mm a side, the strokes are 1.04 mm and the
+// narrowest gap 0.87 mm. The three words are then too long to centre on
+// their controls, 12.5 deg apart, without running into each other, so
+// STATUS stands 2.4 deg beyond its lamp and RANGE 2 deg short of its knob,
+// still over them, with about 3.5 mm between the words. The words are
+// straight, so their ends stand further out than their middles; at r 143.1
+// they keep 1 mm inside the face's edge and clear of the knob's skirt
+// (checks.scad: labels_on_face, labels_clear_of_controls, labels_apart).
+label_r    = 143.1;
+label_size = 5.6;
+label_depth = 0.6;
+label_bold  = 0.11;  // each stroke fattened by this much a side
+label_spacing = 1.1;
+label_font  = "Liberation Sans:style=Bold";
+labels     = [[lamp_a + 2.4, "STATUS"], [button_a, "SCREEN"], [knob_a - 2, "RANGE"]];
 
 // ---------- fixing it to the case ----------
 // Two M3 screws from INSIDE the case, through the wall, into heat-set
@@ -152,7 +167,8 @@ module radial_teardrop(a, z, d, r0, r1, point = 1) {
 // tangential lettering on the face, centred on angle a
 module label2d(a, s) {
     rotate([0, 0, a - 90]) translate([0, label_r])
-        text(s, size = label_size, font = "Liberation Sans:style=Bold", halign = "center", valign = "center", spacing = 1.08);
+        offset(delta = label_bold)
+            text(s, size = label_size, font = label_font, halign = "center", valign = "center", spacing = label_spacing);
 }
 
 // ============================================================
@@ -216,14 +232,30 @@ module pod() {
 // what is inlaid in the second colour: the lettering, and a rivet dot in each
 // round end, echoing the drum's rivets (flat, because the arc prints face down)
 module inlay2d() {
-    for (l = labels) label2d(l[0], l[1]);
+    labels2d();
     for (a = [pod_a0, pod_a1]) translate(polar(pod_r_mid, a)) circle(d = 3.6, $fn = 32);
+}
+
+// the lettering alone, for its checks
+module labels2d() {
+    for (l = labels) label2d(l[0], l[1]);
 }
 
 // the lettering as its own solid, for a second filament
 module pod_text() {
     translate([0, 0, pod_z1 - label_depth]) linear_extrude(height = label_depth) inlay2d();
 }
+
+// The lettering test coupon (2026-10-31): a lettering_coupon_t slice of the
+// arc's face round each word, cut from the arc itself, with its lettering.
+// Like the plate's and the cover's coupons (in the retro file), a few
+// minutes' print to tune the slicer before the 2.5-hour arc.
+module coupon2d() intersection() { pod_outline2d(); for (l = labels) offset(r = 3) hull() label2d(l[0], l[1]); }
+module test_lettering_arc() intersection() {
+    pod();
+    translate([0, 0, pod_z1 - lettering_coupon_t]) linear_extrude(height = lettering_coupon_t + 1) coupon2d();
+}
+module test_lettering_arc_text() translate([0, 0, pod_z1 - label_depth]) linear_extrude(height = label_depth) labels2d();
 
 // the flat cover that closes the arc's back
 module pod_cover() {
@@ -355,6 +387,8 @@ else if (dpart == "shell_dials") shell_dials();
 // the first 0.6 mm), the cover flat, the lens on its shank
 else if (dpart == "pod_print") translate([0, 0, pod_z1]) rotate([180, 0, 0]) pod();
 else if (dpart == "pod_text_print") translate([0, 0, pod_z1]) rotate([180, 0, 0]) pod_text();
+else if (dpart == "coupon_print") translate([0, 0, pod_z1]) rotate([180, 0, 0]) test_lettering_arc();
+else if (dpart == "coupon_text_print") translate([0, 0, pod_z1]) rotate([180, 0, 0]) test_lettering_arc_text();
 else if (dpart == "pod_cover_print") translate([0, 0, -(pod_z0 - cover_t)]) pod_cover();
 else if (dpart == "jewel_print") translate([0, 0, jewel_shank_h]) jewel();
 else if (dpart == "pod") pod();

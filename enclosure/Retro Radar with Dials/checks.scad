@@ -75,6 +75,23 @@ if (check == "lamp_fits") intersection() { arc_and_cover();
     translate(concat(polar(ctl_r, lamp_a), [pod_z1 - pod_face_t - 14])) cylinder(d = 9, h = 14 - 0.05, $fn = 32); }
 // the knob clears the lettering and the face (it stands 1.5 mm off the face on the nut)
 if (check == "knob_clear_of_face") intersection() { pod(); translate(concat(polar(ctl_r, knob_a), [pod_z1 + 1.5])) knob(); }
+// The lettering (2026-10-31), larger since it printed broken at 3.3 mm. It
+// keeps 1 mm inside the face's edge; 1 mm clear of the lamp's jewel, the
+// button's 16 mm bezel, the knob's skirt and the rivet dots; and its words
+// keep 2 mm apart: grown 1 mm each, no two meet. Its strokes and gaps are
+// measured by tests/test_enclosure_core.py (check 13).
+module word2d(i) label2d(labels[i][0], labels[i][1]);
+module controls2d(grow) {
+    translate(polar(ctl_r, lamp_a)) circle(d = jewel_flange_d + 2*grow, $fn = 64);
+    translate(polar(ctl_r, button_a)) circle(d = 16 + 2*grow, $fn = 64);
+    translate(polar(ctl_r, knob_a)) circle(d = knob_skirt_d + 2*grow, $fn = 64);
+    for (a = [pod_a0, pod_a1]) translate(polar(pod_r_mid, a)) circle(d = 3.6 + 2*grow, $fn = 32);
+}
+module words_meet(grow) for (i = [0 : len(labels) - 2]) for (j = [i + 1 : len(labels) - 1])
+    intersection() { offset(r = grow) word2d(i); offset(r = grow) word2d(j); }
+if (check == "labels_on_face") linear_extrude(height = 1) difference() { labels2d(); pod_outline2d(1); }
+if (check == "labels_clear_of_controls") linear_extrude(height = 1) intersection() { labels2d(); controls2d(1); }
+if (check == "labels_apart") linear_extrude(height = 1) words_meet(1);
 
 // ---- must find real geometry (positive controls) --------------------------
 if (check == "pads_touch_drum") intersection() {
@@ -96,4 +113,10 @@ if (check == "labels_present") pod_text();
 if (check == "arc_face_near_trim") intersection() { pod(); slab_from(z_trim_face - 1.5); }
 if (check == "trim_reaches_z_trim_face") intersection() { front_stack_placed("trim"); slab_from(z_trim_face - 0.2); }
 if (check == "button_21mm_meets_cover") intersection() { arc_and_cover(); button_room(21); }
+// The three lettering probes are near enough to bite: the words come
+// within 3 mm of the face's edge, within 3 mm of the knob's skirt, and
+// within 6 mm of each other.
+if (check == "labels_near_edge") linear_extrude(height = 1) difference() { labels2d(); pod_outline2d(3); }
+if (check == "labels_near_controls") linear_extrude(height = 1) intersection() { labels2d(); controls2d(3); }
+if (check == "labels_near_each_other") linear_extrude(height = 1) words_meet(3);
 if (check == "canary") pod();

@@ -10,9 +10,10 @@ trap 'rm -rf "$TMP"' EXIT
 
 EMPTY="arc_vs_shell arc_vs_trim cover_vs_shell cover_vs_arc arc_vs_stand vents_clear_of_arc grille_clear_of_arc
        screw_heads_clear wire_way_clear wire_through_arc button_fits encoder_fits lamp_fits knob_clear_of_face
-       arc_behind_trim_face trim_face_at_z_trim_face"
+       arc_behind_trim_face trim_face_at_z_trim_face labels_on_face labels_clear_of_controls labels_apart"
 FOUND="pads_touch_drum screw_holes_open probe_finds_post labels_present
-       arc_face_near_trim trim_reaches_z_trim_face button_21mm_meets_cover"
+       arc_face_near_trim trim_reaches_z_trim_face button_21mm_meets_cover
+       labels_near_edge labels_near_controls labels_near_each_other"
 CANARY="canary"
 MAX_MM3=1.0
 
