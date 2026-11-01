@@ -96,6 +96,8 @@ src = "\n".join([
     line(r"^const viewPointers = .*$"), line(r"^let viewGesture = .*$"), line(r"^let viewTapSuppressed = .*$"),
     function("function syncFingers("), function("function stageToCanvas("), function("function pinchState("),
     function("function viewPointerEnd("), function("function openNetworkSettings("),
+    function("function enterDeviceSetup("), function("function deviceNetLine("), function("function renderNetStatus("),
+    line(r"^let deviceShowsNet = .*$"),
     line(r"^let netPillPress = .*$"),
     *all_statements("document.getElementById('netPill').addEventListener("),
     *all_statements("gearBtnEl.addEventListener('pointerup'"),
@@ -123,6 +125,7 @@ const stage = new Element('stage', null);
 const els = {};
 for (const id of ['gearBtn', 'rewindBtn', 'zoomInBtn', 'zoomOutBtn', 'homeBtn', 'lockBtn', 'netPill', 'netPillText', 'detailPanel', 'settingsPanel'])
   els[id] = new Element(id, stage);
+els.netPill.classList.add = () => {}; els.netPill.classList.remove = () => {};
 els.netPillText.parentNode = els.netPill;
 els.netPill.dataset.detail = 'Not connected to any network';
 els.netPillText.textContent = 'NO NETWORK';
@@ -145,6 +148,11 @@ function hideSettingsPanel() { log.push('settings-closed'); settingsPanelEl.clas
 function showRewindPanel() { log.push('rewind'); settingsSection = 'rewind'; settingsPanelEl.classList.add('show'); }
 function renderSettingsPanel() {}
 function loadDeviceStatus() { return Promise.resolve(); }
+let otaState = null, netState = { cls: 'bad', text: 'NO NETWORK', detail: 'Not connected to any network' };
+function loadOtaStatus() { log.push('ota'); otaState = { state: 'applying' }; return Promise.resolve(); }
+function startOtaPolling() { log.push('ota-poll'); }
+function netStatusState() { return netState; }
+function esc(t) { return String(t); }
 function showToast(t) { log.push('toast:' + t); }
 function zoomViewAbout() { log.push('zoom'); }
 function getAudioCtx() { return { resume: () => Promise.resolve() }; }
@@ -172,10 +180,21 @@ const reset = () => { log.length = 0; detailPanelEl.classList.remove('show'); se
   const out = {};
   for (const id of ['gearBtn', 'rewindBtn', 'zoomInBtn', 'zoomOutBtn', 'homeBtn', 'lockBtn', 'netPill', 'netPillText']) {
     reset(); tap(els[id]);
-    out[id] = { log: [...log], fingers: viewPointers.size };
+    out[id] = { log: log.filter(x => !x.startsWith('ota')), fingers: viewPointers.size };
   }
   reset(); tap(els.netPillText); await Promise.resolve();
-  out.pillOpens = { section: settingsSection, open: settingsPanelEl.classList.contains('show'), msg: deviceMsg };
+  await Promise.resolve(); await Promise.resolve();
+  out.pillOpens = { section: settingsSection, open: settingsPanelEl.classList.contains('show'), line: deviceNetLine(), msg: deviceMsg,
+                    ota: log.includes('ota') && log.includes('ota-poll') };
+  // The line follows the network while the panel is open.
+  netState = { cls: 'ok', text: 'ONLINE', detail: 'TestNet · 192.168.1.23' };
+  renderNetStatus();
+  out.pillLive = deviceNetLine();
+  // Into Device setup again from the menu: no line from the earlier visit.
+  deviceMsg = 'stale'; enterDeviceSetup(false);
+  out.menuEntry = { line: deviceNetLine(), msg: deviceMsg };
+  netState = { cls: 'bad', text: 'NO NETWORK', detail: 'Not connected to any network' }; renderNetStatus();
+  openNetworkSettings();
   tap(els.netPillText);
   out.pillAgainCloses = !settingsPanelEl.classList.contains('show');
   reset(); ON_DEVICE = false; tap(els.netPill); ON_DEVICE = true;
@@ -219,7 +238,12 @@ const reset = () => { log.length = 0; detailPanelEl.classList.remove('show'); se
     po = o.get("pillOpens") or {}
     check(po.get("open") is True and po.get("section") == "device",
           "on the radar the pill opens Device setup, where WiFi is")
-    check(po.get("msg") == "NO NETWORK: Not connected to any network", "with the pill's own detail at the top")
+    check("NO NETWORK: Not connected to any network" in (po.get("line") or ""), "with the pill's own detail at the top")
+    check(po.get("msg") == "", "kept apart from the panel's own messages")
+    check(po.get("ota") is True, "and the update row loaded (and a running update followed), as from the menu")
+    check("ONLINE: TestNet" in (o.get("pillLive") or ""), "the pill's line follows the network while the panel is open")
+    me = o.get("menuEntry") or {}
+    check(me.get("line") == "" and me.get("msg") == "", "and entering Device setup from the menu later shows no stale line")
     check(o.get("pillAgainCloses") is True, "and a second touch on the pill closes it, as the gear does")
     check(o.get("publicToast") == ["toast:Not connected to any network"],
           "a public viewer, with no network settings to open, is shown the detail")
