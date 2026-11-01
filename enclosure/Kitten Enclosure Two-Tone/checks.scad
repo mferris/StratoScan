@@ -1761,8 +1761,11 @@ if (check=="stand_clip_snaps")       intersection() { stand(); clip_cable(stand_
 // was; shell_inner_ears() lines its floor and walls, cut from the head, and
 // shell_head() is the head less that lining. Restated, as above.
 ear_angle=30; ear_lean=9;
-// The dish as it was on main before the lining, in its own literals, so a
-// change to the design's dish cannot follow itself here.
+// The dish as it was on main before the lining. Its depth, inset, angle and
+// lean are restated in literals here, but the ear's outline, ear_profile_2d(),
+// and shell_depth and outer_dia are the design's own, so a change to those
+// would move this reference with the dish. The volume pinned in
+// run-checks.sh, RECESS_MM3, guards against that.
 module recess_as_on_main() {
   intersection() {
     for (s = [-1, 1]) rotate([0, 0, -s * ear_angle]) translate([0, 0, shell_depth - 2])
@@ -1789,10 +1792,12 @@ if (check=="no_head_in_recess")        intersection() { shell_head(); recess_ski
 if (check=="liner_fills_lining")       difference() { intersection() { shell(); recess_skin(0.8); } shell_inner_ears(); }
 // Their controls. 1.2 mm out, past the liner, the probe finds the head...
 if (check=="recess_skin_probe_works")  intersection() { shell_head(); recess_skin(1.2); }
-// ...and a lining 0.2 mm thick, drawn in place of the real one, shows the
-// head through the first and leaves a gap in the second.
+// ...a lining 0.2 mm thick all round, drawn in place of the real one, shows
+// the head through the first...
 if (check=="thin_liner_shows_head")    intersection() { difference() { shell(); inner_ear_lining_zone(0.2, 0.2); } recess_skin(0.8); }
-if (check=="thin_liner_leaves_gap")    difference() { intersection() { shell(); recess_skin(0.8); } intersection() { shell(); inner_ear_lining_zone(0.2, 0.2); } }
+// ...and one with the real walls but a floor only 0.2 mm thick leaves a gap
+// under the floor in the second.
+if (check=="thin_floor_leaves_gap")    difference() { intersection() { shell(); recess_skin(0.8); } intersection() { shell(); inner_ear_lining_zone(inner_ear_liner_wall, 0.2); } }
 
 // The dish is as it was: nothing of the head or the liner in it...
 if (check=="recess_still_open")        intersection() { recess_as_on_main(); union() { shell_head(); shell_inner_ears(); } }
