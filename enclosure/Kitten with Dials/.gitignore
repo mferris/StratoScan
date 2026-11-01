@@ -1,0 +1,10 @@
+# The parent enclosure/.gitignore excludes *.stl and *.3mf as build output.
+# This folder's print files ARE committed, as in the other case folders, so
+# a fresh clone has them and `git clean -X` can't delete the only copies.
+#
+# They are still generated, not authored. If you change the .scad, re-export
+# and commit both together, or the mesh silently stops matching the source.
+!*.stl
+# The collar's two-colour project and its lettering coupon (make-collar-3mf.py).
+!collar_twotone.3mf
+!test_lettering_*.3mf

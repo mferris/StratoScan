@@ -13,6 +13,10 @@ three controls:
 
 Everything except the arc is the retro case, unchanged:
 `retro-dials.scad` includes `../Retro Radar Enclosure/retro-enclosure.scad`.
+The controls' sizes, the knob and the lens are in `dial-controls.scad`,
+which the [Kitten with Dials](../Kitten%20with%20Dials/) includes too
+(2026-11-01), so both cases take the same parts and print the same
+`knob.stl` and `jewel_lens.stl`.
 The shell gains three holes through its wall: two screws and a wire hole.
 Print the front trim, retainer, back plate, antenna mount and stand from the
 retro folder, and the power fix's parts with them: `power_trigger_mount`,

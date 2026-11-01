@@ -36,10 +36,16 @@ VARIANTS = {
         "control_arc_text.stl": "pod_text_print", "control_arc_cover.stl": "pod_cover_print",
         "knob.stl": "knob", "jewel_lens.stl": "jewel_print",
         "test_lettering_arc.stl": "coupon_print", "test_lettering_arc_text.stl": "coupon_text_print"}),
+    # the kitten with the same three controls in a collar under its chin
+    # (2026-11-01); its knob and lens are the Retro with Dials' files
+    "Kitten with Dials": ("kitten-dials.scad", KITTEN, {
+        "shell_dials.stl": "shell_dials", "front_trim_dials.stl": "front_trim_dials",
+        "collar.stl": "collar_print", "collar_text.stl": "collar_text_print",
+        "test_lettering_collar.stl": "coupon_print", "test_lettering_collar_text.stl": "coupon_text_print"}),
 }
 # A variant's own two-colour 3MFs, built by its own script, which reuses a
 # full design's builder (check 12).
-VARIANT_3MF_SCRIPTS = {"Retro Radar with Dials": "make-arc-3mf.py"}
+VARIANT_3MF_SCRIPTS = {"Retro Radar with Dials": "make-arc-3mf.py", "Kitten with Dials": "make-collar-3mf.py"}
 # A full design's own print files, beyond the shared ones: (its folder) ->
 # {file: the part that makes it}. They are checked like a variant's (check 8):
 # in git, and the shape their design makes today. The kitten head with its
@@ -945,10 +951,12 @@ def two_colour_projects():
 # module that draws the lettering in plan. The shared modules are the same
 # in both full designs (checks 1-3), so the retro's stand for the kitten's.
 DIALS = ROOT / "Retro Radar with Dials" / "retro-dials.scad"
+KITTEN_DIALS = ROOT / "Kitten with Dials" / "kitten-dials.scad"
 LETTERING = {
     "the back plate's charger label": (RETRO, "part", "usbc_label2d();"),
     "the twin antenna cover's frequencies": (RETRO, "part", "ant_twin_label2d();"),
     "the control arc's lettering": (DIALS, "dpart", "labels2d();"),
+    "the kitten collar's lettering": (KITTEN_DIALS, "dpart", "col_labels2d();"),
     # every character the engraving font draws, at the cases' size, so a
     # glyph a later label starts to use is already measured (2026-11-01)
     "the engraving font's alphabet": (RETRO, "part",
