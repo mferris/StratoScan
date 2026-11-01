@@ -60,6 +60,8 @@ CORE = {
     # window, and the charger's label engraved above it
     "back_plate", "back_lip", "usbc_cutout", "usbc_window2d", "usbc_gauge",
     "usbc_label2d", "usbc_label_solid",
+    # the engraving font every lettering is drawn in (2026-11-01)
+    "gorton_arc", "gorton_glyph", "gorton_chars", "gorton_sum", "gorton_width", "gorton_text",
     # the lettering test coupons of the plate and the twin cover (2026-10-31)
     "test_lettering_plate", "test_lettering_cover",
     "intake_grille", "fan_grille",
@@ -930,17 +932,33 @@ LETTERING = {
     "the back plate's charger label": (RETRO, "part", "usbc_label2d();"),
     "the twin antenna cover's frequencies": (RETRO, "part", "ant_twin_label2d();"),
     "the control arc's lettering": (DIALS, "dpart", "labels2d();"),
+    # every character the engraving font draws, at the cases' size, so a
+    # glyph a later label starts to use is already measured (2026-11-01)
+    "the engraving font's alphabet": (RETRO, "part",
+        "gorton_text(gorton_chars(), lettering_cap, lettering_pen, lettering_track);"),
 }
-MIN_STROKE = 1.0    # mm: about two and a half 0.4 mm nozzle lines
+# 0.85 mm since 2026-11-01 (1.0 before): the engraving font's pen. Sliced at
+# the README's two-colour settings (first layer 0.42 mm, Arachne), strokes
+# 0.8 to 1.0 mm wide are all laid down as two first-layer lines, at least
+# 0.42 mm each, covering about 95% of the letters, as the 1.0 mm Liberation
+# Sans lettering was; at 0.7 mm the two lines are 0.38 mm, and at 0.6 mm
+# each stroke is a single line. 0.85 keeps a little over the 0.8 mm edge.
+MIN_STROKE = 0.85   # mm: two first-layer lines of 0.42 mm or more
 MIN_GAP = 0.8       # mm: counters, and the gaps between letters
-# The positive controls: the lettering as it was until 2026-10-31, which
-# printed broken. Each must fail both measures.
+# The positive controls, each of which must fail both measures: the arc's
+# and the plate's lettering as they were until 2026-10-31, in Liberation
+# Sans, which printed broken; and the engraving font drawn with too thin a
+# pen at too small a size.
 LETTERING_CONTROLS = {
-    "the control arc's lettering at its old 3.3 mm": (DIALS, "dpart", "labels2d();", {
-        "label_size": "3.3", "label_bold": "0", "label_spacing": "1.08", "label_r": "143.6",
-        "labels": '[[lamp_a, "STATUS"], [button_a, "SCREEN"], [knob_a, "RANGE"]]'}),
-    "the back plate's label at its old 5 mm": (RETRO, "part", "usbc_label2d();", {
-        "usbc_label_cap": "5", "usbc_label_bold": "0", "usbc_label_spacing": "1", "usbc_label_pitch": "7.5"}),
+    "the control arc's lettering at its old 3.3 mm": (DIALS, "dpart",
+        'for (l = [[lamp_a, "STATUS"], [button_a, "SCREEN"], [knob_a, "RANGE"]]) '
+        'rotate([0, 0, l[0] - 90]) translate([0, 143.6]) text(l[1], size = 3.3, '
+        'font = "Liberation Sans:style=Bold", halign = "center", valign = "center", spacing = 1.08);', {}),
+    "the back plate's label at its old 5 mm": (RETRO, "part",
+        'for (i = [0, 1]) translate([0, (0.5 - i) * 7.5]) text(usbc_label[i], size = 5/0.955, '
+        'font = "Liberation Sans:style=Bold", halign = "center", valign = "center");', {}),
+    "the engraving font with a 0.6 mm pen at 3.2 mm": (RETRO, "part",
+        "gorton_text(gorton_chars(), 3.2, 0.6, lettering_track);", {}),
 }
 # How the lettering is measured, in OpenSCAD. A stroke thinner than w goes
 # when the lettering is opened (shrunk by w/2, then grown back by w/2): what
