@@ -25,6 +25,9 @@
 
 include <../Retro Radar Enclosure/retro-enclosure.scad>
 part = "none";          // silence the retro file's own part switch
+// The controls' sizes, the knob and the jewel lens, shared with Kitten with
+// Dials since 2026-11-01 (they were defined here).
+include <dial-controls.scad>
 
 dpart = "preview";      // preview | front | exploded | in_stand
                         // shell_dials | pod | pod_cover | pod_text | knob | jewel
@@ -39,7 +42,7 @@ pod_r_mid = (pod_r_in + pod_r_out)/2;
 pod_a0    = 32;                   // lower end: its round end stays clear of the speaker grille (+-23 deg round 0)
 pod_a1    = 74;                   // upper end
 pod_wall  = 2.5;
-pod_face_t = 3;                   // front face thickness
+pod_face_t = ctl_face_t;          // front face thickness, the controls' (dial-controls.scad)
 // The face sits 1 mm behind the front trim's face, so the arc reads as a
 // part bolted to the case rather than a bulge in the trim. z_trim_face is
 // the retro file's, 66.62, where front_stack_placed() puts the trim
@@ -57,16 +60,11 @@ ctl_r      = 127;
 lamp_a     = 65;
 knob_a     = 40;
 button_a   = 52.5;
-lamp_hole  = 12.2;   // the jewel lens's shank
-enc_hole   = 7.4;    // EC11 encoder, M7 bushing
-enc_panel  = 2.0;    // the face is thinned to this round the encoder so its nut reaches
-enc_relief = 15;     // diameter of that thinning, from inside
-button_hole = 12.2;  // 12 mm momentary panel button: short enough to fit behind the face
-// The most the button may reach behind the face, body and tags (2026-10-29).
-// The cavity behind the face is 18.1 mm deep, to the cover, and this leaves
-// 2 mm for the wires to turn off the tags. The common 21 mm button would run
-// through the 2.5 mm cover (button_21mm_meets_cover).
-button_deep = 16;
+// The controls' holes and the room behind them are in dial-controls.scad:
+// the short-body button (button_deep, 16 mm with its tags) leaves 2 mm of
+// the 18.1 mm cavity behind the face for the wires to turn off the tags
+// (2026-10-29); the common 21 mm button would run through the 2.5 mm cover
+// (checks.scad: button_21mm_meets_cover).
 // The lettering round the outer edge, inlaid in a second colour like the
 // antenna cover's (see "Inlaid lettering" in the retro file), in the retro
 // file's engraving font (gorton_text) at its lettering_cap, each word
@@ -108,28 +106,10 @@ cover_t   = 2.5;
 cover_lip = 2.0;      // locating lip into the cavity
 cover_screw_pilot = 2.2;   // M2.5 self-tapping
 
-// ---------- the knob (printed) ----------
-knob_cap_d  = 18;
-knob_cap_h  = 14;
-knob_skirt_d = 24;
-knob_skirt_h = 3;
-knob_flutes = 18;
-knob_shaft_d = 6.15;   // 6 mm D shaft
-knob_shaft_flat = 4.6; // across the flat
-knob_bore_h = 12;
-
-// ---------- the jewel lens (printed in clear or translucent filament) ----------
-jewel_d      = 16;
-jewel_flange_d = 16.6;
-jewel_flange_t = 1.2;
-jewel_shank_d  = 11.9;
-jewel_shank_h  = pod_face_t + 0.4;
-led_d          = 5.1;   // 5 mm RGB LED, pushed into the shank
 
 // ============================================================
 // helpers
 // ============================================================
-function polar(r, a) = [r*cos(a), r*sin(a)];
 
 // the arc's outline, seen from the front: a band between the two radii,
 // with round ends
@@ -280,57 +260,10 @@ module shell_dials() {
 }
 
 // ============================================================
-// the knob and the lens
-// ============================================================
-module knob() {
-    difference() {
-        union() {
-            cylinder(d = knob_skirt_d, h = knob_skirt_h, $fn = 96);
-            translate([0, 0, knob_skirt_h]) cylinder(d1 = knob_skirt_d - 2, d2 = knob_cap_d, h = 2, $fn = 96);
-            difference() {
-                cylinder(d = knob_cap_d, h = knob_skirt_h + knob_cap_h, $fn = 96);
-                for (i = [0:knob_flutes - 1]) rotate([0, 0, i*360/knob_flutes])
-                    translate([knob_cap_d/2 + 0.6, 0, knob_skirt_h + 2.5]) cylinder(d = 2.6, h = knob_cap_h, $fn = 16);
-            }
-            // the pointer, a raised line across the skirt
-            translate([knob_cap_d/2 - 1, -0.7, 0]) cube([knob_skirt_d/2 - knob_cap_d/2 + 0.6, 1.4, knob_skirt_h + 0.6]);
-        }
-        // D bore from below
-        translate([0, 0, -0.01]) intersection() {
-            cylinder(d = knob_shaft_d, h = knob_bore_h, $fn = 48);
-            translate([-knob_shaft_d/2, -knob_shaft_d/2, 0]) cube([knob_shaft_flat, knob_shaft_d, knob_bore_h]);
-        }
-        // a small chamfer on the top edge
-        translate([0, 0, knob_skirt_h + knob_cap_h - 0.8]) difference() {
-            cylinder(d = knob_cap_d + 2, h = 2, $fn = 96);
-            cylinder(d1 = knob_cap_d, d2 = knob_cap_d - 2.4, h = 1.2, $fn = 96);
-        }
-    }
-}
-
-module jewel() {
-    difference() {
-        union() {
-            translate([0, 0, -jewel_shank_h]) cylinder(d = jewel_shank_d, h = jewel_shank_h, $fn = 64);
-            cylinder(d = jewel_flange_d, h = jewel_flange_t, $fn = 64);
-            // faceted dome: an octagonal low-poly cap, the jewel lamp's cut glass
-            translate([0, 0, jewel_flange_t]) intersection() {
-                scale([1, 1, 0.62]) sphere(d = jewel_d, $fn = 8);
-                translate([-20, -20, 0]) cube([40, 40, 20]);
-            }
-        }
-        translate([0, 0, -jewel_shank_h - 0.01]) cylinder(d = led_d, h = jewel_shank_h + 2.5, $fn = 32);
-    }
-}
-
-// ============================================================
-// pictures
+// pictures (the knob and the lens are in dial-controls.scad)
 // ============================================================
 c_body  = "#7A877D";   // instrument grey-green
 c_trim  = "#26292A";
-c_knob  = "#1B1C1D";
-c_label = "#E9E2CC";
-c_chrome = "#B9BEC2";
 
 // the screen, for the picture only: a dark scope with rings and a sweep, just
 // under the glass's front face, where front_stack_placed() puts it
