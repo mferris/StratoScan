@@ -1335,7 +1335,8 @@ ant_twin_back_pad_w = 40;
 // usbc_label below), in the engraving font (gorton_text) at lettering_cap
 // since 2026-11-01: each tower's frequency and MHZ under it, two lines
 // ant_twin_label_pitch apart, centred ant_twin_label_y up from the cover's
-// middle. It was Liberation Sans Bold, 7 mm, until then.
+// middle. It was Liberation Sans Bold, 7 mm, until then. MHZ is the
+// modern spelling; panels of the period marked megacycles MC (README).
 ant_twin_label_depth = 0.6;
 ant_twin_label_pitch = 5.9;    // line to line: 2.1 mm between them (6.4 for 4.3 mm caps)
 ant_twin_label_y     = 2;
@@ -1793,7 +1794,7 @@ module usbc_gauge() {
 function gorton_arc(cx, cy, rx, ry, a0, a1, n = 16) =
     [for (i = [0 : n]) let (a = a0 + (a1 - a0) * i / n) [cx + rx * cos(a), cy + ry * sin(a)]];
 function gorton_glyph(c) =
-    c == " " ? [0.5, []] :
+    c == " " ? [0.4, []] :   // a word space: no track after it (gorton_gaps)
     c == "-" ? [0.34, [[[0, 0.5], [0.34, 0.5]]]] :
     c == "A" ? [0.8, [[[0, 0], [0.3, 1], [0.5, 1], [0.8, 0]], [[0.066, 0.22], [0.734, 0.22]]]] :
     c == "B" ? [0.56, [concat([[0, 0.5], [0, 1]], gorton_arc(0.31, 0.75, 0.23, 0.25, 90, -90), [[0, 0.5]]),
@@ -1827,11 +1828,17 @@ function gorton_glyph(c) =
     [0.5, []];
 // The characters drawn, for the alphabet sheet and the checks.
 function gorton_chars() = "ABCDEGHIMNOPRSTUVWZ012789-";
-// The grid width of a string's letters before character i, and the width of
-// the whole string in mm, edge to edge, at cap height h, pen p and track t
-// (the gap between letters' centre-line boxes, in mm).
+// The grid width of a string's letters before character i; the number of
+// tracks before character i; and the width of the whole string in mm, edge
+// to edge, at cap height h, pen p and track t (the gap between letters'
+// centre-line boxes, in mm). A space takes the track before it but none
+// after it, so the words stand t + 0.4 of the grid apart, about one
+// letter's width, as on engraved panels (2.4 mm at 3.8 mm caps). Until
+// 2026-11-01 a space was 0.5 of the grid with a track on both sides, so
+// the words stood two letters' widths apart and read as separate labels.
 function gorton_sum(s, i) = i <= 0 ? 0 : gorton_glyph(s[i - 1])[0] + gorton_sum(s, i - 1);
-function gorton_width(s, h, p, t) = gorton_sum(s, len(s)) * (h - p) + (len(s) - 1) * (p + t) + p;
+function gorton_gaps(s, i) = i <= 1 ? 0 : (s[i - 2] == " " ? 0 : 1) + gorton_gaps(s, i - 1);
+function gorton_width(s, h, p, t) = gorton_sum(s, len(s)) * (h - p) + gorton_gaps(s, len(s)) * (p + t) + p;
 // The string s drawn in plan, h tall (the capitals' outer edges), with pen
 // p, letters t apart; aligned as text() aligns.
 module gorton_text(s, h, p, t, halign = "center", valign = "center") {
@@ -1842,7 +1849,7 @@ module gorton_text(s, h, p, t, halign = "center", valign = "center") {
     fn = 20;
     translate([x0 + p/2, y0 + p/2])
         for (i = [0 : len(s) - 1]) let (g = gorton_glyph(s[i]))
-            translate([gorton_sum(s, i) * u + i * (p + t), 0])
+            translate([gorton_sum(s, i) * u + gorton_gaps(s, i + 1) * (p + t), 0])
                 for (l = g[1]) for (k = [0 : len(l) - 2])
                     hull() {
                         // the pen's polygon circumscribes its circle, so no

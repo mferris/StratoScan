@@ -78,11 +78,16 @@ following a brass template (Gorton's, and the Leroy and MIL-STD-130
 lettering like it). Each letter is a few centre lines, straight or arcs,
 swept with a round pen, so every stroke is the same width with round ends
 and joins; the capitals are plain and a little narrow, the C and G open, the
-R's leg straight, the letters spaced wide. The centre lines are drawn in
+R's leg straight, the letters spaced wide and the words about one letter's
+width apart (2.4 mm; until 2026-11-01 a word space was twice that, and the
+plate's two halves of each line read as separate labels). The centre lines are drawn in
 the design, not taken from a font, and only the characters the cases use
 exist: A B C D E G H I M N O P R S T U V W Z, 0 1 2 7 8 9 and the hyphen.
-The frequencies' unit is engraved MHZ, all capitals, as panels of the
-period were. Until 2026-11-01 the lettering was Liberation Sans Bold, 6 mm
+The frequencies' unit is engraved MHZ, in capitals like the rest, and its
+spelling is modern: US panels of the period marked megacycles MC or MCS,
+and hertz reached them only in the later 1960s. MHZ is kept because it reads
+plainly today; "MC" in place of "MHZ" in the cover's lettering, in both
+full designs, would be the period spelling. Until 2026-11-01 the lettering was Liberation Sans Bold, 6 mm
 on the plate, 7 mm on the covers and 5.6 on the arc, made that big and
 fattened so its strokes would print; the owner found it too big.
 
@@ -94,15 +99,18 @@ smaller, the same day), set once as `lettering_cap`, `lettering_pen` and
 
 - **The pen, 0.7 mm, is as fine as the first layer allows.** A coupon of
   the lettering at pens from 0.6 to 1.0 mm, sliced with the settings below:
-  from 0.7 to 1.0 mm every stroke is laid down as two first-layer lines
-  (about 95% of the letters covered, two lines across about three quarters
-  of the strokes' cross-sections, as many as the 1.0 mm Liberation strokes
-  had; no stroke left out). At 0.7 mm Arachne narrows the two lines to
-  about 0.38 mm, under the 0.42 mm set; at 0.6 mm each stroke is a single
-  line, the thin kind that dropped out of the first arc. Every lettered
-  part and coupon, sliced at 0.7 mm, covers 94-95% of its letters with two
-  lines across 70-78% of the strokes' cross-sections, as at 0.85 mm, and
-  no part of a letter is left bare wider than 0.45 mm.
+  from 0.7 to 1.0 mm every stroke is laid down as two first-layer lines,
+  and no stroke is left out; at 0.6 mm each stroke is a single line, the
+  thin kind that dropped out of the first arc. 0.7 mm is the thin end of
+  that range: Arachne narrows its two lines to about 0.38 mm, under the
+  0.42 mm set, where 0.8 to 1.0 mm keep the full 0.42 mm and two lines
+  across 73-79% of the strokes' cross-sections. Every lettered part and
+  coupon, sliced at 0.7 mm, covers 93-95% of its letters, with two lines
+  across 70-78% of the strokes' cross-sections (65-76% at 0.85 mm, by the
+  same measure, the arc lowest at both), and no part of a letter is left
+  bare wider than 0.45 mm. So the 0.7 mm strokes are narrower and a little
+  patchier than the 0.8 to 1.0 mm ones, not their equal; that is the
+  slicer's view, and a printed coupon is the test that decides it.
 - **The cap height, 3.8 mm, is the least those strokes allow.** Every
   counter and gap must stay 0.8 mm open, and E, B, S, 8 and 9 stack two
   openings in the letter's height, each (h - 3 x pen) / 2, so h is at least
