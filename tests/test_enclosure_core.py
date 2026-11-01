@@ -37,9 +37,12 @@ VARIANTS = {
         "knob.stl": "knob", "jewel_lens.stl": "jewel_print",
         "test_lettering_arc.stl": "coupon_print", "test_lettering_arc_text.stl": "coupon_text_print"}),
     # the kitten with the same three controls in a collar under its chin
-    # (2026-11-01); its knob and lens are the Retro with Dials' files
+    # (2026-11-01); its knob and lens are the Retro with Dials' files. Its
+    # head comes in one colour or two, as the kitten's: the head less its
+    # ears' lining, with the slot, and the kitten's lining itself.
     "Kitten with Dials": ("kitten-dials.scad", KITTEN, {
-        "shell_dials.stl": "shell_dials", "front_trim_dials.stl": "front_trim_dials",
+        "shell_dials.stl": "shell_dials", "shell_head_dials.stl": "shell_head_dials",
+        "shell_inner_ears.stl": "shell_inner_ears", "front_trim_dials.stl": "front_trim_dials",
         "collar.stl": "collar_print", "collar_text.stl": "collar_text_print",
         "test_lettering_collar.stl": "coupon_print", "test_lettering_collar_text.stl": "coupon_text_print"}),
 }
