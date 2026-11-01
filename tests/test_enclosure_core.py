@@ -937,13 +937,15 @@ LETTERING = {
     "the engraving font's alphabet": (RETRO, "part",
         "gorton_text(gorton_chars(), lettering_cap, lettering_pen, lettering_track);"),
 }
-# 0.85 mm since 2026-11-01 (1.0 before): the engraving font's pen. Sliced at
-# the README's two-colour settings (first layer 0.42 mm, Arachne), strokes
-# 0.8 to 1.0 mm wide are all laid down as two first-layer lines, at least
-# 0.42 mm each, covering about 95% of the letters, as the 1.0 mm Liberation
-# Sans lettering was; at 0.7 mm the two lines are 0.38 mm, and at 0.6 mm
-# each stroke is a single line. 0.85 keeps a little over the 0.8 mm edge.
-MIN_STROKE = 0.85   # mm: two first-layer lines of 0.42 mm or more
+# 0.7 mm since 2026-11-01 (1.0 before, then 0.85 briefly): the engraving
+# font's pen. Sliced at the README's two-colour settings (first layer
+# 0.42 mm, Arachne), strokes 0.7 to 1.0 mm wide are laid down as two
+# first-layer lines across about three quarters of their cross-sections,
+# covering about 95% of the letters, as the 1.0 mm Liberation Sans
+# lettering was (at 0.7 mm the two lines narrow to about 0.38 mm); at
+# 0.6 mm each stroke is a single line, the kind that dropped out of the
+# first arc. The lettered parts themselves, sliced at 0.7 mm, lost no stroke.
+MIN_STROKE = 0.7    # mm: two first-layer lines
 MIN_GAP = 0.8       # mm: counters, and the gaps between letters
 # The positive controls, each of which must fail both measures: the arc's
 # and the plate's lettering as they were until 2026-10-31, in Liberation
