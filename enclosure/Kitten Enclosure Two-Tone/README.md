@@ -22,11 +22,13 @@ want it in a single filament.
 
 ## Parts
 
-The head is one colour:
+The head is one colour, or two with its inner ears in a second colour
+([below](#the-inner-ears-in-a-second-colour)):
 
 | part | colour | what it is |
 |---|---|---|
 | `shell` | black | the head — body cylinder plus two ears, and all the internals |
+| `kitten-head-twotone.3mf` | black + a contrast | the same head with the dish in each ear lined in a second colour: one object, `shell_head` (the head less the lining) on filament 1 and `shell_inner_ears` (the lining) on filament 2, built by `make-3mf.py`. Prints back down, as `shell` does |
 | `front_trim` | black | the face — bezel ring with a nose, whisker grooves and seven screw holes. Prints rabbet-down (face up), as `front_trim.stl` is exported, with support (Support for ABS interface) only under the inner band that presses on the glass: the nose stops it printing face down like the retro case's ([below](#the-trim-prints-face-up)) |
 | `retainer` | — | ring behind the glass (identical to the retro part), keyed so it goes in only one way: its relief at the bottom, over the gap in the shelf ([below](#so-does-the-retainer)). `retainer.stl` is glass face down, the way it prints |
 | `back_plate` | black | removable back — locating lip, vents, the trigger board's USB-C window with a pocket for the plug's moulding and two insert holes for its mount, the charger it needs engraved above it, the antenna mount's bolt holes and cable hole, two insert bosses for the regulator's tray, ten cable-tie bridges for its leads and the coax, and two low curbs that keep the slack of the pigtail and the coax on their own sides; identical to the retro part. Prints outer face down, supports off |
@@ -288,6 +290,60 @@ over its cone and the post below the shelf (z 45-53), is all there, and
 behind the two in the ears all the way down to the collar (the old head lacks
 1,554 mm³ of it). `post_wall_probe_works` is its control: the same probe
 behind the 90° post, which always stood on wall, finds it (160 mm³).
+
+## The inner ears in a second colour
+
+Since 2026-11-01 the head can be printed with its inner ears in a second
+colour. The dish in each ear's front, 2 mm deep and 10 mm in from the ear's
+edge, is exactly as it was (`inner_ear_recess()`); what changes is the
+plastic round it. `shell_inner_ears` lines the dish's floor with 1.0 mm,
+five 0.2 mm layers, and its walls with 0.9 mm, two lines, round its outline
+and along the arc where it meets the face. It is cut out of the head's own
+material, so `shell_head` and `shell_inner_ears` meet face to face, with no
+overlap and no gap, and together are `shell` exactly. Looking into an ear you
+see only the second colour; on the face, the walls' liner shows as a 0.9 mm
+outline round each dish's opening. `shell.stl` is unchanged, the head in one
+colour.
+
+Under the floor's liner, at z 58, at least 5 mm of the head is left before
+the ears' tented hollows (they come no higher than z 53). Along the arc the
+liner takes the outer 0.9 mm of the head's 3 mm wall, above the shelf and
+under the trim's rim, so it is hidden there and stays clear of the trim's
+screws and the posts below.
+
+**Printing it.** Open `kitten-head-twotone.3mf`: the head is on filament 1
+and the lining on filament 2, already assigned, so pick the inner ears'
+colour for filament 2. Print it back down with the head's usual support
+(tree supports at 30°). The lining is in the last 15 layers only, from
+z 58 to 61: those layers print in both colours, one change per layer, and
+every layer below them in filament 1 alone.
+Sliced in Bambu Studio 2.08 for an H2D (two 0.4 mm nozzles, 0.20 mm
+Standard, Bambu ASA, tree supports at 30°, Engineering Plate):
+
+| | time | filament 1 | filament 2 | changes |
+|---|---|---|---|---|
+| `shell.stl`, one colour | 7 h 55 min | 193.3 g | — | — |
+| `kitten-head-twotone.3mf`, H2D | 8 h 18 min | 196.3 g | 3.5 g | 14 nozzle changes |
+| `kitten-head-twotone.3mf`, X1C (one nozzle, AMS) | 8 h 29 min | 191.8 g | 7.6 g | 14 filament changes |
+
+On the H2D each filament has a nozzle of its own, so a change is a nozzle
+swap, with no filament cut or flushed; the 3 g more of filament 1 is the
+prime tower, and the print takes 23 minutes longer than in one colour. On a
+printer with one nozzle each change is a full filament swap, with about 4 g
+of filament 2 purged over the 14 of them; the X1C slice needed the prime
+tower off to fit the head on its 256 mm bed.
+
+`liner_vs_head`, `head_and_liner_are_shell`, `no_head_in_recess`,
+`liner_fills_lining`, `recess_still_open`, `recess_not_grown`,
+`liner_clear_of_hollows` and `liner_vs_screws` must come out empty, and the
+room round the dish below the face, `recess_void`, must be 4,260.5 mm³, the
+dish on main measured against the `shell.stl` it had. Their controls must
+find geometry: `recess_skin_probe_works` (1.2 mm out, past the liner, finds
+the head), `thin_liner_shows_head` and `thin_liner_leaves_gap` (a liner only
+0.2 mm thick shows the head and leaves a gap, 1,850 mm³), `recess_grown_probe_works`
+(without the liner, the room round the dish is found, 3,000 mm³),
+`hollow_probe_works` (the liner lowered 4 mm more meets the hollows) and
+`liner_present`.
 
 ## Printing it in two colours
 
@@ -846,7 +902,11 @@ for p in shell front_trim retainer stand back_plate usbc_gauge \
   openscad --backend=manifold --export-format binstl \
            -D "part=\"$p\"" -o "$p.stl" kitten-enclosure-twotone.scad
 done
-python3 make-3mf.py   # kitten-stand-twotone.3mf, from the six stand_* meshes
+for p in shell_head shell_inner_ears; do
+  openscad --backend=manifold --export-format binstl \
+           -D "part=\"$p\"" -o "$p.stl" kitten-enclosure-twotone.scad
+done
+python3 make-3mf.py   # kitten-stand-twotone.3mf from the six stand_* meshes, and kitten-head-twotone.3mf
 python3 make-cover-3mf.py   # the covers', the back plate's and the coupons' two-colour 3MFs (test check 12 fails until they are rebuilt)
 ```
 

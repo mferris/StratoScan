@@ -23,7 +23,7 @@
 // the shell's posts. The head then sets down into the stand.
 // ============================================================
 
-part = "preview";  // front_trim | retainer | shell | stand | preview | exploded | test_ear | test_clip
+part = "preview";  // front_trim | retainer | shell | shell_head | shell_inner_ears | head_twotone | stand | preview | exploded | test_ear | test_clip
 // ---- Curve resolution ------------------------------------------------
 // $fa/$fs rather than a fixed $fn, which is what this was before.
 //
@@ -767,6 +767,51 @@ module inner_ear_recess() {
         outside_head();
     }
 }
+
+// The inner ears in a second colour (2026-11-01). The recess above stays
+// exactly as it was; what changes is the plastic round it. A lining, carved
+// out of the head's own material, lines the dish's floor and every side wall
+// of it, so looking into an ear shows only the second colour:
+//   - the floor's liner is inner_ear_liner_floor thick, five 0.2 mm layers
+//     under the dish's floor, which is the floor's top surface and the
+//     layers it needs to hide the head's colour under it;
+//   - the walls' liner is inner_ear_liner_wall thick, two 0.45 mm lines,
+//     round the dish's outline and along its arc where it meets the face.
+// shell_head() is the head less the lining and shell_inner_ears() the lining:
+// the same zone cut from the same shell(), so the two meet face to face, with
+// no overlap and no gap, and together they are shell() exactly. shell() and
+// shell.stl, the head in one colour, are unchanged.
+//
+// What stands behind the liner: the dish's floor is at z 59, and the ears'
+// hollows come no higher than their tents' apex at z 53, lower towards their
+// edges, so under the 1 mm floor liner at least 5 mm of head is left
+// (checks.scad's liner_clear_of_hollows holds 3). Along the arc the liner
+// stays in the head's wall, 0.9 of its 3 mm, under the trim's rim, whose
+// disc covers the head's face there.
+inner_ear_liner_floor = 1.0;
+inner_ear_liner_wall  = 0.9;
+
+// The zone the lining takes: the dish grown by the liner, down by t_floor and
+// out by t_wall, both round its outline and inward past the circle it is
+// clipped to. t_wall and t_floor are arguments so checks.scad can draw it
+// thinner as its controls.
+module inner_ear_lining_zone(t_wall = inner_ear_liner_wall, t_floor = inner_ear_liner_floor) {
+    intersection() {
+        for (s = [-1, 1])
+            rotate([0, 0, -s * ear_angle])
+                translate([0, 0, shell_depth - inner_ear_depth - t_floor])
+                    linear_extrude(height = inner_ear_depth + t_floor + 1)
+                        offset(r = -inner_ear_inset + t_wall) ear_profile_2d(s * ear_lean);
+        difference() {
+            translate([-400, -400, -50]) cube([800, 800, shell_depth + 100]);
+            translate([0, 0, -60]) cylinder(r = outer_dia/2 - t_wall, h = shell_depth + 120);
+        }
+    }
+}
+
+// The two parts of the head in two colours.
+module shell_inner_ears() { intersection() { shell(); inner_ear_lining_zone(); } }
+module shell_head()       { difference()   { shell(); inner_ear_lining_zone(); } }
 
 // ============================================================
 // INTERNALS — carried over unchanged from the validated build
@@ -3649,6 +3694,9 @@ module stand_colour_parts() {
 if (part == "front_trim") front_trim();
 else if (part == "retainer") retainer_print();   // glass face down, as it prints
 else if (part == "shell") shell();
+else if (part == "shell_head") shell_head();               // the head less its inner ears, filament 1
+else if (part == "shell_inner_ears") shell_inner_ears();   // the inner ears' lining, filament 2 (2026-11-01)
+else if (part == "head_twotone") { color("DimGray") shell_head(); color("Pink") shell_inner_ears(); }  // for pictures
 else if (part == "stand") stand();
 else if (part == "back_plate") back_plate();
 else if (part == "back_plate_text") usbc_label_solid();   // the label's lettering, for a second colour

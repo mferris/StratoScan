@@ -24,9 +24,30 @@ Metadata/model_settings.config, no build transform, the stand on z 0. That
 is the structure Bambu Studio's desktop app loads with the filaments in
 place; per-object process settings made it load geometry only (2026-10-31).
 tests/test_enclosure_core.py checks it (check 12).
+
+It also builds kitten-head-twotone.3mf (2026-11-01): the head with its inner
+ears in a second colour, shell_head on filament 1 and shell_inner_ears, the
+lining of the dish in each ear, on filament 2, as one object. That one is
+built by the covers' builder, make-cover-3mf.py's build(), so it has the
+same proven structure, and is listed in PROJECTS below, which check 12 reads
+to compare each part with its STL.
+
+Usage: python3 make-3mf.py [project.3mf ...]   (after exporting the STLs as
+BINARY). With no names it builds both.
 """
-import struct, sys, zipfile
+import importlib.util, os, pathlib, struct, sys, zipfile
 from xml.sax.saxutils import escape
+
+HERE = pathlib.Path(__file__).resolve().parent
+_spec = importlib.util.spec_from_file_location("cover3mf", HERE / "make-cover-3mf.py")
+cover3mf = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(cover3mf)
+
+STAND = "kitten-stand-twotone.3mf"
+# project -> (what it is, [(STL, filament), ...]), built by make-cover-3mf.py's build()
+PROJECTS = {
+    "kitten-head-twotone.3mf": ("kitten head", [("shell_head", 1), ("shell_inner_ears", 2)]),
+}
 
 PARTS = [
     ("stand_body",     1),
@@ -111,7 +132,7 @@ def main():
             '<Relationship Id="rel0" Target="/3D/3dmodel.model" '
             'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>')
 
-    out = "kitten-stand-twotone.3mf"
+    out = STAND
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", ct)
         z.writestr("_rels/.rels", rels)
@@ -123,4 +144,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    os.chdir(HERE)
+    names = sys.argv[1:] or [STAND] + list(PROJECTS)
+    for out in names:
+        if out == STAND:
+            main()
+        elif out in PROJECTS:
+            cover3mf.build(out, *PROJECTS[out])
+        else:
+            sys.exit(f"unknown project {out}; known: {', '.join([STAND] + list(PROJECTS))}")
