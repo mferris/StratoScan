@@ -307,28 +307,32 @@ colour.
 
 Under the floor's liner, at z 58, at least 5 mm of the head is left before
 the ears' tented hollows (they come no higher than z 53). Along the arc the
-liner takes the outer 0.9 mm of the head's 3 mm wall, above the shelf and
-under the trim's rim, so it is hidden there and stays clear of the trim's
+liner takes the outer 0.9 mm of the head's 3 mm wall, in the head wall beside the
+shelf, under the trim's rim, so it is hidden there and stays clear of the trim's
 screws and the posts below.
 
 **Printing it.** Open `kitten-head-twotone.3mf`: the head is on filament 1
 and the lining on filament 2, already assigned, so pick the inner ears'
 colour for filament 2. Print it back down with the head's usual support
 (tree supports at 30°). The lining is in the last 15 layers only, from
-z 58 to 61: those layers print in both colours, one change per layer, and
+z 58 to 61: those layers print in both colours, one change per layer after the
+first, 14 in all, and
 every layer below them in filament 1 alone.
 Sliced in Bambu Studio 2.08 for an H2D (two 0.4 mm nozzles, 0.20 mm
-Standard, Bambu ASA, tree supports at 30°, Engineering Plate):
+Standard, Bambu ASA, tree supports at 30°, Engineering Plate). The figures
+are approximate: they move by a minute or two and a gram or so with where
+the head and the prime tower sit on the plate.
+
 
 | | time | filament 1 | filament 2 | changes |
 |---|---|---|---|---|
-| `shell.stl`, one colour | 7 h 55 min | 193.3 g | — | — |
-| `kitten-head-twotone.3mf`, H2D | 8 h 18 min | 196.3 g | 3.5 g | 14 nozzle changes |
-| `kitten-head-twotone.3mf`, X1C (one nozzle, AMS) | 8 h 29 min | 191.8 g | 7.6 g | 14 filament changes |
+| `shell.stl`, one colour | about 7 h 55 min | about 193 g | — | — |
+| `kitten-head-twotone.3mf`, H2D | about 8 h 18 min | about 196 g | about 3.5 g | 14 nozzle changes |
+| `kitten-head-twotone.3mf`, X1C (one nozzle, AMS) | about 8 h 29 min | about 192 g | about 7.6 g | 14 filament changes |
 
 On the H2D each filament has a nozzle of its own, so a change is a nozzle
 swap, with no filament cut or flushed; the 3 g more of filament 1 is the
-prime tower, and the print takes 23 minutes longer than in one colour. On a
+prime tower, and the print takes about 20 minutes longer than in one colour. On a
 printer with one nozzle each change is a full filament swap, with about 4 g
 of filament 2 purged over the 14 of them; the X1C slice needed the prime
 tower off to fit the head on its 256 mm bed.
@@ -339,8 +343,9 @@ tower off to fit the head on its 256 mm bed.
 room round the dish below the face, `recess_void`, must be 4,260.5 mm³, the
 dish on main measured against the `shell.stl` it had. Their controls must
 find geometry: `recess_skin_probe_works` (1.2 mm out, past the liner, finds
-the head), `thin_liner_shows_head` and `thin_liner_leaves_gap` (a liner only
-0.2 mm thick shows the head and leaves a gap, 1,850 mm³), `recess_grown_probe_works`
+the head), `thin_liner_shows_head` (a liner only
+0.2 mm thick shows the head, 1,850 mm³), `thin_floor_leaves_gap` (the real
+walls on a floor only 0.2 mm thick leave a gap, 1,431 mm³), `recess_grown_probe_works`
 (without the liner, the room round the dish is found, 3,000 mm³),
 `hollow_probe_works` (the liner lowered 4 mm more meets the hollows) and
 `liner_present`.

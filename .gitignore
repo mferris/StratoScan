@@ -34,3 +34,6 @@ ios/Config/Team.xcconfig
 
 # The local radar dev-server.py proxies to (one line, e.g. http://raspberrypi.local)
 .dev-pi
+
+# Bambu Studio's command line writes result.json into its working directory.
+result.json

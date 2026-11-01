@@ -259,13 +259,13 @@ done
 # the liner keeps 3 mm of head between it and the ears' hollows, and 1 mm
 # from the trim's screws. EAR_FOUND are their controls and must find real
 # geometry: the dish's skin probe 1.2 mm out finds the head; a liner 0.2 mm
-# thick shows the head and leaves a gap; without the liner the room round the
-# dish is found; the liner lowered 4 mm more finds the hollows; and the liner
+# thick shows the head, and a floor 0.2 mm thick leaves a gap; without the
+# liner the room round the dish is found; the liner lowered 4 mm more finds the hollows; and the liner
 # is there. The room round the dish, below the face, must be the dish's own
 # volume on main, RECESS_MM3, measured against the shell.stl it had.
 EAR_EMPTY="liner_vs_head head_and_liner_are_shell no_head_in_recess liner_fills_lining
        recess_still_open recess_not_grown liner_clear_of_hollows liner_vs_screws"
-EAR_FOUND="recess_skin_probe_works thin_liner_shows_head thin_liner_leaves_gap
+EAR_FOUND="recess_skin_probe_works thin_liner_shows_head thin_floor_leaves_gap
        recess_grown_probe_works hollow_probe_works liner_present"
 RECESS_MM3=4260.522
 echo "The inner ears' lining — must come out with no real volume (threshold ${MAX_MM3} mm3):"
