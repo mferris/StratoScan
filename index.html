@@ -5544,8 +5544,12 @@ function renderNetStatus() {
   const st = netStatusState();
   el.classList.remove('ok', 'warn', 'bad');
   el.classList.add(st.cls);
+  const changed = document.getElementById('netPillText').textContent !== st.text || el.dataset.detail !== st.detail;
   document.getElementById('netPillText').textContent = st.text;
   el.dataset.detail = st.detail;
+  // Device setup opened from the pill shows its state; keep that line current.
+  if (changed && deviceShowsNet && !deviceView && settingsSection === 'device' &&
+      settingsPanelEl.classList.contains('show')) renderSettingsPanel();
 }
 
 // A tap on the pill is handled with the other overlay controls, near the
@@ -7433,6 +7437,14 @@ async function handlePhoneTap(row) {
 let deviceView = null;   // null | 'wifi' | 'location' | 'airport' | 'reset' | 'password'
 let deviceStatus = null; // last /onboard payload, so screens can show what is already set
 let deviceMsg = '';
+let deviceShowsNet = false;   // Device setup was opened from the pill: show its state, live, at the top
+// The pill's own words and detail, read when drawn so they follow the network.
+function deviceNetLine() {
+  if (!deviceShowsNet) return '';
+  const text = document.getElementById('netPillText').textContent;
+  const detail = document.getElementById('netPill').dataset.detail || '';
+  return `<div class="sp-sub" data-netline style="padding:8px 0;color:var(--text)">${esc(detail ? `${text}: ${detail}` : text)}</div>`;
+}
 let deviceBusy = false;
 let wifiNets = [];
 let airportRows = [];
@@ -8331,7 +8343,7 @@ function renderDeviceSetup() {
   const nameNow = d.name
     ? (d.nameIsOwn ? d.name : `${d.name} (from the home airport; tap to choose your own)`)
     : 'Not set';
-  return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Settings</div><div class="sp-title">Device setup</div>${busy}${msg}
+  return `<div class="sp-back"><b style="font-size:1.25em;line-height:1">&#8249;</b> Settings</div><div class="sp-title">Device setup</div>${busy}${deviceNetLine()}${msg}
     <div class="sp-menu-row" data-act="set-name"><div><div class="sp-label">Name</div>
       <div class="sp-sub">${esc(nameNow)}. Shown on paired phones</div></div><div class="sp-chevron">&#8250;</div></div>
     <div class="sp-menu-row" data-dev="wifi"><div><div class="sp-label">WiFi</div>
@@ -8940,6 +8952,7 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
       statsView = null;                    // step back within statistics
     } else {
       settingsSection = null;
+      deviceShowsNet = false;              // the pill's line belongs to the visit it opened
     }
     renderSettingsPanel();
     return;
@@ -9010,16 +9023,7 @@ settingsPanelEl.addEventListener('pointerup', (e) => {
     return;
   }
   if (menuRow && menuRow.dataset.group === 'device') {
-    settingsSection = 'device';
-    settingsPanelEl.scrollTop = 0;
-    renderSettingsPanel();
-    loadDeviceStatus().then(renderSettingsPanel); // fill in the current values
-    loadOtaStatus().then(() => {
-      // A rollback happens while this page is dead, so the only place anyone
-      // can learn about it is here, on the way back up.
-      if (otaState && otaState.state === 'applying') startOtaPolling();
-      if (settingsSection === 'device') renderSettingsPanel();
-    });
+    enterDeviceSetup(false);
     return;
   }
   if (menuRow && (menuRow.dataset.dev || menuRow.dataset.act ||
@@ -9165,17 +9169,27 @@ document.getElementById('rewindBtn').addEventListener('pointerup', (e) => {
 // picked the aircraft whose label lay under the pill and opened its details
 // first. Every overlay control now answers pointerup itself, stops it, and
 // is in OVERLAY_CONTROLS, which the stage's drag and tap handlers both skip.
-function openNetworkSettings() {
-  const detail = document.getElementById('netPill').dataset.detail || '';
-  if (!ON_DEVICE) { showToast(detail, 6000); return; }
-  const text = document.getElementById('netPillText').textContent;
-  showSettingsPanel();
-  settingsSection = 'device';        // showSettingsPanel resets it to the menu
+// Into Device setup, from the Settings menu or from the pill: the same way in
+// either, so the update row is loaded (and a running update followed) too.
+function enterDeviceSetup(fromPill) {
+  settingsSection = 'device';
   deviceView = null;
-  deviceMsg = detail ? `${text}: ${detail}` : text;
+  deviceMsg = '';
+  deviceShowsNet = fromPill;
   settingsPanelEl.scrollTop = 0;
   renderSettingsPanel();
-  loadDeviceStatus().then(() => { if (settingsSection === 'device') renderSettingsPanel(); });
+  loadDeviceStatus().then(() => { if (settingsSection === 'device') renderSettingsPanel(); }); // fill in the current values
+  loadOtaStatus().then(() => {
+    // A rollback happens while this page is dead, so the only place anyone
+    // can learn about it is here, on the way back up.
+    if (otaState && otaState.state === 'applying') startOtaPolling();
+    if (settingsSection === 'device') renderSettingsPanel();
+  });
+}
+function openNetworkSettings() {
+  if (!ON_DEVICE) { showToast(document.getElementById('netPill').dataset.detail || '', 6000); return; }
+  showSettingsPanel();
+  enterDeviceSetup(true);
 }
 let netPillPress = null;   // the pointer that pressed the pill, so a drag ending on it is not a tap
 document.getElementById('netPill').addEventListener('pointerdown', (e) => { netPillPress = e.pointerId; });
