@@ -9,15 +9,15 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
 EMPTY="collar_vs_trim collar_vs_shell trim_vs_shell trim_vs_retainer collar_off_bezel collar_vs_nose
-       grooves_open trim_screws_open cavity_closed
-       added_vs_stand collar_clears_stand_by_3 trim_clears_stand_by_3 above_desk_by_10
+       grooves_open trim_screws_open cavity_closed flange_inside_collar
+       added_vs_stand collar_clears_stand_by_3 collar_clears_stand_by_8 trim_clears_stand_by_3 above_desk_by_10
        head_in_cradle arm_ends_at_z_arm_front
        button_fits encoder_fits lamp_fits rooms_clear_of_channel knob_clear_of_face
        wire_channel_open wire_slot_open wire_way_inside screws_pass_flange screw_heads_seat
        labels_on_face labels_clear_of_controls labels_apart controls_on_face"
 FOUND="collar_on_flange collar_stand_probe_bites trim_stand_probe_bites desk_probe_bites
        arm_reaches_z_arm_front button_21mm_meets_flange channel_probe_bites slot_probe_bites
-       screw_holes_open head_probe_bites labels_present
+       screw_holes_open head_probe_bites cavity_probe_bites full_flange_shows labels_present
        labels_near_edge labels_near_controls labels_near_each_other"
 CANARY="canary"
 MAX_MM3=1.0

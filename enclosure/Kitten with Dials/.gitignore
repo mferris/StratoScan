@@ -5,6 +5,8 @@
 # They are still generated, not authored. If you change the .scad, re-export
 # and commit both together, or the mesh silently stops matching the source.
 !*.stl
-# The collar's two-colour project and its lettering coupon (make-collar-3mf.py).
+# The collar's two-colour project, its lettering coupon and the two-colour
+# head (make-collar-3mf.py).
 !collar_twotone.3mf
+!kitten-head-dials-twotone.3mf
 !test_lettering_*.3mf

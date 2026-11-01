@@ -61,10 +61,16 @@ if (check == "trim_screws_open") intersection() { front_trim_dials_placed();
         translate([screw_r*cos(a), screw_r*sin(a), z_trim_back - 1]) cylinder(d = 3, h = 10, $fn = 24); } }
 // The flange closes the collar's cavity: nothing of the cavity's open back
 // lies outside the flange.
-if (check == "cavity_closed") linear_extrude(height = 1) difference() {
-    union() { col_band2d(col_r_in + col_wall, col_cav_back);
-              translate(polar(col_tag_back[0], 270)) circle(r = col_tag_back[1] - col_wall, $fn = 96); }
-    col_band2d(R_head - 0.3, col_r_flange);
+if (check == "cavity_closed") linear_extrude(height = 1) difference() { col_cavity_back2d(); col_flange2d(); }
+// and over the paws, where the band's edge and the flange both come in,
+// the flange stays inside the collar's back, so none of it shows beyond
+// the collar's outer edge
+if (check == "flange_inside_collar") linear_extrude(height = 1) difference() {
+    intersection() { col_flange2d(); polygon([[0, 0], polar(300, col_narrow_a[0] - 5), polar(300, 270), polar(300, col_narrow_a[3] + 5)]); }
+    // the collar's back, filled: its band and the tag's back
+    col_band2d(col_r_in, col_r_back, narrow = true);
+    translate(polar(col_tag_back[0], 270)) circle(r = col_tag_back[1], $fn = 96);
+    circle(r = col_r_in + 0.01, $fn = 720);
 }
 // In the stand, as in_stand_dials() poses the head: nothing the collar adds
 // meets the stand, and it clears it by 3 mm (moved 3 mm down, it still meets
@@ -72,6 +78,10 @@ if (check == "cavity_closed") linear_extrude(height = 1) difference() {
 // more above the stand, so the collar and the flange are what come nearest.
 if (check == "added_vs_stand") intersection() { posed_k() added(); stand(); }
 if (check == "collar_clears_stand_by_3") intersection() { translate([0, 0, -3]) posed_k() collar(); stand(); }
+// Since the band's lower edge came in over the paws (2026-11-01), the
+// collar clears the stand by 8 mm: its nearest point is now the tag's back,
+// over the plinth, which meets it about 9 mm down.
+if (check == "collar_clears_stand_by_8") intersection() { translate([0, 0, -8]) posed_k() collar(); stand(); }
 if (check == "trim_clears_stand_by_3") intersection() { translate([0, 0, -3]) posed_k() front_trim_dials_placed(); stand(); }
 if (check == "above_desk_by_10") intersection() { translate([0, 0, -10]) posed_k() added(); translate([-300, -300, -50]) cube([600, 600, 50]); }
 // and the head still sits in the cradle as the kitten's does
@@ -125,9 +135,9 @@ if (check == "controls_on_face") linear_extrude(height = 1) difference() {
 // the collar stands on the flange: raised 0.2 mm into the collar, the
 // flange meets it
 if (check == "collar_on_flange") intersection() { collar(); translate([0, 0, 0.2]) col_flange(); }
-// the stand probes are near enough to bite: 6 mm down, the collar and the
-// flange meet the stand; 15 mm down, the collar meets the desk
-if (check == "collar_stand_probe_bites") intersection() { translate([0, 0, -6]) posed_k() collar(); stand(); }
+// the stand probes are near enough to bite: 10 mm down the collar, and
+// 6 mm down the flange, meet the stand; 15 mm down, the collar meets the desk
+if (check == "collar_stand_probe_bites") intersection() { translate([0, 0, -10]) posed_k() collar(); stand(); }
 if (check == "trim_stand_probe_bites") intersection() { translate([0, 0, -6]) posed_k() front_trim_dials_placed(); stand(); }
 if (check == "desk_probe_bites") intersection() { translate([0, 0, -15]) posed_k() added(); translate([-300, -300, -50]) cube([600, 600, 50]); }
 // the stand under the chin does reach z_arm_front, within 0.5 mm
@@ -142,6 +152,16 @@ if (check == "slot_probe_bites") intersection() { rotate([0, 0, 360*10/(2*PI*110
 if (check == "screw_holes_open") difference() { screw_probe(); front_trim_dials_placed(); collar(); }
 // and the head probe, 0.5 mm deeper than flush, meets the countersink's walls
 if (check == "head_probe_bites") intersection() { screw_head(0.5); front_trim_dials_placed(); }
+// the cavity check bites: a flange 0.5 mm smaller all round leaves some
+// of the cavity's back open
+if (check == "cavity_probe_bites") linear_extrude(height = 1) difference() { col_cavity_back2d(); offset(r = -0.5) col_flange2d(); }
+// the old, full-width flange would show past the collar over the paws
+if (check == "full_flange_shows") linear_extrude(height = 1) difference() {
+    intersection() { col_band2d(R_head - 0.3, col_r_flange); polygon([[0, 0], polar(300, col_narrow_a[0] - 5), polar(300, 270), polar(300, col_narrow_a[3] + 5)]); }
+    col_band2d(col_r_in, col_r_back, narrow = true);
+    translate(polar(col_tag_back[0], 270)) circle(r = col_tag_back[1], $fn = 96);
+    circle(r = col_r_in + 0.01, $fn = 720);
+}
 if (check == "labels_present") collar_text();
 // The three lettering probes are near enough to bite: the words come
 // within 5 mm of the face's edge, within 4 mm of a control, and within 64

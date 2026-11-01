@@ -40,8 +40,9 @@ include <../Kitten Enclosure Two-Tone/kitten-enclosure-twotone.scad>
 part = "none";          // silence the kitten file's own part switch
 include <../Retro Radar with Dials/dial-controls.scad>
 
-dpart = "preview";      // preview | in_stand | exploded | closeup | sections
-                        // shell_dials | front_trim_dials | collar_print | collar_text_print
+dpart = "preview";      // preview | in_stand | exploded | closeup | sections | desk_eye
+                        // shell_dials | shell_head_dials | shell_inner_ears
+                        // front_trim_dials | collar_print | collar_text_print
                         // coupon_print | coupon_text_print
 
 // ---------- where the collar sits ----------
@@ -67,10 +68,12 @@ col_z1     = col_z0 + col_room + ctl_face_t;   // 84.12, the face
 // Its outer wall leans out a little as it comes forward: r 138.5 at the
 // back, 141 at the face. Two things under it set those (the head leans back
 // 18 degrees in the stand, so the collar's lower edge is the part nearest
-// the stand): the back's lowest point, at 270, stays 2 mm above the
-// plinth, near whose front edge it is; and the face's lower edge stays 5 mm
-// or more above the paws, which sit under it from about 240 to 300 degrees
-// (checks.scad: collar_clears_stand_by_3).
+// the stand): at full width, the back's lowest point, at 270, would stay
+// 2 mm above the plinth, near whose front edge it is, and the face's lower
+// edge 5 mm or more above the paws, which sit under it from about 240 to
+// 300 degrees. Since the edge comes in over the paws (col_narrow, below),
+// the collar clears the stand by 8 mm and more (checks.scad:
+// collar_clears_stand_by_8), the tag's back being nearest.
 col_r_back = 138.5;
 col_r_face = 141;
 // The band's two round ends are centred here; with the ends it runs from
@@ -86,6 +89,19 @@ col_a1     = 322;
 col_tag_back = [127, 10];
 col_tag_face = [133, 16];
 col_wall   = 2.5;
+// The face's two long edges, and the tag's rim, are cut at 45 degrees, this
+// far each way (2026-11-01), so the collar looks worn rather than bolted
+// on. The collar prints face down, so the chamfers are 45-degree
+// overhangs at its first layers, which need no support.
+col_chamfer = 1.5;
+// The band's lower edge rises over the paws (2026-11-01): the outer edge
+// comes in by col_narrow from col_narrow_a[1] to col_narrow_a[2], easing
+// in and out over the 15 degrees either side, so from the front the
+// collar's outline stops above the raised right paw's toes and leaves the
+// tag standing alone between the paws. The cavity, and the flange behind
+// it, come in with it.
+col_narrow   = 6;
+col_narrow_a = [235, 250, 290, 305];
 // The cavity's outer side at the back stays inside the flange (col_r_flange),
 // so the flange closes it.
 col_cav_back = 135;
@@ -94,14 +110,14 @@ col_cav_back = 135;
 // SCREEN on the left cheek, STATUS on the tag, RANGE on the right cheek,
 // where the knob is clear of the paws and the tail below it.
 col_screen   = [228, 126.5];
-col_status   = [270, 129.5];
-col_range    = [312, 126.5];
+col_status   = [270, 129];
+col_range    = [312, 127.2];
 // The lettering, in the shared engraving font at the shared size
 // (lettering_cap), inlaid 0.6 mm in a second colour, upright: SCREEN and
 // RANGE along the band beside their controls, on the side towards the tag,
 // since the knob's 24 mm skirt fills the band's width; STATUS on the tag,
 // under the jewel. [angle, radius, word]
-col_labels   = [[237.6, 126.5, "SCREEN"], [301.9, 126.5, "RANGE"], [270, 141.3, "STATUS"]];
+col_labels   = [[237.6, 126.5, "SCREEN"], [301.9, 126.5, "RANGE"], [270, 140.3, "STATUS"]];
 col_label_depth = 0.6;
 // and a stud inlaid in each round end, as the arc has rivets
 col_stud_d   = 3.6;
@@ -112,9 +128,11 @@ col_stud_d   = 3.6;
 // col_r_flange: 3.2 mm above the plinth at its lowest, under the chin.
 col_r_flange = 135.5;
 // Two M3 x 10 countersunk screws from behind the flange into M3 x 5
-// heat-set inserts in two columns in the collar, either side of the lamp.
+// heat-set inserts in two columns in the collar, either side of the lamp,
+// at r 125 so their countersinks stay 1.4 mm inside the flange where it
+// comes in over the paws.
 col_boss_a   = [252, 288];
-col_boss_r   = 127;
+col_boss_r   = 125;
 col_boss_d   = 8;
 col_insert_d = 4.0;     // M3 heat-set insert, as everywhere else in the case
 col_insert_h = 6;
@@ -144,33 +162,56 @@ col_slot_z0  = 52.5;
 // ============================================================
 function col_t(z) = (z - col_z0) / (col_z1 - col_z0);
 function col_r_out(z) = col_r_back + (col_r_face - col_r_back) * col_t(z);
+// how far the band's outer edge comes in at angle a (col_narrow_a)
+function col_ease(t) = (1 - cos(180 * t)) / 2;
+function col_n(a) = let(k = col_narrow_a)
+    a <= k[0] || a >= k[3] ? 0
+  : a < k[1] ? col_narrow * col_ease((a - k[0]) / (k[1] - k[0]))
+  : a > k[2] ? col_narrow * col_ease((k[3] - a) / (k[3] - k[2]))
+  : col_narrow;
+col_step = 0.5;   // the band's angular step, in degrees
+function col_angles(a0, a1) = [for (i = [0 : ceil((a1 - a0) / col_step)]) min(a1, a0 + i * col_step)];
 
 // An annular band from r0 to r1 between the angles a0 and a1, with round
-// ends centred on them, in plan.
-module col_band2d(r0, r1, a0 = col_a0, a1 = col_a1) {
+// ends centred on them, in plan; with narrow, its outer edge comes in over
+// the paws as the collar's does (col_n).
+module col_band2d(r0, r1, a0 = col_a0, a1 = col_a1, narrow = false) {
     rc = (r1 - r0)/2;  rm = (r0 + r1)/2;
+    as = col_angles(a0, a1);
     union() {
-        intersection() {
-            difference() { circle(r = r1, $fn = 720); circle(r = r0, $fn = 720); }
-            polygon([[0, 0], polar(400, a0), polar(400, (a0 + a1)/2), polar(400, a1)]);
-        }
+        polygon(concat([for (a = as) polar(r1 - (narrow ? col_n(a) : 0), a)],
+                       [for (i = [len(as) - 1 : -1 : 0]) polar(r0, as[i])]));
         translate(polar(rm, a0)) circle(r = rc, $fn = 96);
         translate(polar(rm, a1)) circle(r = rc, $fn = 96);
     }
 }
 
-// A band whose outer radius runs from r1a at za to r1b at zb, the inner
-// radius r0 throughout, with round ends: a rotate_extrude for the arc and an
-// oblique cone at each end, so every section is col_band2d at that height.
+// A band whose outer radius runs from r1a at za to r1b at zb, less col_n
+// over the paws, the inner radius r0 throughout, with round ends. With c,
+// the face's two edges are chamfered c at 45 degrees. The arc is lofted
+// through its section at each angle; each end is an oblique cone (with c, a
+// cone and a chamfered cap), so every section is col_band2d at that height.
 // The cones are 0.01 mm narrower than the band (2026-11-01): at full width
 // each touched the band's inner and outer faces along a line, and the
 // collar's mesh had an edge there that a slicer reports as non-manifold.
-module col_band(r0, r1a, za, r1b, zb) {
-    rotate([0, 0, col_a0]) rotate_extrude(angle = col_a1 - col_a0, $fn = 720)
-        polygon([[r0, za], [r1a, za], [r1b, zb], [r0, zb]]);
+function col_profile(r0, r1a, za, r1b, zb, c, n) = let(r1 = function(z) r1a + (r1b - r1a) * (z - za) / (zb - za) - n)
+    c > 0 ? [[r0, za], [r1(za), za], [r1(zb - c), zb - c], [r1(zb) - c, zb], [r0 + c, zb], [r0, zb - c]]
+          : [[r0, za], [r1(za), za], [r1(zb), zb], [r0, zb]];
+module col_band(r0, r1a, za, r1b, zb, c = 0) {
+    as = col_angles(col_a0, col_a1);
+    m = c > 0 ? 6 : 4;
+    pts = [for (a = as) for (p = col_profile(r0, r1a, za, r1b, zb, c, col_n(a))) [p[0] * cos(a), p[0] * sin(a), p[1]]];
+    k = len(as);
+    polyhedron(points = pts, faces = concat(
+        [for (i = [0 : k - 2]) for (j = [0 : m - 1]) [i*m + j, i*m + (j+1)%m, (i+1)*m + (j+1)%m, (i+1)*m + j]],
+        [[for (j = [m - 1 : -1 : 0]) j]],
+        [[for (j = [0 : m - 1]) (k - 1)*m + j]]));
     for (a = [col_a0, col_a1]) hull() {
-        translate(concat(polar((r0 + r1a)/2, a), [za])) cylinder(r = (r1a - r0)/2 - 0.01, h = 0.01, $fn = 96);
-        translate(concat(polar((r0 + r1b)/2, a), [zb - 0.01])) cylinder(r = (r1b - r0)/2 - 0.01, h = 0.01, $fn = 96);
+        pr = col_profile(r0, r1a, za, r1b, zb, c, 0);
+        // each section's middle and half-width: the bottom, the chamfer's foot and the face
+        for (h = c > 0 ? [[pr[0][1], pr[0][0], pr[1][0]], [pr[2][1] - 0.01, pr[0][0], pr[2][0]], [pr[3][1] - 0.01, pr[4][0], pr[3][0]]]
+                       : [[pr[0][1], pr[0][0], pr[1][0]], [pr[2][1] - 0.01, pr[3][0], pr[2][0]]])
+            translate(concat(polar((h[1] + h[2])/2, a), [h[0]])) cylinder(r = (h[2] - h[1])/2 - 0.01, h = 0.01, $fn = 96);
     }
 }
 
@@ -194,16 +235,34 @@ module col_inlay2d() { col_labels2d(); col_studs2d(); }
 
 // the tag at height z, in plan: the oblique cone's section there
 module col_tag_disc(c, z, h = 0.01) translate(concat(polar(c[0], 270), [z])) cylinder(r = c[1], h = h, $fn = 96);
-module col_tag(inset = 0, z0 = col_z0, z1 = col_z1) hull() {
-    col_tag_disc([col_tag_back[0] + (col_tag_face[0] - col_tag_back[0]) * col_t(z0),
-                  col_tag_back[1] + (col_tag_face[1] - col_tag_back[1]) * col_t(z0) - inset], z0);
-    col_tag_disc([col_tag_back[0] + (col_tag_face[0] - col_tag_back[0]) * col_t(z1),
-                  col_tag_back[1] + (col_tag_face[1] - col_tag_back[1]) * col_t(z1) - inset], z1 - 0.01);
+function col_tag_at(z, inset = 0) = [col_tag_back[0] + (col_tag_face[0] - col_tag_back[0]) * col_t(z),
+                                       col_tag_back[1] + (col_tag_face[1] - col_tag_back[1]) * col_t(z) - inset];
+// with c, the face's rim chamfered c at 45 degrees
+module col_tag(inset = 0, z0 = col_z0, z1 = col_z1, c = 0) hull() {
+    col_tag_disc(col_tag_at(z0, inset), z0);
+    col_tag_disc(col_tag_at(z1 - c, inset), z1 - c - 0.01);
+    if (c > 0) col_tag_disc(col_tag_at(z1, inset + c), z1 - 0.01);
 }
-// the collar's face in plan, for the lettering's checks
+// the collar's face in plan, the flat inside the chamfers, for the
+// lettering's checks
 module col_face2d(inset = 0) {
-    col_band2d(col_r_in + inset, col_r_face - inset);
-    translate(polar(col_tag_face[0], 270)) circle(r = col_tag_face[1] - inset, $fn = 96);
+    col_band2d(col_r_in + col_chamfer + inset, col_r_face - col_chamfer - inset, narrow = true);
+    translate(polar(col_tag_face[0], 270)) circle(r = col_tag_face[1] - col_chamfer - inset, $fn = 96);
+}
+// The collar's back in plan: the flange, and the cavity's open back that
+// it closes. The flange follows the band's outer edge in over the paws and
+// takes in the tag's back, 1.5 mm inside its rim.
+module col_flange2d() {
+    col_band2d(R_head - 0.3, col_r_flange, narrow = true);
+    translate(polar(col_tag_back[0], 270)) circle(r = col_tag_back[1] - 1.5, $fn = 96);
+}
+// (the cavity's outer side leans out from col_cav_back 1 mm behind the
+// collar's back, so at the back it is a little wider)
+function col_cav_r(z) = col_cav_back + (col_r_out(col_z1 - ctl_face_t) - col_wall - col_cav_back)
+                                       * (z - (col_z0 - 1)) / (col_z1 - ctl_face_t - (col_z0 - 1));
+module col_cavity_back2d() {
+    col_band2d(col_r_in + col_wall, col_cav_r(col_z0), narrow = true);
+    translate(polar(col_tag_back[0], 270)) circle(r = col_tag_back[1] - col_wall, $fn = 96);
 }
 
 // ============================================================
@@ -214,12 +273,12 @@ module collar() {
         union() {
             difference() {
                 union() {
-                    col_band(col_r_in, col_r_back, col_z0, col_r_face, col_z1);
-                    col_tag();
+                    col_band(col_r_in, col_r_back, col_z0, col_r_face, col_z1, col_chamfer);
+                    col_tag(c = col_chamfer);
                 }
                 // the cavity, open at the back, where the flange closes it
                 col_band(col_r_in + col_wall, col_cav_back, col_z0 - 1,
-                         col_r_out(col_z1 - ctl_face_t) - col_wall, col_z1 - ctl_face_t);
+                         col_cav_r(col_z1 - ctl_face_t), col_z1 - ctl_face_t);
                 col_tag(col_wall, col_z0 - 1, col_z1 - ctl_face_t);
             }
             // the two columns for the screws, from the face back to the flange
@@ -262,7 +321,7 @@ module test_lettering_collar_text() translate([0, 0, col_z1 - col_label_depth]) 
 // the rim out to col_r_flange, under the collar.
 module col_flange() {
     translate([0, 0, z_trim_back]) linear_extrude(height = z_trim_face - z_trim_back)
-        col_band2d(R_head - 0.3, col_r_flange);
+        col_flange2d();
 }
 // What the flange loses: the screws' holes and countersinks from behind, the
 // button's pocket, and the wires' channel.
@@ -299,13 +358,15 @@ module front_trim_dials_placed() {
 // ============================================================
 // the shell: the kitten's shell with the wires' slot
 // ============================================================
-module shell_dials() {
-    difference() {
-        shell();
-        rotate([0, 0, col_wire_a])
-            translate([R_head - wall - 1, -col_slot_w/2, col_slot_z0]) cube([wall + 2, col_slot_w, shell_depth - col_slot_z0 + 1]);
-    }
-}
+module col_wire_slot() rotate([0, 0, col_wire_a])
+    translate([R_head - wall - 1, -col_slot_w/2, col_slot_z0]) cube([wall + 2, col_slot_w, shell_depth - col_slot_z0 + 1]);
+module shell_dials() difference() { shell(); col_wire_slot(); }
+// The head in two colours, as the kitten's (2026-11-01): the kitten's
+// shell_head() with the same slot, on filament 1, and the kitten's
+// shell_inner_ears(), unchanged, on filament 2. The slot, at 263 degrees
+// under the chin, is nowhere near the ears, so the two still meet face to
+// face and together are shell_dials().
+module shell_head_dials() difference() { shell_head(); col_wire_slot(); }
 
 // ============================================================
 // pictures
@@ -329,8 +390,10 @@ module collar_controls() {
     color(c_label) collar_text();
 }
 
-module head_dials_assembled() {
-    color(c_head) shell_dials();
+c_ear    = "#E59AA6";   // the inner ears' second colour, in the pictures
+module head_dials_assembled(twotone = false) {
+    if (twotone) { color(c_head) shell_head_dials(); color(c_ear) shell_inner_ears(); }
+    else color(c_head) shell_dials();
     color("Gray") front_stack_placed("retainer");
     screen_picture_k();
     color(c_face) front_trim_dials_placed();
@@ -342,14 +405,14 @@ module head_dials_assembled() {
 module posed_k() {
     translate([0, 0, base_h + cradle_od/2 - 3]) rotate([90 - stand_angle, 0, 0]) translate([0, 0, -shell_depth/2]) children();
 }
-module in_stand_dials() {
+module in_stand_dials(twotone = false) {
     color("#1c1c1c") part_stand_body();
     color("#f4f4f2") part_stand_paws();
     color("#1c1c1c") part_stand_toes();
     color("#1c1c1c") part_stand_tail();
     color("#f4f4f2") part_stand_tail_tip();
     color("#f4f4f2") part_stand_claws();
-    posed_k() head_dials_assembled();
+    posed_k() head_dials_assembled(twotone);
 }
 
 // The bought parts behind the face, for the sections only: the button's
@@ -362,8 +425,10 @@ module bought_parts() translate([0, 0, col_z1 - ctl_face_t]) {
         translate([0, 0, -button_deep]) cylinder(d = 13, h = button_deep, $fn = 48);
     }
     translate(col_range()) rotate([0, 0, col_range[0]]) {
-        translate([-enc_body/2, -enc_body/2, -(enc_room - 6) + (ctl_face_t - enc_panel)]) cube([enc_body, enc_body, enc_room - 6]);
-        for (y = [-5, 0, 5]) translate([-5, y, -enc_room + (ctl_face_t - enc_panel)]) cylinder(d = 0.8, h = 6, $fn = 8);
+        // the body bears on the face's back at its corners: its 19 mm
+        // diagonal is wider than the face's 15 mm round relief
+        translate([-enc_body/2, -enc_body/2, -(enc_room - 6)]) cube([enc_body, enc_body, enc_room - 6]);
+        for (y = [-5, 0, 5]) translate([-5, y, -enc_room]) cylinder(d = 0.8, h = 6, $fn = 8);
     }
     translate(col_status()) {
         translate([0, 0, ctl_face_t - jewel_shank_h - 0.2]) cylinder(d = 5, h = 8.6, $fn = 32);
@@ -402,6 +467,8 @@ module inverse_posed_k() {
 
 if (dpart == "none") {}   // for checks.scad, which includes this file
 else if (dpart == "shell_dials") shell_dials();
+else if (dpart == "shell_head_dials") shell_head_dials();     // the two-colour head, filament 1
+else if (dpart == "shell_inner_ears") shell_inner_ears();     // the kitten's ears' lining, filament 2
 // The trim as it prints, face up and in its own frame, as front_trim.stl is
 // exported: rabbet and flange on the bed.
 else if (dpart == "front_trim_dials") translate([0, 0, -z_trim0]) front_trim_dials_placed();
@@ -412,6 +479,8 @@ else if (dpart == "coupon_print") translate([0, 0, col_z1]) rotate([180, 0, 0]) 
 else if (dpart == "coupon_text_print") translate([0, 0, col_z1]) rotate([180, 0, 0]) test_lettering_collar_text();
 else if (dpart == "collar") collar();
 else if (dpart == "in_stand") in_stand_dials();
+// the head in two colours in its stand, for the pictures
+else if (dpart == "in_stand_twotone") in_stand_dials(true);
 else if (dpart == "closeup") {
     intersection() {
         union() {
