@@ -75,8 +75,8 @@ if (check == "lamp_fits") intersection() { arc_and_cover();
     translate(concat(polar(ctl_r, lamp_a), [pod_z1 - pod_face_t - 14])) cylinder(d = 9, h = 14 - 0.05, $fn = 32); }
 // the knob clears the lettering and the face (it stands 1.5 mm off the face on the nut)
 if (check == "knob_clear_of_face") intersection() { pod(); translate(concat(polar(ctl_r, knob_a), [pod_z1 + 1.5])) knob(); }
-// The lettering (2026-10-31), larger since it printed broken at 3.3 mm. It
-// keeps 1 mm inside the face's edge; 1 mm clear of the lamp's jewel, the
+// The lettering (2026-10-31; in the engraving font, centred over its
+// controls, since 2026-11-01). It keeps 1 mm inside the face's edge; 1 mm clear of the lamp's jewel, the
 // button's 16 mm bezel, the knob's skirt and the rivet dots; and its words
 // keep 2 mm apart: grown 1 mm each, no two meet. Its strokes and gaps are
 // measured by tests/test_enclosure_core.py (check 13).
@@ -114,9 +114,11 @@ if (check == "arc_face_near_trim") intersection() { pod(); slab_from(z_trim_face
 if (check == "trim_reaches_z_trim_face") intersection() { front_stack_placed("trim"); slab_from(z_trim_face - 0.2); }
 if (check == "button_21mm_meets_cover") intersection() { arc_and_cover(); button_room(21); }
 // The three lettering probes are near enough to bite: the words come
-// within 3 mm of the face's edge, within 3 mm of the knob's skirt, and
-// within 6 mm of each other.
-if (check == "labels_near_edge") linear_extrude(height = 1) difference() { labels2d(); pod_outline2d(3); }
+// within 4 mm of the face's edge, within 3 mm of the knob's skirt, and
+// within 9 mm of each other (2026-11-01: 3 mm and 6 mm while the words were
+// 5.6 mm Liberation Sans; centred on their controls they are now 7-8 mm
+// apart, and about 2.8 mm in from the edge).
+if (check == "labels_near_edge") linear_extrude(height = 1) difference() { labels2d(); pod_outline2d(4); }
 if (check == "labels_near_controls") linear_extrude(height = 1) intersection() { labels2d(); controls2d(3); }
-if (check == "labels_near_each_other") linear_extrude(height = 1) words_meet(3);
+if (check == "labels_near_each_other") linear_extrude(height = 1) words_meet(4.5);
 if (check == "canary") pod();

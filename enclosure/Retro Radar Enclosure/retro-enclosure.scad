@@ -1542,17 +1542,14 @@ ant_twin_cbore_h = 1.5;
 function ant_twin_cbore() = ant_twin_cbore_d;
 ant_twin_back_pad  = 4;     // the bar is thicker on its case side behind the flare under the bore's mouth
 ant_twin_back_pad_w = 40;
-// The lettering, inlaid in a second colour (2026-10-31: see "Inlaid
-// lettering" at usbc_label below). It was size 6, with MHz at 0.55 of that,
-// and MHz's strokes were 0.45 mm, too thin to print. ant_twin_label_mhz is
-// the MHz line's size as a fraction of the number's; ant_twin_label_y the two
-// lines' heights, number then MHz, from the cover's middle.
-ant_twin_label_size = 7;
+// The lettering, inlaid in a second colour (see "Inlaid lettering" at
+// usbc_label below), in the engraving font (gorton_text) at lettering_cap
+// since 2026-11-01: each tower's frequency and MHZ under it, two lines
+// ant_twin_label_pitch apart, centred ant_twin_label_y up from the cover's
+// middle. It was Liberation Sans Bold, 7 mm, until then.
 ant_twin_label_depth = 0.6;
-ant_twin_label_bold    = 0.13;   // each stroke fattened by this much a side
-ant_twin_label_spacing = 1.12;
-ant_twin_label_mhz     = 0.8;
-ant_twin_label_y       = [3.5, -5.5];
+ant_twin_label_pitch = 6.4;    // line to line: 2.1 mm between them
+ant_twin_label_y     = 2;
 ant_twin_plug_d    = 9.3;   // an SMA plug's hex across its corners
 
 // Everything sized from a jack body `a` (across flats), and from a pair
@@ -1728,17 +1725,13 @@ module ant_twin_label_solid(af = ant_twin_jack_af, h = ant_twin_label_depth) {
 
 // Both sides' lettering in plan, mirrored as it is cut (2026-10-31: drawn
 // here once, so the test can measure its strokes; see "Inlaid lettering").
+// Each tower's lines are centred under it (2026-11-01; 6 mm inboard while
+// the lettering was 7 mm, to clear the screws).
 module ant_twin_label2d() {
     for (s = [-1, 1]) let (i = s > 0 ? 0 : 1) if (ant_twin_labels[i] != "")
-        translate([s * (ant_twin_sep/2 - 6), 0]) mirror([1, 0])
-            offset(delta = ant_twin_label_bold) {
-                translate([0, ant_twin_label_y[0]]) text(ant_twin_labels[i], size = ant_twin_label_size,
-                    font = "Liberation Sans:style=Bold", halign = "center", valign = "center",
-                    spacing = ant_twin_label_spacing);
-                translate([0, ant_twin_label_y[1]]) text("MHz", size = ant_twin_label_size * ant_twin_label_mhz,
-                    font = "Liberation Sans:style=Bold", halign = "center", valign = "center",
-                    spacing = ant_twin_label_spacing);
-            }
+        translate([s * ant_twin_sep/2, ant_twin_label_y]) mirror([1, 0])
+            for (l = [0, 1]) translate([0, (0.5 - l) * ant_twin_label_pitch])
+                gorton_text(l == 0 ? ant_twin_labels[i] : "MHZ", lettering_cap, lettering_pen, lettering_track);
 }
 
 // The cover in its seat on the body, for the checks and the preview.
@@ -1982,36 +1975,128 @@ module usbc_gauge() {
         }
 }
 
+// ---- Engraved lettering: a small stroke font (2026-11-01) ----------------
+// Every lettering on the cases is drawn in this one font, in the manner of
+// the engraving on 1950s and 60s radar and avionics panels: the lettering a
+// pantograph engraver cut with a round cutter following a brass template
+// (Gorton's, and the Leroy and MIL-STD-130 lettering like it). Each letter
+// is a few centre lines, straight or arcs, swept with a round pen, so every
+// stroke is one width, its ends and joins round; the capitals are plain and
+// geometric, a little narrow, the C and G open, the R's leg straight, and
+// the letters spaced wide. The centre lines are drawn here, not taken from
+// any font. Only the characters the cases use are drawn; any other draws
+// nothing (gorton_chars() lists them). The A's apex is a short flat, 0.2 of
+// the grid, not a point: at this size a pointed A's counter is under 0.8 mm
+// across and fills in (check 13).
+//
+// A glyph is [width, [polyline, ...]], its centre lines on a grid whose
+// unit is the centre-line cap height: the baseline's centre line is y = 0,
+// the cap line's y = 1, and x runs from 0 to width. Drawn at cap height h
+// with pen p, the grid unit is h - p, so the strokes' outer edges span
+// exactly h. Arcs are elliptical, from a0 to a1 degrees.
+function gorton_arc(cx, cy, rx, ry, a0, a1, n = 16) =
+    [for (i = [0 : n]) let (a = a0 + (a1 - a0) * i / n) [cx + rx * cos(a), cy + ry * sin(a)]];
+function gorton_glyph(c) =
+    c == " " ? [0.5, []] :
+    c == "-" ? [0.34, [[[0, 0.5], [0.34, 0.5]]]] :
+    c == "A" ? [0.8, [[[0, 0], [0.3, 1], [0.5, 1], [0.8, 0]], [[0.066, 0.22], [0.734, 0.22]]]] :
+    c == "B" ? [0.56, [concat([[0, 0.5], [0, 1]], gorton_arc(0.31, 0.75, 0.23, 0.25, 90, -90), [[0, 0.5]]),
+                       concat([[0, 0.5]], gorton_arc(0.31, 0.25, 0.25, 0.25, 90, -90), [[0, 0], [0, 0.5]])]] :
+    c == "C" ? [0.6, [gorton_arc(0.3, 0.5, 0.3, 0.5, 45, 315, 24)]] :
+    c == "D" ? [0.58, [concat([[0, 0], [0, 1]], gorton_arc(0.22, 0.5, 0.36, 0.5, 90, -90, 20), [[0, 0]])]] :
+    c == "E" ? [0.5, [[[0.5, 1], [0, 1], [0, 0], [0.5, 0]], [[0, 0.5], [0.4, 0.5]]]] :
+    c == "G" ? [0.6, [concat(gorton_arc(0.3, 0.5, 0.3, 0.5, 65, 360, 26), [[0.45, 0.5]])]] :
+    c == "H" ? [0.58, [[[0, 0], [0, 1]], [[0.58, 0], [0.58, 1]], [[0, 0.5], [0.58, 0.5]]]] :
+    c == "I" ? [0, [[[0, 0], [0, 1]]]] :
+    c == "M" ? [0.8, [[[0, 0], [0, 1], [0.4, 0], [0.8, 1], [0.8, 0]]]] :
+    c == "N" ? [0.6, [[[0, 0], [0, 1], [0.6, 0], [0.6, 1]]]] :
+    c == "O" ? [0.64, [gorton_arc(0.32, 0.5, 0.32, 0.5, 0, 360, 32)]] :
+    c == "P" ? [0.54, [concat([[0, 0], [0, 1]], gorton_arc(0.3, 0.75, 0.24, 0.25, 90, -90), [[0, 0.5]])]] :
+    c == "R" ? [0.56, [concat([[0, 0], [0, 1]], gorton_arc(0.3, 0.75, 0.24, 0.25, 90, -90), [[0, 0.5]]),
+                       [[0.28, 0.5], [0.56, 0]]]] :
+    c == "S" ? [0.56, [concat(gorton_arc(0.27, 0.75, 0.26, 0.25, 40, 270),
+                              gorton_arc(0.29, 0.25, 0.27, 0.25, 90, -140))]] :
+    c == "T" ? [0.58, [[[0, 1], [0.58, 1]], [[0.29, 1], [0.29, 0]]]] :
+    c == "U" ? [0.56, [concat([[0, 1]], gorton_arc(0.28, 0.3, 0.28, 0.3, 180, 360), [[0.56, 1]])]] :
+    c == "V" ? [0.64, [[[0, 1], [0.32, 0], [0.64, 1]]]] :
+    c == "W" ? [0.96, [[[0, 1], [0.24, 0], [0.48, 1], [0.72, 0], [0.96, 1]]]] :
+    c == "Z" ? [0.54, [[[0, 1], [0.54, 1], [0, 0], [0.54, 0]]]] :
+    c == "0" ? [0.56, [gorton_arc(0.28, 0.5, 0.28, 0.5, 0, 360, 32)]] :
+    c == "1" ? [0.22, [[[0, 0.8], [0.22, 1], [0.22, 0]]]] :
+    c == "2" ? [0.56, [concat(gorton_arc(0.27, 0.73, 0.27, 0.27, 160, -35), [[0, 0], [0.56, 0]])]] :
+    c == "7" ? [0.54, [[[0, 1], [0.54, 1], [0.16, 0]]]] :
+    c == "8" ? [0.56, [gorton_arc(0.28, 0.75, 0.26, 0.25, -90, 270, 24), gorton_arc(0.28, 0.25, 0.28, 0.25, 90, 450, 24)]] :
+    c == "9" ? [0.54, [gorton_arc(0.27, 0.745, 0.27, 0.255, 0, 360, 24),
+                       concat([[0.54, 0.745]], gorton_arc(0.29, 0.25, 0.25, 0.25, 0, -100))]] :
+    [0.5, []];
+// The characters drawn, for the alphabet sheet and the checks.
+function gorton_chars() = "ABCDEGHIMNOPRSTUVWZ012789-";
+// The grid width of a string's letters before character i, and the width of
+// the whole string in mm, edge to edge, at cap height h, pen p and track t
+// (the gap between letters' centre-line boxes, in mm).
+function gorton_sum(s, i) = i <= 0 ? 0 : gorton_glyph(s[i - 1])[0] + gorton_sum(s, i - 1);
+function gorton_width(s, h, p, t) = gorton_sum(s, len(s)) * (h - p) + (len(s) - 1) * (p + t) + p;
+// The string s drawn in plan, h tall (the capitals' outer edges), with pen
+// p, letters t apart; aligned as text() aligns.
+module gorton_text(s, h, p, t, halign = "center", valign = "center") {
+    u = h - p;
+    w = gorton_width(s, h, p, t);
+    x0 = halign == "center" ? -w/2 : halign == "right" ? -w : 0;
+    y0 = valign == "center" ? -h/2 : valign == "top" ? -h : 0;
+    fn = 20;
+    translate([x0 + p/2, y0 + p/2])
+        for (i = [0 : len(s) - 1]) let (g = gorton_glyph(s[i]))
+            translate([gorton_sum(s, i) * u + i * (p + t), 0])
+                for (l = g[1]) for (k = [0 : len(l) - 2])
+                    hull() {
+                        // the pen's polygon circumscribes its circle, so no
+                        // stroke is narrower than p in any direction
+                        translate(l[k] * u) circle(r = p/2 / cos(180/fn), $fn = fn);
+                        translate(l[k + 1] * u) circle(r = p/2 / cos(180/fn), $fn = fn);
+                    }
+}
+
+// The lettering's size, shared by every part that carries it: the
+// capitals' height, the pen (every stroke's width) and the gap between
+// letters, in mm. Each part's own sizes below start from these. Why these
+// numbers (README, "Inlaid lettering"): the pen is the narrowest that the
+// slicer, at the two-colour settings, still lays down as two first-layer
+// lines of at least the 0.42 mm it is set to (a coupon sliced at 0.6 to
+// 1.0 mm, 2026-11-01: 0.7 mm gets two 0.38 mm lines, 0.6 mm one). The cap
+// height is then the least that keeps every counter and gap 0.8 mm open:
+// E, B, S, 8 and 9 stack two openings in the height, each (h - 3p)/2, so
+// h >= 1.6 + 3p = 4.15 mm, and 4.3 leaves 0.075 mm a side to spare.
+lettering_cap   = 4.3;
+lettering_pen   = 0.85;
+lettering_track = 1.3;
+
 // Inlaid lettering (2026-10-31). Every part with lettering in a second
 // colour prints it face down: the back plate's label here, the twin antenna
 // cover's frequencies and the Retro with Dials' control arc. The letters are
 // the part's first three layers, so each stroke is laid down by the first
-// layer's lines, about 0.42-0.5 mm wide. A stroke much under two lines
-// wide comes out broken or missing: the arc's 3.3 mm letters
-// had 0.5 mm strokes, and its C and S printed half there. So every inlaid
-// lettering has strokes at least 1.0 mm wide and its counters and the gaps
+// layer's lines, about 0.42-0.5 mm wide. A stroke much under two lines wide
+// comes out broken or missing: the arc's 3.3 mm Liberation Sans letters had
+// 0.5 mm strokes, and its C and S printed half there. So every inlaid
+// lettering has strokes at least 0.85 mm wide and its counters and the gaps
 // between its letters at least 0.8 mm open, which tests/test_enclosure_core.py
-// measures (check 13). Liberation Sans Bold's own strokes are about a seventh
-// of its size, so the letters are larger, and offset() fattens each stroke;
-// the letters are spaced wider to keep their gaps open.
+// measures (check 13). From 2026-10-31 to 2026-11-01 that was done with
+// Liberation Sans Bold made 6-7 mm tall and fattened, which the owner found
+// too big; since 2026-11-01 every lettering is the engraving font above
+// (gorton_text), whose strokes are all one pen wide, at lettering_cap.
 //
 // The charger it needs, engraved in the plate's outer face above the USB-C
 // pocket (2026-10-29). The trigger board asks the charger for 12 V, and one
 // that has no 12 V, such as a Pi-style 5 V 5 A supply, never starts the
-// radar and gives no sign why. Two lines of capitals 6 mm tall (5 mm until
-// 2026-10-31, whose 0.67 mm strokes were too thin), 0.6 mm deep,
-// in the font of the antenna cover's lettering. It is read from behind the
-// case, so it is mirrored here. The plate prints outer face down, so the
-// letters are its first three layers, open to the bed: they need no support.
-// It stands 1.5 mm above the coupon's patch, so usbc_gauge is unchanged, and
-// is well clear of every hole in the plate.
+// radar and gives no sign why. Two lines of capitals lettering_cap tall,
+// 0.6 mm deep. It is read from behind the case, so it is mirrored here. The
+// plate prints outer face down, so the letters are its first three layers,
+// open to the bed: they need no support. It stands 1.5 mm above the
+// coupon's patch, so usbc_gauge is unchanged, and is well clear of every
+// hole in the plate.
 usbc_label       = ["USB-C PD", "12V 27W"];
-usbc_label_cap   = 6;       // the capitals' height
-usbc_label_size  = usbc_label_cap / 0.955;   // the text size for that: Liberation Sans Bold's capitals are 0.955 of it
-usbc_label_pitch = 8.5;     // line to line, 2.5 mm between them
+usbc_label_cap   = lettering_cap;   // the capitals' height
+usbc_label_pitch = 6.4;     // line to line, 2.1 mm between them
 usbc_label_depth = 0.6;
-usbc_label_bold    = 0.12;  // each stroke fattened by this much a side
-usbc_label_spacing = 1.12;  // letter spacing, as text()'s spacing
 usbc_label_pos   = [usbc_cut_pos[0],
                     usbc_cut_pos[1] + usbc_gauge_size[1]/2 + 1.5 + (usbc_label_pitch*(len(usbc_label) - 1) + usbc_label_cap)/2];
 
@@ -2019,9 +2104,7 @@ usbc_label_pos   = [usbc_cut_pos[0],
 module usbc_label2d() {
     for (i = [0 : len(usbc_label) - 1])
         translate([0, ((len(usbc_label) - 1)/2 - i) * usbc_label_pitch])
-            offset(delta = usbc_label_bold)
-                text(usbc_label[i], size = usbc_label_size, font = "Liberation Sans:style=Bold",
-                     halign = "center", valign = "center", spacing = usbc_label_spacing);
+            gorton_text(usbc_label[i], usbc_label_cap, lettering_pen, lettering_track);
 }
 
 // Its letters as a solid h deep from the plate's outer face in, mirrored to
@@ -2446,7 +2529,7 @@ slack_curb_h = 8;    // tall: well over a 5 mm cable lying on the plate, and ove
 // and the leads' ferrules, and letters cut into a top face print with no
 // support.
 pwr_tray_label     = ["OUT", "IN"];   // at the +x end, and at the -x end
-pwr_tray_label_cap = 4.5;             // their capitals' height, along the tray
+pwr_tray_label_cap = lettering_cap;   // their capitals' height, along the tray (4.5 mm in Liberation Sans until 2026-11-01)
 pwr_tray_label_d   = 0.6;             // three 0.2 mm layers
 
 // across the tray, from its long centre line to each boss: each cap's bore just
@@ -2867,8 +2950,7 @@ module pwr_tie_tent(w = pwr_tie_slot_w, h = pwr_tie_slot_h, len = 10) {
 module pwr_tray_labels2d() {
     x = pwr_reg_l/2 + pwr_reg_clear + pwr_tie_slot_at/2;
     for (i = [0, 1]) translate([i == 0 ? x : -x, 0]) rotate(i == 0 ? -90 : 90)
-        text(pwr_tray_label[i], size = pwr_tray_label_cap/0.955, font = "Liberation Sans:style=Bold",
-             halign = "center", valign = "center");
+        gorton_text(pwr_tray_label[i], pwr_tray_label_cap, lettering_pen, lettering_track);
 }
 
 // The regulator's tray, in its own frame: the board's long axis along x, the

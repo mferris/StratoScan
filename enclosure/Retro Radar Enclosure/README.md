@@ -46,8 +46,8 @@ defaults, the old lettering's first layer is thin and patchy in its narrow
 strokes, the C and S among them. What caused the pale ring is not yet known;
 print a coupon (below) to see whether these settings cure it.
 
-Two things changed. The lettering is larger and bolder, with every stroke at
-least 1.0 mm wide and every counter and gap between letters at least 0.8 mm
+Two things changed. The lettering's strokes are at least 0.85 mm wide
+(1.0 mm from 2026-10-31 to 2026-11-01) and every counter and gap between letters at least 0.8 mm
 open (`tests/test_enclosure_core.py` measures them, check 13). And the first
 three settings below go on the part, set by hand once the 3MF is open:
 Arachne walls, elephant-foot compensation 0 and a monotonic line bottom
@@ -55,10 +55,9 @@ surface. For a few hours on 2026-10-31 the 3MFs carried them as per-object
 settings, but Bambu Studio's desktop app then opened the files as geometry
 only ("The 3mf file has invalid config"), losing the filaments, so the 3MFs
 now hold only the parts and their filaments, with the face at z 0, on the
-bed. Sliced with the settings, the first layer now lays two lines or more
-across most of each stroke, and one wider Arachne line, up to 0.7 mm, across
-most of the rest. Arachne walls and the larger lettering are what fill the
-first layer.
+bed. Sliced with the settings, the first layer lays two lines across most
+of each stroke and covers about 95% of the letters, every letter whole.
+Arachne walls and strokes two lines wide are what fill the first layer.
 
 **Print a coupon first.** `test_lettering_plate.3mf` and
 `test_lettering_cover.3mf` (in the Retro and Kitten folders) and
@@ -67,6 +66,56 @@ round their lettering, cut from the parts themselves. Each prints in about
 11 to 12 minutes on an X1C, against 25 minutes for a cover, 52 for the arc
 and 2 h 40 min for the plate. When a coupon's letters come out whole with
 clean edges, its part will too.
+
+### The lettering: engraved panel capitals (2026-11-01)
+
+Every lettering on the cases (the plate's charger label, the covers'
+frequencies, the arc's STATUS, SCREEN and RANGE, and the regulator tray's
+OUT and IN) is drawn in one small stroke font built into the design,
+`gorton_text()`, in the manner of the engraving on 1950s and 60s radar and
+avionics panels: the capitals a pantograph engraver cut with a round cutter
+following a brass template (Gorton's, and the Leroy and MIL-STD-130
+lettering like it). Each letter is a few centre lines, straight or arcs,
+swept with a round pen, so every stroke is the same width with round ends
+and joins; the capitals are plain and a little narrow, the C and G open, the
+R's leg straight, the letters spaced wide. The centre lines are drawn in
+the design, not taken from a font, and only the characters the cases use
+exist: A B C D E G H I M N O P R S T U V W Z, 0 1 2 7 8 9 and the hyphen.
+The frequencies' unit is engraved MHZ, all capitals, as panels of the
+period were. Until 2026-11-01 the lettering was Liberation Sans Bold, 6 mm
+on the plate, 7 mm on the covers and 5.6 on the arc, made that big and
+fattened so its strokes would print; the owner found it too big.
+
+All of it is now **4.3 mm tall, with 0.85 mm strokes and 1.3 mm between
+letters**, set once as `lettering_cap`, `lettering_pen` and
+`lettering_track` in `retro-enclosure.scad` and
+`kitten-enclosure-twotone.scad` (shared: change both). Why those numbers:
+
+- **The pen, 0.85 mm, is as fine as the first layer allows.** A coupon of
+  the lettering at pens from 0.6 to 1.0 mm, sliced with the settings below:
+  from 0.8 to 1.0 mm every stroke is laid down as two first-layer lines,
+  each at least the 0.42 mm set (about 95% of the letters covered, two
+  lines across 73-79% of the strokes' cross-sections, as many as the
+  1.0 mm Liberation strokes had; no stroke left out). At 0.75 mm a quarter
+  of the lines are under 0.4 mm, at 0.7 mm most are 0.38 mm, and at
+  0.6 mm each stroke is a single line, the thin kind that dropped out of
+  the first arc. 0.85 keeps a little over 0.8.
+- **The cap height, 4.3 mm, is the least those strokes allow.** Every
+  counter and gap must stay 0.8 mm open, and E, B, S, 8 and 9 stack two
+  openings in the letter's height, each (h - 3 x pen) / 2, so h is at least
+  0.8 x 2 + 3 x 0.85 = 4.15 mm; 4.3 leaves 0.875 mm openings. A thinner pen
+  would allow smaller letters but would not print, so the arc cannot go
+  smaller than the plate and covers either.
+
+To change the size, change `lettering_cap` (and `lettering_pen` only with a
+new slice to back it) in both full designs, re-export the parts and their
+`_text` STLs, rebuild the 3MFs (`make-cover-3mf.py`, `make-arc-3mf.py`) and
+run `tests/test_enclosure_core.py`: check 13 measures every lettering and
+the whole alphabet, strokes 0.85 mm or more and openings 0.8 mm or more, and
+fails anything smaller. The checks in each folder then say whether the
+words still fit their faces. To letter something new, `gorton_text(s, h,
+pen, track)` draws it centred; a character it does not know draws nothing,
+so add its centre lines to `gorton_glyph()` first.
 
 The settings, with their names in Bambu Studio 2.08 and the keys in its own
 profiles. Set the first three on the object (right-click it in the object
@@ -893,10 +942,11 @@ cable moved. Now:
   default; that option does worse with this shape.
 - **The plate says which charger it needs** (since 2026-10-29): `USB-C PD`
   over `12V 27W`, engraved 0.6 mm deep in the outer face above the pocket,
-  in bold capitals 6 mm tall that read the right way from behind the case
-  (5 mm until 2026-10-31, when every stroke was fattened to 1 mm or more so
-  the label prints whole in a second colour: [lettering in two
-  colours](#lettering-in-two-colours-print-settings)).
+  in engraved capitals 4.3 mm tall that read the right way from behind the
+  case (bold, 5 mm until 2026-10-31 and 6 mm until 2026-11-01: [the
+  lettering](#the-lettering-engraved-panel-capitals-2026-11-01)). It prints
+  whole in a second colour: [lettering in two
+  colours](#lettering-in-two-colours-print-settings).
   The trigger board asks the charger for 12 V, and one without it, such as
   a 5 V-only Pi-style supply, never starts the radar. The plate prints outer
   face down, so the letters are its first three layers and need no support.
@@ -923,9 +973,10 @@ cable moved. Now:
   line, slice with `--arrange 1`). The checks
   `plate_text_vs_plate`, `plate_text_fills_engraving` (with its control
   `plate_text_gap_probe_works`) and `plate_text_on_face` prove the lettering
-  meets the plate face to face, no overlap and no gap. Since 2026-10-31 the
-  label is larger, so `back_plate.stl` is too: a plate printed before then
-  fits and works the same, with the old, smaller label.
+  meets the plate face to face, no overlap and no gap. The label's
+  lettering changed on 2026-10-31 and again on 2026-11-01, and
+  `back_plate.stl` with it: a plate printed before then fits and works the
+  same, with the older label.
 - **`power_trigger_mount`** is a sleeve round the board, 0.2 mm clear of it
   either side, its flat face on the plate's inner face, level with the
   board's front edge: no flange, since the plate is the front stop now. The
@@ -1222,7 +1273,7 @@ The FlyCatcher has two antenna inputs, 1090 and 978 MHz, and the Nooelec bundle 
    Set each whip so its hinge folds towards or away from the wall, not towards the other whip: that's the direction the mount is weakest, so the hinge gives before the panel does, and a folded whip then clears the other tower.
 4. Tidy the cables into the channel and fit the cover: five M2 × 6 into the M2 inserts.
 
-**Lettering in a second colour.** Open the cover's `_twotone.3mf` rather than its STL, and see [lettering in two colours](#lettering-in-two-colours-print-settings) for its settings and its test coupon. Since 2026-10-31 the numbers are 7 mm and MHz 5.6 mm, fattened so every stroke is 1 mm or more; MHz's strokes were 0.45 mm. The lettering is many separate letters, and a slicer splits a multi-lump STL into one part per letter, so picking a colour for "the text" would colour one letter; the project file already has the cover on filament 1 and every letter on filament 2. Change either in the slicer. The cover prints outer face down, so the lettering is its first 0.6 mm, three 0.2 mm layers: a change at the start of each, and one back to filament 1 above them, nothing after. The plain STL still prints the engraved, one-colour cover.
+**Lettering in a second colour.** Open the cover's `_twotone.3mf` rather than its STL, and see [lettering in two colours](#lettering-in-two-colours-print-settings) for its settings and its test coupon. Since 2026-11-01 the numbers and MHZ under them are engraved capitals 4.3 mm tall with 0.85 mm strokes, centred under each tower ([the lettering](#the-lettering-engraved-panel-capitals-2026-11-01)); from 2026-10-31 they were 7 mm Liberation Sans Bold, and before that MHz's strokes were 0.45 mm, too thin to print. The lettering is many separate letters, and a slicer splits a multi-lump STL into one part per letter, so picking a colour for "the text" would colour one letter; the project file already has the cover on filament 1 and every letter on filament 2. Change either in the slicer. The cover prints outer face down, so the lettering is its first 0.6 mm, three 0.2 mm layers: a change at the start of each, and one back to filament 1 above them, nothing after. The plain STL still prints the engraved, one-colour cover.
 5. Pass both plugs through the plate's 13 mm hole, bolt the flange on from inside the plate with the three M3 × 8, plug 1090 and 978 into the FlyCatcher, and screw the whips on (the 1090 whip is the shorter one). Inside, tie both jumpers together at the two bridges that lead from the cable hole to the right and down the right-hand side, seen from behind, with 150 × 3.6 mm cable ties. Below the second bridge they run free down the right-hand side, between their curb and the speaker, to the FlyCatcher: fold any spare length back on itself just below the second bridge and take it into that bridge's tie, so only the planned slack runs on to the SMA plugs, on the speaker's side of the curb, never across it. Never leave the spare as a loose loop: the plate stands nearly upright, and a loop that sags below the SMA plugs comes within 20 mm of the 12 V pair at the lower right (since 2026-10-29; [the regulator's place](#the-regulators-place)). That keeps them 20 mm or more from the regulator's leads, which keep to the lower half and the left, and from the Pi's USB-C plug. For an outdoor antenna, screw its coax onto the same barrel instead, and give the coax its own strain relief within a few centimetres of the tower.
 
 To replace a cable: back plate off, cover off, nut off, slide the jack out of its slot, pull the plug back up through the bore. The mount stays bolted to the plate.

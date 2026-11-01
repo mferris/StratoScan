@@ -68,24 +68,19 @@ button_hole = 12.2;  // 12 mm momentary panel button: short enough to fit behind
 // through the 2.5 mm cover (button_21mm_meets_cover).
 button_deep = 16;
 // The lettering round the outer edge, inlaid in a second colour like the
-// antenna cover's (see "Inlaid lettering" in the retro file). Until
-// 2026-10-31 it was size 3.3 at r 143.6, centred on its controls, and its
-// 0.5 mm strokes printed broken: SCREEN's C almost gone, STATUS's S half
-// there. At 5.6, fattened 0.11 mm a side, the strokes are 1.04 mm and the
-// narrowest gap 0.87 mm. The three words are then too long to centre on
-// their controls, 12.5 deg apart, without running into each other, so
-// STATUS stands 2.4 deg beyond its lamp and RANGE 2 deg short of its knob,
-// still over them, with about 3.5 mm between the words. The words are
-// straight, so their ends stand further out than their middles; at r 143.1
+// antenna cover's (see "Inlaid lettering" in the retro file), in the retro
+// file's engraving font (gorton_text) at its lettering_cap, each word
+// centred over its control (2026-11-01). It was size 3.3 Liberation Sans
+// until 2026-10-31, whose 0.5 mm strokes printed broken, and then 5.6
+// fattened, too long to centre on the controls; the engraving font's
+// strokes are 0.85 mm at any size, so the words are small again. They are
+// straight, so their ends stand further out than their middles; at r 142.6
 // they keep 1 mm inside the face's edge and clear of the knob's skirt
 // (checks.scad: labels_on_face, labels_clear_of_controls, labels_apart).
-label_r    = 143.1;
-label_size = 5.6;
+label_r    = 142.6;
+label_cap  = lettering_cap;
 label_depth = 0.6;
-label_bold  = 0.11;  // each stroke fattened by this much a side
-label_spacing = 1.1;
-label_font  = "Liberation Sans:style=Bold";
-labels     = [[lamp_a + 2.4, "STATUS"], [button_a, "SCREEN"], [knob_a - 2, "RANGE"]];
+labels     = [[lamp_a, "STATUS"], [button_a, "SCREEN"], [knob_a, "RANGE"]];
 
 // ---------- fixing it to the case ----------
 // Two M3 screws from INSIDE the case, through the wall, into heat-set
@@ -167,8 +162,7 @@ module radial_teardrop(a, z, d, r0, r1, point = 1) {
 // tangential lettering on the face, centred on angle a
 module label2d(a, s) {
     rotate([0, 0, a - 90]) translate([0, label_r])
-        offset(delta = label_bold)
-            text(s, size = label_size, font = label_font, halign = "center", valign = "center", spacing = label_spacing);
+        gorton_text(s, label_cap, lettering_pen, lettering_track);
 }
 
 // ============================================================

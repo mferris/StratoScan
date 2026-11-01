@@ -475,8 +475,8 @@ defaults, the old lettering's first layer is thin and patchy in its narrow
 strokes, the C and S among them. What caused the pale ring is not yet known;
 print a coupon (below) to see whether these settings cure it.
 
-Two things changed. The lettering is larger and bolder, with every stroke at
-least 1.0 mm wide and every counter and gap between letters at least 0.8 mm
+Two things changed. The lettering's strokes are at least 0.85 mm wide
+(1.0 mm from 2026-10-31 to 2026-11-01) and every counter and gap between letters at least 0.8 mm
 open (`tests/test_enclosure_core.py` measures them, check 13). And the first
 three settings below go on the part, set by hand once the 3MF is open:
 Arachne walls, elephant-foot compensation 0 and a monotonic line bottom
@@ -484,10 +484,9 @@ surface. For a few hours on 2026-10-31 the 3MFs carried them as per-object
 settings, but Bambu Studio's desktop app then opened the files as geometry
 only ("The 3mf file has invalid config"), losing the filaments, so the 3MFs
 now hold only the parts and their filaments, with the face at z 0, on the
-bed. Sliced with the settings, the first layer now lays two lines or more
-across most of each stroke, and one wider Arachne line, up to 0.7 mm, across
-most of the rest. Arachne walls and the larger lettering are what fill the
-first layer.
+bed. Sliced with the settings, the first layer lays two lines across most
+of each stroke and covers about 95% of the letters, every letter whole.
+Arachne walls and strokes two lines wide are what fill the first layer.
 
 **Print a coupon first.** `test_lettering_plate.3mf` and
 `test_lettering_cover.3mf` (here and in the Retro folder) and
@@ -496,6 +495,56 @@ round their lettering, cut from the parts themselves. Each prints in about
 11 to 12 minutes on an X1C, against 25 minutes for a cover, 52 for the arc
 and 2 h 40 min for the plate. When a coupon's letters come out whole with
 clean edges, its part will too.
+
+### The lettering: engraved panel capitals (2026-11-01)
+
+Every lettering on the cases (the plate's charger label, the covers'
+frequencies, the arc's STATUS, SCREEN and RANGE, and the regulator tray's
+OUT and IN) is drawn in one small stroke font built into the design,
+`gorton_text()`, in the manner of the engraving on 1950s and 60s radar and
+avionics panels: the capitals a pantograph engraver cut with a round cutter
+following a brass template (Gorton's, and the Leroy and MIL-STD-130
+lettering like it). Each letter is a few centre lines, straight or arcs,
+swept with a round pen, so every stroke is the same width with round ends
+and joins; the capitals are plain and a little narrow, the C and G open, the
+R's leg straight, the letters spaced wide. The centre lines are drawn in
+the design, not taken from a font, and only the characters the cases use
+exist: A B C D E G H I M N O P R S T U V W Z, 0 1 2 7 8 9 and the hyphen.
+The frequencies' unit is engraved MHZ, all capitals, as panels of the
+period were. Until 2026-11-01 the lettering was Liberation Sans Bold, 6 mm
+on the plate, 7 mm on the covers and 5.6 on the arc, made that big and
+fattened so its strokes would print; the owner found it too big.
+
+All of it is now **4.3 mm tall, with 0.85 mm strokes and 1.3 mm between
+letters**, set once as `lettering_cap`, `lettering_pen` and
+`lettering_track` in `retro-enclosure.scad` and
+`kitten-enclosure-twotone.scad` (shared: change both). Why those numbers:
+
+- **The pen, 0.85 mm, is as fine as the first layer allows.** A coupon of
+  the lettering at pens from 0.6 to 1.0 mm, sliced with the settings below:
+  from 0.8 to 1.0 mm every stroke is laid down as two first-layer lines,
+  each at least the 0.42 mm set (about 95% of the letters covered, two
+  lines across 73-79% of the strokes' cross-sections, as many as the
+  1.0 mm Liberation strokes had; no stroke left out). At 0.75 mm a quarter
+  of the lines are under 0.4 mm, at 0.7 mm most are 0.38 mm, and at
+  0.6 mm each stroke is a single line, the thin kind that dropped out of
+  the first arc. 0.85 keeps a little over 0.8.
+- **The cap height, 4.3 mm, is the least those strokes allow.** Every
+  counter and gap must stay 0.8 mm open, and E, B, S, 8 and 9 stack two
+  openings in the letter's height, each (h - 3 x pen) / 2, so h is at least
+  0.8 x 2 + 3 x 0.85 = 4.15 mm; 4.3 leaves 0.875 mm openings. A thinner pen
+  would allow smaller letters but would not print, so the arc cannot go
+  smaller than the plate and covers either.
+
+To change the size, change `lettering_cap` (and `lettering_pen` only with a
+new slice to back it) in both full designs, re-export the parts and their
+`_text` STLs, rebuild the 3MFs (`make-cover-3mf.py`, `make-arc-3mf.py`) and
+run `tests/test_enclosure_core.py`: check 13 measures every lettering and
+the whole alphabet, strokes 0.85 mm or more and openings 0.8 mm or more, and
+fails anything smaller. The checks in each folder then say whether the
+words still fit their faces. To letter something new, `gorton_text(s, h,
+pen, track)` draws it centred; a character it does not know draws nothing,
+so add its centre lines to `gorton_glyph()` first.
 
 The settings, with their names in Bambu Studio 2.08 and the keys in its own
 profiles. Set the first three on the object (right-click it in the object

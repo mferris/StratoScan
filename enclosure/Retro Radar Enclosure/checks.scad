@@ -283,11 +283,11 @@ else if (check=="twin_cover_text_inside" || check=="twin_cover_text_inside_11") 
 else if (check=="twin_cover_text_present") ant_twin_label_solid([11, 11]);   // positive control: must have volume
 // It keeps 1 mm inside the cover's edge and 1 mm clear of the screws'
 // counterbores (2026-10-31, when it grew so its strokes print: see "Inlaid
-// lettering" in the design). The control: moved 8 mm down the cover, it
-// runs off the bottom edge.
+// lettering" in the design). The control: moved 12 mm down the cover, it
+// runs off the bottom edge (8 mm until the lettering shrank, 2026-11-01).
 else if (check=="twin_cover_text_room" || check=="twin_cover_text_room_11" || check=="twin_cover_text_room_probe_works") {
   af = check=="twin_cover_text_room_11" ? [11, 11] : [8, 8];
-  dy = check=="twin_cover_text_room_probe_works" ? -8 : 0;
+  dy = check=="twin_cover_text_room_probe_works" ? -12 : 0;
   difference() {
     translate([0, dy, 0]) ant_twin_label_solid(af);
     translate([0, 0, -1]) linear_extrude(height=3) difference() {
