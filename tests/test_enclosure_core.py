@@ -61,7 +61,7 @@ CORE = {
     "back_plate", "back_lip", "usbc_cutout", "usbc_window2d", "usbc_gauge",
     "usbc_label2d", "usbc_label_solid",
     # the engraving font every lettering is drawn in (2026-11-01)
-    "gorton_arc", "gorton_glyph", "gorton_chars", "gorton_sum", "gorton_width", "gorton_text",
+    "gorton_arc", "gorton_glyph", "gorton_chars", "gorton_sum", "gorton_gaps", "gorton_width", "gorton_text",
     # the lettering test coupons of the plate and the twin cover (2026-10-31)
     "test_lettering_plate", "test_lettering_cover",
     "intake_grille", "fan_grille",
