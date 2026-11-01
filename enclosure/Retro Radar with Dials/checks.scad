@@ -115,10 +115,10 @@ if (check == "trim_reaches_z_trim_face") intersection() { front_stack_placed("tr
 if (check == "button_21mm_meets_cover") intersection() { arc_and_cover(); button_room(21); }
 // The three lettering probes are near enough to bite: the words come
 // within 4 mm of the face's edge, within 3 mm of the knob's skirt, and
-// within 9 mm of each other (2026-11-01: 3 mm and 6 mm while the words were
-// 5.6 mm Liberation Sans; centred on their controls they are now 7-8 mm
-// apart, and about 2.8 mm in from the edge).
+// within 12 mm of each other (2026-11-01: 3 mm and 6 mm while the words were
+// 5.6 mm Liberation Sans; centred on their controls, in 3.8 mm capitals,
+// they are now 10-11 mm apart, and about 3-3.5 mm in from the edge).
 if (check == "labels_near_edge") linear_extrude(height = 1) difference() { labels2d(); pod_outline2d(4); }
 if (check == "labels_near_controls") linear_extrude(height = 1) intersection() { labels2d(); controls2d(3); }
-if (check == "labels_near_each_other") linear_extrude(height = 1) words_meet(4.5);
+if (check == "labels_near_each_other") linear_extrude(height = 1) words_meet(6);
 if (check == "canary") pod();

@@ -63,8 +63,8 @@ defaults, the old lettering's first layer is thin and patchy in its narrow
 strokes, the C and S among them. What caused the pale ring is not yet known;
 print a coupon (below) to see whether these settings cure it.
 
-Two things changed. The lettering's strokes are at least 0.85 mm wide
-(1.0 mm from 2026-10-31 to 2026-11-01) and every counter and gap between letters at least 0.8 mm
+Two things changed. The lettering's strokes are at least 0.7 mm wide
+(1.0 mm from 2026-10-31 to 2026-11-01, then 0.85 mm briefly) and every counter and gap between letters at least 0.8 mm
 open (`tests/test_enclosure_core.py` measures them, check 13). And the first
 three settings below go on the part, set by hand once the 3MF is open:
 Arachne walls, elephant-foot compensation 0 and a monotonic line bottom
@@ -103,24 +103,27 @@ period were. Until 2026-11-01 the lettering was Liberation Sans Bold, 6 mm
 on the plate, 7 mm on the covers and 5.6 on the arc, made that big and
 fattened so its strokes would print; the owner found it too big.
 
-All of it is now **4.3 mm tall, with 0.85 mm strokes and 1.3 mm between
-letters**, set once as `lettering_cap`, `lettering_pen` and
+All of it is now **3.8 mm tall, with 0.7 mm strokes and 1.15 mm between
+letters** (4.3 mm, 0.85 mm and 1.3 mm until the owner asked for it a little
+smaller, the same day), set once as `lettering_cap`, `lettering_pen` and
 `lettering_track` in `retro-enclosure.scad` and
 `kitten-enclosure-twotone.scad` (shared: change both). Why those numbers:
 
-- **The pen, 0.85 mm, is as fine as the first layer allows.** A coupon of
+- **The pen, 0.7 mm, is as fine as the first layer allows.** A coupon of
   the lettering at pens from 0.6 to 1.0 mm, sliced with the settings below:
-  from 0.8 to 1.0 mm every stroke is laid down as two first-layer lines,
-  each at least the 0.42 mm set (about 95% of the letters covered, two
-  lines across 73-79% of the strokes' cross-sections, as many as the
-  1.0 mm Liberation strokes had; no stroke left out). At 0.75 mm a quarter
-  of the lines are under 0.4 mm, at 0.7 mm most are 0.38 mm, and at
-  0.6 mm each stroke is a single line, the thin kind that dropped out of
-  the first arc. 0.85 keeps a little over 0.8.
-- **The cap height, 4.3 mm, is the least those strokes allow.** Every
+  from 0.7 to 1.0 mm every stroke is laid down as two first-layer lines
+  (about 95% of the letters covered, two lines across about three quarters
+  of the strokes' cross-sections, as many as the 1.0 mm Liberation strokes
+  had; no stroke left out). At 0.7 mm Arachne narrows the two lines to
+  about 0.38 mm, under the 0.42 mm set; at 0.6 mm each stroke is a single
+  line, the thin kind that dropped out of the first arc. Every lettered
+  part and coupon, sliced at 0.7 mm, covers 94-95% of its letters with two
+  lines across 70-78% of the strokes' cross-sections, as at 0.85 mm, and
+  no part of a letter is left bare wider than 0.45 mm.
+- **The cap height, 3.8 mm, is the least those strokes allow.** Every
   counter and gap must stay 0.8 mm open, and E, B, S, 8 and 9 stack two
   openings in the letter's height, each (h - 3 x pen) / 2, so h is at least
-  0.8 x 2 + 3 x 0.85 = 4.15 mm; 4.3 leaves 0.875 mm openings. A thinner pen
+  0.8 x 2 + 3 x 0.7 = 3.7 mm; 3.8 leaves 0.85 mm openings. A thinner pen
   would allow smaller letters but would not print, so the arc cannot go
   smaller than the plate and covers either.
 
@@ -128,7 +131,7 @@ To change the size, change `lettering_cap` (and `lettering_pen` only with a
 new slice to back it) in both full designs, re-export the parts and their
 `_text` STLs, rebuild the 3MFs (`make-cover-3mf.py`, `make-arc-3mf.py`) and
 run `tests/test_enclosure_core.py`: check 13 measures every lettering and
-the whole alphabet, strokes 0.85 mm or more and openings 0.8 mm or more, and
+the whole alphabet, strokes 0.7 mm or more and openings 0.8 mm or more, and
 fails anything smaller. The checks in each folder then say whether the
 words still fit their faces. To letter something new, `gorton_text(s, h,
 pen, track)` draws it centred; a character it does not know draws nothing,
@@ -174,9 +177,9 @@ What slicing with Bambu Studio 2.08's command line showed:
 The arc's lettering was 3.3 mm Liberation Sans until 2026-10-31, and its
 0.5 mm strokes printed broken; then 5.6 mm, too long for the words to sit
 centred on their controls. Since 2026-11-01 it is the engraved capitals
-above, 4.3 mm tall with 0.85 mm strokes, and each word is centred over its
-control again at r 142.6, 7 to 8 mm between the words and about 2.8 mm in
-from the face's edge. The checks `labels_on_face`,
+above, 3.8 mm tall with 0.7 mm strokes, and each word is centred over its
+control again at r 142.6, 10 to 11 mm between the words and about 3 to
+3.5 mm in from the face's edge. The checks `labels_on_face`,
 `labels_clear_of_controls` and `labels_apart` hold that.
 
 ## Buy

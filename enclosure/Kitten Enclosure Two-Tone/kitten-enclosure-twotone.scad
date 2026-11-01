@@ -1337,7 +1337,7 @@ ant_twin_back_pad_w = 40;
 // ant_twin_label_pitch apart, centred ant_twin_label_y up from the cover's
 // middle. It was Liberation Sans Bold, 7 mm, until then.
 ant_twin_label_depth = 0.6;
-ant_twin_label_pitch = 6.4;    // line to line: 2.1 mm between them
+ant_twin_label_pitch = 5.9;    // line to line: 2.1 mm between them (6.4 for 4.3 mm caps)
 ant_twin_label_y     = 2;
 ant_twin_plug_d    = 9.3;   // an SMA plug's hex across its corners
 
@@ -1857,14 +1857,17 @@ module gorton_text(s, h, p, t, halign = "center", valign = "center") {
 // letters, in mm. Each part's own sizes below start from these. Why these
 // numbers (README, "Inlaid lettering"): the pen is the narrowest that the
 // slicer, at the two-colour settings, still lays down as two first-layer
-// lines of at least the 0.42 mm it is set to (a coupon sliced at 0.6 to
-// 1.0 mm, 2026-11-01: 0.7 mm gets two 0.38 mm lines, 0.6 mm one). The cap
-// height is then the least that keeps every counter and gap 0.8 mm open:
-// E, B, S, 8 and 9 stack two openings in the height, each (h - 3p)/2, so
-// h >= 1.6 + 3p = 4.15 mm, and 4.3 leaves 0.075 mm a side to spare.
-lettering_cap   = 4.3;
-lettering_pen   = 0.85;
-lettering_track = 1.3;
+// lines (a coupon sliced at 0.6 to 1.0 mm, 2026-11-01: 0.7 mm gets two
+// lines of about 0.38 mm across as many strokes as 0.85 mm does, 0.6 mm
+// only one). The cap height is then the least that keeps every counter and
+// gap 0.8 mm open: E, B, S, 8 and 9 stack two openings in the height, each
+// (h - 3p)/2, so h >= 1.6 + 3p = 3.7 mm, and 3.8 leaves 0.05 mm a side to
+// spare. The letters stand 1.15 mm apart, the same share of the cap height
+// as before. 4.3 mm tall with a 0.85 mm pen and 1.3 mm apart until
+// 2026-11-01, which the owner found a little big.
+lettering_cap   = 3.8;
+lettering_pen   = 0.7;
+lettering_track = 1.15;
 
 // Inlaid lettering (2026-10-31). Every part with lettering in a second
 // colour prints it face down: the back plate's label here, the twin antenna
@@ -1873,7 +1876,7 @@ lettering_track = 1.3;
 // layer's lines, about 0.42-0.5 mm wide. A stroke much under two lines wide
 // comes out broken or missing: the arc's 3.3 mm Liberation Sans letters had
 // 0.5 mm strokes, and its C and S printed half there. So every inlaid
-// lettering has strokes at least 0.85 mm wide and its counters and the gaps
+// lettering has strokes at least 0.7 mm wide and its counters and the gaps
 // between its letters at least 0.8 mm open, which tests/test_enclosure_core.py
 // measures (check 13). From 2026-10-31 to 2026-11-01 that was done with
 // Liberation Sans Bold made 6-7 mm tall and fattened, which the owner found
@@ -1891,7 +1894,7 @@ lettering_track = 1.3;
 // hole in the plate.
 usbc_label       = ["USB-C PD", "12V 27W"];
 usbc_label_cap   = lettering_cap;   // the capitals' height
-usbc_label_pitch = 6.4;     // line to line, 2.1 mm between them
+usbc_label_pitch = 5.9;     // line to line, 2.1 mm between them (6.4 for 4.3 mm caps)
 usbc_label_depth = 0.6;
 usbc_label_pos   = [usbc_cut_pos[0],
                     usbc_cut_pos[1] + usbc_gauge_size[1]/2 + 1.5 + (usbc_label_pitch*(len(usbc_label) - 1) + usbc_label_cap)/2];

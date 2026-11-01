@@ -73,7 +73,7 @@ button_deep = 16;
 // centred over its control (2026-11-01). It was size 3.3 Liberation Sans
 // until 2026-10-31, whose 0.5 mm strokes printed broken, and then 5.6
 // fattened, too long to centre on the controls; the engraving font's
-// strokes are 0.85 mm at any size, so the words are small again. They are
+// strokes are one pen wide at any size, so the words are small again. They are
 // straight, so their ends stand further out than their middles; at r 142.6
 // they keep 1 mm inside the face's edge and clear of the knob's skirt
 // (checks.scad: labels_on_face, labels_clear_of_controls, labels_apart).
