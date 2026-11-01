@@ -136,7 +136,8 @@ too.
   the radar is actually working: online, on a network that is not reaching
   the internet, running its own setup WiFi, or receiving no aircraft data.
   On the device it reports what NetworkManager concludes about the
-  connection; viewed remotely it falls back to whether data is still flowing
+  connection, and a touch on it opens Device setup, where WiFi is; viewed
+  remotely it falls back to whether data is still flowing
 - **Restart from the screen** — a Restart row under Device setup, so a stuck
   unit does not need someone to find and pull the plug
 - **Frozen-display watchdog** — the radar reports each painted frame to a
