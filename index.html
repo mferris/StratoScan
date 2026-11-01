@@ -738,6 +738,8 @@
     box-shadow: 0 0 6px currentColor;
     flex: none;
   }
+  /* Answers the finger where it is: the tap opens the network settings. */
+  .netpill:active { border-color: currentColor; background: var(--panel-bg-strong); }
   .netpill.ok    { color: var(--good); }
   .netpill.warn  { color: var(--warn); }
   .netpill.bad   { color: var(--bad); }
@@ -5546,10 +5548,8 @@ function renderNetStatus() {
   el.dataset.detail = st.detail;
 }
 
-document.getElementById('netPill').addEventListener('click', (e) => {
-  e.stopPropagation();
-  showToast(document.getElementById('netPill').dataset.detail || '', 6000);
-});
+// A tap on the pill is handled with the other overlay controls, near the
+// gear's (search OVERLAY_CONTROLS): it opens the network settings.
 
 // ---- Rare aircraft alert -------------------------------------------------
 // The point of a receiver that has been running in one place for months is
@@ -9153,6 +9153,42 @@ document.getElementById('rewindBtn').addEventListener('pointerup', (e) => {
   else showRewindPanel();
 });
 
+// The status pill (2026-11-01). A tap on it only ever showed a toast, and
+// that at the top of the dial, far from the finger: on the panel the owner
+// saw the pill flash and nothing else. The pill says whether the radar is
+// online, so a tap opens what fixes it when it is not: Device setup, with
+// its WiFi row and the pill's own detail line at the top. A public viewer
+// has no network settings to open, so there it stays the detail as a toast.
+//
+// It listened for 'click', which comes after pointerup, so its
+// stopPropagation never stopped the stage's tap handler below: that handler
+// picked the aircraft whose label lay under the pill and opened its details
+// first. Every overlay control now answers pointerup itself, stops it, and
+// is in OVERLAY_CONTROLS, which the stage's drag and tap handlers both skip.
+function openNetworkSettings() {
+  const detail = document.getElementById('netPill').dataset.detail || '';
+  if (!ON_DEVICE) { showToast(detail, 6000); return; }
+  const text = document.getElementById('netPillText').textContent;
+  showSettingsPanel();
+  settingsSection = 'device';        // showSettingsPanel resets it to the menu
+  deviceView = null;
+  deviceMsg = detail ? `${text}: ${detail}` : text;
+  settingsPanelEl.scrollTop = 0;
+  renderSettingsPanel();
+  loadDeviceStatus().then(() => { if (settingsSection === 'device') renderSettingsPanel(); });
+}
+let netPillPress = null;   // the pointer that pressed the pill, so a drag ending on it is not a tap
+document.getElementById('netPill').addEventListener('pointerdown', (e) => { netPillPress = e.pointerId; });
+document.getElementById('netPill').addEventListener('pointerup', (e) => {
+  e.stopPropagation();
+  const pressed = netPillPress === e.pointerId;
+  netPillPress = null;
+  if (!pressed) return;
+  // It stays above the panel's backdrop, so, like the gear, a second tap closes.
+  if (settingsPanelEl.classList.contains('show') && settingsSection === 'device') hideSettingsPanel();
+  else openNetworkSettings();
+});
+
 function findPlaneAtStagePoint(x, y) {
   const HIT_RADIUS = 22; // px, around the blip anchor
   // when two hit targets overlap (close blips, or a blip under a neighbor's
@@ -9183,7 +9219,11 @@ function findPlaneAtStagePoint(x, y) {
 // whole drag anyway; one that leaves the window ends the gesture. A press
 // that starts on a control or a panel is theirs, never a drag.
 stage.style.touchAction = 'none';
-const VIEW_NOT_A_DRAG = '#gearBtn, #rewindBtn, #zoomInBtn, #zoomOutBtn, #homeBtn, #detailPanel, #detailBackdrop, #settingsPanel, #settingsBackdrop, #onboard, #kbd, #splash';
+// The controls drawn over the map. A press on one is never a drag, and a tap
+// on one never reaches the aircraft picking below, whatever label is drawn
+// under it (the lock and the pill were missing, 2026-11-01).
+const OVERLAY_CONTROLS = '#gearBtn, #rewindBtn, #zoomInBtn, #zoomOutBtn, #homeBtn, #lockBtn, #netPill';
+const VIEW_NOT_A_DRAG = OVERLAY_CONTROLS + ', #detailPanel, #detailBackdrop, #settingsPanel, #settingsBackdrop, #onboard, #kbd, #splash';
 const VIEW_STEP = 1.5;              // one tap of + or -
 function syncFingers() {
   viewFingers = viewPointers.size;
@@ -9274,7 +9314,9 @@ stage.addEventListener('pointerdown', (e) => {
   if (e.target instanceof Element && e.target.closest(VIEW_NOT_A_DRAG)) return;
   const p = stageToCanvas(e);
   viewPointers.set(e.pointerId, p);
-  if (viewPointers.size === 1) viewGesture = { startX: p.x, startY: p.y, moved: false };
+  // A fresh press starts clean: a drag that ended on a control, which stops
+  // its pointerup, left this set and swallowed the next tap on the map.
+  if (viewPointers.size === 1) { viewGesture = { startX: p.x, startY: p.y, moved: false }; viewTapSuppressed = false; }
   else if (viewPointers.size === 2) viewGesture = { ...pinchState(), moved: true, pinch: true };
   if (viewPointers.size >= 2) viewTapSuppressed = true;
   syncFingers();
@@ -9325,6 +9367,8 @@ stage.addEventListener('pointerup', (e) => {
     if (viewPointers.size === 0) viewTapSuppressed = false;
     return;
   }
+  // A control's tap is the control's, even one that forgets to stop it.
+  if (e.target instanceof Element && e.target.closest(OVERLAY_CONTROLS)) return;
   if (detailPanelEl.classList.contains('show')) {
     hideDetailPanel(); // any tap while open just dismisses it
     return;
