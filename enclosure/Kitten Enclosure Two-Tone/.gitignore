@@ -15,3 +15,5 @@
 !kitten-stand-twotone.3mf
 # And the lettering test coupons, a few minutes each (2026-10-31).
 !test_lettering_*.3mf
+# And the head's, its inner ears in a second colour (make-3mf.py, 2026-11-01).
+!kitten-head-twotone.3mf

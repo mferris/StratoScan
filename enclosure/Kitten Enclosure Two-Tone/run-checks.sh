@@ -250,6 +250,56 @@ for c in $TRAY_FOUND; do
     fi
 done
 
+# The inner ears in a second colour (2026-11-01): shell_inner_ears() lines
+# the dish in each ear's front, its floor 1.0 mm and its walls 0.9 mm, carved
+# out of the head; shell_head() is the head less it. EAR_EMPTY must come out
+# with no real volume: the two parts do not overlap and together are the
+# one-colour head; no head lies within 0.8 mm of the dish, and all of the head
+# that does is the liner; nothing fills the dish and no room opens round it;
+# the liner keeps 3 mm of head between it and the ears' hollows, and 1 mm
+# from the trim's screws. EAR_FOUND are their controls and must find real
+# geometry: the dish's skin probe 1.2 mm out finds the head; a liner 0.2 mm
+# thick shows the head and leaves a gap; without the liner the room round the
+# dish is found; the liner lowered 4 mm more finds the hollows; and the liner
+# is there. The room round the dish, below the face, must be the dish's own
+# volume on main, RECESS_MM3, measured against the shell.stl it had.
+EAR_EMPTY="liner_vs_head head_and_liner_are_shell no_head_in_recess liner_fills_lining
+       recess_still_open recess_not_grown liner_clear_of_hollows liner_vs_screws"
+EAR_FOUND="recess_skin_probe_works thin_liner_shows_head thin_liner_leaves_gap
+       recess_grown_probe_works hollow_probe_works liner_present"
+RECESS_MM3=4260.522
+echo "The inner ears' lining — must come out with no real volume (threshold ${MAX_MM3} mm3):"
+for c in $EAR_EMPTY; do
+    out="$TMP/$c.stl"
+    "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
+    v=$(vol_of "$out")
+    if [ "$(echo "$v < $MAX_MM3" | bc -l)" = "1" ]; then
+        printf "  PASS  %-18s %8s mm3\n" "$c" "$v"
+    else
+        printf "  FAIL  %-18s %8s mm3\n" "$c" "$v"; fail=1
+    fi
+done
+echo "The inner ears' lining — controls, must find real geometry:"
+for c in $EAR_FOUND; do
+    out="$TMP/$c.stl"
+    "$SCAD" --backend=manifold -D "check=\"$c\"" -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
+    v=$(vol_of "$out")
+    if [ "$(echo "$v > 10" | bc -l)" = "1" ]; then
+        printf "  PASS  %-18s %8s mm3\n" "$c" "$v"
+    else
+        printf "  FAIL  %-18s %8s mm3  (probe found nothing)\n" "$c" "$v"; fail=1
+    fi
+done
+echo "The inner ears' dish — the same volume as on main (${RECESS_MM3} mm3, within 0.5):"
+out="$TMP/recess_void.stl"
+"$SCAD" --backend=manifold -D 'check="recess_void"' -o "$out" "$DIR/checks.scad" >/dev/null 2>&1 || true
+v=$(vol_of "$out")
+if [ "$(echo "$v - $RECESS_MM3 < 0.5 && $RECESS_MM3 - $v < 0.5" | bc -l)" = "1" ]; then
+    printf "  PASS  %-18s %8s mm3\n" "recess_void" "$v"
+else
+    printf "  FAIL  %-18s %8s mm3  (the dish has changed)\n" "recess_void" "$v"; fail=1
+fi
+
 # Paired positive control for nose_screw_removed. An empty result there is
 # also what a probe in the wrong place, or a front_trim() that failed to
 # evaluate, would produce -- so a probe at a NORMAL screw position has to

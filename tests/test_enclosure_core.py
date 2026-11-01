@@ -40,6 +40,16 @@ VARIANTS = {
 # A variant's own two-colour 3MFs, built by its own script, which reuses a
 # full design's builder (check 12).
 VARIANT_3MF_SCRIPTS = {"Retro Radar with Dials": "make-arc-3mf.py"}
+# A full design's own print files, beyond the shared ones: (its folder) ->
+# {file: the part that makes it}. They are checked like a variant's (check 8):
+# in git, and the shape their design makes today. The kitten head with its
+# inner ears in a second colour (2026-11-01): the one-colour head, and the
+# head less its ears' lining and the lining, which together are it.
+FULL_OWN_PRINTS = {"Kitten Enclosure Two-Tone": {
+    "shell.stl": "shell", "shell_head.stl": "shell_head", "shell_inner_ears.stl": "shell_inner_ears"}}
+# A full design's own two-colour 3MFs, built by its own script from its own
+# STLs (check 12): the kitten head's, by the script that builds the stand's.
+FULL_3MF_SCRIPTS = {"Kitten Enclosure Two-Tone": "make-3mf.py"}
 # Print files for the parts every case shares. Each full design's folder ships
 # them, and they must be the same shape in every folder (compared by volume
 # and extent: two exports of one model differ in triangulation, not shape).
@@ -381,6 +391,8 @@ def folders_and_prints():
             for part in SHARED_PRINTS for fname in FULL]
     for name, (scad, base, prints) in VARIANTS.items():
         jobs += [(ROOT / name / scad, "dpart", part, ROOT / name / fn) for fn, part in prints.items()]
+    for name, prints in FULL_OWN_PRINTS.items():
+        jobs += [(FULL[name], "part", part, ROOT / name / fn) for fn, part in prints.items()]
     tracked = in_git(ROOT)
     if tracked is None:
         print("note: not a git checkout: print files not checked for being in git")
@@ -819,7 +831,11 @@ def two_colour_projects():
     #     vertex moved 0.01 mm must not count as the same. A variant's 3MFs (VARIANT_3MF_SCRIPTS)
     #     are checked the same way in its folder, since 2026-10-31: the
     #     Dials' make-arc-3mf.py had been calling the builder the old way,
-    #     and nothing ran it. The builder stands each object on z 0 by
+    #     and nothing ran it. So are a full design's own (FULL_3MF_SCRIPTS,
+    #     its script's PROJECTS) since 2026-11-01: the kitten head's, its
+    #     inner ears in a second colour, from make-3mf.py; that script is not
+    #     the shared make-cover-3mf.py, so it is not compared between folders.
+    #     The builder stands each object on z 0 by
     #     moving its meshes together, so a part is compared with its STL
     #     moved by the same amount: minus the lowest z of the project's STLs.
     #     And every tracked 3MF in a case folder (the kitten stand's too,
@@ -845,7 +861,8 @@ def two_colour_projects():
     shapes = {}
     sources = {}
     projects = set()
-    scripts = [(fname, "make-cover-3mf.py") for fname in FULL] + sorted(VARIANT_3MF_SCRIPTS.items())
+    scripts = ([(fname, "make-cover-3mf.py") for fname in FULL] + sorted(VARIANT_3MF_SCRIPTS.items())
+               + sorted(FULL_3MF_SCRIPTS.items()))
     for n_script, (fname, script_name) in enumerate(scripts):
         folder = ROOT / fname
         script = folder / script_name
@@ -853,7 +870,7 @@ def two_colour_projects():
         if not script.exists():
             failures.append(f"{fname} has no {script_name}")
             continue
-        if fname in FULL:
+        if fname in FULL and script_name == "make-cover-3mf.py":
             sources[fname] = script.read_text()
         spec = importlib.util.spec_from_file_location(f"two_colour_3mf_{n_script}", script)
         mod = importlib.util.module_from_spec(spec)

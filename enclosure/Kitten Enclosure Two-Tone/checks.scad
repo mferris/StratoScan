@@ -1755,3 +1755,71 @@ if (check=="stand_clip_grips")       intersection() { stand(); clip_cable(stand_
 // ...and lifted 1mm out of the groove along the top it still meets the lips
 // of the mouth, so it snaps in and stays.
 if (check=="stand_clip_snaps")       intersection() { stand(); clip_cable(stand_cable_d, 1); }
+
+// ---- the inner ears in a second colour (2026-11-01) ----------------------
+// The dish recessed into each ear's front, inner_ear_recess(), is kept as it
+// was; shell_inner_ears() lines its floor and walls, cut from the head, and
+// shell_head() is the head less that lining. Restated, as above.
+ear_angle=30; ear_lean=9;
+// The dish as it was on main before the lining, in its own literals, so a
+// change to the design's dish cannot follow itself here.
+module recess_as_on_main() {
+  intersection() {
+    for (s = [-1, 1]) rotate([0, 0, -s * ear_angle]) translate([0, 0, shell_depth - 2])
+      linear_extrude(height = 2 + 1) offset(r = -10) ear_profile_2d(s * ear_lean);
+    difference() {
+      translate([-400, -400, -50]) cube([800, 800, shell_depth + 100]);
+      translate([0, 0, -60]) cylinder(d = outer_dia, h = shell_depth + 120);
+    }
+  }
+}
+// Everything within r of the dish, sideways and down: a probe of its skin.
+module recess_skin(r) { minkowski() { recess_as_on_main(); cylinder(r = r, h = 2*r, center = true, $fn = 16); } }
+module below_face() { translate([-400, -400, -1]) cube([800, 800, shell_depth + 1]); }
+
+// The two parts meet with no overlap...
+if (check=="liner_vs_head")            intersection() { shell_inner_ears(); shell_head(); }
+// ...and together they are the one-colour head, with nothing lost.
+if (check=="head_and_liner_are_shell") difference() { shell(); shell_head(); shell_inner_ears(); }
+// No head colour shows in the dish: nothing of shell_head() lies within
+// 0.8 mm of it, below or beside, 0.1 mm inside the 0.9 mm walls' liner.
+if (check=="no_head_in_recess")        intersection() { shell_head(); recess_skin(0.8); }
+// ...and the lining has no gap: every bit of the head within 0.8 mm of the
+// dish is the liner.
+if (check=="liner_fills_lining")       difference() { intersection() { shell(); recess_skin(0.8); } shell_inner_ears(); }
+// Their controls. 1.2 mm out, past the liner, the probe finds the head...
+if (check=="recess_skin_probe_works")  intersection() { shell_head(); recess_skin(1.2); }
+// ...and a lining 0.2 mm thick, drawn in place of the real one, shows the
+// head through the first and leaves a gap in the second.
+if (check=="thin_liner_shows_head")    intersection() { difference() { shell(); inner_ear_lining_zone(0.2, 0.2); } recess_skin(0.8); }
+if (check=="thin_liner_leaves_gap")    difference() { intersection() { shell(); recess_skin(0.8); } intersection() { shell(); inner_ear_lining_zone(0.2, 0.2); } }
+
+// The dish is as it was: nothing of the head or the liner in it...
+if (check=="recess_still_open")        intersection() { recess_as_on_main(); union() { shell_head(); shell_inner_ears(); } }
+// ...and no more space round it than it: within 1.2 mm of it, below the
+// face, all is the dish, the head or the liner. Its control: without the
+// liner, the same finds the liner's room (about 3,000 mm3).
+if (check=="recess_not_grown")         difference() { intersection() { recess_skin(1.2); below_face(); } shell_head(); shell_inner_ears(); recess_as_on_main(); }
+if (check=="recess_grown_probe_works") difference() { intersection() { recess_skin(1.2); below_face(); } shell_head(); recess_as_on_main(); }
+// Its volume, the space round the dish not filled by head or liner, below
+// the face: must equal the dish's on main (run-checks.sh holds the number).
+if (check=="recess_void")              difference() { intersection() { recess_skin(1.2); below_face(); } shell_head(); shell_inner_ears(); }
+
+// The liner keeps a skin of head between it and the ears' hollows: grown
+// 3 mm down and up and 2 mm sideways, it still meets no hollow. Its control:
+// lowered 4 mm more, the same reach (7 mm under the liner) finds them.
+module liner_reach(dz) { translate([0, 0, -dz]) minkowski() { shell_inner_ears(); cylinder(r = 2, h = 6, center = true, $fn = 12); } }
+if (check=="liner_clear_of_hollows")   intersection() { ears_hollow(); liner_reach(0); }
+if (check=="hollow_probe_works")       intersection() { ears_hollow(); liner_reach(4); }
+// Clear of the trim's screws: nothing of the liner within 1 mm of any
+// screw's path, front to back of the head. (Over the posts at 45 and 135
+// degrees the liner lies in the head's wall above the shelf, at z 58 and up
+// and r 110.8 and out, so the posts' tops, at z 57, are under it.)
+if (check=="liner_vs_screws")
+  intersection() {
+    shell_inner_ears();
+    for (i=[0:n_screws-1]) { a=i*360/n_screws;
+      translate([screw_r*cos(a), screw_r*sin(a), -1]) cylinder(d=screw_clear_dia+2, h=shell_depth+2); }
+  }
+// The liner is there at all, both ears of it (about 3,000 mm3).
+if (check=="liner_present")            shell_inner_ears();
