@@ -14,6 +14,9 @@
 # missing the data stores, the public gateway's unit, six lighttpd configs,
 # the page itself, readsb and tar1090. It now installs all of it.
 set -e
+# Files made without an explicit mode come out the same whoever runs this:
+# by hand under sudo, or from first boot.
+umask 022
 cd "$(dirname "$0")/.."
 
 CHROOT="${STRATOSCAN_CHROOT:-0}"

@@ -1917,9 +1917,11 @@ def main():
     share_state_dir()
     code = ensure_claim_code()
     if code:
-        # Also to the journal: on a headless or screen-dead unit this is the
-        # only way an owner with shell access can complete setup.
-        print(f"setupd: device is UNCLAIMED, setup code is {code}", flush=True)
+        # Where the code is, never the code: the journal is readable by the
+        # adm group and by the maintainer's journalctl (security review
+        # 2026-11-03, SR-55). An owner with shell access on a headless or
+        # screen-dead unit reads the file with sudo.
+        print("setupd: device is UNCLAIMED; its setup code is in " + os.path.join(RUN_DIR, "claim-code"), flush=True)
     with contextlib.suppress(FileNotFoundError):
         os.unlink(SOCK_PATH)
     srv = Server(SOCK_PATH, Handler)
