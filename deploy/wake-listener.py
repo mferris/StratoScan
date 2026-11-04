@@ -455,6 +455,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         global _last_wake, _last_beat, _unrecovered_restarts
+        # funnel-gateway.py marks everything from the public tunnel. Only the
+        # radar itself may wake its screen (96-stratoscan-wake.conf trusts
+        # 127.0.0.1, which is also the gateway), so a marked request is
+        # refused here too (security review 2026-11-03, SR-01).
+        if self.headers.get("X-FR-Public") is not None:
+            self.send_error(404)
+            return
         _ensure_wayland()
         path = self.path.split("?", 1)[0].rstrip("/")
         if path == "/wake/alive":

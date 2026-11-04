@@ -283,7 +283,11 @@ fi
 # The last line (2026-10-26): only the radar's own names are answered;
 # tar1090 is held to what a radar needs of it; and the stores take writes
 # only from private addresses on every unit, not only managed ones.
-for c in 85-stratoscan-tls.conf 86-stratoscan-nocache.conf 87-stratoscan-uploads.conf 89-stratoscan-photo-proxy.conf 91-stratoscan-approach-store.conf \
+# And (SR-01, 2026-11-03): a file is served only under its own name, and
+# what arrives marked as public is refused the house's own backends and data
+# here too, not only in the gateway. An update cannot install these (it
+# writes nothing under /etc); re-running this installer does.
+for c in 82-stratoscan-pathinfo.conf 83-stratoscan-public.conf 85-stratoscan-tls.conf 86-stratoscan-nocache.conf 87-stratoscan-uploads.conf 89-stratoscan-photo-proxy.conf 91-stratoscan-approach-store.conf \
          93-stratoscan-sighting-store.conf 94-stratoscan-core.conf 95-stratoscan-network.conf 96-stratoscan-wake.conf \
          97-stratoscan-tts.conf 98-stratoscan-setup.conf 99-stratoscan-captive.conf \
          84-stratoscan-hosts.conf 88-stratoscan-tar1090.conf 92-stratoscan-managed-writes.conf; do
@@ -727,10 +731,19 @@ systemctl restart systemd-journald
 
 echo "== verifying privileged paths are refused on the public tunnel =="
 fail=0
+# 404 for a path the gateway refuses by name, 400 for one it refuses as
+# ambiguous (a dot or empty segment, or still encoded after one decode).
 for p in /setup /./setup /x/../setup /%73etup /wake /%77ake /tts; do
   code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' --path-as-is -X POST \
          -H 'Content-Length: 0' "http://127.0.0.1:8085$p")
-  [ "$code" = "404" ] || { echo "  FAIL: $p returned $code via the public gateway"; fail=1; }
+  case "$code" in 400|404) ;; *) echo "  FAIL: $p returned $code via the public gateway"; fail=1 ;; esac
+done
+# And reads (SR-01): a file named with something after it, or a path still
+# encoded after one decode, reaches nothing private.
+for p in /tar1090/data/receiver.json/x /tar1090/data/stats.json/x /data/notable-people.json/x \
+         /tar1090/data/receiver.json/%252e%252e /setup/%252e%252e/x /photo/%252e%252e/x; do
+  code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' --path-as-is "http://127.0.0.1:8085$p")
+  case "$code" in 400|404) ;; *) echo "  FAIL: GET $p returned $code via the public gateway"; fail=1 ;; esac
 done
 [ "$fail" = "0" ] && echo "  all privileged paths refused publicly"
 [ "$fail" = "0" ] || { echo "REFUSING TO FINISH: the public filter is not working"; exit 1; }
@@ -746,6 +759,20 @@ answers() {   # name, path, the status lighttpd must give
 answers 127.0.0.1 / 200
 answers example.com / 302
 answers 127.0.0.1 '/tar1090/?aiscatcher_server=x' 403
+# 82-stratoscan-pathinfo.conf: a file only under its own name.
+answers 127.0.0.1 /index.html/x 404
+# 83-stratoscan-public.conf: what the gateway marks as public is refused the
+# house's backends here too, and still gets the files the public page reads.
+public() {    # path, the status lighttpd must give a request marked public
+  code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' --path-as-is -H 'X-FR-Public: 1' "http://127.0.0.1$1")
+  [ "$code" = "$2" ] || { echo "  FAIL: $1 marked public returned $code, not $2"; fail=1; }
+}
+public /setup 403
+public /data/notable-people.json 403
+public /tar1090/data/stats.json 403
+# status.json may not be written yet (readsb not started): only not refused.
+code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' -H 'X-FR-Public: 1' "http://127.0.0.1/tar1090/data/status.json")
+[ "$code" != "403" ] || { echo "  FAIL: status.json marked public is refused; the public page needs it"; fail=1; }
 # And the stores, through lighttpd: the radar's own page reaches them (an
 # empty sighting, refused as one, so nothing is written) and another site's
 # is turned away, which needs lighttpd to pass on the name it was asked for.
@@ -756,7 +783,7 @@ writes() {    # Origin, the status the sighting store must give
 }
 writes http://10.42.0.1 400
 writes https://example.com 403
-[ "$fail" = "0" ] && echo "  only its own names answered, and only its own page writes"
+[ "$fail" = "0" ] && echo "  only its own names answered, only its own page writes, and nothing private marked public"
 [ "$fail" = "0" ] || { echo "REFUSING TO FINISH: the radar's names or writes are not being checked"; exit 1; }
 
 echo

@@ -27,7 +27,6 @@ import hashlib
 import http.server
 import json
 import os
-import posixpath
 import re
 import secrets
 import sys
@@ -134,12 +133,74 @@ assert "/wake" in LOCAL_ONLY_PATHS and "/setup" in LOCAL_ONLY_PATHS \
 # /sightingsx and /networkx sailed past the read-only guard into the stores.
 #
 # Prefix matching is deliberately broader than lighttpd's, not narrower:
-# _normalise() casefolds, so /SETUP is refused here even though lighttpd's
+# match_key() casefolds, so /SETUP is refused here even though lighttpd's
 # regex is case-sensitive and would not have routed it. Over-refusing on the
 # public tunnel costs nothing -- no legitimate public path begins with any of
 # these prefixes.
 def _matches(base, paths):
     return any(base.startswith(p) for p in paths)
+
+
+# ---- the one path a public request names (SR-01, 2026-11-04) ----------------
+# The gateway used to decide on one path and forward another. It decoded the
+# path up to four times and collapsed dot segments to decide, then forwarded
+# the client's own bytes, which lighttpd decodes only once. A path that is
+# still encoded after one decode meant something different to each of them,
+# and lighttpd's static handler also serves a file with anything after its
+# name. Between the two, files and backends the filter refuses could be
+# reached (security review 2026-11-03, SR-01).
+#
+# Now a public path is decoded exactly once, which is what lighttpd does, and
+# a path that is still ambiguous after that is refused outright: one with a
+# '%' left in it, a dot segment or '..' anywhere, an empty segment ('//'), a
+# backslash, a ';', or any byte that is not printable ASCII or a space (a
+# control character, a NUL, or anything a lax UTF-8 decoder might turn into
+# a dot). No page or app asks for such a path; a space is allowed, for the
+# offline map's font folders ("Noto Sans Regular"). What is left has nothing
+# for lighttpd to decode or collapse, so the path decided on is byte for byte
+# the path lighttpd routes on, and it is the path forwarded: the request goes
+# upstream re-encoded from it, never as the client spelled it.
+_REFUSED_IN_PATH = ("%", "\\", ";", "//", "..")
+_UPSTREAM_SAFE = "/-._~!$&'()*+,=:@"
+
+
+def canonical_path(target):
+    """The path a public request-target names, decoded exactly once, or None
+    when the request must be refused (400). The query is not part of it."""
+    if not isinstance(target, str) or not target.startswith("/"):
+        return None                              # "*", absolute-form, empty
+    if any(not 0x21 <= ord(c) <= 0x7e for c in target):
+        return None                              # the query too: it goes upstream as sent
+    raw = target.split("#", 1)[0].partition("?")[0]
+    try:
+        path = urllib.parse.unquote_to_bytes(raw).decode("ascii")
+    except (UnicodeDecodeError, ValueError):
+        return None                              # an escape for a byte past ASCII
+    if any(not 0x20 <= ord(c) <= 0x7e for c in path):
+        return None                              # %00, %0a, %7f, %c0%ae ...
+    if any(t in path for t in _REFUSED_IN_PATH):
+        return None
+    if "." in path.split("/"):                   # /./ and a trailing /.
+        return None
+    return path
+
+
+def request_query(target):
+    """The query string exactly as the client sent it (without the '?')."""
+    return target.split("#", 1)[0].partition("?")[2]
+
+
+def match_key(path):
+    """What the deny lists and rewrites compare against: the canonical path
+    without trailing slashes, casefolded (broader than lighttpd, on purpose)."""
+    return (path.rstrip("/") or "/").casefold()
+
+
+def upstream_target(path, query):
+    """The request-target sent to lighttpd: the canonical path re-encoded, so
+    that lighttpd's one decode gives back exactly `path`, and the query as
+    the client sent it."""
+    return urllib.parse.quote(path, safe=_UPSTREAM_SAFE) + ("?" + query if query else "")
 
 
 def strip_antenna_relative(data):
@@ -741,9 +802,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         for k, v in SECURITY_HEADERS.items():
             self.send_header(k, v)
 
+    # The checks below take a raw request-target. A target that is refused
+    # outright (canonical_path() is None) counts as local-only, private and
+    # read-only: it reaches nothing publicly.
     @classmethod
     def _is_read_only_public(cls, path):
-        return _matches(cls._normalise(path), READ_ONLY_PUBLIC_PATHS)
+        base = cls._normalise(path)
+        return base is None or _matches(base, READ_ONLY_PUBLIC_PATHS)
 
     @classmethod
     def _is_rounded_receiver_json(cls, path):
@@ -755,12 +820,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # real, unrounded home coordinates to anyone with the Funnel URL.
         # Same class of bug as the /wake bypass _normalise()'s own docstring
         # documents; this call site just hadn't been switched over to it.
+        # A spelling that is refused (400) is never served at all.
         return cls._normalise(path) == ROUNDED_PATH
 
     @classmethod
     def _is_tar1090_private(cls, path):
         base = cls._normalise(path)
-        return _matches(base, TAR1090_PRIVATE_PREFIXES) and base not in TAR1090_PUBLIC_FILES
+        return base is None or (_matches(base, TAR1090_PRIVATE_PREFIXES) and base not in TAR1090_PUBLIC_FILES)
 
     def _dispatch(self):
         """Single gate for every HTTP method.
@@ -768,7 +834,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         Previously only do_GET and do_POST checked LOCAL_ONLY_PATHS, so any
         method added later would silently bypass it. Deny first, always.
         """
-        if self._is_local_only(self.path) or self._is_tar1090_private(self.path):
+        # Decided once, on the path lighttpd will route on (canonical_path);
+        # everything below uses self._canon, self._query and self._base, and
+        # never self.path again (SR-01).
+        self._canon = canonical_path(self.path)
+        if self._canon is None:
+            self._refuse_path()
+            return
+        self._query = request_query(self.path)
+        self._base = base = match_key(self._canon)
+        if _matches(base, LOCAL_ONLY_PATHS) or (
+                _matches(base, TAR1090_PRIVATE_PREFIXES) and base not in TAR1090_PUBLIC_FILES):
             self.send_error(404)  # 404, not 403 -- don't confirm it exists
             return
         if refused_query(self.path):
@@ -776,12 +852,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         if VISITS is not None:
             try:
-                VISITS.record(self.command, self._normalise(self.path), self.headers)
+                VISITS.record(self.command, base, self.headers)
             except Exception:
                 pass    # counting must never get in the way of serving
         # A browser reporting a policy violation (see CSP_DIRECTIVES): counted,
         # answered, never forwarded.
-        if self.command == "POST" and self._normalise(self.path) == "/csp-report":
+        if self.command == "POST" and base == "/csp-report":
             length = int(self.headers.get("Content-Length", 0) or 0)
             if 0 < length <= CSP_REPORT_MAX_BYTES:
                 note_csp_report(self.rfile.read(length))
@@ -791,12 +867,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # Public traffic only reads (PUBLIC_METHODS), and nothing else is
         # proxied. The shared stores answer a write 403, as they always did.
         if self.command not in PUBLIC_METHODS:
-            if self._is_read_only_public(self.path):
+            if _matches(base, READ_ONLY_PUBLIC_PATHS):
                 self.send_error(403, "Read-only")
             else:
                 self._refuse_method()
             return
-        base = self._normalise(self.path)
         if base in PUBLIC_REWRITES:
             self._serve_rewritten(base, PUBLIC_REWRITES[base])
         else:
@@ -812,35 +887,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     @staticmethod
     def _normalise(path):
-        """Reduce a request path to the form the UPSTREAM server will act on.
+        """The match key (match_key) of the path a request-target names, or
+        None when the request is refused outright (canonical_path).
 
-        Matching the raw path is not enough and was a real hole: lighttpd
-        percent-decodes and collapses traversal before routing, so /%77ake,
-        /./wake and /x/../wake all reach the wake service while none of them
-        string-compare equal to "/wake". Verified against the live gateway --
-        all three returned 204 instead of 404.
-
-        Decode repeatedly, because a single pass turns %2577 into %77 rather
-        than into "w".
+        Matching the raw path was a real hole: lighttpd percent-decodes and
+        collapses traversal before routing, so /%77ake, /./wake and /x/../wake
+        all reached the wake service (2026-10). Decoding several times to
+        catch %2577 was the next hole (SR-01, 2026-11-03): lighttpd decodes
+        once, so the gateway and lighttpd no longer agreed on the path. Now
+        the path is decoded once, as lighttpd does, and anything still
+        ambiguous after that is refused instead of guessed at.
         """
-        base = path.split("?", 1)[0].split("#", 1)[0]
-        for _ in range(4):
-            decoded = urllib.parse.unquote(base)
-            if decoded == base:
-                break
-            base = decoded
-        base = base.replace("\\", "/")          # defensive: some clients send backslashes
-        base = re.sub(r"/{2,}", "/", base)      # //wake -> /wake
-        if not base.startswith("/"):
-            base = "/" + base
-        base = posixpath.normpath(base)         # /x/../wake -> /wake
-        if not base.startswith("/"):            # normpath can yield ".."
-            base = "/" + base.lstrip("./")
-        return (base.rstrip("/") or "/").casefold()
+        path = canonical_path(path)
+        return None if path is None else match_key(path)
 
     @classmethod
     def _is_local_only(cls, path):
-        return _matches(cls._normalise(path), LOCAL_ONLY_PATHS)
+        base = cls._normalise(path)
+        return base is None or _matches(base, LOCAL_ONLY_PATHS)
+
+    def _refuse_path(self):
+        body = b"Bad request\n"
+        self.send_response(400)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(body)))
+        self._send_security_headers()
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def _refuse_method(self):
         body = b"Method not allowed\n"
@@ -857,8 +931,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         through its rewrite. Asked for by the path the rewrite is for (and the
         request's query), not the spelling the client sent, so the answer
         rewritten is the one that was decided on."""
-        query = self.path.split("#", 1)[0].partition("?")[2]
-        url = UPSTREAM + base + ("?" + query if query else "")
+        url = UPSTREAM + upstream_target(base, self._query)
         try:
             req = urllib.request.Request(url, headers={PUBLIC_MARKER: "1"})
             with _opener.open(req, timeout=10) as upstream:
@@ -882,7 +955,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         body = self.rfile.read(length) if length else None
 
         req_headers = forward_headers(self.headers.items())
-        req = urllib.request.Request(UPSTREAM + self.path, data=body, headers=req_headers, method=self.command)
+        # The canonical path, re-encoded, never self.path (SR-01).
+        url = UPSTREAM + upstream_target(self._canon, self._query)
+        req = urllib.request.Request(url, data=body, headers=req_headers, method=self.command)
 
         try:
             with _opener.open(req, timeout=10) as upstream:
@@ -902,7 +977,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._send_security_headers()
         # Only a GET carries the document the policy is for: a HEAD has no
         # body to hash, and would get a policy with no script hash in it.
-        base = self._normalise(self.path)
+        base = self._base
         html = (resp.headers.get("Content-Type") or "").startswith("text/html")
         if status == 200 and self.command == "GET" and base in PAGE_PATHS and html:
             self.send_header(CSP_HEADER, page_csp(body))

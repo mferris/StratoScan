@@ -38,7 +38,7 @@ up = (D / "87-stratoscan-uploads.conf").read_text()
 check(re.search(r'^server\.upload-dirs := \( "/run/lighttpd" \)$', up, re.M) is not None,
       "lighttpd's temporary files are in RAM (/run/lighttpd, made by Debian at boot)")
 inst = (D / "install-setup-server.sh").read_text()
-check("87-stratoscan-uploads.conf" in inst.split("for c in 85-stratoscan-tls.conf")[1].split("done")[0],
+check("87-stratoscan-uploads.conf" in re.search(r"for c in ([^;]*85-stratoscan-tls\.conf[^;]*);", inst).group(1),
       "and the installer enables that")
 
 fs = inst.split("ROOT_LINE=")[1].split("\nfi\n")[0]

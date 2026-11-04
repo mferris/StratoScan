@@ -37,7 +37,15 @@ LISTEN = ("127.0.0.1", 8081)
 CONTACT = os.environ.get("STRATOSCAN_CONTACT", "https://github.com/mferris/StratoScan")
 USER_AGENT = f"StratoScan/1.0 (+{CONTACT}; ADS-B radar display)"
 CACHE_TTL = 24 * 3600
-HEX_RE = re.compile(r"/photo/([0-9a-fA-F]{6})$")
+# The whole path, and only the path: it used to be searched for anywhere in
+# the path and query, so /anything?/photo/<hex> was a photo request too
+# (security review 2026-11-03, SR-01).
+HEX_RE = re.compile(r"^/photo/([0-9a-fA-F]{6})$")
+# Set by funnel-gateway.py on everything from the public tunnel (and dropped
+# from what clients send it). Photos are for the house's own screens: the
+# public page asks planespotters itself (2026-10-09), so a request carrying
+# it is refused here even if the gateway's filter were ever got round.
+PUBLIC_MARKER = "X-FR-Public"
 # planespotters not answering is remembered this long, not as "no photo" for
 # a day: one slow answer hid an aircraft's photo until the next day (#86,
 # 2026-10-26).
@@ -48,11 +56,12 @@ TYPE_BUDGET_S = 8
 
 cache = {}  # hex -> (timestamp, ttl, response_body_bytes)
 
-# The cache is keyed by a caller-supplied hex code and this service is
-# reachable from the public tunnel (/photo/<hex> is not on the gateway's
-# local-only list, and must not be -- public viewers need aircraft photos).
-# There are 16.7M valid keys and nothing was evicting them, so a stranger
-# walking the keyspace grew this dict without limit. Bounded, oldest-first.
+# The cache is keyed by a caller-supplied hex code. When this was written
+# the service was reachable from the public tunnel; since 2026-10-09 /photo is
+# on the gateway's local-only list (and the public marker is refused below),
+# so only the house reaches it, but any device on the LAN still can.
+# There are 16.7M valid keys and nothing was evicting them, so a walk of
+# the keyspace grew this dict without limit. Bounded, oldest-first.
 CACHE_MAX = 4096
 
 # Representative photos, keyed by the type's label. A type with no photo is
@@ -191,10 +200,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return "StratoScan"  # don't advertise the Python/http.server version
 
     def do_GET(self):
+        if self.headers.get(PUBLIC_MARKER) is not None:
+            self.send_response(404)
+            self.end_headers()
+            return
         label = type_label(self.path)
         if label is not None:
             return self._type_photo(label)
-        m = HEX_RE.search(self.path)
+        m = HEX_RE.search(urllib.parse.urlsplit(self.path).path)
         if not m:
             self.send_response(404)
             self.end_headers()

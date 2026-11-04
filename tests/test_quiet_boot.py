@@ -131,7 +131,7 @@ spec = importlib.util.spec_from_file_location("wl", D / "wake-listener.py")
 wl = importlib.util.module_from_spec(spec); spec.loader.exec_module(wl)
 check(wl.PAGE_PAINTED_FLAG == bc.FLAG, "the listener writes the flag the cover watches")
 H = [v for v in vars(wl).values() if isinstance(v, type) and hasattr(v, "do_POST")][0]
-h = H.__new__(H); h.path = "/wake/painted"; got = []
+h = H.__new__(H); h.path = "/wake/painted"; h.headers = {}; got = []
 h.send_response = lambda c, *a: got.append(c); h.end_headers = lambda: None; h.send_error = lambda c, *a: got.append(c)
 h.do_POST()
 check(got == [204] and flag.exists(), "POST /wake/painted answers 204 and writes the flag")

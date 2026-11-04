@@ -53,7 +53,7 @@ MUST_BLOCK = [
 MUST_ALLOW = [
     "/tar1090/data/aircraft.json", "/tar1090/data/receiver.json",
     "/tar1090/data/status.json", "/tar1090/data/aircraft.json?_=1", "/tar1090/data/receiver.json/",
-    "//tar1090/data/aircraft.json", "/./tar1090/data/status.json",
+    "/tar1090/data/%73tatus.json", "/TAR1090/data/aircraft.json",
     # the page itself and everything else on the site are not this filter's business
     "/", "/index.html", "/tar1090/", "/tar1090/index.html", "/tar1090/style.css", "/tar1090/script.js",
     "/api/aircraft", "/sightings", "/config.json", "/tar1090x/data/outline.json",
@@ -122,7 +122,7 @@ def main():
         checks += 1
         if not ok:
             failures.append(f"tar1090 CSP: {want}")
-    for p in ("/tar1090", "/tar1090/", "/tar1090/index.html", "/TAR1090/", "/x/../tar1090/"):
+    for p in ("/tar1090", "/tar1090/", "/tar1090/index.html", "/TAR1090/", "/%74ar1090/"):
         checks += 1
         if not is_tar1090(fg.Handler._normalise(p)):
             failures.append(f"not treated as tar1090's page: {p!r}")

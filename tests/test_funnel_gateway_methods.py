@@ -127,20 +127,25 @@ def ask(method, path, body=None):
 
 
 REWRITTEN = {
-    "receiver": ["/tar1090/data/receiver.json", "/tar1090/data/receiver.json?x=1", "/tar1090//data/receiver.json",
+    "receiver": ["/tar1090/data/receiver.json", "/tar1090/data/receiver.json?x=1",
                  "/tar1090/data/receiver%2Ejson", "/tar1090/data/receiver.json/", "/TAR1090/data/receiver.json"],
-    "aircraft": ["/tar1090/data/aircraft.json", "/tar1090/data/aircraft.json?_=1", "/x/../tar1090/data/aircraft.json"],
-    "core": ["/api/aircraft", "/api/aircraft?network=1", "/API/aircraft", "/api//aircraft"],
+    "aircraft": ["/tar1090/data/aircraft.json", "/tar1090/data/aircraft.json?_=1", "/tar1090/data/aircraft%2ejson"],
+    "core": ["/api/aircraft", "/api/aircraft?network=1", "/API/aircraft", "/api/%61ircraft"],
     "sightings": ["/sightings", "/sightings/", "/sightings?x=1", "/%73ightings"],
     "stats": ["/sightings/stats", "/sightings/stats/", "/SIGHTINGS/stats"],
     "year": ["/sightings/year", "/sightings/year?y=2026"],
 }
-REFUSED = ["/tar1090/data/stats.json", "/tar1090/data/stats.json?x=1", "/./tar1090/data/stats.json",
+# Spellings that mean one path to a decoder that decodes once and another to
+# one that collapses or decodes again: refused outright (400), whatever the
+# method (SR-01, 2026-11-03). They used to be served through the rewrite.
+AMBIGUOUS = ["/tar1090//data/receiver.json", "/x/../tar1090/data/aircraft.json", "/api//aircraft",
+             "/./tar1090/data/stats.json", "/tar1090/data/receiver.json/%252e%252e"]
+REFUSED = ["/tar1090/data/stats.json", "/tar1090/data/stats.json?x=1",
            "/tar1090/?aiscatcher_server=https://x.example", "/tar1090/?customTiles=https://x.example/{z}/{x}/{y}.png",
            "/tar1090/index.html?droneJson=https://x.example/d.json"]
 PASSED = ["/tar1090/data/status.json", "/network", "/network/stats", "/approaches", "/sightings/unclassified",
           "/tar1090/", "/tar1090/index.html", "/", "/index.html"]
-ALL_PATHS = [p for ps in REWRITTEN.values() for p in ps] + REFUSED + PASSED
+ALL_PATHS = [p for ps in REWRITTEN.values() for p in ps] + REFUSED + PASSED + AMBIGUOUS
 WRITES = ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 OTHER = ["PROPFIND", "TRACE", "QUERY", "MKCOL"]
 
@@ -160,7 +165,8 @@ for path in ALL_PATHS:
         if found:
             leaked.append("%s %s: %s" % (method, path, found))
         if method in ("GET", "HEAD"):
-            want = (404,) if "stats.json" in path else (400,) if path in REFUSED else (200,)
+            want = (400,) if path in AMBIGUOUS else (404,) if "stats.json" in path \
+                else (400,) if path in REFUSED else (200,)
             if status not in want:
                 wrong_status.append("%s %s -> %d" % (method, path, status))
         else:

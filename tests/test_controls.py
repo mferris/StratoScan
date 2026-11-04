@@ -118,7 +118,7 @@ check(not any(a[:3] == ["systemctl", "--user", "restart"] for a in calls), "in a
 
 def post(path):
     H = wl.Handler
-    h = H.__new__(H); h.path = path; out = {"code": None, "body": b""}
+    h = H.__new__(H); h.path = path; h.headers = {}; out = {"code": None, "body": b""}
     h.send_response = lambda code, *a: out.__setitem__("code", code)
     h.send_header = lambda *a: None; h.end_headers = lambda: None
     h.send_error = lambda code, *a: out.__setitem__("code", code)
