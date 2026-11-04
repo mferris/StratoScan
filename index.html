@@ -7309,13 +7309,21 @@ const DEVICE_API_SLOW_MS = 200 * 1000;
 
 async function deviceApi(path, opts = {}) {
   if (!ON_DEVICE) throw new Error('Only on the radar itself.');
-  const { timeoutMs = DEVICE_API_TIMEOUT_MS, ...rest } = opts;
+  const { timeoutMs = DEVICE_API_TIMEOUT_MS, retried = false, ...rest } = opts;
   try {
     const headers = { 'Content-Type': 'application/json' };
     if (deviceClaimCode) headers['X-StratoScan-Claim'] = deviceClaimCode;
     const r = await fetch(DEVICE_API + path, { ...rest, headers, signal: timeLimit(timeoutMs) });
     let b = {};
     try { b = await r.json(); } catch (e) { if (isTimeout(e)) throw e; }
+    // setupd makes a new setup code each time it starts on a radar not yet
+    // set up, and this page holds the one it was last shown: fetch the
+    // current one and try once more, rather than refusing a change the
+    // screen is entitled to.
+    if (r.status === 403 && b?.error?.code === 'claim_required' && !retried && path !== '/onboard') {
+      await deviceApi('/onboard', { timeoutMs: ONBOARD_TIMEOUT_MS, retried: true });
+      if (deviceClaimCode) return deviceApi(path, { ...opts, retried: true });
+    }
     if (!r.ok) {
       const err = new Error(b?.error?.message || 'That did not work.');
       err.code = b?.error?.code;
@@ -7432,14 +7440,21 @@ async function handlePhoneTap(row) {
     if (phoneConfirm !== unpair) { phoneConfirm = unpair; renderSettingsPanel(); return; }
     phoneConfirm = null;
   }
+  // Pairing gives a phone the radar's events for good, and removing one cuts
+  // the owner's off: both ask for the admin password (SR-11).
+  let proof = {};
+  if (pact === 'start' || unpair) {
+    proof = await adminProof();
+    if (proof === null) return;
+  }
   phoneBusy = true; renderSettingsPanel();
   try {
     if (pact === 'start') {
-      await deviceApi('/onboard/pair', { method: 'POST', body: JSON.stringify({ action: 'start' }) });
+      await deviceApi('/onboard/pair', { method: 'POST', body: JSON.stringify({ action: 'start', ...proof }) });
     } else if (pact === 'cancel') {
       await deviceApi('/onboard/pair', { method: 'POST', body: JSON.stringify({ action: 'cancel' }) });
     } else if (unpair) {
-      await deviceApi('/onboard/pair', { method: 'POST', body: JSON.stringify({ action: 'remove', phone: unpair }) });
+      await deviceApi('/onboard/pair', { method: 'POST', body: JSON.stringify({ action: 'remove', phone: unpair, ...proof }) });
       phoneMsg = 'Unpaired.';
     }
     await loadPhoneStatus();
@@ -8444,11 +8459,15 @@ async function loadDeviceStatus() {
 }
 
 // On a radar that is set up, the changes that could hand it to someone else
-// (a new admin password, another WiFi network, a tailnet, the public page)
-// ask for its admin password first (SR-11). {} when none is needed, null
+// (a new admin password, another WiFi network, a tailnet, the public page,
+// pairing a phone or removing one) ask for its admin password first (SR-11). {} when none is needed, null
 // when the owner cancels.
 async function adminProof(label = 'ADMIN PASSWORD  (to confirm this change)') {
-  if (!(deviceStatus && deviceStatus.claimed)) return {};
+  let claimed = deviceStatus ? deviceStatus.claimed : undefined;
+  if (claimed === undefined) {
+    try { claimed = !!(await deviceApi('/onboard')).claimed; } catch (e) { claimed = true; }
+  }
+  if (!claimed) return {};
   const pw = await openKeyboard(label, '', { secret: true });
   return pw === null ? null : { adminPassword: pw };
 }

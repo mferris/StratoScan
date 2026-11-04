@@ -79,7 +79,12 @@ def login(pw, xff, uid=LIGHTTPD):
 def reset():
     ss._fail.clear()
     getattr(ss, "_good", {}).clear()
-    ss._fail_all.update(count=0, until=0.0, window=ss.time.time())
+    if hasattr(ss, "_good_state"):
+        ss._good_state.update(loaded=False, salt=None)
+    good = os.path.join(tmp, getattr(ss, "GOOD_FILE", "-"))
+    if os.path.exists(good):
+        os.unlink(good)
+    ss._fail_all.update(count=0, until=0.0, window=ss.time.time(), last=ss.time.time())
 
 
 # ---- client_key ------------------------------------------------------------------
@@ -93,6 +98,10 @@ check(ss.client_key(lo, here, OWNER, uid=OTHER) == "local:%d" % OTHER,
       "another program on the radar can't pick its address by writing the header")
 check(ss.client_key(lo, here, "not-an-address", uid=LIGHTTPD) == "proxy", "a header that isn't an address is not a key")
 check(ss.client_key(("192.168.1.9", 5), here, OWNER) == "192.168.1.9", "a direct caller is its own address")
+check(ss.client_key(lo, here, "::ffff:" + OWNER, uid=LIGHTTPD) == OWNER,
+      "an IPv4 client reaching lighttpd's IPv6 socket is the same key as its IPv4 address")
+check(ss.client_key(lo, here, "2001:db8:1:2::23", uid=LIGHTTPD) == "2001:db8:1:2::23",
+      "an IPv6 client is its whole address (a home LAN shares one /64, so a /64 key would be one bucket again)")
 
 # ---- through the real handler ---------------------------------------------------------
 reset()
@@ -112,6 +121,11 @@ for i in range(ss.FAIL_ALL_LIMIT + 5):
     ss.note_failure("10.0.%d.%d" % (i // 200, i % 200))
 check(login("guess", "192.168.1.88") == 429, "a crowd of failures slows a newcomer")
 check(login("owner-secret-1", OWNER) == 200, "not the owner's own device")
+# ...and still not after the setup service restarts (every OTA does).
+ss._good.clear()
+if hasattr(ss, "_good_state"):
+    ss._good_state.update(loaded=False, salt=None)
+check(login("owner-secret-1", OWNER) == 200, "nor after a restart, which used to forget the owner's device")
 
 # ---- the current password, re-entered, is throttled ----------------------------------
 reset()
