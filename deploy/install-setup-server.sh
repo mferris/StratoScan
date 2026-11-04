@@ -379,7 +379,9 @@ install -m 0644 deploy/journald-stratoscan.conf /etc/systemd/journald.conf.d/str
 # Package changes and the clock need an administrator (security review
 # 2026-11-03, SR-12 and SR-39): Raspberry Pi OS lets the sudo group install
 # and remove packages through PackageKit with no password, and any user stop
-# time sync. See the file. polkit picks a new rules file up by itself; on a
+# time sync; and NetworkManager lets the same group add and change network
+# profiles, which the on-screen setup asks the admin password for (SR-11).
+# See the file. polkit picks a new rules file up by itself; on a
 # running unit the rule is then proved against a process of the kiosk user.
 if [ -d /etc/polkit-1 ]; then
   [ -d /etc/polkit-1/rules.d ] || install -d -m 0755 /etc/polkit-1/rules.d
@@ -391,14 +393,22 @@ if [ -d /etc/polkit-1 ]; then
     pk_refused=0
     for i in 1 2 3 4 5 6 7 8 9 10; do
       sleep 1
-      # Exit 0 is "allowed"; 1, 2 or 3 is refused or "needs a password".
-      if ! pkcheck --action-id org.freedesktop.packagekit.package-remove --process "$PK_SUBJECT" \
-           --detail cmdline gui-pkinst >/dev/null 2>&1; then pk_refused=1; break; fi
+      # Exit 0 is "allowed"; 1, 2 or 3 is refused, "needs a password" or a
+      # dismissed prompt. Anything else (127: polkitd down, a bad subject)
+      # proves nothing, and is a failure, not a pass.
+      pk_rc=0
+      pkcheck --action-id org.freedesktop.packagekit.package-remove --process "$PK_SUBJECT" \
+        --detail cmdline gui-pkinst >/dev/null 2>&1 || pk_rc=$?
+      case "$pk_rc" in
+        1|2|3) pk_refused=1; break ;;
+      esac
     done
     kill "$PK_SUBJECT" 2>/dev/null || true
     wait "$PK_SUBJECT" 2>/dev/null || true
     if [ "$pk_refused" = "1" ]; then
       echo "  packages: changes need an administrator (polkit)"
+    elif [ "$pk_rc" != "0" ]; then
+      echo "  FAIL: polkit could not be asked (pkcheck exit $pk_rc); the package rule is unproved"; exit 1
     else
       echo "  FAIL: polkit still lets $KIOSK_USER remove packages without a password"; exit 1
     fi

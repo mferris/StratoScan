@@ -57,6 +57,11 @@ polkit.addRule(function(action, subject) {
     if (action.id.indexOf("org.freedesktop.packagekit.package-") == 0 &&
         action.lookup("cmdline") == "gui-pkinst" && subject.isInGroup("sudo")) return polkit.Result.YES;
 });
+polkit.addRule(function(action, subject) {   // org.freedesktop.NetworkManager.rules
+    if (action.id == "org.freedesktop.NetworkManager.settings.modify.system" &&
+        subject.local && subject.active &&
+        (subject.isInGroup("sudo") || subject.isInGroup("netdev"))) return polkit.Result.YES;
+});
 polkit.addRule(function(action, subject) {   // org.freedesktop.packagekit.rules
     if (action.id == "org.freedesktop.packagekit.upgrade-system" &&
         subject.active && subject.local && subject.isInGroup("sudo")) return polkit.Result.YES;
@@ -85,6 +90,11 @@ console.log(JSON.stringify({
   rootPk: decide('org.freedesktop.packagekit.package-install', { cmdline: 'gui-pkinst' }, 'root', ['root']),
   rootTime: decide('org.freedesktop.systemd1.manage-units', { unit: 'systemd-timesyncd.service' }, 'root', []),
   nm: decide('org.freedesktop.NetworkManager.settings.modify.system', {}, ...kiosk),
+  nmControl: decide('org.freedesktop.NetworkManager.network-control', {}, ...kiosk),
+  nmOwn: decide('org.freedesktop.NetworkManager.settings.modify.own', {}, ...kiosk),
+  nmShare: decide('org.freedesktop.NetworkManager.wifi.share.protected', {}, ...kiosk),
+  nmScan: decide('org.freedesktop.NetworkManager.wifi.scan', {}, ...kiosk),
+  rootNm: decide('org.freedesktop.NetworkManager.settings.modify.system', {}, 'root', ['root']),
 }));
 """
 
@@ -105,10 +115,47 @@ check(o.get("install") == "auth_admin" and o.get("upgrade") == "auth_admin",
 check(o.get("timesync") == "auth_admin", "no ordinary user can stop or start time sync")
 check(o.get("rootPk") not in ("auth_admin", "no", None) and o.get("rootTime") == "yes",
       "root is left to the rules after ours (and polkit always allows root anyway)")
-check(o.get("otherUnit") == "default" and o.get("nm") == "default",
-      "nothing else is changed (other units, NetworkManager)")
+check(o.get("otherUnit") == "default", "other units are left alone")
+# NetworkManager: the kiosk's user is in sudo and netdev, so the stock rule
+# let it add or change a system profile, joining the radar to another network
+# quietly, which the on-screen setup asks the admin password for (SR-11).
+check(o.get("nm") == "auth_admin", "the kiosk's user can't add or change a network profile without a password")
+check(o.get("nmControl") == "auth_admin" and o.get("nmOwn") == "auth_admin" and o.get("nmShare") == "auth_admin",
+      "nor bring one up, keep one of its own, or share a network")
+check(o.get("nmScan") == "default", "a WiFi scan changes nothing and is left alone")
+check(o.get("rootNm") not in ("auth_admin", "no", None), "root (setupd, net-watchdog) is left to the rules after ours")
 bare = run("")
-check(bare.get("pkinst") == "yes", "(the stand-in stock rules do allow it without ours, as on a stock radar)")
+check(bare.get("pkinst") == "yes" and bare.get("nm") == "yes",
+      "(the stand-in stock rules do allow both without ours, as on a stock radar)")
+
+# ---- the installer's live proof counts only a real refusal ---------------------------
+# pkcheck exits 1, 2 or 3 for refused, needs-a-password or dismissed; 127 when
+# it couldn't ask at all, which proves nothing and must not pass.
+import os
+import tempfile
+start = INSTALLER.index("  if live && command -v pkcheck")
+end = INSTALLER.index("\nfi\n", INSTALLER.index("packages: polkit rule installed")) + 1
+snippet = INSTALLER[start:end]
+
+
+def proof(rc):
+    d = tempfile.mkdtemp()
+    for name, body in (("pkcheck", f"exit {rc}"), ("setpriv", "exec sleep 5"), ("sleep", "exit 0")):
+        with open(os.path.join(d, name), "w") as f:
+            f.write("#!/bin/sh\n" + body + "\n")
+        os.chmod(os.path.join(d, name), 0o755)
+    sh = "live() { return 0; }\nKIOSK_USER=$(id -un)\n" + snippet
+    env = dict(os.environ, PATH=d + ":" + os.environ["PATH"])
+    p = subprocess.run(["sh", "-c", sh], env=env, capture_output=True, text=True, timeout=60)
+    return p.returncode, p.stdout
+
+
+rc, out = proof(1)
+check(rc == 0 and "need an administrator" in out, "a refusal from pkcheck passes the proof")
+rc, out = proof(0)
+check(rc != 0 and "FAIL" in out, "an allowed removal fails the install")
+rc, out = proof(127)
+check(rc != 0 and "FAIL" in out, "and so does a pkcheck that couldn't ask polkit at all (exit 127)")
 
 print("polkit rule checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)
