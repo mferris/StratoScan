@@ -61,7 +61,7 @@ for f in /usr/bin/readsb /usr/local/share/tar1090/git/.stratoscan-commit /var/ww
          /var/www/html/vendor/maplibre-gl.mjs /var/www/html/vendor/maplibre-gl-worker.mjs \
          /opt/stratoscan/boot-cover.py /opt/stratoscan/controls.py \
          /etc/systemd/system/stratoscan-controls.service \
-         /etc/cloud/cloud-init.disabled; do must "$f"; done
+         /etc/cloud/cloud-init.disabled /etc/polkit-1/rules.d/05-stratoscan.rules; do must "$f"; done
 for f in /var/lib/stratoscan-relay/unit.key /var/lib/stratoscan-setup/setup.json \
          /var/lib/stratoscan-setup/hotspot-psk /var/lib/tailscale/tailscaled.state \
          /var/lib/stratoscan-setupd/hotspot-psk /var/lib/stratoscan-setupd/readsb.default.orig \
