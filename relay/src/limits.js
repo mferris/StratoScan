@@ -6,6 +6,72 @@ export const MAX_UNITS = 500;            // bounds what an unauthenticated first
 export const HISTORY_PER_UNIT = 120;     // ~30 days at one report per 6 h
 export const STALE_AFTER_S = 13 * 3600;  // two missed reports
 
+// Self-minted keys (security review 2026-11-03, SR-03 and SR-05), until
+// enrolment (#65) decides who may report at all. Any key can still make
+// first contact, but:
+// - only units heard from in the last ACTIVE_UNIT_S count toward MAX_UNITS,
+//   and the daily cleanup forgets units silent that long (unless they are
+//   named, in a fleet or paired), so keys minted once and abandoned stop
+//   filling the fleet after a month instead of for good;
+// - a unit younger than YOUNG_UNIT_S keeps only HISTORY_YOUNG reports;
+// - each stored report is a whitelisted copy (cleanHeartbeat), about 1 KB,
+//   not whatever 8 KB the key sent;
+// - the shared network cache serves a unit only after MEMBER_MIN_AGE_S and
+//   MEMBER_MIN_REPORTS of reports, and while it still reports.
+export const ACTIVE_UNIT_S = 30 * 86400;
+export const HEARTBEAT_RETENTION_S = 30 * 86400;
+export const YOUNG_UNIT_S = 7 * 86400;
+export const HISTORY_YOUNG = 3;
+export const MEMBER_MIN_AGE_S = 48 * 3600;
+export const MEMBER_MIN_REPORTS = 4;     // a unit reports every 6 h: 8 in two days
+export const MEMBER_RECENT_S = 2 * 86400;
+export const HEARTBEAT_STORED_MAX = 2048;   // the whitelisted copy can never be bigger than this
+
+// The fields of a health report the fleet pages read, and nothing else
+// (SR-05; SR-20: a crafted list could break an administrator's page). Unknown
+// fields are dropped rather than refused, so a newer unit can add one; it
+// shows on the fleet pages once it is added here.
+const str = max => v => (typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, '').slice(0, max) : undefined);
+const numv = v => (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e12 ? v : undefined);
+const intv = v => (Number.isInteger(v) && Math.abs(v) <= 1e12 ? v : undefined);
+const boolv = v => (typeof v === 'boolean' ? v : undefined);
+const HEARTBEAT_SHAPE = {
+  v: intv, version: str(32), serial: v => intv(v) ?? str(24)(v), uptime_s: numv, ring: intv, name: str(32),
+  last_watchdog_reboot_age_s: numv,
+  ota: { state: str(24), held: str(120) },
+  receiver: { age_s: numv, aircraft: numv, messages_per_min: numv, signal_db: numv, noise_db: numv, restarts: numv },
+  display: { painted_age_s: numv },
+  storage: { device: str(24), gb_per_day: numv, rate_window_h: numv, lifetime_gb: numv, free_pct: numv },
+  rtc: { fitted: boolv, battery_mv: numv, charging: boolv },
+  thermal: { temp_c: numv, throttled: str(16) },
+  power: { undervoltage_24h: numv },
+  memory_mb: { MemTotal: numv, MemAvailable: numv, Shmem: numv },
+  os: { last_patch_age_s: numv, pending: numv, pending_since: numv, chromium: str(40), kernel: str(64),
+        restart_waiting: boolv, trial: boolv, held_update: str(16) },
+};
+const VISIT_DAY = { date: str(10), views: intv, unique: intv };
+
+function shaped(v, shape) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const out = {};
+  for (const [k, f] of Object.entries(shape)) {
+    if (!(k in v)) continue;
+    if (v[k] === null) { out[k] = null; continue; }
+    const x = typeof f === 'function' ? f(v[k]) : shaped(v[k], f);
+    if (x !== undefined) out[k] = x;
+  }
+  return out;
+}
+
+// The copy of a health report the relay keeps.
+export function cleanHeartbeat(p) {
+  const out = shaped(p, HEARTBEAT_SHAPE) || {};
+  if (Array.isArray(p.visits)) {
+    out.visits = p.visits.slice(-7).map(d => shaped(d, VISIT_DAY)).filter(Boolean);
+  }
+  return out;
+}
+
 // Unit events (POST /v1/events). A unit caps itself at 60 ordinary events an
 // hour plus any emergencies; these bound what a misbehaving one can do.
 export const EVENT_KINDS = ['emergency', 'notable', 'low_overhead', 'helicopter', 'test', 'approach', 'approach_end'];
@@ -118,9 +184,23 @@ export function assess(unit, now) {
 
 // Pairing (roadmap 2.3).
 export const PAIRING_TTL_S = 10 * 60;
-export const PAIRING_MAX_ATTEMPTS = 5;   // wrong secrets before an offer is void
 export const MAX_PHONES_PER_UNIT = 10;
 export const MAX_UNITS_PER_PHONE = 20;
+// Open pairing codes (SR-03): at most MAX_OFFERS_PER_NET from one network
+// block (/24 or /48) at a time, and only the newest MAX_OPEN_OFFERS kept in
+// all, so minted keys re-offering every 10 minutes can no longer fill the
+// table and stop every phone from pairing. A wrong secret no longer voids
+// an offer (SR-17): strangers knew the unit id from any pair link, and a
+// 128-bit secret is not guessed; the per-key and per-address limits bound
+// the guessing anyway.
+export const MAX_OFFERS_PER_NET = 8;
+export const MAX_OPEN_OFFERS = 500;
+// A pairing younger than this (SR-03): its radar's emergencies and tests are
+// not let past the ordinary hourly cap, and only YOUNG_PAIRING_URGENT_PER_HOUR
+// of them reach the phone in an hour. A minted radar paired through a link
+// sent to a stranger could otherwise send them 60 time-sensitive alerts an hour.
+export const YOUNG_PAIRING_S = 86400;
+export const YOUNG_PAIRING_URGENT_PER_HOUR = 5;
 
 export function cleanPhoneName(v) {
   if (typeof v !== 'string') return null;

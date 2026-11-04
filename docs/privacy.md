@@ -240,11 +240,13 @@ The relay is a small service run by the StratoScan maintainer on Cloudflare.
 | A phone's location, if it shares one with its radar for approach alerts: sealed so only that radar can read it | At most 6 hours |
 | Alerts waiting to be delivered | At most 48 hours (500 per radar) |
 | Health reports (only if turned on), and, for a radar in a fleet, its name and its public page's daily visit counts | About 30 days |
-| A one-time pairing code's fingerprint (never the code itself) | Until used, or 10 minutes |
+| A one-time pairing code's fingerprint (never the code itself), and a fingerprint of the network block it came from (its /24 or /48, never the address), used only to limit how many codes one network can have open | Until used, or 10 minutes |
 | Fingerprints of fleet invite codes and administrator links (never the codes) | Until replaced or the fleet is removed |
 | Aircraft positions, routes and registered owners fetched for radars and phones (the shared cache), never kept against whoever asked. An owner comes from public aircraft registries and, for a private aircraft, can be a person's name | Positions seconds, routes 6 hours, owners 7 days |
 
-The relay doesn't store IP addresses. Cloudflare, which runs it, sees them
+The relay doesn't store IP addresses. To stop floods it counts requests per
+address, a minute at a time; the counts are never written down. Cloudflare,
+which runs it, sees them
 when it delivers requests, under
 [Cloudflare's own privacy policy](https://www.cloudflare.com/privacypolicy/).
 

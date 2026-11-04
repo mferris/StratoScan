@@ -614,8 +614,8 @@ before you do:
 - **Units and phones prove who they are to the relay.** Every unit request is
   signed with the unit's own Ed25519 key, and every phone request with a key
   generated on the phone. Pairing takes a one-time code shown on the radar's
-  screen, which expires in 10 minutes or after five wrong guesses. Only a
-  hash of it is stored.
+  screen, which expires in 10 minutes and holds 128 random bits, so wrong
+  guesses get nowhere (and can't void it). Only a hash of it is stored.
 - **No secrets in the repository or on units.** The radar's data sources are
   free and keyless (see [Data sources](#data-sources) above). The one secret
   the project has, Apple's push key, lives only in the relay as a Cloudflare

@@ -6,9 +6,9 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import worker, { withSecurityHeaders } from '../src/index.js';
 import {
-  assess, HISTORY_PER_UNIT, MAX_UNITS, MIN_INTERVAL_S, STALE_AFTER_S,
+  assess, HISTORY_PER_UNIT, MAX_UNITS, ACTIVE_UNIT_S, YOUNG_UNIT_S, MIN_INTERVAL_S, STALE_AFTER_S,
   EVENTS_PER_HOUR, EVENTS_PER_UNIT, EVENT_RETENTION_S, MAX_EVENTS_PER_REQUEST,
-  PAIRING_TTL_S, PAIRING_MAX_ATTEMPTS, MAX_PHONES_PER_UNIT, cleanEvent } from '../src/limits.js';
+  PAIRING_TTL_S, MAX_PHONES_PER_UNIT, YOUNG_PAIRING_S, cleanEvent } from '../src/limits.js';
 import { sha256Hex, signedMessage } from '../src/auth.js';
 import { makeD1 } from './d1-sqlite.js';
 
@@ -96,6 +96,7 @@ test('oversized and malformed bodies are refused', async () => {
 test('history is trimmed per unit', async () => {
   const e = env(), u = await newUnit();
   clock += 1000;
+  e.DB.raw.prepare('INSERT INTO units (id, first_seen, last_seen, last_ts) VALUES (?, ?, ?, 0)').run(u.id, clock - YOUNG_UNIT_S, clock - 86400);
   for (let i = 0; i < HISTORY_PER_UNIT + 20; i++) {
     e.DB.raw.prepare('INSERT INTO heartbeats (unit, ts, payload) VALUES (?, ?, ?)').run(u.id, 1_000 + i, '{}');
   }
@@ -106,10 +107,18 @@ test('history is trimmed per unit', async () => {
 
 test('first contact cannot grow the fleet without bound', async () => {
   const e = env();
-  const ins = e.DB.raw.prepare('INSERT INTO units (id, first_seen, last_seen, last_ts) VALUES (?, 0, 0, 0)');
-  for (let i = 0; i < MAX_UNITS; i++) ins.run('filler' + i);
   clock += 1000;
+  const ins = e.DB.raw.prepare('INSERT INTO units (id, first_seen, last_seen, last_ts) VALUES (?, ?, ?, 0)');
+  for (let i = 0; i < MAX_UNITS; i++) ins.run('filler' + i, clock - 86400, clock - 86400);
   assert.equal((await worker.fetch(await signed(await newUnit(), hb()), e)).status, 503);
+});
+
+test('only units heard from in the last 30 days fill the fleet', async () => {
+  const e = env();
+  clock += 1000;
+  const ins = e.DB.raw.prepare('INSERT INTO units (id, first_seen, last_seen, last_ts) VALUES (?, ?, ?, 0)');
+  for (let i = 0; i < MAX_UNITS; i++) ins.run('filler' + i, clock - ACTIVE_UNIT_S - 2, clock - ACTIVE_UNIT_S - 1);
+  assert.equal((await worker.fetch(await signed(await newUnit(), hb()), e)).status, 200, 'keys silent for a month hold no place');
 });
 
 test('the fleet view is never open', async () => {
@@ -335,11 +344,14 @@ test('a wrong, expired or guessed code pairs nothing', async () => {
   const e = env(), u = await newUnit(), phone = await newUnit();
   clock += 1000;
   await offer(e, u, TEST_PAIRING_CODE);
-  assert.equal((await pair(e, phone, u, 'wrong-secret-0123456')).status, 403);
-  for (let i = 1; i < PAIRING_MAX_ATTEMPTS; i++) { clock += 1; await pair(e, phone, u, 'wrong-secret-0123456'); }
+  const wrong = await pair(e, phone, u, 'wrong-secret-0123456');
+  assert.equal(wrong.status, 404);
   clock += 1;
-  assert.equal((await pair(e, phone, u, TEST_PAIRING_CODE)).status, 404, 'too many wrong guesses void the offer');
+  const none = await pair(e, phone, await newUnit(), 'wrong-secret-0123456');
+  assert.deepEqual(await wrong.json(), await none.json(), 'a wrong code and no code get the same answer');
+  assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM pairings').get().n, 0);
 
+  clock += 1;
   await offer(e, u, TEST_PAIRING_CODE);
   clock += PAIRING_TTL_S + 1;
   assert.equal((await pair(e, phone, u, TEST_PAIRING_CODE)).status, 404, 'expired');
@@ -532,6 +544,7 @@ test('phones get only the kinds they asked for; emergencies are never rate-limit
   const u2 = await newUnit();
   clock += 1000;
   await pairedPhone(e2, u2);
+  clock += YOUNG_PAIRING_S;
   for (let i = 0; i < PUSHES_PER_HOUR + 5; i++) {
     clock += 5;
     await postEvents(e2, u2, [evt({ kind: 'low_overhead', hex: (0x100000 + i).toString(16) })]);
@@ -611,6 +624,7 @@ test('emergencies pass the ordinary cap, but not the hard one', async () => {
   const u = await newUnit();
   clock += 1000;
   await pairedPhone(e, u, { kinds: ['emergency'] });
+  clock += YOUNG_PAIRING_S;
   for (let i = 0; i < PUSHES_PER_HOUR_HARD + 5; i++) {
     clock += 5;
     await postEvents(e, u, [evt({ kind: 'emergency', hex: (0x300000 + i).toString(16) })]);

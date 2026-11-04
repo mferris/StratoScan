@@ -16,8 +16,15 @@ For each unit:
 - a name the maintainer gives it;
 - first and last report times;
 - its software version;
-- its last ~30 days of health reports: uptime, receiver health, storage
-  wear, temperature, clock battery, update state.
+- its last ~30 days of health reports (only 3 while the unit is under a
+  week old): uptime, receiver health, storage wear, temperature, clock
+  battery, update state. Only those fields are kept, about 1 KB a report
+  (`cleanHeartbeat` in `src/limits.js`); anything else a report carries is
+  dropped.
+
+A unit not heard from for 30 days is forgotten by the daily cleanup,
+unless the maintainer has named it, it is in a fleet, or a phone is paired
+with it.
 
 For each unit that sends **events** (roadmap 2.2; only once its owner
 pairs a phone): the moments it decided a paired phone should hear about.
@@ -33,15 +40,21 @@ For **pairing** (roadmap 2.3): which phones are paired with which unit,
 each phone's public key (its id) and the name it gave itself ("iPhone"),
 and while a code is showing on a unit's screen, that code's SHA-256. The
 code itself reaches the relay only when a phone presents it, is compared
-and then discarded; it works once, and expires after 10 minutes or five
-wrong guesses. A unit stops sending events when its last phone unpairs,
+and then discarded; it works once, and expires after 10 minutes. A wrong
+guess changes nothing (the code is 128 random bits), so a stranger who
+knows a unit's id can't void its code. While a code is open the relay
+also keeps a fingerprint of the network block it came from (the /24 of
+an IPv4 address, the /48 of an IPv6 one), to allow only a few open codes
+per network; it goes with the code. A unit stops sending events when its last phone unpairs,
 and the relay drops events from a unit with no phones.
 
 For **push** (roadmap 2.1): each paired phone's APNs device token, whether
 it is a development or App Store build, and which alert kinds it wants.
 A token is only an address for Apple's push service. Apple tells the relay
 when a token stops working, and the relay then forgets it. Each phone gets
-at most 30 ordinary alerts an hour; emergencies always go through.
+at most 30 ordinary alerts an hour; emergencies go past that, up to 60,
+except from a radar paired less than a day ago, whose emergencies and tests
+are capped at 5 an hour.
 
 For **alerts about aircraft approaching a phone** (roadmap 2.7; only for
 phones whose owner turns on "Approaching me"):
@@ -56,7 +69,8 @@ phones whose owner turns on "Approaching me"):
   phone alone) and the aircraft, without distance or direction.
 
 **No locations in the clear.** Reports or events carrying a latitude or
-longitude field are rejected outright. No network addresses are stored either. An event
+longitude field are rejected outright. No network addresses are stored
+either (only the network-block fingerprint of an open pairing code, above). An event
 still says roughly where its unit is ("a helicopter passed within 2
 miles"), which is why events are opt-in and kept so briefly.
 
@@ -65,8 +79,11 @@ unit. The relay keeps, in Cloudflare's per-data-centre cache, the public
 network's aircraft in 250 nm discs on a fixed world lattice (10 seconds),
 flight routes from adsb.im by callsign (6 hours; "no route" for 1 hour)
 and registered owners from adsbdb by aircraft address (7 days). Entries
-are keyed by the thing asked for, never by who asked; a reporting unit or
-a paired phone may ask, and nothing else. A disc is fetched from adsb.lol
+are keyed by the thing asked for, never by who asked (a route by its
+callsign and the one-degree cell the flight is in, since adsb.im's verdict
+depends on where it is); a unit that has reported for two days (at least 4
+reports) and still does, or a phone paired with one, may ask, and nothing
+else. Others are told 403 and ask the services themselves, as before. A disc is fetched from adsb.lol
 by the unit that first finds it missing (adsb.lol rate-limits Cloudflare's
 shared addresses) and handed up for the others; routes and owners the
 relay fetches itself.
@@ -99,8 +116,21 @@ It never shows a location (health reports carry none), phones or alerts. An admi
   come at most every 10 minutes. Events are capped at 120 an hour per unit
   and 20 per request, and every field is validated and length-limited
   before it is stored.
-- An unknown key registers on first contact. The number of units is capped,
-  so this can't grow without bound.
+- An unknown key registers on first contact. The number of units heard from
+  in the last 30 days is capped, so this can't grow without bound, and keys
+  that go silent stop counting after a month. Enrolment (#65) is still to
+  decide who may report at all.
+- Every request is rate-limited per address before anything else, more
+  tightly for anything that can write and for the fleet pages; signed
+  changes are also limited per signing key once the signature verifies,
+  before the database is touched (`src/ratelimit.js`). The route's own
+  checks run before the replay record is written. Bodies are read only up
+  to their limit, and only after the signing headers look right.
+- Open pairing codes are capped at 8 per network block and 500 in all (the
+  oldest go first).
+- A daily cron (`scheduled()` in `src/index.js`, `src/cleanup.js`) prunes
+  replay records, expired codes, alerts past 48 hours, reports past 30
+  days, silent keys, and phones no longer paired with anything.
 - Phones sign the same way with their own Ed25519 key (CryptoKit on iOS),
   named in `X-FR-Phone`. A phone can only pair by presenting the code on a
   unit's screen, and can only unpair itself. A unit can list and remove its
@@ -125,6 +155,19 @@ npm run deploy                                      # serves the custom domain i
 
 After a change to `schema.sql` (new tables only, never altered ones), run
 `npm run db:init` again before `npm run deploy`. It is safe to repeat.
+A change to an existing table comes as a file in `migrations/`, run once
+on the live database before deploying the Worker that needs it; each file
+says how. `schema.sql` already includes every migration, so a new database
+needs none of them (and `db:init` fails on an older database until its
+migrations have run).
+
+`wrangler.example.toml` has the daily cleanup's cron trigger and the three
+rate-limit bindings (`RL_IP`, `RL_STRICT`, `RL_KEY`); copy both sections
+into your `wrangler.toml`. Without the bindings the same limits are
+counted in memory per machine. Also add a rate-limiting rule for the
+relay's domain in the Cloudflare dashboard (for example 120 requests per
+10 seconds per address, tighter on `/fleet*` and `/f/*`): a request the
+Worker refuses still counts toward the daily quota.
 
 Then set `RELAY_URL` in `deploy/heartbeat.py` to that address and cut a
 release; units that have opted in start reporting within a few minutes. The

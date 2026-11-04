@@ -77,7 +77,13 @@ const envOf = (answer, extra = {}) => {
   return { DB: makeD1(SCHEMA), NET_FETCH: fetch, NET_CACHE: cache, fetch, cache, ...extra };
 };
 const hb = () => JSON.stringify({ version: '2026.10.09.5', uptime_s: 3600 });
-const reporting = async (e, u) => { clock += 1000; assert.equal((await worker.fetch(await signed(u, hb()), e)).status, 200); };
+// A unit the shared cache serves: one that has reported for a few days
+// (SR-03). Its history is aged rather than played out report by report.
+const reporting = async (e, u) => {
+  clock += 1000;
+  assert.equal((await worker.fetch(await signed(u, hb()), e)).status, 200);
+  e.DB.raw.prepare('UPDATE units SET first_seen = first_seen - ?, reports = ? WHERE id = ?').run(3 * 86400, 12, u.id);
+};
 const paired = (e, u, phone) => e.DB.raw.prepare('INSERT INTO pairings (unit, phone, name, created) VALUES (?, ?, ?, ?)').run(u.id, phone.id, null, clock);
 const ask = async (e, who, path, as = 'X-FR-Unit') => worker.fetch(await signed(who, '', { path, method: 'GET', as }), e);
 const post = async (e, who, path, body, as = 'X-FR-Unit') => worker.fetch(await signed(who, JSON.stringify(body), { path, as }), e);
@@ -254,15 +260,16 @@ test('routes: misses go to adsb.im in one batch, hits come from the cache, "no r
   assert.deepEqual(JSON.parse(e.fetch.calls[0].init.body).planes[0], { callsign: 'DAL2164', lat: 35.9, lng: -78.8 }, 'positions go upstream rounded to 0.1 degrees');
   clock += 60;
   const v = await newUnit(); await reporting(e, v);
-  const r2 = await post(e, v, '/v1/net/routes', { planes: [{ callsign: 'DAL2164', lat: 0, lng: 0 }, { callsign: 'NOROUTE', lat: 0, lng: 0 }] });
+  const here = { callsign: 'DAL2164', lat: 35.6, lng: -78.2 };   // the same one-degree cell
+  const r2 = await post(e, v, '/v1/net/routes', { planes: [here, { callsign: 'NOROUTE', lat: 0, lng: 0 }] });
   assert.equal((await r2.json()).length, 2);
   assert.equal(e.fetch.calls.length, 1, 'another radar asking the same callsigns costs adsb.im nothing');
   clock += NO_ROUTE_TTL_S;
-  await post(e, v, '/v1/net/routes', { planes: [{ callsign: 'DAL2164', lat: 0, lng: 0 }, { callsign: 'NOROUTE', lat: 0, lng: 0 }] });
+  await post(e, v, '/v1/net/routes', { planes: [here, { callsign: 'NOROUTE', lat: 0, lng: 0 }] });
   assert.equal(e.fetch.calls.length, 2, 'past an hour the callsign with no route is asked about again');
   assert.deepEqual(JSON.parse(e.fetch.calls[1].init.body).planes.map(p => p.callsign), ['NOROUTE'], 'the known route is still cached');
   clock += ROUTE_TTL_S;
-  await post(e, v, '/v1/net/routes', { planes: [{ callsign: 'DAL2164', lat: 0, lng: 0 }] });
+  await post(e, v, '/v1/net/routes', { planes: [here] });
   assert.equal(e.fetch.calls.length, 3, 'and after six hours so is the route');
   const tooMany = await post(e, v, '/v1/net/routes', { planes: Array.from({ length: 51 }, (_, i) => ({ callsign: `CS${i}`, lat: 0, lng: 0 })) });
   assert.equal(tooMany.status, 400);
@@ -292,6 +299,7 @@ test('owners: adsbdb\'s answer trimmed and kept a week; "unknown" (404) is remem
   assert.equal((await ask(e, u, '/v1/net/owner/000001')).status, 404);
   assert.equal(e.fetch.calls.length, 2, 'an unknown aircraft is not asked about twice');
   clock += OWNER_TTL_S + 1;
+  await reporting(e, u);
   await ask(e, u, '/v1/net/owner/ae74e8');
   assert.equal(e.fetch.calls.length, 3, 'after a week it is asked again');
   assert.equal((await ask(e, u, '/v1/net/owner/AE74E8')).status, 400, 'lower case only, so one entry per aircraft');

@@ -41,8 +41,9 @@
 // its view (`near`, the middle rounded to 0.05 degrees, as adsb.lol gets
 // it; anything finer is refused) and gets only the aircraft in it.
 //
-// Who may ask: a unit that reports to the relay (it is in `units`, which
-// only a signed health report puts it in) or a phone paired with one. The
+// Who may ask: a unit that has reported to the relay for two days (it is in
+// `units`, which only a signed health report puts it in; see isMember) or a
+// phone paired with one. The
 // signature is the same as every other request's; membership keeps this
 // from being an open proxy to three volunteer-run services. The relay
 // keeps nothing about who asked for what: the cache is keyed by the thing
@@ -56,7 +57,8 @@
 // Both the cache (Cloudflare's, per data centre) and the upstream fetch can
 // be handed in through env (NET_CACHE, NET_FETCH) so the tests run the
 // real code against a fake of each.
-import { verifyRequest } from './auth.js';
+import { verifyRequest, headerError, readCapped } from './auth.js';
+import { MEMBER_MIN_AGE_S, MEMBER_MIN_REPORTS, MEMBER_RECENT_S } from './limits.js';
 
 export const DISC_R_NM = 250;                      // what adsb.lol serves at most
 export const DISC_SPACING_NM = DISC_R_NM * Math.SQRT2;   // discs this far apart leave no gap
@@ -147,13 +149,25 @@ function allow(id, kind) {
   return b.n <= LIMITS[kind];
 }
 
+// A member is a unit that has reported for MEMBER_MIN_AGE_S, at least
+// MEMBER_MIN_REPORTS times, and still does; or a phone paired with one
+// (security review 2026-11-03, SR-03, SR-14, SR-15: one heartbeat from a
+// freshly minted key used to be enough to hand discs up and to ask routes
+// for everyone). A unit not yet a member is told 403 and asks the services
+// itself, as it always did.
 async function isMember(env, kind, id) {
   const key = `${kind}:${id}`, now = Date.now();
   const until = members.get(key);
   if (until && until > now) return true;
+  const s = Math.floor(now / 1000);
   const row = kind === 'phone'
-    ? await env.DB.prepare('SELECT 1 AS x FROM pairings WHERE phone = ? LIMIT 1').bind(id).first()
-    : await env.DB.prepare('SELECT 1 AS x FROM units WHERE id = ? LIMIT 1').bind(id).first();
+    ? await env.DB.prepare(
+      `SELECT 1 AS x FROM pairings p JOIN units u ON u.id = p.unit
+        WHERE p.phone = ? AND u.first_seen <= ? AND u.last_seen >= ? AND u.reports >= ? LIMIT 1`
+    ).bind(id, s - MEMBER_MIN_AGE_S, s - MEMBER_RECENT_S, MEMBER_MIN_REPORTS).first()
+    : await env.DB.prepare(
+      'SELECT 1 AS x FROM units WHERE id = ? AND first_seen <= ? AND last_seen >= ? AND reports >= ? LIMIT 1'
+    ).bind(id, s - MEMBER_MIN_AGE_S, s - MEMBER_RECENT_S, MEMBER_MIN_REPORTS).first();
   if (!row) return false;
   if (members.size > 10_000) members.clear();
   members.set(key, now + MEMBER_TTL_MS);
@@ -192,15 +206,18 @@ function nmBetween(lat1, lon1, lat2, lon2) {
   return 3440.065 * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
-// A phone's view (#68): "lat,lon,nm", the middle to two decimals at most and
-// a radius no wider than a disc. null when not asked for, false when wrong.
+// A phone's view (#68): "lat,lon,nm", the middle a multiple of 0.05 degrees
+// as privacy.md says (SR-52: two decimals of any kind were taken) and a
+// radius no wider than a disc. null when not asked for, false when wrong.
 const NEAR = /^(-?\d{1,2}(?:\.\d{1,2})?),(-?\d{1,3}(?:\.\d{1,2})?),(\d{1,3})$/;
+const twentieths = x => Math.abs(Math.round(x * 100)) % 5 === 0;
 export function nearOf(raw) {
   if (raw === null || raw === undefined) return null;
   const m = NEAR.exec(raw);
   if (!m) return false;
   const lat = Number(m[1]), lon = Number(m[2]), nm = Number(m[3]);
   if (Math.abs(lat) > 90 || Math.abs(lon) > 180 || nm < 1 || nm > DISC_R_NM) return false;
+  if (!twentieths(lat) || !twentieths(lon)) return false;
   return { lat, lon, nm };
 }
 
@@ -225,6 +242,10 @@ export function nearOnly(buf, near) {
 export function discLooksRight(buf, centre) {
   let d;
   try { d = JSON.parse(dec.decode(buf)); } catch { return false; }
+  return looksRight(d, centre);
+}
+
+function looksRight(d, centre) {
   if (!d || typeof d !== 'object' || Array.isArray(d) || !Array.isArray(d.ac)) return false;
   if (d.ac.length > DISC_MAX_AIRCRAFT) return false;
   for (const a of d.ac) {
@@ -237,13 +258,87 @@ export function discLooksRight(buf, centre) {
   return true;
 }
 
-// A disc handed up by a unit: bigger than any other body the relay takes.
-async function readDisc(request) {
-  const len = Number(request.headers.get('Content-Length') || 0);
-  if (len > DISC_MAX_BYTES) return null;
-  const buf = new Uint8Array(await request.arrayBuffer());
-  return buf.length > DISC_MAX_BYTES ? null : buf;
+// The aircraft's fields in their real form only (SR-14): a disc handed up
+// could carry any text as a callsign, registration, type or squawk, and
+// numbers such as an altitude of 1e300 that crash the iOS app. A field not
+// in its real form is dropped (the aircraft stays); an aircraft without a
+// real address is dropped. Other fields keep finite, bounded numbers and
+// short strings only. The disc is rewritten only when something changed,
+// which for adsb.lol's own answer is never, so the usual case costs one
+// walk and no re-serialising.
+const AC_FORMS = {
+  flight: /^[A-Z0-9 ]{1,8}$/,
+  r: /^[A-Z0-9-]{1,10}$/,
+  t: /^[A-Z0-9]{2,4}$/,
+  squawk: /^[0-7]{4}$/,
+};
+const AC_HEX = /^~?[0-9a-f]{6}$/;
+const AC_NUM_MAX = 1e9;            // message counters run to millions; 1e300 is what crashed the app
+const AC_STR_MAX = 100;
+
+function cleanValue(v, depth) {
+  if (typeof v === 'number') return Number.isFinite(v) && Math.abs(v) <= AC_NUM_MAX ? v : undefined;
+  if (typeof v === 'string') return v.length <= AC_STR_MAX && !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(v) ? v : undefined;
+  if (v === null || typeof v === 'boolean') return v;
+  if (depth >= 2) return undefined;
+  if (Array.isArray(v)) {
+    if (v.length > 32) return undefined;
+    const out = v.map(x => cleanValue(x, depth + 1));
+    return out.includes(undefined) ? undefined : out;
+  }
+  if (typeof v === 'object') {
+    const out = {};
+    for (const [k, x] of Object.entries(v)) {
+      const c = cleanValue(x, depth + 1);
+      if (c === undefined) return undefined;
+      out[k] = c;
+    }
+    return out;
+  }
+  return undefined;
 }
+
+// Returns { ac, changed } for one aircraft, or null to drop it.
+function cleanAircraft(a) {
+  if (typeof a.hex !== 'string' || !AC_HEX.test(a.hex)) return null;
+  let changed = false;
+  const out = {};
+  for (const [k, v] of Object.entries(a)) {
+    const form = AC_FORMS[k];
+    const ok = form ? (typeof v === 'string' && form.test(v) ? v : undefined) : cleanValue(v, 0);
+    if (ok === undefined) { changed = true; continue; }
+    out[k] = ok;
+  }
+  return { ac: out, changed };
+}
+
+// The disc a radar handed up, checked (discLooksRight) and cleaned, parsed
+// once: what to cache, or null when it is not a disc.
+export function checkedDisc(buf, centre) {
+  let d;
+  try { d = parse(buf); } catch { return null; }
+  if (!looksRight(d, centre)) return null;
+  return cleanDisc(d, buf);
+}
+
+function cleanDisc(d, buf) {
+  let changed = false;
+  const ac = [];
+  for (const a of d.ac) {
+    const c = cleanAircraft(a);
+    if (!c) { changed = true; continue; }
+    if (c.changed) changed = true;
+    ac.push(c.ac);
+  }
+  if (!changed) return buf;
+  d.ac = ac;
+  if ('total' in d) d.total = ac.length;
+  return JSON.stringify(d);
+}
+
+// A disc handed up by a unit: bigger than any other body the relay takes.
+// Read only up to the cap, however it is sent (SR-19).
+const readDisc = request => readCapped(request, DISC_MAX_BYTES);
 
 const dec = new TextDecoder();
 const parse = buf => JSON.parse(dec.decode(buf));
@@ -260,6 +355,12 @@ export function netRoutes({ json, readBody, nowS }) {
       : json(502, { error: 'the service did not answer', status, detail });
   const snippet = async r => { try { return (await r.text()).replace(/\s+/g, ' ').slice(0, 160); } catch { return ''; } };
 
+  // The signing headers, checked before any body is read (SR-19).
+  const early = request => {
+    const e = headerError(request, nowS(), request.headers.has('X-FR-Phone') ? 'X-FR-Phone' : 'X-FR-Unit');
+    return e ? json(401, { error: e }) : null;
+  };
+
   // The asker: a unit that reports, or a phone that is paired. Both sign.
   async function who(request, body, env) {
     const asPhone = request.headers.has('X-FR-Phone');
@@ -267,7 +368,8 @@ export function netRoutes({ json, readBody, nowS }) {
     if (auth.error) return { error: json(401, { error: auth.error }) };
     const kind = asPhone ? 'phone' : 'unit';
     if (!(await isMember(env, kind, auth.unit))) {
-      return { error: json(403, { error: asPhone ? 'pair with a radar first' : 'turn health reports on first' }) };
+      return { error: json(403, { error: asPhone ? 'pair with a radar that has reported for two days first'
+                                                  : 'the shared cache serves radars that have reported for two days' }) };
     }
     return { id: auth.unit, kind };
   }
@@ -280,7 +382,9 @@ export function netRoutes({ json, readBody, nowS }) {
     }
     const putting = request.method === 'PUT';
     const near = putting ? null : nearOf(new URL(request.url).searchParams.get('near'));
-    if (near === false) return json(400, { error: 'near is lat,lon,nm: two decimals at most, 1 to 250 nm' });
+    if (near === false) return json(400, { error: 'near is lat,lon,nm: multiples of 0.05 degrees, 1 to 250 nm' });
+    const refused = early(request);
+    if (refused) return refused;
     const body = putting ? await readDisc(request) : await readBody(request);
     if (!body) return json(413, { error: 'too large' });
     const w = await who(request, body, env);
@@ -298,8 +402,9 @@ export function netRoutes({ json, readBody, nowS }) {
       if (!(await cacheOf(env).match(CACHE_ORIGIN + grant))) {
         return json(409, { error: 'this radar was not asked to fetch that disc' });
       }
-      if (!discLooksRight(body, c)) return json(400, { error: 'not a disc' });
-      await cachePut(env, ctx, name, body, DISC_TTL_S);
+      const clean = checkedDisc(body, c);
+      if (!clean) return json(400, { error: 'not a disc' });
+      await cachePut(env, ctx, name, clean, DISC_TTL_S);
       await cacheDrop(env, lease);
       await cacheDrop(env, grant);
       return new Response(null, { status: 204 });
@@ -326,8 +431,15 @@ export function netRoutes({ json, readBody, nowS }) {
   }
 
   const CALLSIGN = /^[A-Z0-9]{2,8}$/;
+  // adsb.im's verdict on a route depends on where the asker says the flight
+  // is, so it is kept per callsign and one-degree cell (SR-15): an asker
+  // giving a false position could otherwise mark a real route "unconfirmed"
+  // for everyone for six hours.
+  const routeKey = p => `route/${p.callsign}/${Math.floor(p.lat)}/${Math.floor(p.lng)}`;
 
   async function routes(request, env, ctx) {
+    const refused = early(request);
+    if (refused) return refused;
     const body = await readBody(request);
     if (!body) return json(413, { error: 'too large' });
     const w = await who(request, body, env);
@@ -347,7 +459,7 @@ export function netRoutes({ json, readBody, nowS }) {
     }
     const out = [], misses = [];
     for (const [cs, plane] of wanted) {
-      const hit = await cacheGet(env, `route/${cs}`);
+      const hit = await cacheGet(env, routeKey(plane));
       if (hit) out.push(parse(hit.body)); else misses.push(plane);
     }
     if (misses.length) {
@@ -371,7 +483,7 @@ export function netRoutes({ json, readBody, nowS }) {
           _airports: stops.map(a => ({ location: a && a.location, name: a && a.name, iata: a && a.iata, icao: a && a.icao })),
         };
         out.push(slim);
-        await cachePut(env, ctx, `route/${m.callsign}`, JSON.stringify(slim), stops.length >= 2 ? ROUTE_TTL_S : NO_ROUTE_TTL_S);
+        await cachePut(env, ctx, routeKey(m), JSON.stringify(slim), stops.length >= 2 ? ROUTE_TTL_S : NO_ROUTE_TTL_S);
       }
     }
     return json(200, out);
@@ -379,7 +491,11 @@ export function netRoutes({ json, readBody, nowS }) {
 
   async function owner(request, env, ctx, hex) {
     if (!/^[0-9a-f]{6}$/.test(hex)) return json(400, { error: 'a hex address is six hex digits, lower case' });
-    const w = await who(request, await readBody(request), env);
+    const refused = early(request);
+    if (refused) return refused;
+    const body = await readBody(request);
+    if (!body) return json(413, { error: 'too large' });
+    const w = await who(request, body, env);
     if (w.error) return w.error;
     if (!allow(w.id, 'owner')) return json(429, { error: 'too many owner lookups' });
     const name = `owner/${hex}`;
