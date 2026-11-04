@@ -8,8 +8,13 @@ CREATE TABLE IF NOT EXISTS units (
   last_seen   INTEGER NOT NULL,
   last_ts     INTEGER NOT NULL,   -- last accepted signed timestamp (replay guard)
   version     TEXT,
-  payload     TEXT                -- latest heartbeat body, JSON
+  payload     TEXT,               -- latest heartbeat, its whitelisted fields only (limits.js cleanHeartbeat), JSON
+  -- How many reports it has sent (security review 2026-11-03, SR-03): the
+  -- shared network cache serves only units with a few days of them. Added
+  -- to the live database by migrations/2026-11-04-relay-harden.sql.
+  reports     INTEGER NOT NULL DEFAULT 0
 );
+CREATE INDEX IF NOT EXISTS units_last_seen ON units (last_seen);
 
 CREATE TABLE IF NOT EXISTS heartbeats (
   unit     TEXT NOT NULL,
@@ -17,6 +22,7 @@ CREATE TABLE IF NOT EXISTS heartbeats (
   payload  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS heartbeats_unit_ts ON heartbeats (unit, ts);
+CREATE INDEX IF NOT EXISTS heartbeats_ts ON heartbeats (ts);
 
 -- Unit events (roadmap 2.2): moments a unit decided are worth telling its
 -- paired phones about. Kept only long enough to deliver (EVENT_RETENTION_S):
@@ -36,6 +42,7 @@ CREATE TABLE IF NOT EXISTS events (
   payload   TEXT NOT NULL           -- the validated event, JSON
 );
 CREATE INDEX IF NOT EXISTS events_unit_received ON events (unit, received);
+CREATE INDEX IF NOT EXISTS events_received ON events (received);
 
 -- Pairing (roadmap 2.3). A unit's screen shows a QR code holding its id and
 -- a one-time secret; the unit registers only the secret's SHA-256 here. A
@@ -44,8 +51,14 @@ CREATE TABLE IF NOT EXISTS pairing_offers (
   unit         TEXT PRIMARY KEY,
   secret_hash  TEXT NOT NULL,       -- hex sha256 of the secret; the secret itself never reaches the relay until a phone uses it
   expires      INTEGER NOT NULL,
-  attempts     INTEGER NOT NULL DEFAULT 0
+  attempts     INTEGER NOT NULL DEFAULT 0,   -- no longer counted (SR-17); kept for older databases
+  -- A fingerprint of the network block (/24 or /48) the offer came from,
+  -- kept only as long as the offer, to cap how many one network has open
+  -- (SR-03). Never the address. Added by migrations/2026-11-04-relay-harden.sql.
+  net          TEXT
 );
+CREATE INDEX IF NOT EXISTS pairing_offers_net ON pairing_offers (net);
+CREATE INDEX IF NOT EXISTS pairing_offers_expires ON pairing_offers (expires);
 
 CREATE TABLE IF NOT EXISTS pairings (
   unit     TEXT NOT NULL,

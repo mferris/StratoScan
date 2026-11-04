@@ -15,6 +15,34 @@ database_name = "stratoscan-relay"
 # From: npx wrangler d1 create stratoscan-relay
 database_id = "00000000-0000-0000-0000-000000000000"
 
+# The daily cleanup (security review 2026-11-03, SR-05/SR-22): old replay
+# records, expired pairing codes, alerts past 48 h, reports past 30 days, and
+# keys silent for 30 days. Any time of day works; once a day is enough.
+[triggers]
+crons = ["17 4 * * *"]
+
+# Request rate limits (SR-04), counted by Cloudflare in each data centre.
+# Each namespace_id is any number you choose, unique in your account; the
+# limits match RATES in src/ratelimit.js. Without these the relay counts the
+# same limits in memory, per machine, which stops bursts but not a spread-out
+# flood. Either way, add a rate-limiting rule on the relay's domain in the
+# Cloudflare dashboard as the backstop (requests the Worker refuses still
+# count toward the daily request quota).
+[[ratelimits]]
+name = "RL_IP"                 # every request, per address
+namespace_id = "1001"
+simple = { limit = 600, period = 60 }
+
+[[ratelimits]]
+name = "RL_STRICT"             # requests that can write, and the fleet pages, per address
+namespace_id = "1002"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "RL_KEY"                # signed changes, per signing key (after the signature checks)
+namespace_id = "1003"
+simple = { limit = 30, period = 60 }
+
 # Push (roadmap 2.1). Not secret, but they are your Apple account's:
 # the push key's ID, your team ID, and your app's bundle ID.
 [vars]

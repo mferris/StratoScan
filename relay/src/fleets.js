@@ -231,7 +231,9 @@ export function fleetRoutes({ json, signedJson, nowS, maintainer, needAuth, asse
       }
       const { flags, p } = assess(u, now);
       if (!flags.length) healthy++;
-      const days = Array.isArray(p.visits) ? p.visits.slice(-7) : [];
+      // Reports are whitelisted on arrival now (SR-20), but one stored before
+      // that, or a list with holes, must not break the page.
+      const days = Array.isArray(p.visits) ? p.visits.slice(-7).filter(d => d && typeof d === 'object') : [];
       const v7 = days.reduce((n, d) => n + (Number(d.views) || 0), 0);
       const u7 = days.reduce((n, d) => n + (Number(d.unique) || 0), 0);
       views7 += v7; visitors7 += u7;

@@ -248,6 +248,8 @@ test('routes and owners: a service that never answers is given up on in time', L
     const e = { DB: makeD1(SCHEMA), NET_FETCH: svc, NET_CACHE };
     const u = await newUnit();
     assert.equal((await post(e, u, '/v1/heartbeat', { version: '2026.10.26.1', uptime_s: 60 })).status, 200);
+    // A unit the shared cache serves has reported for a few days (SR-03).
+    e.DB.raw.prepare('UPDATE units SET first_seen = first_seen - ?, reports = 12 WHERE id = ?').run(3 * 86400, u.id);
     let t0 = Date.now();
     const routes = await post(e, u, '/v1/net/routes', { planes: [{ callsign: 'AAL1801', lat: 35.9, lng: -78.8 }] });
     assert.equal(routes.status, 502, `routes (${how})`);

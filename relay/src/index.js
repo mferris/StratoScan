@@ -23,14 +23,18 @@
 // A unit that cannot reach this keeps working exactly as before: the radar
 // never depends on it.
 
-import { verifyRequest, sha256Hex, b64urlDecode, MAX_SKEW_S } from './auth.js';
+import { verifyRequest, sha256Hex, b64urlDecode, headerError, readCapped, MAX_SKEW_S } from './auth.js';
+import { allow, clientIp, netBlock } from './ratelimit.js';
+import { cleanup } from './cleanup.js';
 // Only `default` may be exported from this file: the Workers runtime treats
 // every named export of the main module as an entrypoint and refuses to
 // start on anything else. Shared constants and helpers live in limits.js.
 import {
   MAX_BODY, MIN_INTERVAL_S, MAX_UNITS, HISTORY_PER_UNIT, assess,
+  ACTIVE_UNIT_S, YOUNG_UNIT_S, HISTORY_YOUNG, cleanHeartbeat, HEARTBEAT_STORED_MAX,
   MAX_EVENTS_PER_REQUEST, EVENTS_PER_HOUR, EVENTS_PER_UNIT, EVENT_RETENTION_S, cleanEvent,
-  PAIRING_TTL_S, PAIRING_MAX_ATTEMPTS, MAX_PHONES_PER_UNIT, MAX_UNITS_PER_PHONE, cleanPhoneName,
+  PAIRING_TTL_S, MAX_PHONES_PER_UNIT, MAX_UNITS_PER_PHONE, cleanPhoneName,
+  MAX_OFFERS_PER_NET, MAX_OPEN_OFFERS, YOUNG_PAIRING_S, YOUNG_PAIRING_URGENT_PER_HOUR,
   PUSHES_PER_HOUR, PUSHES_PER_HOUR_HARD, PUSHES_PER_BATCH, cleanKinds,
   LOCATION_TTL_S, LOCATION_MIN_GAP_S, LOCATION_BLOB_MAX, BOX_KEY_CONTEXT, NEARBY_KINDS,
 } from './limits.js';
@@ -47,20 +51,23 @@ function json(status, obj) {
   });
 }
 
-async function readBody(request) {
-  const len = Number(request.headers.get('Content-Length') || 0);
-  if (len > MAX_BODY) return null;
-  const buf = new Uint8Array(await request.arrayBuffer());
-  return buf.length > MAX_BODY ? null : buf;
-}
+const readBody = request => readCapped(request, MAX_BODY);
+
+// After a signature verifies, and before anything is written (SR-04): the
+// signing key's own limit.
+const tooMany = () => json(429, { error: 'too many requests; try again in a minute' });
+const keyAllowed = (env, id) => allow(env, 'key', id);
 
 const carriesLocation = text => /"(lat|lon|latitude|longitude)"\s*:/i.test(text);
 
 async function heartbeat(request, env) {
+  const early = headerError(request, nowS());
+  if (early) return json(401, { error: early });
   const body = await readBody(request);
   if (!body) return json(413, { error: 'too large' });
   const auth = await verifyRequest(request, body, nowS());
   if (auth.error) return json(401, { error: auth.error });
+  if (!(await keyAllowed(env, auth.unit))) return tooMany();
 
   let payload;
   try {
@@ -73,32 +80,38 @@ async function heartbeat(request, env) {
   }
   // A location has no business here. Refuse rather than silently store one
   // if a future client bug ever included it.
-  const text = JSON.stringify(payload);
-  if (carriesLocation(text)) return json(400, { error: 'location fields are not accepted' });
+  if (carriesLocation(JSON.stringify(payload))) return json(400, { error: 'location fields are not accepted' });
+  // Only the fields the fleet pages read, bounded (SR-05, SR-20).
+  const text = JSON.stringify(cleanHeartbeat(payload));
+  if (text.length > HEARTBEAT_STORED_MAX) return json(413, { error: 'too large' });
 
   const db = env.DB;
-  const existing = await db.prepare('SELECT last_ts FROM units WHERE id = ?').bind(auth.unit).first();
+  const seen = nowS();
+  const existing = await db.prepare('SELECT last_ts, first_seen FROM units WHERE id = ?').bind(auth.unit).first();
   if (existing) {
     if (auth.ts <= existing.last_ts) return json(409, { error: 'replayed or out of order' });
     if (auth.ts - existing.last_ts < MIN_INTERVAL_S) return json(429, { error: 'too frequent' });
   } else {
-    const { n } = await db.prepare('SELECT COUNT(*) AS n FROM units').first();
+    // Only units heard from lately count (SR-03): keys minted once and
+    // abandoned stop holding places after ACTIVE_UNIT_S.
+    const { n } = await db.prepare('SELECT COUNT(*) AS n FROM units WHERE last_seen > ?').bind(seen - ACTIVE_UNIT_S).first();
     if (n >= MAX_UNITS) return json(503, { error: 'fleet full' });
   }
 
   const version = typeof payload.version === 'string' ? payload.version.slice(0, 32) : null;
-  const seen = nowS();
+  // A new unit keeps a few reports, an established one a month's (SR-05).
+  const keep = existing && existing.first_seen <= seen - YOUNG_UNIT_S ? HISTORY_PER_UNIT : HISTORY_YOUNG;
   await db.batch([
     db.prepare(
-      `INSERT INTO units (id, first_seen, last_seen, last_ts, version, payload)
-       VALUES (?1, ?2, ?2, ?3, ?4, ?5)
-       ON CONFLICT(id) DO UPDATE SET last_seen = ?2, last_ts = ?3, version = ?4, payload = ?5`
+      `INSERT INTO units (id, first_seen, last_seen, last_ts, version, payload, reports)
+       VALUES (?1, ?2, ?2, ?3, ?4, ?5, 1)
+       ON CONFLICT(id) DO UPDATE SET last_seen = ?2, last_ts = ?3, version = ?4, payload = ?5, reports = reports + 1`
     ).bind(auth.unit, seen, auth.ts, version, text),
     db.prepare('INSERT INTO heartbeats (unit, ts, payload) VALUES (?, ?, ?)').bind(auth.unit, auth.ts, text),
     db.prepare(
       `DELETE FROM heartbeats WHERE unit = ?1 AND ts NOT IN
          (SELECT ts FROM heartbeats WHERE unit = ?1 ORDER BY ts DESC LIMIT ?2)`
-    ).bind(auth.unit, HISTORY_PER_UNIT),
+    ).bind(auth.unit, keep),
   ]);
   return json(200, { ok: true });
 }
@@ -107,10 +120,13 @@ async function heartbeat(request, env) {
 // only EVENT_RETENTION_S: "a helicopter passed within 2 miles" says roughly
 // where a unit is, to anyone who reads it.
 async function events(request, env, ctx) {
+  const early = headerError(request, nowS());
+  if (early) return json(401, { error: early });
   const body = await readBody(request);
   if (!body) return json(413, { error: 'too large' });
   const auth = await verifyRequest(request, body, nowS());
   if (auth.error) return json(401, { error: auth.error });
+  if (!(await keyAllowed(env, auth.unit))) return tooMany();
 
   let payload;
   try {
@@ -137,7 +153,8 @@ async function events(request, env, ctx) {
   if (state) {
     if (auth.ts <= state.last_ts) return json(409, { error: 'replayed or out of order' });
   } else {
-    const { n } = await db.prepare('SELECT COUNT(*) AS n FROM event_senders').first();
+    const { n } = await db.prepare('SELECT COUNT(*) AS n FROM event_senders WHERE last_ts > ?')
+      .bind(nowS() - ACTIVE_UNIT_S).first();
     if (n >= MAX_UNITS) return json(503, { error: 'fleet full' });
   }
   let start = state ? state.window_start : auth.ts;
@@ -171,7 +188,7 @@ async function deliver(env, unit, evs) {
   if (!apns.configured(env)) return;
   const db = env.DB;
   const { results } = await db.prepare(
-    `SELECT p.* FROM pairings x JOIN phones p ON p.id = x.phone
+    `SELECT p.*, x.created AS paired_at FROM pairings x JOIN phones p ON p.id = x.phone
       WHERE x.unit = ? AND p.token IS NOT NULL`
   ).bind(unit).all();
   // Most important first, so a busy batch never crowds out an emergency.
@@ -225,6 +242,10 @@ async function deliverTo(env, unit, phone, ordered, deadline) {
   // sits on no longer holds back this phone's emergency. Each push takes its
   // place in the hourly allowance before it waits, so the count stays right,
   // and the row is written back once both are done.
+  // A pairing less than a day old (SR-03) gets its radar's emergencies and
+  // tests only within a small allowance, and never past the ordinary cap.
+  const young = !(phone.paired_at <= nowS() - YOUNG_PAIRING_S);
+  const urgentCap = young ? Math.min(YOUNG_PAIRING_URGENT_PER_HOUR, PUSHES_PER_HOUR) : true;
   await Promise.allSettled([
     (async () => {
       for (const e of approaches.slice(0, 2)) await liveActivity(env, phone, unit, e, wants, deadline);
@@ -232,7 +253,7 @@ async function deliverTo(env, unit, phone, ordered, deadline) {
     (async () => {
       let dead = false;
       for (const e of mine.slice(0, PUSHES_PER_BATCH)) {
-        const r = await pushTo(env, phone, apns.notificationFor(e, unit), e.kind === 'emergency' || e.kind === 'test', deadline);
+        const r = await pushTo(env, phone, apns.notificationFor(e, unit), e.kind === 'emergency' || e.kind === 'test' ? urgentCap : false, deadline);
         if (r.dead) { dead = true; break; }
       }
       const rest = mine.length - PUSHES_PER_BATCH;
@@ -242,10 +263,17 @@ async function deliverTo(env, unit, phone, ordered, deadline) {
     })(),
   ]);
   // One write per phone per request: the free plan also caps D1 queries.
-  await db.prepare(
-    `UPDATE phones SET window_start = ?, window_count = ?${phone.dead ? ', token = NULL' : ''} WHERE id = ?`
-  ).bind(phone.window_start, phone.window_count, phone.id).run();
+  await savePhone(db, phone);
 }
+
+// Writes back a phone's push count, and forgets its token if Apple called it
+// dead -- that token only (SR-21): a phone that registered a new one while
+// this delivery was under way keeps it.
+const savePhone = (db, phone) => (phone.dead
+  ? db.prepare('UPDATE phones SET window_start = ?, window_count = ?, token = CASE WHEN token = ? THEN NULL ELSE token END WHERE id = ?')
+    .bind(phone.window_start, phone.window_count, phone.token, phone.id)
+  : db.prepare('UPDATE phones SET window_start = ?, window_count = ? WHERE id = ?')
+    .bind(phone.window_start, phone.window_count, phone.id)).run();
 
 async function liveActivity(env, phone, unit, e, wants, deadline) {
   const db = env.DB, now = nowS();
@@ -277,12 +305,14 @@ async function liveActivity(env, phone, unit, e, wants, deadline) {
 // One push to one phone, within its hourly allowance. Updates the in-memory
 // row only; the caller writes it back. Marks a token Apple calls dead.
 // With its delivery's time all but gone (#86), nothing is sent or counted.
+// `exempt`: true goes past the ordinary cap up to the hard one; a number is
+// a cap of its own (a young pairing's, SR-03).
 async function pushTo(env, phone, notification, exempt, deadline = Infinity) {
   const now = nowS();
   const timeoutMs = Math.min(apns.tune.sendMs, deadline - Date.now());
   if (timeoutMs < apns.tune.sendMs / 10) return { ok: false, reason: 'out of time' };
   if (now - phone.window_start >= 3600) { phone.window_start = now; phone.window_count = 0; }
-  const cap = exempt ? PUSHES_PER_HOUR_HARD : PUSHES_PER_HOUR;
+  const cap = typeof exempt === 'number' ? exempt : exempt ? PUSHES_PER_HOUR_HARD : PUSHES_PER_HOUR;
   if (phone.window_count >= cap) return { ok: false, reason: 'rate limited' };
   phone.window_count += 1;
   const r = await apns.send(env, phone, notification, now, env.APNS_FETCH || fetch, timeoutMs);
@@ -301,14 +331,23 @@ const forgetUnpairedPhones = db => db.batch([
     (SELECT 1 FROM pairings p WHERE p.phone = phone_locations.phone AND p.unit = phone_locations.unit)`),
 ]);
 
-async function phoneRegister(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env);
-  if (error) return error;
+function registerRefusal(payload) {
   const token = payload.token;
   if (typeof token !== 'string' || !/^[0-9a-f]{64,200}$/.test(token)) return json(400, { error: 'expected a hex device token' });
   if (!['sandbox', 'production'].includes(payload.env)) return json(400, { error: "env must be 'sandbox' or 'production'" });
+  if (!cleanKinds(payload.kinds)) return json(400, { error: 'unknown alert kind' });
+  const la = payload.la_start_token;
+  if (la !== undefined && la !== null && (typeof la !== 'string' || !/^[0-9a-f]{64,400}$/.test(la))) {
+    return json(400, { error: 'expected a hex push-to-start token' });
+  }
+  return null;
+}
+
+async function phoneRegister(request, env) {
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, registerRefusal);
+  if (error) return error;
+  const token = payload.token;
   const kinds = cleanKinds(payload.kinds);
-  if (!kinds) return json(400, { error: 'unknown alert kind' });
   const db = env.DB;
   const known = await db.prepare('SELECT 1 FROM phones WHERE id = ?').bind(auth.unit).first();
   if (!known) {
@@ -318,9 +357,6 @@ async function phoneRegister(request, env) {
     if (!paired) return json(403, { error: 'pair with a radar first' });
   }
   const la = payload.la_start_token;
-  if (la !== undefined && la !== null && (typeof la !== 'string' || !/^[0-9a-f]{64,400}$/.test(la))) {
-    return json(400, { error: 'expected a hex push-to-start token' });
-  }
   await db.batch([
     db.prepare(
       `INSERT INTO phones (id, token, env, kinds, updated) VALUES (?1, ?2, ?3, ?4, ?5)
@@ -338,13 +374,12 @@ async function phoneRegister(request, env) {
 // The phone reports the update token of a Live Activity it just started, so
 // the relay can end it after the aircraft has passed.
 async function phoneActivity(request, env, ctx) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env);
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, ({ unit, hex, token }) =>
+    (!isId(unit) || typeof hex !== 'string' || !/^[0-9a-f]{6}$/.test(hex)
+      || typeof token !== 'string' || !/^[0-9a-f]{64,400}$/.test(token)
+      ? json(400, { error: 'expected unit, hex and a hex token' }) : null));
   if (error) return error;
   const { unit, hex, token } = payload;
-  if (!isId(unit) || typeof hex !== 'string' || !/^[0-9a-f]{6}$/.test(hex)
-      || typeof token !== 'string' || !/^[0-9a-f]{64,400}$/.test(token)) {
-    return json(400, { error: 'expected unit, hex and a hex token' });
-  }
   const db = env.DB;
   const paired = await db.prepare('SELECT 1 FROM pairings WHERE unit = ? AND phone = ?').bind(unit, auth.unit).first();
   if (!paired) return json(403, { error: 'not paired with that radar' });
@@ -389,9 +424,7 @@ async function phoneTest(request, env) {
   const phone = await env.DB.prepare('SELECT * FROM phones WHERE id = ?').bind(auth.unit).first();
   if (!phone || !phone.token) return json(409, { error: 'This phone has not registered for notifications.' });
   const r = await pushTo(env, phone, apns.notificationFor({ kind: 'test' }, 'test'), true);
-  await env.DB.prepare(
-    `UPDATE phones SET window_start = ?, window_count = ?${phone.dead ? ', token = NULL' : ''} WHERE id = ?`
-  ).bind(phone.window_start, phone.window_count, phone.id).run();
+  await savePhone(env.DB, phone);
   // Apple not answering is said as that, and well before the phone gives up
   // (15 s) and blames its own connection (#86, 2026-10-26).
   if (r.reason === 'timed out') return json(504, { error: 'Apple’s notification service did not answer in time. Try again in a few minutes.' });
@@ -425,47 +458,79 @@ async function firstUse(env, sig, now) {
   return !!row;
 }
 
-async function signedJson(request, idHeader, env) {
+// A signed request's identity and JSON body. In this order, cheapest first
+// (SR-04, SR-19): the headers' shape, the body (bounded), the signature, the
+// key's rate limit, the JSON, the route's own checks (`check`, which may
+// not touch the database and returns a refusal or nothing), and only then
+// the replay record, the first write any signed change makes.
+async function signedJson(request, idHeader, env, check) {
+  const early = headerError(request, nowS(), idHeader);
+  if (early) return { error: json(401, { error: early }) };
   const body = await readBody(request);
   if (!body) return { error: json(413, { error: 'too large' }) };
   const auth = await verifyRequest(request, body, nowS(), idHeader);
   if (auth.error) return { error: json(401, { error: auth.error }) };
   if (request.method === 'GET') return { auth, payload: {} };
   if (!env) throw new Error('signedJson needs env for a request that changes something');
-  if (!(await firstUse(env, request.headers.get('X-FR-Sig'), nowS()))) {
-    return { error: json(409, { error: 'this request was already used' }) };
-  }
+  if (!(await keyAllowed(env, auth.unit))) return { error: tooMany() };
+  let payload;
   try {
-    const payload = JSON.parse(new TextDecoder().decode(body));
+    payload = JSON.parse(new TextDecoder().decode(body));
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error();
-    return { auth, payload };
   } catch {
     return { error: json(400, { error: 'expected a JSON object' }) };
   }
+  const refused = check ? await check(payload, auth) : null;
+  if (refused) return { error: refused };
+  if (!(await firstUse(env, request.headers.get('X-FR-Sig'), nowS()))) {
+    return { error: json(409, { error: 'this request was already used' }) };
+  }
+  return { auth, payload };
 }
 
 const isId = v => typeof v === 'string' && (b64urlDecode(v) || []).length === 32;
 
+// The network block a request came from, as a fingerprint kept only with an
+// open pairing code (at most PAIRING_TTL_S): enough to count one network's
+// open codes, never the address itself.
+async function netTag(request) {
+  const block = netBlock(clientIp(request));
+  return block ? (await sha256Hex(new TextEncoder().encode('stratoscan-offer-net-v1:' + block))).slice(0, 16) : null;
+}
+
 async function unitOffer(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env);
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env, p =>
+    (typeof p.secret_hash !== 'string' || !/^[0-9a-f]{64}$/.test(p.secret_hash)
+      ? json(400, { error: 'secret_hash must be a hex SHA-256' }) : null));
   if (error) return error;
-  if (typeof payload.secret_hash !== 'string' || !/^[0-9a-f]{64}$/.test(payload.secret_hash)) {
-    return json(400, { error: 'secret_hash must be a hex SHA-256' });
-  }
-  const db = env.DB;
+  const db = env.DB, now = nowS();
   // Expired codes are dead weight; left in place they would eventually fill
   // the table and stop every unit from pairing.
-  await db.prepare('DELETE FROM pairing_offers WHERE expires <= ?').bind(nowS()).run();
+  await db.prepare('DELETE FROM pairing_offers WHERE expires <= ?').bind(now).run();
   const had = await db.prepare('SELECT 1 FROM pairing_offers WHERE unit = ?').bind(auth.unit).first();
+  const net = await netTag(request);
   if (!had) {
+    // One network can hold only a few open codes, and the table only the
+    // newest MAX_OPEN_OFFERS (SR-03): a flood pushes out its own oldest,
+    // and a radar that offers again is back at the front.
+    if (net) {
+      const { n } = await db.prepare('SELECT COUNT(*) AS n FROM pairing_offers WHERE net = ?').bind(net).first();
+      if (n >= MAX_OFFERS_PER_NET) {
+        return json(429, { error: 'Too many pairing codes are open from this network. Try again in a few minutes.' });
+      }
+    }
     const { n } = await db.prepare('SELECT COUNT(*) AS n FROM pairing_offers').first();
-    if (n >= MAX_UNITS) return json(503, { error: 'too many open offers' });
+    if (n >= MAX_OPEN_OFFERS) {
+      await db.prepare(
+        'DELETE FROM pairing_offers WHERE unit IN (SELECT unit FROM pairing_offers ORDER BY expires ASC LIMIT ?)'
+      ).bind(n - MAX_OPEN_OFFERS + 1).run();
+    }
   }
-  const expires = nowS() + PAIRING_TTL_S;
+  const expires = now + PAIRING_TTL_S;
   await db.prepare(
-    `INSERT INTO pairing_offers (unit, secret_hash, expires, attempts) VALUES (?1, ?2, ?3, 0)
-     ON CONFLICT(unit) DO UPDATE SET secret_hash = ?2, expires = ?3, attempts = 0`
-  ).bind(auth.unit, payload.secret_hash, expires).run();
+    `INSERT INTO pairing_offers (unit, secret_hash, expires, attempts, net) VALUES (?1, ?2, ?3, 0, ?4)
+     ON CONFLICT(unit) DO UPDATE SET secret_hash = ?2, expires = ?3, attempts = 0, net = ?4`
+  ).bind(auth.unit, payload.secret_hash, expires, net).run();
   return json(200, { ok: true, expires });
 }
 
@@ -489,7 +554,8 @@ async function unitPhones(request, env) {
 }
 
 async function unitUnpair(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env);
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env, p =>
+    (p.all === true || isId(p.phone) ? null : json(400, { error: 'name a phone, or all: true' })));
   if (error) return error;
   const db = env.DB;
   if (payload.all === true) {
@@ -498,36 +564,32 @@ async function unitUnpair(request, env) {
       db.prepare('DELETE FROM pairing_offers WHERE unit = ?').bind(auth.unit),
       db.prepare('DELETE FROM events WHERE unit = ?').bind(auth.unit),
     ]);
-  } else if (isId(payload.phone)) {
-    await db.prepare('DELETE FROM pairings WHERE unit = ? AND phone = ?').bind(auth.unit, payload.phone).run();
   } else {
-    return json(400, { error: 'name a phone, or all: true' });
+    await db.prepare('DELETE FROM pairings WHERE unit = ? AND phone = ?').bind(auth.unit, payload.phone).run();
   }
   await forgetUnpairedPhones(db);
   return json(200, { ok: true, phones: await phoneCount(db, auth.unit) });
 }
 
+// One answer whether there is no open code or the secret is wrong (SR-17),
+// so a guess learns nothing about the radar's code either way.
+const NO_SUCH_CODE = 'That pairing code isn’t open on the radar any more. Start again from the radar’s screen.';
+
 async function phonePair(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env);
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, ({ unit, secret }) =>
+    (!isId(unit) || typeof secret !== 'string' || secret.length < 16 || secret.length > 64
+      ? json(400, { error: 'expected unit and secret' }) : null));
   if (error) return error;
   const { unit, secret } = payload;
-  if (!isId(unit) || typeof secret !== 'string' || secret.length < 16 || secret.length > 64) {
-    return json(400, { error: 'expected unit and secret' });
-  }
   const db = env.DB;
   const offer = await db.prepare('SELECT * FROM pairing_offers WHERE unit = ?').bind(unit).first();
-  if (!offer || offer.expires <= nowS()) {
-    if (offer) await db.prepare('DELETE FROM pairing_offers WHERE unit = ?').bind(unit).run();
-    return json(404, { error: 'That pairing code has been used or has expired. Start again from the radar’s screen.' });
-  }
+  // A wrong secret changes nothing (SR-17): five of them from strangers'
+  // keys used to void the radar's open code, and anyone who had seen a pair
+  // link knew the radar's id. The secret is 128 random bits; the per-key and
+  // per-address limits bound how fast anyone can guess.
   const given = await sha256Hex(new TextEncoder().encode(secret));
-  if (!timingSafeEqual(given, offer.secret_hash)) {
-    if (offer.attempts + 1 >= PAIRING_MAX_ATTEMPTS) {
-      await db.prepare('DELETE FROM pairing_offers WHERE unit = ?').bind(unit).run();
-    } else {
-      await db.prepare('UPDATE pairing_offers SET attempts = attempts + 1 WHERE unit = ?').bind(unit).run();
-    }
-    return json(403, { error: 'That is not the code on the radar’s screen.' });
+  if (!offer || offer.expires <= nowS() || !timingSafeEqual(given, offer.secret_hash)) {
+    return json(404, { error: NO_SUCH_CODE });
   }
   const already = await db.prepare('SELECT 1 FROM pairings WHERE unit = ? AND phone = ?').bind(unit, auth.unit).first();
   if (!already) {
@@ -546,9 +608,7 @@ async function phonePair(request, env) {
   const spent = await db.prepare(
     'DELETE FROM pairing_offers WHERE unit = ?1 AND secret_hash = ?2 AND expires > ?3 RETURNING unit'
   ).bind(unit, offer.secret_hash, nowS()).first();
-  if (!spent) {
-    return json(404, { error: 'That pairing code has been used or has expired. Start again from the radar’s screen.' });
-  }
+  if (!spent) return json(404, { error: NO_SUCH_CODE });
   await db.prepare(
     `INSERT INTO pairings (unit, phone, name, created) VALUES (?1, ?2, ?3, ?4)
      ON CONFLICT(unit, phone) DO UPDATE SET name = ?3`
@@ -565,10 +625,11 @@ async function phoneUnits(request, env) {
   return json(200, { units: results || [] });
 }
 
+const unitNamed = p => (isId(p.unit) ? null : json(400, { error: 'name a unit' }));
+
 async function phoneUnpair(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env);
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, unitNamed);
   if (error) return error;
-  if (!isId(payload.unit)) return json(400, { error: 'name a unit' });
   await env.DB.prepare('DELETE FROM pairings WHERE unit = ? AND phone = ?').bind(payload.unit, auth.unit).run();
   await forgetUnpairedPhones(env.DB);
   return json(200, { ok: true });
@@ -584,15 +645,18 @@ const paired = (db, unit, phone) =>
   db.prepare('SELECT 1 FROM pairings WHERE unit = ? AND phone = ?').bind(unit, phone).first();
 
 // A radar publishes its box key, signed by its identity key.
-async function unitBoxKey(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env);
-  if (error) return error;
+async function boxKeyRefusal(payload, auth) {
   const key = b64urlDecode(payload.key || ''), sig = b64urlDecode(payload.sig || '');
   if (!key || key.length !== 32 || !sig || sig.length !== 64) return json(400, { error: 'key and sig expected' });
   // Checked here too, so a bad key never reaches a phone (which checks again).
   const id = await crypto.subtle.importKey('raw', b64urlDecode(auth.unit), { name: 'Ed25519' }, false, ['verify']);
   const ok = await crypto.subtle.verify({ name: 'Ed25519' }, id, sig, new TextEncoder().encode(BOX_KEY_CONTEXT + payload.key));
-  if (!ok) return json(400, { error: 'signature does not match the unit' });
+  return ok ? null : json(400, { error: 'signature does not match the unit' });
+}
+
+async function unitBoxKey(request, env) {
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env, boxKeyRefusal);
+  if (error) return error;
   await env.DB.prepare(
     `INSERT INTO unit_box_keys (unit, key, sig, updated) VALUES (?1, ?2, ?3, ?4)
      ON CONFLICT(unit) DO UPDATE SET key = ?2, sig = ?3, updated = ?4`
@@ -602,9 +666,8 @@ async function unitBoxKey(request, env) {
 
 // A paired phone fetches that key (and checks the signature itself).
 async function phoneBoxKey(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env);
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, unitNamed);
   if (error) return error;
-  if (!isId(payload.unit)) return json(400, { error: 'name a unit' });
   if (!(await paired(env.DB, payload.unit, auth.unit))) return json(403, { error: 'not paired with that unit' });
   const row = await env.DB.prepare('SELECT key, sig FROM unit_box_keys WHERE unit = ?').bind(payload.unit).first();
   if (!row) return json(404, { error: 'that radar has not published a key yet' });
@@ -612,19 +675,24 @@ async function phoneBoxKey(request, env) {
 }
 
 // A paired phone leaves its encrypted location for one radar; null withdraws it.
+function locationRefusal(payload) {
+  if (!isId(payload.unit)) return json(400, { error: 'name a unit' });
+  if (payload.blob === null) return null;
+  if (typeof payload.blob !== 'string' || payload.blob.length > LOCATION_BLOB_MAX
+      || !/^[A-Za-z0-9_-]+$/.test(payload.blob) || (b64urlDecode(payload.blob) || []).length < 32 + 12 + 16 + 8) {
+    return json(400, { error: 'blob expected' });
+  }
+  return null;
+}
+
 async function phoneLocation(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env);
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, locationRefusal);
   if (error) return error;
   const db = env.DB, now = nowS();
-  if (!isId(payload.unit)) return json(400, { error: 'name a unit' });
   if (!(await paired(db, payload.unit, auth.unit))) return json(403, { error: 'not paired with that unit' });
   if (payload.blob === null) {
     await db.prepare('DELETE FROM phone_locations WHERE phone = ? AND unit = ?').bind(auth.unit, payload.unit).run();
     return json(200, { ok: true, cleared: true });
-  }
-  if (typeof payload.blob !== 'string' || payload.blob.length > LOCATION_BLOB_MAX
-      || !/^[A-Za-z0-9_-]+$/.test(payload.blob) || (b64urlDecode(payload.blob) || []).length < 32 + 12 + 16 + 8) {
-    return json(400, { error: 'blob expected' });
   }
   const last = await db.prepare('SELECT updated FROM phone_locations WHERE phone = ? AND unit = ?')
     .bind(auth.unit, payload.unit).first();
@@ -785,11 +853,34 @@ export default {
   async fetch(request, env, ctx) {
     return withSecurityHeaders(await route(request, env, ctx));
   },
+  // The daily cleanup (SR-05, SR-22): [triggers] crons in wrangler.toml.
+  async scheduled(controller, env, ctx) {
+    const done = cleanup(env.DB, nowS());
+    if (ctx && ctx.waitUntil) ctx.waitUntil(done);
+    await done;
+  },
 };
+
+// Per address, before anything else (SR-04): every request, and more
+// tightly anything that can write to the database or checks a password.
+async function addressRefusal(request, env, pathname, m) {
+  const ip = clientIp(request);
+  if (!ip) return null;
+  const slow = () => new Response(JSON.stringify({ error: 'too many requests; try again in a minute' }), {
+    status: 429, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Retry-After': '60' },
+  });
+  if (!(await allow(env, 'ip', ip))) return slow();
+  const writes = m !== 'GET' && m !== 'HEAD' && !pathname.startsWith('/v1/net/');
+  const fleetPages = pathname.startsWith('/fleet') || pathname === '/f' || pathname.startsWith('/f/');
+  if ((writes || fleetPages) && !(await allow(env, 'strict', ip))) return slow();
+  return null;
+}
 
 async function route(request, env, ctx) {
   const { pathname } = new URL(request.url);
   const m = request.method;
+  const refused = await addressRefusal(request, env, pathname, m);
+  if (refused) return refused;
   if (pathname === '/health' && m === 'GET') return json(200, { ok: true });
   if (pathname === '/v1/heartbeat' && m === 'POST') return heartbeat(request, env);
   if (pathname === '/v1/events' && m === 'POST') return events(request, env, ctx);
