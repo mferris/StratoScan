@@ -1,0 +1,34 @@
+// StratoScan: package changes and the clock need an administrator.
+//
+// Installed as /etc/polkit-1/rules.d/05-stratoscan.rules by
+// deploy/install-setup-server.sh. polkit reads every rules file in name
+// order across /etc/polkit-1/rules.d and /usr/share/polkit-1/rules.d, and
+// the first rule to answer wins, so 05- comes before Raspberry Pi OS's 10-
+// rules.
+//
+// Why (security review 2026-11-03, SR-12 and SR-39): Raspberry Pi OS's
+// gui-pkinst, gui-updater and rp-prefapps rules let any member of the sudo
+// group install, remove or upgrade packages through PackageKit with no
+// password, on the strength of a command line the caller chooses; and they
+// let ANY user stop or start systemd-timesyncd. On a radar the kiosk's user
+// is in the sudo group, so code running as it could have removed sshd or
+// lighttpd, or pulled in the Chromium and kernel the releases hold back.
+//
+// Nothing on a radar uses PackageKit or polkit for these. Packages change
+// only as root (unattended-upgrades, os-update.py, the installer), and polkit
+// always allows root, so this rule leaves root to the rules after it. The
+// kiosk has no password agent, so AUTH_ADMIN is a refusal there; an owner
+// at a desktop session would be asked for an administrator's password.
+polkit.addRule(function (action, subject) {
+    if (subject.user == "root") {
+        return undefined;
+    }
+    if (action.id.indexOf("org.freedesktop.packagekit.") == 0) {
+        return polkit.Result.AUTH_ADMIN;
+    }
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") == "systemd-timesyncd.service") {
+        return polkit.Result.AUTH_ADMIN;
+    }
+    return undefined;
+});

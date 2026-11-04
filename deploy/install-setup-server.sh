@@ -376,6 +376,36 @@ if live && command -v sshd >/dev/null 2>&1; then
 fi
 install -d -m 0755 /etc/systemd/journald.conf.d
 install -m 0644 deploy/journald-stratoscan.conf /etc/systemd/journald.conf.d/stratoscan.conf
+# Package changes and the clock need an administrator (security review
+# 2026-11-03, SR-12 and SR-39): Raspberry Pi OS lets the sudo group install
+# and remove packages through PackageKit with no password, and any user stop
+# time sync. See the file. polkit picks a new rules file up by itself; on a
+# running unit the rule is then proved against a process of the kiosk user.
+if [ -d /etc/polkit-1 ]; then
+  [ -d /etc/polkit-1/rules.d ] || install -d -m 0755 /etc/polkit-1/rules.d
+  install -m 0644 deploy/polkit-stratoscan.rules /etc/polkit-1/rules.d/05-stratoscan.rules
+  if live && command -v pkcheck >/dev/null 2>&1 && command -v setpriv >/dev/null 2>&1 \
+     && [ -n "$KIOSK_USER" ] && [ "$KIOSK_USER" != "root" ] && id "$KIOSK_USER" >/dev/null 2>&1; then
+    setpriv --reuid "$KIOSK_USER" --regid "$KIOSK_USER" --init-groups sleep 30 &
+    PK_SUBJECT=$!
+    pk_refused=0
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+      sleep 1
+      # Exit 0 is "allowed"; 1, 2 or 3 is refused or "needs a password".
+      if ! pkcheck --action-id org.freedesktop.packagekit.package-remove --process "$PK_SUBJECT" \
+           --detail cmdline gui-pkinst >/dev/null 2>&1; then pk_refused=1; break; fi
+    done
+    kill "$PK_SUBJECT" 2>/dev/null || true
+    wait "$PK_SUBJECT" 2>/dev/null || true
+    if [ "$pk_refused" = "1" ]; then
+      echo "  packages: changes need an administrator (polkit)"
+    else
+      echo "  FAIL: polkit still lets $KIOSK_USER remove packages without a password"; exit 1
+    fi
+  else
+    echo "  packages: polkit rule installed"
+  fi
+fi
 # Applying sysctl in the image build would change the BUILD machine's kernel;
 # the image picks the file up at boot.
 if live; then sysctl -q -p /etc/sysctl.d/90-stratoscan-sysctl.conf; fi
