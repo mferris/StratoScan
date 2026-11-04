@@ -406,6 +406,9 @@ if [ -d /etc/polkit-1 ]; then
     echo "  packages: polkit rule installed"
   fi
 fi
+# The first boot's log, from units flashed before 2026-11-04, was readable by
+# every user and held the claim code (SR-55). It is root's alone now.
+if [ -f /var/log/stratoscan-firstboot.log ]; then chmod 0600 /var/log/stratoscan-firstboot.log; fi
 # Applying sysctl in the image build would change the BUILD machine's kernel;
 # the image picks the file up at boot.
 if live; then sysctl -q -p /etc/sysctl.d/90-stratoscan-sysctl.conf; fi
@@ -745,5 +748,11 @@ writes https://example.com 403
 
 echo
 echo "Setup page:  http://$(hostname -I | awk '{print $1}')/setup"
-echo "Claim code:  shown below (also in /run/stratoscan/claim-code)"
-cat /run/stratoscan/claim-code 2>/dev/null || echo "  (not generated yet)"
+# The claim code only to a person at a terminal, never into a log: first boot
+# sends this script's output to one (SR-55). It is on the radar's own screen.
+if [ -t 1 ]; then
+  echo "Claim code:  shown below (also in /run/stratoscan/claim-code)"
+  cat /run/stratoscan/claim-code 2>/dev/null || echo "  (not generated yet)"
+else
+  echo "Claim code:  on the radar's screen (and in /run/stratoscan/claim-code)"
+fi
