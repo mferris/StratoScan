@@ -8,7 +8,14 @@
 # image; anything that needs the internet (the notable list, the offline map)
 # is retried later by net-watchdog. Runs once, then disables itself.
 set -e
+# The log is root's alone (security review 2026-11-03, SR-55): the
+# installer's output went into it under the default umask, readable by every
+# user, and with it the claim code. umask covers a new log; chmod one left
+# by an earlier attempt.
+umask 077
 LOG=/var/log/stratoscan-firstboot.log
+touch "$LOG"
+chmod 0600 "$LOG"
 {
   echo "== StratoScan first boot: $(date -Is)"
   # Raspberry Pi OS keeps WiFi blocked until a country is set, which would
