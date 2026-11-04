@@ -65,6 +65,11 @@ CREATE TABLE IF NOT EXISTS pairings (
   phone    TEXT NOT NULL,           -- base64url Ed25519 public key; the phone's identity
   name     TEXT,                    -- what the phone calls itself ("Alex's iPhone")
   created  INTEGER NOT NULL,
+  -- A pairing's first day (SR-03): its own hourly count of emergencies and
+  -- tests (limits.js YOUNG_PAIRING_*). Added to the live database by
+  -- migrations/2026-11-04-relay-budget.sql.
+  urgent_start  INTEGER NOT NULL DEFAULT 0,
+  urgent_count  INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (unit, phone)
 );
 CREATE INDEX IF NOT EXISTS pairings_phone ON pairings (phone);
@@ -174,3 +179,14 @@ CREATE TABLE IF NOT EXISTS replay_guard (
   expires  INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS replay_guard_expires ON replay_guard (expires);
+
+-- What new keys have written today, per address (security review
+-- 2026-11-03, SR-04; src/budget.js). The tag is a fingerprint of the
+-- address's /64 (IPv4: the address) or IPv6 /48, mixed with the day; never
+-- the address. Deleted by the daily cleanup once the day is over. Added to
+-- the live database by migrations/2026-11-04-relay-budget.sql.
+CREATE TABLE IF NOT EXISTS write_budget (
+  tag  TEXT PRIMARY KEY,
+  day  INTEGER NOT NULL,      -- unix days (UTC)
+  n    INTEGER NOT NULL
+);

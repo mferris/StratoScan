@@ -43,6 +43,11 @@ name = "RL_KEY"                # signed changes, per signing key (after the sign
 namespace_id = "1003"
 simple = { limit = 30, period = 60 }
 
+[[ratelimits]]
+name = "RL_NET"                # requests that can write, per IPv6 /48 (RL_IP and RL_STRICT count each /64)
+namespace_id = "1004"
+simple = { limit = 300, period = 60 }
+
 # Push (roadmap 2.1). Not secret, but they are your Apple account's:
 # the push key's ID, your team ID, and your app's bundle ID.
 [vars]

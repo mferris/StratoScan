@@ -24,7 +24,8 @@
 // never depends on it.
 
 import { verifyRequest, sha256Hex, b64urlDecode, headerError, readCapped, MAX_SKEW_S } from './auth.js';
-import { allow, clientIp, netBlock } from './ratelimit.js';
+import { allow, clientIp, netBlock, addressKey, isV6 } from './ratelimit.js';
+import { spend, settledUnit, settledPhone, SETTLED_OFFER_SQL, settledOfferArgs } from './budget.js';
 import { cleanup } from './cleanup.js';
 // Only `default` may be exported from this file: the Workers runtime treats
 // every named export of the main module as an entrypoint and refuses to
@@ -57,6 +58,8 @@ const readBody = request => readCapped(request, MAX_BODY);
 // signing key's own limit.
 const tooMany = () => json(429, { error: 'too many requests; try again in a minute' });
 const keyAllowed = (env, id) => allow(env, 'key', id);
+// A new key's daily budget for its address is used up (budget.js).
+const overBudget = () => json(429, { error: 'Too many changes from new radars and phones on this network today. Try again tomorrow.' });
 
 const carriesLocation = text => /"(lat|lon|latitude|longitude)"\s*:/i.test(text);
 
@@ -97,6 +100,8 @@ async function heartbeat(request, env) {
     const { n } = await db.prepare('SELECT COUNT(*) AS n FROM units WHERE last_seen > ?').bind(seen - ACTIVE_UNIT_S).first();
     if (n >= MAX_UNITS) return json(503, { error: 'fleet full' });
   }
+  // A new radar's reports count toward its address's daily budget (SR-04).
+  if (!(await settledUnit(db, auth.unit, seen)) && !(await spend(env, request, seen))) return overBudget();
 
   const version = typeof payload.version === 'string' ? payload.version.slice(0, 32) : null;
   // A new unit keeps a few reports, an established one a month's (SR-05).
@@ -161,6 +166,8 @@ async function events(request, env, ctx) {
   let count = state ? state.window_count : 0;
   if (auth.ts - start >= 3600) { start = auth.ts; count = 0; }
   if (count + clean.length > EVENTS_PER_HOUR) return json(429, { error: 'too many events' });
+  // A new radar's events count toward its address's daily budget, one each (SR-04).
+  if (!(await settledUnit(db, auth.unit, nowS())) && !(await spend(env, request, nowS(), clean.length))) return overBudget();
 
   const received = nowS();
   await db.batch([
@@ -188,7 +195,8 @@ async function deliver(env, unit, evs) {
   if (!apns.configured(env)) return;
   const db = env.DB;
   const { results } = await db.prepare(
-    `SELECT p.*, x.created AS paired_at FROM pairings x JOIN phones p ON p.id = x.phone
+    `SELECT p.*, x.created AS paired_at, x.urgent_start AS urgent_start, x.urgent_count AS urgent_count
+       FROM pairings x JOIN phones p ON p.id = x.phone
       WHERE x.unit = ? AND p.token IS NOT NULL`
   ).bind(unit).all();
   // Most important first, so a busy batch never crowds out an emergency.
@@ -243,9 +251,10 @@ async function deliverTo(env, unit, phone, ordered, deadline) {
   // place in the hourly allowance before it waits, so the count stays right,
   // and the row is written back once both are done.
   // A pairing less than a day old (SR-03) gets its radar's emergencies and
-  // tests only within a small allowance, and never past the ordinary cap.
+  // tests only within a small allowance of its own, counted for that
+  // pairing alone (another radar's pushes to the same phone don't use it up).
   const young = !(phone.paired_at <= nowS() - YOUNG_PAIRING_S);
-  const urgentCap = young ? Math.min(YOUNG_PAIRING_URGENT_PER_HOUR, PUSHES_PER_HOUR) : true;
+  const urgentCap = young ? { start: phone.urgent_start || 0, count: phone.urgent_count || 0, used: false } : true;
   await Promise.allSettled([
     (async () => {
       for (const e of approaches.slice(0, 2)) await liveActivity(env, phone, unit, e, wants, deadline);
@@ -264,6 +273,10 @@ async function deliverTo(env, unit, phone, ordered, deadline) {
   ]);
   // One write per phone per request: the free plan also caps D1 queries.
   await savePhone(db, phone);
+  if (young && urgentCap.used) {
+    await db.prepare('UPDATE pairings SET urgent_start = ?, urgent_count = ? WHERE unit = ? AND phone = ?')
+      .bind(urgentCap.start, urgentCap.count, unit, phone.id).run();
+  }
 }
 
 // Writes back a phone's push count, and forgets its token if Apple called it
@@ -305,15 +318,20 @@ async function liveActivity(env, phone, unit, e, wants, deadline) {
 // One push to one phone, within its hourly allowance. Updates the in-memory
 // row only; the caller writes it back. Marks a token Apple calls dead.
 // With its delivery's time all but gone (#86), nothing is sent or counted.
-// `exempt`: true goes past the ordinary cap up to the hard one; a number is
-// a cap of its own (a young pairing's, SR-03).
+// `exempt`: true goes past the ordinary cap up to the hard one; an object
+// is a young pairing's own hourly allowance ({ start, count }, SR-03), also
+// within the hard cap.
 async function pushTo(env, phone, notification, exempt, deadline = Infinity) {
   const now = nowS();
   const timeoutMs = Math.min(apns.tune.sendMs, deadline - Date.now());
   if (timeoutMs < apns.tune.sendMs / 10) return { ok: false, reason: 'out of time' };
   if (now - phone.window_start >= 3600) { phone.window_start = now; phone.window_count = 0; }
-  const cap = typeof exempt === 'number' ? exempt : exempt ? PUSHES_PER_HOUR_HARD : PUSHES_PER_HOUR;
+  const own = exempt && typeof exempt === 'object' ? exempt : null;
+  if (own && now - own.start >= 3600) { own.start = now; own.count = 0; }
+  const cap = own || exempt ? PUSHES_PER_HOUR_HARD : PUSHES_PER_HOUR;
   if (phone.window_count >= cap) return { ok: false, reason: 'rate limited' };
+  if (own && own.count >= YOUNG_PAIRING_URGENT_PER_HOUR) return { ok: false, reason: 'rate limited' };
+  if (own) { own.count += 1; own.used = true; }
   phone.window_count += 1;
   const r = await apns.send(env, phone, notification, now, env.APNS_FETCH || fetch, timeoutMs);
   // A dead Live Activity token says nothing about the phone's alert token.
@@ -344,18 +362,18 @@ function registerRefusal(payload) {
 }
 
 async function phoneRegister(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, registerRefusal);
+  const db = env.DB;
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, async (p, a) => {
+    const bad = registerRefusal(p);
+    if (bad) return bad;
+    // Only a phone that is paired with something has any business here,
+    // which bounds this table by the pairings table.
+    const paired = await db.prepare('SELECT 1 FROM pairings WHERE phone = ?').bind(a.unit).first();
+    return paired ? null : json(403, { error: 'pair with a radar first' });
+  }, phoneBudget);
   if (error) return error;
   const token = payload.token;
   const kinds = cleanKinds(payload.kinds);
-  const db = env.DB;
-  const known = await db.prepare('SELECT 1 FROM phones WHERE id = ?').bind(auth.unit).first();
-  if (!known) {
-    // Only a phone that is paired with something has any business here,
-    // which bounds this table by the pairings table.
-    const paired = await db.prepare('SELECT 1 FROM pairings WHERE phone = ?').bind(auth.unit).first();
-    if (!paired) return json(403, { error: 'pair with a radar first' });
-  }
   const la = payload.la_start_token;
   await db.batch([
     db.prepare(
@@ -374,15 +392,16 @@ async function phoneRegister(request, env) {
 // The phone reports the update token of a Live Activity it just started, so
 // the relay can end it after the aircraft has passed.
 async function phoneActivity(request, env, ctx) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, ({ unit, hex, token }) =>
-    (!isId(unit) || typeof hex !== 'string' || !/^[0-9a-f]{6}$/.test(hex)
-      || typeof token !== 'string' || !/^[0-9a-f]{64,400}$/.test(token)
-      ? json(400, { error: 'expected unit, hex and a hex token' }) : null));
+  const db = env.DB;
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, async ({ unit, hex, token }, a) => {
+    if (!isId(unit) || typeof hex !== 'string' || !/^[0-9a-f]{6}$/.test(hex)
+        || typeof token !== 'string' || !/^[0-9a-f]{64,400}$/.test(token)) {
+      return json(400, { error: 'expected unit, hex and a hex token' });
+    }
+    return (await paired(db, unit, a.unit)) ? null : json(403, { error: 'not paired with that radar' });
+  }, phoneBudget);
   if (error) return error;
   const { unit, hex, token } = payload;
-  const db = env.DB;
-  const paired = await db.prepare('SELECT 1 FROM pairings WHERE unit = ? AND phone = ?').bind(unit, auth.unit).first();
-  if (!paired) return json(403, { error: 'not paired with that radar' });
   const now = nowS();
   // Did the approach already end before this report? Then end it now.
   const ended = await db.prepare('SELECT 1 FROM live_activity_ends WHERE phone = ? AND hex = ? AND at > ?')
@@ -418,11 +437,13 @@ async function phoneActivity(request, env, ctx) {
 }
 
 async function phoneTest(request, env) {
-  const { auth, error } = await signedJson(request, 'X-FR-Phone', env);
+  let phone;
+  const { error } = await signedJson(request, 'X-FR-Phone', env, async (p, a) => {
+    if (!apns.configured(env)) return json(503, { error: 'Notifications are not set up on this StratoScan service yet.' });
+    phone = await env.DB.prepare('SELECT * FROM phones WHERE id = ?').bind(a.unit).first();
+    return phone && phone.token ? null : json(409, { error: 'This phone has not registered for notifications.' });
+  }, phoneBudget);
   if (error) return error;
-  if (!apns.configured(env)) return json(503, { error: 'Notifications are not set up on this StratoScan service yet.' });
-  const phone = await env.DB.prepare('SELECT * FROM phones WHERE id = ?').bind(auth.unit).first();
-  if (!phone || !phone.token) return json(409, { error: 'This phone has not registered for notifications.' });
   const r = await pushTo(env, phone, apns.notificationFor({ kind: 'test' }, 'test'), true);
   await savePhone(env.DB, phone);
   // Apple not answering is said as that, and well before the phone gives up
@@ -461,9 +482,12 @@ async function firstUse(env, sig, now) {
 // A signed request's identity and JSON body. In this order, cheapest first
 // (SR-04, SR-19): the headers' shape, the body (bounded), the signature, the
 // key's rate limit, the JSON, the route's own checks (`check`, which may
-// not touch the database and returns a refusal or nothing), and only then
-// the replay record, the first write any signed change makes.
-async function signedJson(request, idHeader, env, check) {
+// read the database but never write, and returns a refusal or nothing: a
+// request that would change nothing ends here, writing nothing), a new
+// key's daily budget (`budget`, budget.js: how much this request costs it,
+// 0 for a settled key), and only then the replay record, the first write
+// any signed change makes.
+async function signedJson(request, idHeader, env, check, budget) {
   const early = headerError(request, nowS(), idHeader);
   if (early) return { error: json(401, { error: early }) };
   const body = await readBody(request);
@@ -482,6 +506,10 @@ async function signedJson(request, idHeader, env, check) {
   }
   const refused = check ? await check(payload, auth) : null;
   if (refused) return { error: refused };
+  if (budget) {
+    const weight = await budget(env.DB, auth, payload, nowS());
+    if (weight > 0 && !(await spend(env, request, nowS(), weight))) return { error: overBudget() };
+  }
   if (!(await firstUse(env, request.headers.get('X-FR-Sig'), nowS()))) {
     return { error: json(409, { error: 'this request was already used' }) };
   }
@@ -489,6 +517,10 @@ async function signedJson(request, idHeader, env, check) {
 }
 
 const isId = v => typeof v === 'string' && (b64urlDecode(v) || []).length === 32;
+
+// What a request costs a key's daily budget (budget.js): nothing once it is settled.
+const unitBudget = async (db, auth, payload, now) => ((await settledUnit(db, auth.unit, now)) ? 0 : 1);
+const phoneBudget = async (db, auth, payload, now) => ((await settledPhone(db, auth.unit, now)) ? 0 : 1);
 
 // The network block a request came from, as a fingerprint kept only with an
 // open pairing code (at most PAIRING_TTL_S): enough to count one network's
@@ -499,31 +531,43 @@ async function netTag(request) {
 }
 
 async function unitOffer(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env, p =>
-    (typeof p.secret_hash !== 'string' || !/^[0-9a-f]{64}$/.test(p.secret_hash)
-      ? json(400, { error: 'secret_hash must be a hex SHA-256' }) : null));
-  if (error) return error;
-  const db = env.DB, now = nowS();
-  // Expired codes are dead weight; left in place they would eventually fill
-  // the table and stop every unit from pairing.
-  await db.prepare('DELETE FROM pairing_offers WHERE expires <= ?').bind(now).run();
-  const had = await db.prepare('SELECT 1 FROM pairing_offers WHERE unit = ?').bind(auth.unit).first();
+  const db = env.DB;
   const net = await netTag(request);
-  if (!had) {
-    // One network can hold only a few open codes, and the table only the
-    // newest MAX_OPEN_OFFERS (SR-03): a flood pushes out its own oldest,
-    // and a radar that offers again is back at the front.
-    if (net) {
-      const { n } = await db.prepare('SELECT COUNT(*) AS n FROM pairing_offers WHERE net = ?').bind(net).first();
+  let had = null, settled = false;
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env, async (p, a) => {
+    if (typeof p.secret_hash !== 'string' || !/^[0-9a-f]{64}$/.test(p.secret_hash)) {
+      return json(400, { error: 'secret_hash must be a hex SHA-256' });
+    }
+    const now = nowS();
+    had = await db.prepare('SELECT 1 FROM pairing_offers WHERE unit = ? AND expires > ?').bind(a.unit, now).first();
+    settled = await settledUnit(db, a.unit, now);
+    // One network can hold only a few open codes from new radars (SR-03).
+    if (!had && !settled && net) {
+      const { n } = await db.prepare('SELECT COUNT(*) AS n FROM pairing_offers WHERE net = ? AND expires > ?').bind(net, now).first();
       if (n >= MAX_OFFERS_PER_NET) {
         return json(429, { error: 'Too many pairing codes are open from this network. Try again in a few minutes.' });
       }
     }
-    const { n } = await db.prepare('SELECT COUNT(*) AS n FROM pairing_offers').first();
+    return null;
+  }, async () => (settled ? 0 : 1));
+  if (error) return error;
+  const now = nowS();
+  // Expired codes are dead weight; left in place they would eventually fill
+  // the table and stop every unit from pairing.
+  await db.prepare('DELETE FROM pairing_offers WHERE expires <= ?').bind(now).run();
+  if (!had && !settled) {
+    // The table holds only the newest MAX_OPEN_OFFERS codes of new radars
+    // (SR-03): a flood pushes out its own oldest, and a radar that offers
+    // again is back at the front. A settled radar's code (budget.js: two
+    // days of reports, or a pairing a day old) is never pushed out and
+    // doesn't count; there are at most as many of those as settled radars.
+    const args = settledOfferArgs(now);
+    const { n } = await db.prepare(`SELECT COUNT(*) AS n FROM pairing_offers o WHERE NOT ${SETTLED_OFFER_SQL}`).bind(...args).first();
     if (n >= MAX_OPEN_OFFERS) {
       await db.prepare(
-        'DELETE FROM pairing_offers WHERE unit IN (SELECT unit FROM pairing_offers ORDER BY expires ASC LIMIT ?)'
-      ).bind(n - MAX_OPEN_OFFERS + 1).run();
+        `DELETE FROM pairing_offers WHERE unit IN
+           (SELECT o.unit FROM pairing_offers o WHERE NOT ${SETTLED_OFFER_SQL} ORDER BY o.expires ASC LIMIT ?4)`
+      ).bind(...args, n - MAX_OPEN_OFFERS + 1).run();
     }
   }
   const expires = now + PAIRING_TTL_S;
@@ -535,7 +579,10 @@ async function unitOffer(request, env) {
 }
 
 async function unitCancelOffer(request, env) {
-  const { auth, error } = await signedJson(request, 'X-FR-Unit', env);
+  // No open code: nothing to do, and nothing written.
+  const { auth, error } = await signedJson(request, 'X-FR-Unit', env, async (p, a) =>
+    ((await env.DB.prepare('SELECT 1 FROM pairing_offers WHERE unit = ?').bind(a.unit).first()) ? null : json(200, { ok: true })),
+  unitBudget);
   if (error) return error;
   await env.DB.prepare('DELETE FROM pairing_offers WHERE unit = ?').bind(auth.unit).run();
   return json(200, { ok: true });
@@ -554,10 +601,18 @@ async function unitPhones(request, env) {
 }
 
 async function unitUnpair(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env, p =>
-    (p.all === true || isId(p.phone) ? null : json(400, { error: 'name a phone, or all: true' })));
-  if (error) return error;
   const db = env.DB;
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env, async (p, a) => {
+    if (p.all !== true && !isId(p.phone)) return json(400, { error: 'name a phone, or all: true' });
+    // Nothing to remove: the same answer, and nothing written.
+    const n = await phoneCount(db, a.unit);
+    if (p.all === true) {
+      const offered = await db.prepare('SELECT 1 FROM pairing_offers WHERE unit = ?').bind(a.unit).first();
+      return n === 0 && !offered ? json(200, { ok: true, phones: 0 }) : null;
+    }
+    return (await paired(db, a.unit, p.phone)) ? null : json(200, { ok: true, phones: n });
+  }, unitBudget);
+  if (error) return error;
   if (payload.all === true) {
     await db.batch([
       db.prepare('DELETE FROM pairings WHERE unit = ?').bind(auth.unit),
@@ -576,31 +631,35 @@ async function unitUnpair(request, env) {
 const NO_SUCH_CODE = 'That pairing code isn’t open on the radar any more. Start again from the radar’s screen.';
 
 async function phonePair(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, ({ unit, secret }) =>
-    (!isId(unit) || typeof secret !== 'string' || secret.length < 16 || secret.length > 64
-      ? json(400, { error: 'expected unit and secret' }) : null));
-  if (error) return error;
-  const { unit, secret } = payload;
   const db = env.DB;
-  const offer = await db.prepare('SELECT * FROM pairing_offers WHERE unit = ?').bind(unit).first();
-  // A wrong secret changes nothing (SR-17): five of them from strangers'
-  // keys used to void the radar's open code, and anyone who had seen a pair
-  // link knew the radar's id. The secret is 128 random bits; the per-key and
-  // per-address limits bound how fast anyone can guess.
-  const given = await sha256Hex(new TextEncoder().encode(secret));
-  if (!offer || offer.expires <= nowS() || !timingSafeEqual(given, offer.secret_hash)) {
-    return json(404, { error: NO_SUCH_CODE });
-  }
-  const already = await db.prepare('SELECT 1 FROM pairings WHERE unit = ? AND phone = ?').bind(unit, auth.unit).first();
-  if (!already) {
-    if (await phoneCount(db, unit) >= MAX_PHONES_PER_UNIT) {
-      return json(409, { error: `A radar can be paired with at most ${MAX_PHONES_PER_UNIT} phones. Unpair one first.` });
+  let offer = null;
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, async ({ unit, secret }, a) => {
+    if (!isId(unit) || typeof secret !== 'string' || secret.length < 16 || secret.length > 64) {
+      return json(400, { error: 'expected unit and secret' });
     }
-    const { n } = await db.prepare('SELECT COUNT(*) AS n FROM pairings WHERE phone = ?').bind(auth.unit).first();
-    if (n >= MAX_UNITS_PER_PHONE) {
-      return json(409, { error: `A phone can be paired with at most ${MAX_UNITS_PER_PHONE} radars. Unpair one first.` });
+    offer = await db.prepare('SELECT * FROM pairing_offers WHERE unit = ?').bind(unit).first();
+    // A wrong secret changes nothing (SR-17): five of them from strangers'
+    // keys used to void the radar's open code, and anyone who had seen a pair
+    // link knew the radar's id. The secret is 128 random bits; the per-key and
+    // per-address limits bound how fast anyone can guess, and a guess writes
+    // nothing at all, not even its replay record.
+    const given = await sha256Hex(new TextEncoder().encode(secret));
+    if (!offer || offer.expires <= nowS() || !timingSafeEqual(given, offer.secret_hash)) {
+      return json(404, { error: NO_SUCH_CODE });
     }
-  }
+    if (!(await paired(db, unit, a.unit))) {
+      if (await phoneCount(db, unit) >= MAX_PHONES_PER_UNIT) {
+        return json(409, { error: `A radar can be paired with at most ${MAX_PHONES_PER_UNIT} phones. Unpair one first.` });
+      }
+      const { n } = await db.prepare('SELECT COUNT(*) AS n FROM pairings WHERE phone = ?').bind(a.unit).first();
+      if (n >= MAX_UNITS_PER_PHONE) {
+        return json(409, { error: `A phone can be paired with at most ${MAX_UNITS_PER_PHONE} radars. Unpair one first.` });
+      }
+    }
+    return null;
+  }, async (d, a, p, now) => ((await settledPhone(d, a.unit, now)) || (await settledUnit(d, p.unit, now)) ? 0 : 1));
+  if (error) return error;
+  const { unit } = payload;
   // One use only, in one step: the offer is spent by whichever phone deletes
   // it first. Reading it, then pairing, then deleting let two phones with
   // the same code at the same moment both pair (audit 2026-10-12, from
@@ -628,7 +687,9 @@ async function phoneUnits(request, env) {
 const unitNamed = p => (isId(p.unit) ? null : json(400, { error: 'name a unit' }));
 
 async function phoneUnpair(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, unitNamed);
+  // Not paired with it: nothing to remove, and nothing written.
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, async (p, a) =>
+    unitNamed(p) || ((await paired(env.DB, p.unit, a.unit)) ? null : json(200, { ok: true })), phoneBudget);
   if (error) return error;
   await env.DB.prepare('DELETE FROM pairings WHERE unit = ? AND phone = ?').bind(payload.unit, auth.unit).run();
   await forgetUnpairedPhones(env.DB);
@@ -655,7 +716,7 @@ async function boxKeyRefusal(payload, auth) {
 }
 
 async function unitBoxKey(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env, boxKeyRefusal);
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Unit', env, boxKeyRefusal, unitBudget);
   if (error) return error;
   await env.DB.prepare(
     `INSERT INTO unit_box_keys (unit, key, sig, updated) VALUES (?1, ?2, ?3, ?4)
@@ -666,9 +727,9 @@ async function unitBoxKey(request, env) {
 
 // A paired phone fetches that key (and checks the signature itself).
 async function phoneBoxKey(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, unitNamed);
+  const { payload, error } = await signedJson(request, 'X-FR-Phone', env, async (p, a) =>
+    unitNamed(p) || ((await paired(env.DB, p.unit, a.unit)) ? null : json(403, { error: 'not paired with that unit' })), phoneBudget);
   if (error) return error;
-  if (!(await paired(env.DB, payload.unit, auth.unit))) return json(403, { error: 'not paired with that unit' });
   const row = await env.DB.prepare('SELECT key, sig FROM unit_box_keys WHERE unit = ?').bind(payload.unit).first();
   if (!row) return json(404, { error: 'that radar has not published a key yet' });
   return json(200, { key: row.key, sig: row.sig });
@@ -686,17 +747,22 @@ function locationRefusal(payload) {
 }
 
 async function phoneLocation(request, env) {
-  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, locationRefusal);
+  const db = env.DB;
+  let last = null;
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, async (p, a) => {
+    const bad = locationRefusal(p);
+    if (bad) return bad;
+    if (!(await paired(db, p.unit, a.unit))) return json(403, { error: 'not paired with that unit' });
+    last = await db.prepare('SELECT updated FROM phone_locations WHERE phone = ? AND unit = ?').bind(a.unit, p.unit).first();
+    if (p.blob === null) return last ? null : json(200, { ok: true, cleared: true });
+    return last && nowS() - last.updated < LOCATION_MIN_GAP_S ? json(429, { error: 'too soon' }) : null;
+  }, phoneBudget);
   if (error) return error;
-  const db = env.DB, now = nowS();
-  if (!(await paired(db, payload.unit, auth.unit))) return json(403, { error: 'not paired with that unit' });
+  const now = nowS();
   if (payload.blob === null) {
     await db.prepare('DELETE FROM phone_locations WHERE phone = ? AND unit = ?').bind(auth.unit, payload.unit).run();
     return json(200, { ok: true, cleared: true });
   }
-  const last = await db.prepare('SELECT updated FROM phone_locations WHERE phone = ? AND unit = ?')
-    .bind(auth.unit, payload.unit).first();
-  if (last && now - last.updated < LOCATION_MIN_GAP_S) return json(429, { error: 'too soon' });
   await db.prepare(
     `INSERT INTO phone_locations (phone, unit, blob, updated) VALUES (?1, ?2, ?3, ?4)
      ON CONFLICT(phone, unit) DO UPDATE SET blob = ?3, updated = ?4`
@@ -863,16 +929,27 @@ export default {
 
 // Per address, before anything else (SR-04): every request, and more
 // tightly anything that can write to the database or checks a password.
+// An IPv6 address counts as its /64 (ratelimit.js addressKey), and writes
+// from IPv6 also per /48.
+//
+// Event batches are left out of the tighter limit: a radar may send one
+// every 5 s, so a fleet site with several radars behind one address would
+// reach it, and they have their own limits (per key, EVENTS_PER_HOUR per
+// radar, and a new radar's daily budget).
 async function addressRefusal(request, env, pathname, m) {
   const ip = clientIp(request);
   if (!ip) return null;
+  const key = addressKey(ip) || ip;
   const slow = () => new Response(JSON.stringify({ error: 'too many requests; try again in a minute' }), {
     status: 429, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Retry-After': '60' },
   });
-  if (!(await allow(env, 'ip', ip))) return slow();
-  const writes = m !== 'GET' && m !== 'HEAD' && !pathname.startsWith('/v1/net/');
+  if (!(await allow(env, 'ip', key))) return slow();
+  const writes = m !== 'GET' && m !== 'HEAD' && !pathname.startsWith('/v1/net/') && pathname !== '/v1/events';
   const fleetPages = pathname.startsWith('/fleet') || pathname === '/f' || pathname.startsWith('/f/');
-  if ((writes || fleetPages) && !(await allow(env, 'strict', ip))) return slow();
+  if (writes || fleetPages) {
+    if (!(await allow(env, 'strict', key))) return slow();
+    if (isV6(ip) && !(await allow(env, 'net', netBlock(ip)))) return slow();
+  }
   return null;
 }
 

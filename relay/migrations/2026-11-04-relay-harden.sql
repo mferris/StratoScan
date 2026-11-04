@@ -7,7 +7,7 @@
 -- If the login may not use --file (as the fleet tables found, README), run
 -- each statement below in order with --command="...".
 --
--- Additive only: two new columns with defaults and four indexes. No row is
+-- Additive only: two new columns with defaults and five indexes. No row is
 -- changed except to fill units.reports from the history already kept, so
 -- every unit that has been reporting stays a member of the shared network
 -- cache at once. A fresh database needs none of this: schema.sql has it all.

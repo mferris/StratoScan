@@ -13,15 +13,17 @@ import worker from '../src/index.js';
 import {
   MAX_UNITS, ACTIVE_UNIT_S, YOUNG_UNIT_S, HISTORY_YOUNG, HISTORY_PER_UNIT, MIN_INTERVAL_S,
   MAX_OFFERS_PER_NET, MAX_OPEN_OFFERS, YOUNG_PAIRING_S, YOUNG_PAIRING_URGENT_PER_HOUR, PUSHES_PER_HOUR_HARD,
-  EVENT_RETENTION_S, HEARTBEAT_STORED_MAX, cleanHeartbeat,
+  EVENT_RETENTION_S, HEARTBEAT_STORED_MAX, cleanHeartbeat, BOX_KEY_CONTEXT, PAIRING_IDLE_S, MEMBER_MIN_AGE_S,
 } from '../src/limits.js';
-import { RATES, resetLocalLimits, netBlock } from '../src/ratelimit.js';
+import { RATES, resetLocalLimits, netBlock, addressKey, allow, localSize, LOCAL_MAX_KEYS } from '../src/ratelimit.js';
+import { NEW_KEY_BUDGET } from '../src/budget.js';
 import { checkedDisc, nearOf, latticeCentre } from '../src/netcache.js';
 import { sha256Hex, signedMessage, b64urlDecode } from '../src/auth.js';
 import { makeD1 } from './d1-sqlite.js';
 
 const SCHEMA = fileURLToPath(new URL('../schema.sql', import.meta.url));
 const MIGRATION = fileURLToPath(new URL('../migrations/2026-11-04-relay-harden.sql', import.meta.url));
+const MIGRATION2 = fileURLToPath(new URL('../migrations/2026-11-04-relay-budget.sql', import.meta.url));
 const BASE = 'https://relay.example';
 const b64url = bytes => Buffer.from(bytes).toString('base64url');
 let clock = 1_850_000_000;
@@ -129,7 +131,10 @@ test('every request counts per address, /health included', async () => {
     last = await worker.fetch(new Request(BASE + '/health', { headers: { 'CF-Connecting-IP': '2001:db8::1' } }), e);
   }
   assert.equal(last.status, 429);
-  assert.equal((await worker.fetch(new Request(BASE + '/health', { headers: { 'CF-Connecting-IP': '2001:db8::2' } }), e)).status, 200);
+  assert.equal((await worker.fetch(new Request(BASE + '/health', { headers: { 'CF-Connecting-IP': '2001:db8::2' } }), e)).status, 429,
+    'the same /64');
+  assert.equal((await worker.fetch(new Request(BASE + '/health', { headers: { 'CF-Connecting-IP': '2001:db8:0:1::1' } }), e)).status, 200,
+    'another /64');
 });
 
 test('fleet page passwords are tried a limited number of times a minute per address (SR-18)', async () => {
@@ -590,4 +595,297 @@ test('the migration adds what the new code needs to a live database, losing noth
     const cols = d => d.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name).sort();
     assert.deepEqual(cols(db), cols(fresh), t);
   }
+});
+
+test('the second migration adds the budget table and the pairings\' counters, losing nothing', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(`CREATE TABLE pairings (unit TEXT NOT NULL, phone TEXT NOT NULL, name TEXT, created INTEGER NOT NULL, PRIMARY KEY (unit, phone));`);
+  db.prepare("INSERT INTO pairings VALUES ('rdu', 'phone-a', 'Test iPhone', 5)").run();
+  db.exec(readFileSync(MIGRATION2, 'utf8'));
+  assert.deepEqual({ ...db.prepare('SELECT * FROM pairings').get() },
+    { unit: 'rdu', phone: 'phone-a', name: 'Test iPhone', created: 5, urgent_start: 0, urgent_count: 0 });
+  const fresh = new DatabaseSync(':memory:');
+  fresh.exec(readFileSync(SCHEMA, 'utf8'));
+  for (const t of ['pairings', 'write_budget']) {
+    const cols = d => d.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name).sort();
+    assert.deepEqual(cols(db), cols(fresh), t);
+  }
+  assert.throws(() => db.exec(readFileSync(MIGRATION2, 'utf8')), /duplicate column/, 'a second run changes nothing');
+});
+
+// ---- the 2026-11-04 re-review -----------------------------------------------------
+
+const settle = (e, u, { age = 3 * 86400, reports = 12 } = {}) => {
+  e.DB.raw.prepare(`INSERT INTO units (id, first_seen, last_seen, last_ts, reports) VALUES (?1, ?2, ?3, 0, ?4)
+    ON CONFLICT(id) DO UPDATE SET first_seen = ?2, reports = ?4`).run(u.id, clock - age, clock, reports);
+};
+const leaveFrom = async (e, unit, ip) => worker.fetch(await signed(await newKey(), JSON.stringify({ unit: unit.id }),
+  { path: '/v1/phone/unpair', as: 'X-FR-Phone', ip }), e);
+
+test('IPv6: rotating addresses inside one /64 is one address, and a /48 has a limit of its own', async () => {
+  const e = env();
+  const unit = await newKey();
+  assert.equal(addressKey('2001:db8:1:2::1'), '2001:db8:1:2::/64');
+  assert.equal(addressKey('2001:0db8:0001:0002:ffff:1:2:3'), '2001:db8:1:2::/64');
+  assert.equal(addressKey('198.51.100.7'), '198.51.100.7');
+  let ok = 0, first429 = null;
+  for (let i = 1; i <= 300; i++) {
+    const r = await leaveFrom(e, unit, `2001:db8:1:2::${i.toString(16)}`);
+    if (r.status === 200) ok++; else if (first429 === null) first429 = i;
+  }
+  assert.equal(ok, RATES.strict.limit, 'one /64, however many addresses: the strict limit');
+  assert.equal(first429, RATES.strict.limit + 1);
+  assert.equal(count(e, 'SELECT COUNT(*) AS n FROM replay_guard'), 0);
+
+  // A different /64 in each request, all in one /48.
+  resetLocalLimits();
+  ok = 0;
+  for (let i = 0; i < RATES.net.limit + 20; i++) {
+    if ((await leaveFrom(e, unit, `2001:db8:5:${i.toString(16)}::1`)).status === 200) ok++;
+  }
+  assert.equal(ok, RATES.net.limit, 'one /48: its own, looser limit');
+  assert.equal((await leaveFrom(e, unit, '2001:db8:6::1')).status, 200, 'another /48 is not affected');
+});
+
+test('the in-memory limiter makes room without forgetting who is being limited', async () => {
+  const which = 'strict';
+  for (let i = 0; i < RATES[which].limit; i++) assert.ok(await allow({}, which, 'victim'));
+  assert.equal(await allow({}, which, 'victim'), false);
+  for (let i = 0; i < LOCAL_MAX_KEYS + 500; i++) await allow({}, which, `flood-${i}`);
+  assert.ok(localSize(which) <= LOCAL_MAX_KEYS);
+  // The flood pushed out the oldest; the victim, the oldest of all, may be
+  // forgotten only once its minute is up -- so check a key counted late.
+  const late = `flood-${LOCAL_MAX_KEYS + 499}`;
+  for (let i = 1; i < RATES[which].limit; i++) await allow({}, which, late);
+  assert.equal(await allow({}, which, late), false, 'a fresh flood of new keys does not reset a busy one');
+  clock += 61;
+  for (let i = 0; i < 10; i++) await allow({}, which, `after-${i}`);
+  assert.ok(await allow({}, which, late), 'a minute later it may again');
+});
+
+async function boxKeyReq(u, ip) {
+  const kp = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
+  const key = b64url(new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey)));
+  const sig = b64url(new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, u.key, new TextEncoder().encode(BOX_KEY_CONTEXT + key))));
+  return signed(u, JSON.stringify({ key, sig }), { path: '/v1/unit/boxkey', ip });
+}
+
+test('a day\'s writes from new keys are budgeted per address, and a settled radar is not', async () => {
+  const e = env();
+  clock += 1000;
+  const real = await newKey();
+  settle(e, real);
+  let ok = 0, refused = 0;
+  for (let i = 0; i < NEW_KEY_BUDGET.addr + 50; i++) {
+    if (i % 50 === 49) clock += 61;                 // stay under the per-minute limit
+    const r = await worker.fetch(await boxKeyReq(await newKey(), '198.51.100.40'), e);
+    if (r.status === 200) ok++;
+    else { assert.equal(r.status, 429); assert.match((await r.json()).error, /today/); refused++; }
+  }
+  assert.equal(ok, NEW_KEY_BUDGET.addr);
+  assert.equal(refused, 50);
+  assert.equal(count(e, 'SELECT COUNT(*) AS n FROM unit_box_keys'), NEW_KEY_BUDGET.addr, 'nothing written once over');
+  const replays = count(e, 'SELECT COUNT(*) AS n FROM replay_guard');
+  clock += 61;
+  assert.equal((await worker.fetch(await boxKeyReq(await newKey(), '198.51.100.40'), e)).status, 429);
+  assert.equal(count(e, 'SELECT COUNT(*) AS n FROM replay_guard'), replays, 'not even a replay record');
+  // A settled radar on the same address carries on; so does a new key elsewhere.
+  assert.equal((await worker.fetch(await boxKeyReq(real, '198.51.100.40'), e)).status, 200);
+  clock += 10 * 60;
+  assert.equal((await heartbeat(e, real, { ip: '198.51.100.40' })).status, 200);
+  assert.equal((await worker.fetch(await boxKeyReq(await newKey(), '198.51.100.41'), e)).status, 200);
+  // Only fingerprints are kept, and only for the day.
+  assert.ok(e.DB.raw.prepare('SELECT tag FROM write_budget').all().every(r => /^[0-9a-f]{16}$/.test(r.tag)));
+  clock += 86400;
+  assert.equal((await worker.fetch(await boxKeyReq(await newKey(), '198.51.100.40'), e)).status, 200, 'the next day');
+  await worker.scheduled({}, e, { waitUntil() {} });
+  assert.equal(count(e, 'SELECT COUNT(*) AS n FROM write_budget'), 1, 'yesterday\'s counts are deleted');
+});
+
+test('IPv6: the daily budget is per /64 and per /48', async () => {
+  const e = env();
+  clock += 1000;
+  let ok = 0;
+  // Every request from a new /64 of one /48, a minute apart in tens.
+  for (let i = 0; i < NEW_KEY_BUDGET.net + 20; i++) {
+    if (i % 10 === 9) { clock += 61; resetLocalLimits(); }
+    if ((await worker.fetch(await boxKeyReq(await newKey(), `2001:db8:9:${i.toString(16)}::1`), e)).status === 200) ok++;
+  }
+  assert.equal(ok, NEW_KEY_BUDGET.net);
+  assert.equal((await worker.fetch(await boxKeyReq(await newKey(), '2001:db8:a::1'), e)).status, 200);
+});
+
+test('a new household fits its first day in the budget', async () => {
+  const e = env();
+  clock += 1000;
+  const ip = '192.168.1.23';
+  const unit = await newKey(), phone = await newKey();
+  for (let i = 0; i < 12; i++) { clock += MIN_INTERVAL_S; assert.equal((await heartbeat(e, unit, { ip })).status, 200); }
+  for (let i = 0; i < 5; i++) { clock += 1; assert.equal((await offer(e, unit, { ip })).status, 200); }
+  clock += 1;
+  assert.equal((await pair(e, phone, unit, CODE, { ip })).status, 200);
+  clock += 1;
+  assert.equal((await worker.fetch(await signed(phone, JSON.stringify({ token: 'ab'.repeat(32), env: 'sandbox' }),
+    { path: '/v1/phone/register', as: 'X-FR-Phone', ip }), e)).status, 200);
+  clock += 1;
+  assert.equal((await worker.fetch(await boxKeyReq(unit, ip), e)).status, 200);
+  for (let i = 0; i < 60; i++) {
+    clock += 30;
+    const ev = { v: 1, events: [{ kind: 'test', ts: clock }] };
+    assert.equal((await worker.fetch(await signed(unit, JSON.stringify(ev), { path: '/v1/events', ip }), e)).status, 200);
+  }
+  assert.ok(e.DB.raw.prepare('SELECT MAX(n) AS n FROM write_budget').get().n < NEW_KEY_BUDGET.addr / 2);
+});
+
+test('event batches from several radars behind one address are not held to the strict limit', async () => {
+  const e = env();
+  clock += 1000;
+  const radars = [await newKey(), await newKey(), await newKey()];
+  let ok = 0;
+  for (let i = 0; i < 25; i++) {
+    clock += 1;
+    for (const u of radars) {
+      const r = await worker.fetch(await signed(u, JSON.stringify({ v: 1, events: [{ kind: 'test', ts: clock }] }),
+        { path: '/v1/events', ip: '198.51.100.50' }), e);
+      if (r.status === 200) ok++;
+    }
+  }
+  assert.ok(ok > RATES.strict.limit, `${ok} batches`);
+});
+
+test('a flood of minted offers cannot push out a settled radar\'s open code', async () => {
+  const e = env();
+  clock += 1000;
+  const settled = await newKey(), viaPairing = await newKey(), oldPhone = await newKey();
+  settle(e, settled);
+  // A radar with health reports off, settled by a pairing older than a day.
+  e.DB.raw.prepare('INSERT INTO pairings (unit, phone, name, created) VALUES (?, ?, NULL, ?)').run(viaPairing.id, oldPhone.id, clock - 2 * 86400);
+  assert.equal((await offer(e, settled, { ip: '192.168.1.23' })).status, 200);
+  assert.equal((await offer(e, viaPairing, { ip: '192.168.1.23', code: 'second-radar-code-0000001' })).status, 200);
+  // 500 minted keys, 8 from each of 63 different /24s, one request per address.
+  for (let i = 0; i < MAX_OPEN_OFFERS + 4; i++) {
+    clock += 1;
+    const ip = `203.0.${Math.floor(i / 8)}.${i % 8 + 1}`;
+    assert.equal((await offer(e, await newKey(), { ip, code: `flood-code-${i}-xxxxxxxx` })).status, 200);
+  }
+  assert.equal(count(e, 'SELECT COUNT(*) AS n FROM pairing_offers WHERE unit IN (?, ?)', settled.id, viaPairing.id), 2,
+    'both settled radars\' codes are still open');
+  assert.equal(count(e, 'SELECT COUNT(*) AS n FROM pairing_offers'), MAX_OPEN_OFFERS + 2);
+  clock += 1;
+  assert.equal((await pair(e, await newKey(), settled)).status, 200, 'and their phones pair');
+  clock += 1;
+  assert.equal((await pair(e, await newKey(), viaPairing, 'second-radar-code-0000001')).status, 200);
+});
+
+test('wrong guesses and no-op requests write nothing, not even a replay record', async () => {
+  const e = env();
+  clock += 1000;
+  const unit = await newKey();
+  assert.equal((await offer(e, unit)).status, 200);
+  const before = count(e, 'SELECT COUNT(*) AS n FROM replay_guard');
+  for (let i = 0; i < 20; i++) {
+    clock += 1;
+    assert.equal((await pair(e, await newKey(), unit, `wrong-guess-${i}-0123456789`)).status, 404);
+    assert.equal((await leaveFrom(e, unit)).status, 200);
+    assert.equal((await worker.fetch(await signed(await newKey(), '{}', { path: '/v1/unit/pairing/cancel' }), e)).status, 200);
+    assert.equal((await worker.fetch(await signed(await newKey(), JSON.stringify({ all: true }), { path: '/v1/unit/unpair' }), e)).status, 200);
+    const reg = await worker.fetch(await signed(await newKey(), JSON.stringify({ token: 'ab'.repeat(32), env: 'sandbox' }),
+      { path: '/v1/phone/register', as: 'X-FR-Phone' }), e);
+    assert.equal(reg.status, 403);
+  }
+  assert.equal(count(e, 'SELECT COUNT(*) AS n FROM replay_guard'), before);
+  // The radar can still cancel its own code, once.
+  clock += 1;
+  const req = await signed(unit, '{}', { path: '/v1/unit/pairing/cancel' });
+  assert.equal((await worker.fetch(req.clone(), e)).status, 200);
+  assert.equal(count(e, 'SELECT COUNT(*) AS n FROM pairing_offers'), 0);
+});
+
+test('the cleanup forgets minted box keys and minted pairs, and keeps real ones', async () => {
+  const e = env();
+  const db = e.DB.raw;
+  clock += 1000;
+  // 60 box keys from minted keys that never reported or paired.
+  for (let i = 0; i < 60; i++) {
+    clock += 1;
+    assert.equal((await worker.fetch(await boxKeyReq(await newKey(), spread(i)), e)).status, 200);
+  }
+  // A minted phone paired with 5 minted (self-offered) units.
+  const mintedPhone = await newKey();
+  for (let i = 0; i < 5; i++) {
+    const u = await newKey();
+    clock += 1;
+    await offer(e, u, { ip: spread(100 + i) });
+    clock += 1;
+    assert.equal((await pair(e, mintedPhone, u, CODE, { ip: spread(100 + i) })).status, 200);
+  }
+  // A real radar with health reports off and its phone: it republishes its
+  // box key every day.
+  const real = await newKey(), phone = await newKey();
+  clock += 1;
+  await offer(e, real, { ip: '192.168.1.23' });
+  clock += 1;
+  assert.equal((await pair(e, phone, real, CODE, { ip: '192.168.1.23' })).status, 200);
+  for (let d = 0; d < 400; d += 1) {
+    clock += 86400;
+    if (d % 7 === 0) await worker.fetch(await boxKeyReq(real, '192.168.1.23'), e);
+    if (d === 40) {
+      await worker.scheduled({}, e, { waitUntil() {} });
+      assert.equal(count(e, 'SELECT COUNT(*) AS n FROM unit_box_keys'), 1, 'minted box keys gone after a month');
+    }
+  }
+  await worker.scheduled({}, e, { waitUntil() {} });
+  assert.deepEqual(db.prepare('SELECT unit, phone FROM pairings').all().map(r => ({ ...r })), [{ unit: real.id, phone: phone.id }],
+    'the minted pairs are forgotten; the real one stays');
+  assert.equal(count(e, 'SELECT COUNT(*) AS n FROM unit_box_keys'), 1);
+  assert.ok(PAIRING_IDLE_S < 400 * 86400);
+});
+
+test('a young pairing\'s emergencies are its own allowance, not used up by another radar\'s pushes', async () => {
+  const sent = [];
+  const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  const der = Buffer.from(await crypto.subtle.exportKey('pkcs8', kp.privateKey)).toString('base64');
+  const e = env({
+    APNS_KEY: `-----BEGIN PRIVATE KEY-----\n${der.match(/.{1,64}/g).join('\n')}\n-----END PRIVATE KEY-----\n`, // notsecret: made for this test
+    APNS_KEY_ID: 'KEYID12345', APNS_TEAM_ID: 'TEAM123456', APNS_TOPIC: 'com.example.stratoscan',
+    APNS_FETCH: async url => { sent.push(url); return new Response(null, { status: 200 }); },
+  });
+  const busy = await newKey(), fresh = await newKey(), phone = await newKey();
+  clock += 1000;
+  e.DB.raw.prepare('INSERT INTO pairings (unit, phone, name, created) VALUES (?, ?, NULL, ?)').run(busy.id, phone.id, clock - 10 * 86400);
+  clock += 1;
+  assert.equal((await worker.fetch(await signed(phone, JSON.stringify({ token: 'ab'.repeat(32), env: 'sandbox', kinds: ['emergency', 'helicopter'] }),
+    { path: '/v1/phone/register', as: 'X-FR-Phone' }), e)).status, 200);
+  const send = async (u, kind, i) => {
+    clock += 6;
+    const ev = kind === 'emergency' ? { kind, ts: clock, hex: (0x400000 + i).toString(16), squawk: '7700' }
+                                    : { kind, ts: clock, hex: (0x500000 + i).toString(16), dist_nm: 1 };
+    return worker.fetch(await signed(u, JSON.stringify({ v: 1, events: [ev] }), { path: '/v1/events' }), e);
+  };
+  for (let i = 0; i < 10; i++) await send(busy, 'emergency', i);
+  assert.equal(sent.length, 10, 'the older radar\'s pushes this hour');
+  // A second, real radar paired today.
+  await offer(e, fresh);
+  clock += 1;
+  assert.equal((await pair(e, phone, fresh)).status, 200);
+  sent.length = 0;
+  for (let i = 0; i < 8; i++) assert.equal((await send(fresh, 'emergency', 100 + i)).status, 200);
+  assert.equal(sent.length, YOUNG_PAIRING_URGENT_PER_HOUR, 'its own five, though the phone had ten already');
+  clock += 3600;
+  sent.length = 0;
+  for (let i = 0; i < 8; i++) await send(fresh, 'emergency', 200 + i);
+  assert.equal(sent.length, YOUNG_PAIRING_URGENT_PER_HOUR, 'five more the next hour');
+});
+
+test('500 minted keys from one /64, each from a new address, get only the strict limit through', async () => {
+  const e = env();
+  clock += 1000;
+  let through = 0;
+  for (let i = 0; i < 500; i++) {
+    const r = await offer(e, await newKey(), { ip: `2001:db8:77:1:${(i + 1).toString(16)}::1`, code: `mint-${i}-xxxxxxxxxxxxxx` });
+    if (r.status === 200) through++;
+  }
+  assert.ok(through <= MAX_OFFERS_PER_NET, `${through} offers`);
+  assert.ok(count(e, 'SELECT COUNT(*) AS n FROM replay_guard') <= RATES.strict.limit);
+  assert.equal(count(e, 'SELECT COUNT(*) AS n FROM pairing_offers'), through);
 });
