@@ -3924,6 +3924,7 @@ function askOnboard() {
   if (!onboardAsk) {
     onboardAsk = fetch(ONBOARD_URL, { cache: 'no-store', signal: timeLimit(ONBOARD_TIMEOUT_MS) })
       .then(res => res.ok ? res.json() : (drain(res), null))
+      .then(noteOnboard)
       .finally(() => { onboardAsk = null; });
   }
   return onboardAsk;
@@ -7284,10 +7285,20 @@ function renderSettingsPanel() {
   `;
 }
 
-// Talks to the loopback-only setup listener. Not reachable from the network,
-// so no credential is needed -- and none can be required, since this is the
-// only way back in for someone who has forgotten the admin password.
+// Talks to the loopback-only setup listener, which answers only the kiosk's
+// own user (setup-server.py, security review 2026-11-03, SR-11). On a radar
+// not yet set up, every change carries the code on this screen; on one that
+// is, the few changes that could hand it to someone else ask for the admin
+// password (adminProof). Erasing asks for neither: it is the way back in for
+// someone who has forgotten the admin password.
 const DEVICE_API = 'http://127.0.0.1:8090';
+let deviceClaimCode = null;   // the screen's setup code while the radar is unclaimed, from /onboard
+
+// Every /onboard answer says whether the radar is claimed, and its code if not.
+function noteOnboard(d) {
+  if (d && typeof d === 'object' && 'claimed' in d) deviceClaimCode = (!d.claimed && d.claimCode) || null;
+  return d;
+}
 // Every call has a limit (#86, 2026-10-26), set past the listener's own for
 // that kind of call (setup-server.py: 10-30 s for a status or a quick change,
 // up to 3 minutes for one that restarts or reconfigures something), so a slow
@@ -7300,11 +7311,17 @@ async function deviceApi(path, opts = {}) {
   if (!ON_DEVICE) throw new Error('Only on the radar itself.');
   const { timeoutMs = DEVICE_API_TIMEOUT_MS, ...rest } = opts;
   try {
-    const r = await fetch(DEVICE_API + path, {
-      ...rest, headers: { 'Content-Type': 'application/json' }, signal: timeLimit(timeoutMs) });
+    const headers = { 'Content-Type': 'application/json' };
+    if (deviceClaimCode) headers['X-StratoScan-Claim'] = deviceClaimCode;
+    const r = await fetch(DEVICE_API + path, { ...rest, headers, signal: timeLimit(timeoutMs) });
     let b = {};
     try { b = await r.json(); } catch (e) { if (isTimeout(e)) throw e; }
-    if (!r.ok) throw new Error(b?.error?.message || 'That did not work.');
+    if (!r.ok) {
+      const err = new Error(b?.error?.message || 'That did not work.');
+      err.code = b?.error?.code;
+      throw err;
+    }
+    if (path === '/onboard') noteOnboard(b);
     return b;
   } catch (e) {
     if (isTimeout(e)) throw new Error("The radar's setup service did not answer in time. Try again in a moment.");
@@ -8426,6 +8443,16 @@ async function loadDeviceStatus() {
   await loadRadios();
 }
 
+// On a radar that is set up, the changes that could hand it to someone else
+// (a new admin password, another WiFi network, a tailnet, the public page)
+// ask for its admin password first (SR-11). {} when none is needed, null
+// when the owner cancels.
+async function adminProof(label = 'ADMIN PASSWORD  (to confirm this change)') {
+  if (!(deviceStatus && deviceStatus.claimed)) return {};
+  const pw = await openKeyboard(label, '', { secret: true });
+  return pw === null ? null : { adminPassword: pw };
+}
+
 async function handleDeviceTap(row) {
   const { dev, act, wifi, airport, tz, addr } = row.dataset;
   deviceMsg = '';
@@ -8481,12 +8508,14 @@ async function handleDeviceTap(row) {
   }
 
   if (act === 'set-password') {
+    const proof = await adminProof('CURRENT ADMIN PASSWORD');
+    if (proof === null) return;
     const pw = await openKeyboard('NEW ADMIN PASSWORD  (8+ characters)', '', { secret: true });
     if (pw === null) return;
     deviceBusy = true; renderSettingsPanel();
     try {
       await deviceApi('/onboard/password', { method: 'POST',
-        body: JSON.stringify({ password: pw }) });
+        body: JSON.stringify({ password: pw, ...proof }) });
       deviceMsg = 'Password set. Setup is complete.';
       await loadDeviceStatus();
       refreshOnboarding();     // dismisses the first-run screen
@@ -8502,13 +8531,15 @@ async function handleDeviceTap(row) {
   }
 
   if (wifi) {
+    const proof = await adminProof();
+    if (proof === null) return;
     const psk = await openKeyboard(`PASSWORD FOR ${wifi}`, '', { secret: true });
     if (psk === null) return;
     deviceBusy = true; renderSettingsPanel();
     try {
       // the listener allows the join 150 s and then its confirm 120 s
       await deviceApi('/onboard/wifi/connect', { timeoutMs: 5 * 60 * 1000, method: 'POST',
-        body: JSON.stringify({ ssid: wifi, psk }) });
+        body: JSON.stringify({ ssid: wifi, psk, ...proof }) });
       deviceMsg = `Connected to ${wifi}.`;
     } catch (e) { deviceMsg = e.message; }
     deviceBusy = false; return renderSettingsPanel();
@@ -8668,12 +8699,14 @@ async function handleDeviceTap(row) {
   }
 
   if (act === 'remote-start') {
+    const proof = await adminProof();
+    if (proof === null) return;
     const name = await openKeyboard('NAME FOR THIS RADAR  (letters, digits, -)', 'stratoscan');
     if (name === null) return;
     deviceBusy = true; renderSettingsPanel();
     try {
       const r = await deviceApi('/onboard/remote/start', { timeoutMs: DEVICE_API_SLOW_MS, method: 'POST',
-        body: JSON.stringify({ hostname: name.trim().toLowerCase() }) });
+        body: JSON.stringify({ hostname: name.trim().toLowerCase(), ...proof }) });
       deviceStatus = deviceStatus || {};
       deviceStatus.remote = { ...(deviceStatus.remote || {}),
                               loginUrl: r.result.url, state: r.result.state };
@@ -8696,10 +8729,12 @@ async function handleDeviceTap(row) {
 
   if (act === 'remote-funnel-on' || act === 'remote-funnel-off') {
     const on = act.endsWith('-on');
+    const proof = await adminProof();
+    if (proof === null) return;
     deviceBusy = true; renderSettingsPanel();
     try {
       const r = await deviceApi('/onboard/remote/funnel', { timeoutMs: DEVICE_API_SLOW_MS, method: 'POST',
-        body: JSON.stringify({ enabled: on }) });
+        body: JSON.stringify({ enabled: on, ...proof }) });
       deviceStatus.remote = { ...(deviceStatus.remote || {}),
                               publicUrl: r.result.publicUrl };
       deviceMsg = on ? 'Published.' : 'Public page turned off.';

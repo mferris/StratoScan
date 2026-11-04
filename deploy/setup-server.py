@@ -59,6 +59,9 @@ FAIL_FORGET_S = 15 * 60         # an address's failures are forgotten after this
 FAIL_ALL_WINDOW_S = 15 * 60
 FAIL_ALL_LIMIT = 50             # failures from every address together, per window...
 FAIL_ALL_DELAY_S = 30           # ...then everyone waits this long between tries
+_good = {}                      # address -> when it last signed in (kept in memory only)
+GOOD_FORGET_S = 30 * 86400      # ...exempt from the backstop for this long
+GOOD_MAX = 64
 
 
 # ------------------------------------------------------------------ state
@@ -170,6 +173,139 @@ def call_setupd(verb, params=None, timeout=120):
         s.close()
 
 
+# ------------------------------------------------------------ who is asking
+# Both listeners are on loopback, so every caller is 127.0.0.1 and the
+# address says nothing about who it is: the kiosk browser, lighttpd passing a
+# phone on the LAN through, or any other program on the radar (the public
+# gateway, which parses internet traffic, among them). The kernel knows which
+# user owns the other end of a loopback connection, and lists it in
+# /proc/net/tcp; that is SO_PEERCRED for TCP, and needs no privilege.
+PROC_NET_TCP = ("/proc/net/tcp", "/proc/net/tcp6")
+LIGHTDM_CONFS = ["/etc/lightdm/lightdm.conf"]
+
+
+def _proc_addr(host, port):
+    """An address as /proc/net/tcp{,6} spells it (32-bit words, host order)."""
+    import ipaddress
+    ip = ipaddress.ip_address(host)
+    packed = ip.packed
+    words = "".join("%08X" % int.from_bytes(packed[i:i + 4], sys.byteorder)
+                    for i in range(0, len(packed), 4))
+    return f"{words}:{port:04X}"
+
+
+def peer_uid(peer, local, tables=PROC_NET_TCP):
+    """The uid owning the far end of the loopback connection peer -> local,
+    or None when it can't be found (never a guess)."""
+    import ipaddress
+    try:
+        want = {(_proc_addr(peer[0], peer[1]), _proc_addr(local[0], local[1]))}
+        p4 = ipaddress.ip_address(peer[0])
+        if p4.version == 4:
+            # A dual-stack client lists its end as ::ffff:a.b.c.d in tcp6.
+            m = lambda h: "::ffff:" + h
+            want.add((_proc_addr(m(peer[0]), peer[1]), _proc_addr(m(local[0]), local[1])))
+    except (ValueError, TypeError, IndexError):
+        return None
+    for path in tables:
+        try:
+            with open(path) as f:
+                next(f, None)
+                for line in f:
+                    cols = line.split()
+                    if len(cols) > 7 and (cols[1], cols[2]) in want:
+                        return int(cols[7])
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def detect_kiosk_user(confs=None):
+    """The desktop user the kiosk runs as, as ota.py finds it: an override,
+    then the display manager's autologin user, then uid 1000."""
+    override = os.environ.get("STRATOSCAN_KIOSK_USER")
+    if override:
+        return override
+    paths = list(confs or LIGHTDM_CONFS)
+    d = "/etc/lightdm/lightdm.conf.d"
+    if confs is None and os.path.isdir(d):
+        paths += sorted(os.path.join(d, n) for n in os.listdir(d) if n.endswith(".conf"))
+    user = None
+    for path in paths:
+        try:
+            with open(path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("autologin-user=") and line.split("=", 1)[1].strip():
+                        user = line.split("=", 1)[1].strip()
+        except OSError:
+            continue
+    if user:
+        return user
+    try:
+        import pwd
+        return pwd.getpwuid(1000).pw_name
+    except (KeyError, ImportError):
+        return None
+
+
+def uid_of(name):
+    try:
+        import pwd
+        return pwd.getpwnam(name).pw_uid
+    except (KeyError, TypeError, ImportError):
+        return None
+
+
+_uids = {}
+
+
+def kiosk_uid():
+    """The one user allowed on the on-screen listener: the kiosk's."""
+    if "kiosk" not in _uids:
+        _uids["kiosk"] = uid_of(detect_kiosk_user())
+    return _uids["kiosk"]
+
+
+def proxy_uid():
+    """lighttpd's user: the one caller whose X-Forwarded-For is believed."""
+    if "proxy" not in _uids:
+        _uids["proxy"] = uid_of(os.environ.get("STRATOSCAN_PROXY_USER", "www-data"))
+    return _uids["proxy"]
+
+
+def _ip_or_none(s):
+    import ipaddress
+    try:
+        return str(ipaddress.ip_address((s or "").strip()))
+    except ValueError:
+        return None
+
+
+def client_key(peer, local, xff, uid=None):
+    """Who to count a failed sign-in against.
+
+    Behind lighttpd every caller is 127.0.0.1, so keying on that put the
+    whole LAN in one bucket and one device failing on purpose kept the owner
+    out (security review 2026-11-03, SR-25). lighttpd adds the real address
+    as the LAST X-Forwarded-For entry (anything before it came from the
+    client and is ignored), and it is believed only when the connection is
+    lighttpd's own: any other local program could write the header itself.
+    """
+    host = peer[0] if peer else ""
+    if not host.startswith("127.") and host != "::1":
+        return host
+    if uid is None:
+        uid = peer_uid(peer, local)
+    if uid is not None and uid == proxy_uid():
+        last = (xff or "").split(",")[-1]
+        ip = _ip_or_none(last)
+        if ip:
+            return ip
+        return "proxy"
+    return f"local:{uid if uid is not None else '?'}"
+
+
 # ---------------------------------------------------------------- sessions
 
 def new_session():
@@ -215,15 +351,19 @@ def throttled(addr):
     """Exponential backoff for this address, capped, always self-clearing.
 
     Never a permanent lockout: the owner forgetting their password must not
-    require re-flashing the device.
+    require re-flashing the device. The global backstop does not hold up an
+    address that has signed in before (GOOD_FORGET_S), so a neighbour with a
+    crowd of addresses slows strangers, never the owner's own devices.
     """
     now = time.time()
     with _lock:
         _forget_old_failures(now)
-        if now < _fail_all["until"]:
-            return True
         f = _fail.get(addr)
-        return bool(f) and now < f["until"]
+        if f and now < f["until"]:
+            return True
+        if now < _fail_all["until"]:
+            return now - _good.get(addr, -GOOD_FORGET_S - 1) > GOOD_FORGET_S
+        return False
 
 
 def note_failure(addr):
@@ -243,6 +383,9 @@ def note_failure(addr):
 def note_success(addr):
     with _lock:
         _fail.pop(addr, None)
+        _good[addr] = time.time()
+        if len(_good) > GOOD_MAX:
+            del _good[min(_good, key=_good.get)]
 
 
 # -------------------------------------------------------------------- HTTP
@@ -311,6 +454,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return json.loads(self.rfile.read(n) or b"{}")
         except Exception:
             return None
+
+    def _who(self):
+        """The throttle's key for this caller (client_key)."""
+        local = self.server.server_address[:2]
+        if not hasattr(self, "_peer_uid"):     # one lookup per connection
+            self._peer_uid = peer_uid(self.client_address, local)
+        return client_key(self.client_address, local,
+                          self.headers.get("X-Forwarded-For"), uid=self._peer_uid)
 
     def _authed(self):
         auth = self.headers.get("Authorization") or ""
@@ -502,7 +653,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if st.get("claimed"):
             return self._err(409, "already_claimed",
                              "This device has already been set up.")
-        if throttled(self.client_address[0]):
+        if throttled(self._who()):
             return self._err(429, "too_many_attempts", "Too many tries. Wait a moment.")
         b = self._body() or {}
         code, pw = b.get("claimCode") or "", b.get("password") or ""
@@ -511,12 +662,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._err(503, "no_claim_code",
                              "The device has not finished starting up.")
         if not hmac.compare_digest(code.strip().upper(), expected.strip().upper()):
-            note_failure(self.client_address[0])
+            note_failure(self._who())
             return self._err(403, "bad_claim_code",
                              "That code does not match the one on the screen.")
         if not (8 <= len(pw) <= 128):
             return self._err(400, "weak_password", "Use at least 8 characters.")
-        note_success(self.client_address[0])
+        note_success(self._who())
         st.update({"schema": 1, "claimed": True,
                    "password": hash_password(pw),
                    "steps": st.get("steps", {})})
@@ -526,19 +677,33 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _login(self, st):
         if not st.get("claimed"):
             return self._err(409, "not_claimed", "This device has not been set up yet.")
-        if throttled(self.client_address[0]):
+        if throttled(self._who()):
             return self._err(429, "too_many_attempts", "Too many tries. Wait a moment.")
         b = self._body() or {}
         if not verify_password(b.get("password") or "", st.get("password")):
-            note_failure(self.client_address[0])
+            note_failure(self._who())
             return self._err(401, "bad_password", "That password was not accepted.")
-        note_success(self.client_address[0])
+        note_success(self._who())
         return self._send(200, {"token": new_session(), "expiresIn": SESSION_TTL})
+
+    def _current_password_ok(self, st, given):
+        """The current password, re-entered, under the sign-in's own throttle
+        and failure count: a stolen session must not be a way to guess it
+        at full speed (security review 2026-11-03, addendum)."""
+        if throttled(self._who()):
+            self._err(429, "too_many_attempts", "Too many tries. Wait a moment.")
+            return False
+        if not verify_password(given or "", st.get("password")):
+            note_failure(self._who())
+            self._err(401, "bad_password", "Current password was not accepted.")
+            return False
+        note_success(self._who())
+        return True
 
     def _change_password(self, st):
         b = self._body() or {}
-        if not verify_password(b.get("currentPassword") or "", st.get("password")):
-            return self._err(401, "bad_password", "Current password was not accepted.")
+        if not self._current_password_ok(st, b.get("currentPassword")):
+            return
         new = b.get("newPassword") or ""
         if not (8 <= len(new) <= 128):
             return self._err(400, "weak_password", "Use at least 8 characters.")
@@ -634,8 +799,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         secret again, not merely an unlocked browser tab left open.
         """
         b = self._body() or {}
-        if not verify_password(b.get("currentPassword") or "", st.get("password")):
-            return self._err(401, "bad_password", "Password was not accepted.")
+        if not self._current_password_ok(st, b.get("currentPassword")):
+            return
         scope = b.get("scope")
         if scope == "settings":
             if b.get("confirm") != "RESET":
@@ -1018,6 +1183,24 @@ def pair_verb(action, phone=None):
 # proxied by lighttpd, so only software running on the device itself -- i.e.
 # the kiosk browser -- can read it.
 ONBOARD_LISTEN = ("127.0.0.1", 8090)
+# Who may use it (security review 2026-11-03, SR-11). Bound to loopback was
+# never enough: every program on the radar can reach loopback, the public
+# gateway and the other services among them. So:
+#   - only the kiosk's user, by the kernel's word (peer_uid);
+#   - only by the radar's own names (no other site's name pointed at
+#     127.0.0.1), and a change only from the kiosk page's own origin;
+#   - on a radar not yet set up, a change carries the code on its screen;
+#   - on one that is, the changes that would hand it to someone else
+#     (ONBOARD_OWNER_ONLY) need its admin password, or a /setup session.
+# Erasing stays open to the screen: it is the way back for a lost password,
+# and it leaves a blank radar with a new code, not a quiet foothold.
+ONBOARD_HOSTS = ("localhost", "127.0.0.1")
+ONBOARD_ORIGINS = ("http://localhost", "http://127.0.0.1")
+ONBOARD_CLAIM_HEADER = "X-StratoScan-Claim"
+ONBOARD_READS = {"/onboard/wifi/scan", "/onboard/remote/status"}   # POSTs that change nothing
+ONBOARD_OWNER_ONLY = {"/onboard/password", "/onboard/wifi/connect",
+                      "/onboard/remote/start", "/onboard/remote/funnel"}
+PANEL_KEY = "panel"         # the throttle's key for passwords and codes typed on the screen
 
 
 class OnboardHandler(http.server.BaseHTTPRequestHandler):
@@ -1033,19 +1216,85 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass  # this endpoint carries the claim code; never log it
 
+    def _caller_ok(self):
+        """The kiosk's user, asking by one of the radar's own names (SR-11).
+        Anything else gets a bare 403, sent here."""
+        host = (self.headers.get("Host") or "").strip().lower()
+        name, _, port = host.partition(":")
+        uid = peer_uid(self.client_address, self.server.server_address[:2])
+        if (name in ONBOARD_HOSTS and port in ("", str(ONBOARD_LISTEN[1]))
+                and uid is not None and uid == kiosk_uid()):
+            return True
+        self.send_response(403)
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        return False
+
+    def _refuse(self, code, token, message):
+        self._json(code, {"error": {"code": token, "message": message}})
+
+    def _gate(self, path, body):
+        """True when this change may go ahead; otherwise the refusal is sent.
+
+        Not yet set up: the code on the screen (the kiosk page has it from
+        GET /onboard and sends it as ONBOARD_CLAIM_HEADER). Set up: the
+        ONBOARD_OWNER_ONLY changes need the admin password (adminPassword in
+        the body) or a /setup session; the rest are the panel's own settings.
+        """
+        if path in ONBOARD_READS:
+            return True
+        st = load_state()
+        if not st.get("claimed"):
+            expected = claim_code()
+            if expected is None:
+                self._refuse(503, "no_claim_code", "The radar has not finished starting up.")
+                return False
+            if throttled(PANEL_KEY):
+                self._refuse(429, "too_many_attempts", "Too many tries. Wait a moment.")
+                return False
+            given = (self.headers.get(ONBOARD_CLAIM_HEADER) or "").strip().upper()
+            if given and hmac.compare_digest(given.encode(), expected.strip().upper().encode()):
+                return True
+            if given:
+                note_failure(PANEL_KEY)
+            self._refuse(403, "claim_required", "This screen's setup code was not sent. Try again in a moment.")
+            return False
+        if path not in ONBOARD_OWNER_ONLY:
+            return True
+        auth = self.headers.get("Authorization") or ""
+        if auth.startswith("Bearer ") and valid_session(auth[7:]):
+            return True
+        if throttled(PANEL_KEY):
+            self._refuse(429, "too_many_attempts", "Too many tries. Wait a moment.")
+            return False
+        pw = body.get("adminPassword") if isinstance(body, dict) else None
+        if isinstance(pw, str) and pw and verify_password(pw, st.get("password")):
+            note_success(PANEL_KEY)
+            return True
+        if isinstance(pw, str) and pw:
+            note_failure(PANEL_KEY)
+            msg = "That password was not accepted. If it is lost, Erase everything resets the radar."
+        else:
+            msg = "This change needs the radar's admin password."
+        self._refuse(401, "admin_required", msg)
+        return False
+
     def do_POST(self):
         """Device-local setup actions, for the radar's own touchscreen.
 
-        Unauthenticated BY DESIGN, and safe only because this listener is
-        bound to loopback and is not proxied by lighttpd -- reaching it means
-        already running on the device. Physical access is ownership here, the
-        same assumption every appliance makes.
-
-        It also has to be unauthenticated to be useful: this is the only
-        recovery path for someone who has forgotten the admin password. If it
-        demanded that password, a forgotten one would mean a dead unit.
+        Open only to the kiosk's own user (_caller_ok), and gated on the
+        screen's setup code or the admin password (_gate). It still asks no
+        credential to erase the radar: that is the only recovery path for
+        someone who has forgotten the admin password, and a forgotten one
+        must not mean a dead unit.
         """
+        if not self._caller_ok():
+            return
         path = self.path.split("?", 1)[0].rstrip("/")
+        origin = self.headers.get("Origin")
+        if origin not in ONBOARD_ORIGINS:
+            return self._refuse(403, "bad_origin", "Only the radar's own screen can make changes here.")
         # JSON only. A browser sends a cross-origin POST with a plain content
         # type WITHOUT asking first (no preflight), so a page the kiosk's
         # browser was somehow steered to could fire a reset or set a password
@@ -1060,6 +1309,10 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(n) or b"{}") if n else {}
         except Exception:
             return self._json(400, {"error": {"message": "Bad request."}})
+        if not isinstance(body, dict):
+            return self._json(400, {"error": {"message": "Bad request."}})
+        if not self._gate(path, body):
+            return
 
         if path == "/onboard/wifi/scan":
             return self._verb("wifi_scan")
@@ -1109,10 +1362,9 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             return self._verb("set_airport", {"code": body.get("code"),
                                               "atcMount": body.get("atcMount", "")})
         if path == "/onboard/password":
-            # Setting the admin password from the device's own screen. No
-            # claim code is required here: being able to reach this listener
-            # already means being on the device, which is the same physical
-            # proof the code exists to establish. Without this, a unit set up
+            # Setting the admin password from the device's own screen: with
+            # the screen's code on a new radar, and with the current password
+            # on one already set up (_gate). Without this, a unit set up
             # entirely on-screen would stay unclaimed forever and keep
             # showing its first-run instructions.
             pw = body.get("password") or ""
@@ -1171,37 +1423,30 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("Access-Control-Allow-Origin", self._allowed_origin())
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, " + ONBOARD_CLAIM_HEADER)
         self.end_headers()
         self.wfile.write(body)
 
     @staticmethod
     def _origin_ok(origin):
-        """Loopback origins only.
-
-        The listener is already bound to loopback, so this is a second layer
-        rather than the primary control -- it stops some other page loaded in
-        the kiosk browser from reading the claim code. Any localhost port is
-        accepted because the kiosk is served from :80 while diagnostics and
-        forwarded sessions are not.
-        """
-        if not origin:
-            return False
-        from urllib.parse import urlparse
-        try:
-            h = urlparse(origin).hostname
-        except Exception:
-            return False
-        return h in ("localhost", "127.0.0.1", "::1")
+        """The kiosk page's own origin only: http://localhost or
+        http://127.0.0.1 on port 80. Any loopback port used to do, which
+        included tar1090's pages and the public gateway's (SR-49); it stops
+        some other page in the kiosk browser from reading the claim code."""
+        return origin in ONBOARD_ORIGINS
 
     def _allowed_origin(self):
         o = self.headers.get("Origin")
         return o if self._origin_ok(o) else "http://localhost"
 
     def do_OPTIONS(self):
+        if not self._caller_ok():
+            return
         self._json(204, {})
 
     def do_GET(self):
+        if not self._caller_ok():
+            return
         p = self.path.split("?", 1)[0].rstrip("/")
         if p == "/onboard/ota":
             r = call_setupd("ota_status", {})
