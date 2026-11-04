@@ -56,8 +56,11 @@ for leftover in (False, True):
         log.chmod(0o644)
     src = d / "src"
     (src / "deploy").mkdir(parents=True)
-    # The installer stand-in prints the code, as the real one did at its end.
-    (src / "deploy" / "install-setup-server.sh").write_text(f"echo 'Claim code:'\necho {CODE}\n")
+    # The installer stand-in prints the code, as the real one did at its end,
+    # and makes a file without a mode, as many of its lines do.
+    made = d / "made-by-installer"
+    (src / "deploy" / "install-setup-server.sh").write_text(
+        f"echo 'Claim code:'\necho {CODE}\n: > '{made}'\n")
     script = (FIRSTBOOT.replace("/var/log/stratoscan-firstboot.log", str(log))
               .replace("/opt/stratoscan-src", str(src))
               .replace("/var/lib/stratoscan-firstboot.done", str(d / "done")))
@@ -69,6 +72,9 @@ for leftover in (False, True):
     check(p.returncode == 0 and log.exists(), f"first boot runs ({what})")
     check(log.exists() and mode(log) & 0o077 == 0,
           f"first boot: {what} is readable by root alone (mode {oct(mode(log)) if log.exists() else '-'})")
+    check(made.exists() and mode(made) == 0o644,
+          f"first boot: the installer runs under the usual umask, so what it makes is as by hand "
+          f"(mode {oct(mode(made)) if made.exists() else '-'})")
 
 # The installer's last lines, run as first boot runs them (output to a file)
 # and as a person runs them (at a terminal, which script(1) stands in for).
@@ -95,6 +101,15 @@ except (OSError, subprocess.SubprocessError):
 
 check(re.search(r"chmod 0600 /var/log/stratoscan-firstboot\.log", INSTALLER),
       "a re-run of the installer closes an old first-boot log")
+check(re.search(r"^umask 022$", INSTALLER, re.M), "the installer sets its own umask, whoever runs it")
+
+# setupd's start-up line goes to the journal, which the adm group (the
+# kiosk's user among them) and the maintainer's journalctl can read.
+SETUPD = (ROOT / "deploy" / "setupd.py").read_text()
+bad = [m.group(0) for m in re.finditer(r"print\([^\n]*\{code\}[^\n]*", SETUPD)]
+check(not bad, "setupd never prints the claim code to the journal (%s)" % bad)
+check("UNCLAIMED" in SETUPD and "claim-code" in SETUPD[SETUPD.index("UNCLAIMED;"):][:200] if "UNCLAIMED;" in SETUPD else False,
+      "it says where the code is instead")
 
 print("claim code log checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)

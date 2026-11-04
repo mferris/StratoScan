@@ -10,12 +10,14 @@
 set -e
 # The log is root's alone (security review 2026-11-03, SR-55): the
 # installer's output went into it under the default umask, readable by every
-# user, and with it the claim code. umask covers a new log; chmod one left
-# by an earlier attempt.
-umask 077
+# user, and with it the claim code. A new log is made under umask 077, and
+# chmod closes one left by an earlier attempt. Only the log: the installer
+# runs under the usual 022, as it does by hand, or files it makes without a
+# mode would be root's alone on factory units only.
 LOG=/var/log/stratoscan-firstboot.log
-touch "$LOG"
+( umask 077; : >>"$LOG" )
 chmod 0600 "$LOG"
+umask 022
 {
   echo "== StratoScan first boot: $(date -Is)"
   # Raspberry Pi OS keeps WiFi blocked until a country is set, which would
