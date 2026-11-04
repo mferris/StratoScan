@@ -195,12 +195,18 @@ export const MAX_UNITS_PER_PHONE = 20;
 // the guessing anyway.
 export const MAX_OFFERS_PER_NET = 8;
 export const MAX_OPEN_OFFERS = 500;
-// A pairing younger than this (SR-03): its radar's emergencies and tests are
-// not let past the ordinary hourly cap, and only YOUNG_PAIRING_URGENT_PER_HOUR
-// of them reach the phone in an hour. A minted radar paired through a link
-// sent to a stranger could otherwise send them 60 time-sensitive alerts an hour.
+// A pairing younger than this (SR-03): only YOUNG_PAIRING_URGENT_PER_HOUR of
+// its radar's emergencies and tests reach the phone in an hour, counted for
+// that pairing alone (pairings.urgent_*), so a busy older radar on the same
+// phone doesn't use them up. A minted radar paired through a link sent to a
+// stranger could otherwise send them 60 time-sensitive alerts an hour.
+// Open codes from settled radars (budget.js) are neither capped per network
+// nor pushed out by newer ones.
 export const YOUNG_PAIRING_S = 86400;
 export const YOUNG_PAIRING_URGENT_PER_HOUR = 5;
+// A pairing neither side has shown any sign of life in for this long is
+// forgotten by the daily cleanup (cleanup.js).
+export const PAIRING_IDLE_S = 90 * 86400;
 
 export function cleanPhoneName(v) {
   if (typeof v !== 'string') return null;

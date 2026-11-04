@@ -235,17 +235,19 @@ The relay is a small service run by the StratoScan maintainer on Cloudflare.
 
 | What | Kept for |
 |---|---|
-| Which phones are paired with which radar, and the name each phone gives itself (such as "Alex's iPhone"), which the radar's settings show | Until either side unpairs |
+| Which phones are paired with which radar, and the name each phone gives itself (such as "Alex's iPhone"), which the radar's settings show | Until either side unpairs, or neither has used the relay for 90 days |
 | A phone's push address and alert choices, and the push addresses of its Live Activities | Until it is no longer paired with any radar (a Live Activity's, until it ends) |
 | A phone's location, if it shares one with its radar for approach alerts: sealed so only that radar can read it | At most 6 hours |
 | Alerts waiting to be delivered | At most 48 hours (500 per radar) |
 | Health reports (only if turned on), and, for a radar in a fleet, its name and its public page's daily visit counts | About 30 days |
 | A one-time pairing code's fingerprint (never the code itself), and a fingerprint of the network block it came from (its /24 or /48, never the address), used only to limit how many codes one network can have open | Until used, or 10 minutes |
+| How many changes new radars and phones made today from one address: a fingerprint of the address's /64 (an IPv4 address itself) or IPv6 /48, mixed with the date, never the address, used only to cap what new keys can write in a day | Until the day is over |
 | Fingerprints of fleet invite codes and administrator links (never the codes) | Until replaced or the fleet is removed |
 | Aircraft positions, routes and registered owners fetched for radars and phones (the shared cache), never kept against whoever asked. An owner comes from public aircraft registries and, for a private aircraft, can be a person's name | Positions seconds, routes 6 hours, owners 7 days |
 
 The relay doesn't store IP addresses. To stop floods it counts requests per
-address, a minute at a time; the counts are never written down. Cloudflare,
+address, a minute at a time; those counts are never written down. The one
+daily count above is kept against a fingerprint, never the address. Cloudflare,
 which runs it, sees them
 when it delivers requests, under
 [Cloudflare's own privacy policy](https://www.cloudflare.com/privacypolicy/).

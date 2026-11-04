@@ -123,14 +123,49 @@ It never shows a location (health reports carry none), phones or alerts. An admi
 - Every request is rate-limited per address before anything else, more
   tightly for anything that can write and for the fleet pages; signed
   changes are also limited per signing key once the signature verifies,
-  before the database is touched (`src/ratelimit.js`). The route's own
-  checks run before the replay record is written. Bodies are read only up
-  to their limit, and only after the signing headers look right.
-- Open pairing codes are capped at 8 per network block and 500 in all (the
-  oldest go first).
+  before the database is touched (`src/ratelimit.js`). An IPv6 address
+  counts as its /64, and writes from IPv6 are limited per /48 as well.
+  Event batches are left out of the tighter per-address limit, so several
+  radars behind one address (a fleet site) aren't held up. The route's own
+  checks run before the replay record is written, and may read the
+  database: a request that would change nothing (a wrong pairing guess,
+  leaving a radar the phone isn't paired with) writes nothing at all.
+  Bodies are read only up to their limit, and only after the signing
+  headers look right.
+- What new keys write is also budgeted per address for the whole UTC day
+  (`src/budget.js`): 250 changes per IPv4 address or IPv6 /64, 1,000 per
+  /48. A key is new until its radar has two days of reports or a pairing a
+  day old, or its phone has such a pairing. See the quota arithmetic below.
+- Open pairing codes from new radars are capped at 8 per network block and
+  500 in all (the oldest go first). A settled radar's code is never pushed
+  out. A brand-new radar's code still can be, by a flood from many networks
+  in the minutes before its phone pairs; enrolment (#65) is the real fix.
+- Emergencies and tests from a pairing less than a day old are capped at 5
+  an hour, counted for that pairing alone.
 - A daily cron (`scheduled()` in `src/index.js`, `src/cleanup.js`) prunes
   replay records, expired codes, alerts past 48 hours, reports past 30
-  days, silent keys, and phones no longer paired with anything.
+  days, yesterday's budget counts, silent keys, box keys of radars with no
+  report or pairing that went a month without republishing, pairings
+  neither side has used in 90 days, and phones no longer paired with
+  anything.
+
+### D1 quota arithmetic
+
+The free plan allows 100,000 rows written a day, for everyone. A real
+radar writes about 3 rows per report (4 a day), and a few per alert; a
+household is a few hundred rows a day at most. Anyone can mint keys, so:
+
+- From one address in one minute: 60 writes (`RL_STRICT`), but over a day
+  only 250 changes from new keys (`src/budget.js`), about 750 rows with
+  their replay records and the budget's own counter. Using up the day's
+  writes takes about 130 IPv4 addresses or /64s, or 33 IPv6 /48s.
+- At most 500 radars that reported in the last 30 days are accepted
+  (`MAX_UNITS`), and a minted radar becomes settled (unbudgeted) only after
+  two days of reports or a day-old pairing, each through the budget.
+- What is left: a patient attacker with many addresses can still settle
+  hundreds of keys and then write as fast as the per-key limits allow
+  (one report per 10 minutes, 120 alerts an hour). Only enrolment (#65)
+  closes that; the dashboard rate-limiting rule below is the backstop.
 - Phones sign the same way with their own Ed25519 key (CryptoKit on iOS),
   named in `X-FR-Phone`. A phone can only pair by presenting the code on a
   unit's screen, and can only unpair itself. A unit can list and remove its
@@ -161,8 +196,8 @@ says how. `schema.sql` already includes every migration, so a new database
 needs none of them (and `db:init` fails on an older database until its
 migrations have run).
 
-`wrangler.example.toml` has the daily cleanup's cron trigger and the three
-rate-limit bindings (`RL_IP`, `RL_STRICT`, `RL_KEY`); copy both sections
+`wrangler.example.toml` has the daily cleanup's cron trigger and the four
+rate-limit bindings (`RL_IP`, `RL_STRICT`, `RL_KEY`, `RL_NET`); copy both sections
 into your `wrangler.toml`. Without the bindings the same limits are
 counted in memory per machine. Also add a rate-limiting rule for the
 relay's domain in the Cloudflare dashboard (for example 120 requests per

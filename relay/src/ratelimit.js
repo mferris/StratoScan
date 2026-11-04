@@ -31,10 +31,31 @@ export const RATES = {
   // Signed requests that change something, per signing key, checked after
   // the signature. A radar sends at most one event batch every 5 s.
   key:    { binding: 'RL_KEY', limit: 30, period: 60 },
+  // Requests that can write, per IPv6 /48 (one site, or one tunnel
+  // broker's customer): looser than `strict`, which counts each /64, so a
+  // host that rotates through a /48's 65,536 /64s is still held to this.
+  // IPv4 has no such bucket; a /24 is often many unrelated homes.
+  net:    { binding: 'RL_NET', limit: 300, period: 60 },
 };
 
 const local = new Map();          // which -> Map(key -> { start, n })
-const LOCAL_MAX_KEYS = 20_000;    // per limit; a flood of distinct keys starts the minute again
+const LOCAL_MAX_KEYS = 20_000;    // per limit
+
+// A full map makes room by dropping finished minutes first, then the
+// oldest, never by forgetting every count at once: a flood of distinct keys
+// used to start everyone's minute again, the one being limited included.
+// Each key is (re)inserted when its minute starts, so the Map's order is
+// oldest minute first.
+function makeRoom(m, now, periodMs) {
+  for (const [k, b] of m) {
+    if (m.size < LOCAL_MAX_KEYS) return;
+    if (now - b.start >= periodMs) m.delete(k);
+  }
+  for (const k of m.keys()) {
+    if (m.size < LOCAL_MAX_KEYS) return;
+    m.delete(k);
+  }
+}
 
 function localAllow(which, key) {
   const { limit, period } = RATES[which];
@@ -43,7 +64,8 @@ function localAllow(which, key) {
   const now = Date.now();
   let b = m.get(key);
   if (!b || now - b.start >= period * 1000) {
-    if (!b && m.size >= LOCAL_MAX_KEYS) m.clear();
+    if (b) m.delete(key);
+    else if (m.size >= LOCAL_MAX_KEYS) makeRoom(m, now, period * 1000);
     b = { start: now, n: 0 };
     m.set(key, b);
   }
@@ -65,6 +87,9 @@ export async function allow(env, which, key) {
 
 // For tests: forget every in-memory count.
 export function resetLocalLimits() { local.clear(); }
+// For tests: how many keys a limit holds in memory.
+export const localSize = which => (local.get(which) || { size: 0 }).size;
+export { LOCAL_MAX_KEYS };
 
 // The caller's address, as Cloudflare saw it. Absent only when the request
 // did not come through Cloudflare's edge (tests, local development): the
@@ -78,14 +103,38 @@ function expandV6(a) {
   return h;
 }
 
+const v4Parts = ip => {
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+  return v4 && v4.slice(1, 5).every(x => Number(x) <= 255) ? v4.slice(1, 5) : null;
+};
+
+function v6Groups(ip) {
+  if (!/^[0-9a-fA-F:]+$/.test(ip) || !ip.includes(':')) return null;
+  const g = expandV6(ip.toLowerCase());
+  if (g.length !== 8 || g.some(x => !/^[0-9a-f]{1,4}$/.test(x))) return null;
+  return g.map(x => x.replace(/^0+(?=.)/, ''));
+}
+
+// What the per-address limits count by: an IPv4 address itself, and for
+// IPv6 the /64 it is in. One host is routinely given a whole /64 (2^64
+// addresses), so counting each IPv6 address apart let one machine send
+// every request from a new address and never be limited at all.
+export function addressKey(ip) {
+  if (typeof ip !== 'string') return null;
+  const v4 = v4Parts(ip);
+  if (v4) return v4.join('.');
+  const g = v6Groups(ip);
+  return g ? `${g.slice(0, 4).join(':')}::/64` : null;
+}
+
+export const isV6 = ip => typeof ip === 'string' && !v4Parts(ip) && !!v6Groups(ip);
+
 // The network block an address is in: its /24 for IPv4, its /48 for IPv6
 // (one home or one small business, roughly). null when it isn't an address.
 export function netBlock(ip) {
   if (typeof ip !== 'string') return null;
-  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
-  if (v4) return v4.slice(1, 5).every(x => Number(x) <= 255) ? `${v4[1]}.${v4[2]}.${v4[3]}.0/24` : null;
-  if (!/^[0-9a-fA-F:]+$/.test(ip) || !ip.includes(':')) return null;
-  const g = expandV6(ip.toLowerCase());
-  if (g.length !== 8 || g.some(x => !/^[0-9a-f]{1,4}$/.test(x))) return null;
-  return `${g.slice(0, 3).map(x => x.replace(/^0+(?=.)/, '')).join(':')}::/48`;
+  const v4 = v4Parts(ip);
+  if (v4) return `${v4[0]}.${v4[1]}.${v4[2]}.0/24`;
+  const g = v6Groups(ip);
+  return g ? `${g.slice(0, 3).join(':')}::/48` : null;
 }
