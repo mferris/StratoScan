@@ -66,7 +66,9 @@ check(public_core_feed({"aircraft": "odd"}) == {"aircraft": "odd"} and public_co
 check(getattr(fg, "PUBLIC_REWRITES", {}).get(fg.CORE_FEED_PATH) is public_core_feed,
       "the public gateway serves /api/aircraft through public_core_feed")
 check(fg.CORE_FEED_PATH == "/api/aircraft" and fg.Handler._normalise("/API/aircraft/?x=1") == fg.CORE_FEED_PATH
-      and fg.Handler._normalise("/x/../api/%61ircraft") == fg.CORE_FEED_PATH, "in every spelling lighttpd would route there")
+      and fg.Handler._normalise("/api/%61ircraft") == fg.CORE_FEED_PATH, "in every spelling lighttpd would route there")
+check(fg.Handler._normalise("/x/../api/%61ircraft") is None and fg.Handler._normalise("/api//aircraft") is None,
+      "and a spelling with a dot or empty segment is refused outright (SR-01)")
 page = (root / "index.html").read_text()
 check("if (c.owner && pl)" in page, "the page shows an owner only when the feed carries one")
 check("feed.counts" not in page and ".counts.heard" not in page, "the page does not read the feed's counts")

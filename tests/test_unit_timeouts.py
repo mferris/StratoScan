@@ -415,7 +415,7 @@ def refused(req, timeout=None):
 
 pp.urllib.request.urlopen = refused
 h = pp.Handler.__new__(pp.Handler)
-h.path, h.wfile = "/photo/a1b2c3", io.BytesIO()
+h.path, h.wfile, h.headers = "/photo/a1b2c3", io.BytesIO(), {}
 h.send_response = h.send_header = lambda *a: None
 h.end_headers = lambda: None
 h.do_GET()

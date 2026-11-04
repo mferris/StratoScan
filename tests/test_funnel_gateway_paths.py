@@ -45,6 +45,15 @@ MUST_BLOCK = [
     # it survived: 45/45 green with the hole wide open.
     "/setupx", "/setup-ui.html", "/setup.html", "/setupapi",
     "/wakeup", "/wake-up", "/wakex", "/wake.json",
+    # Still encoded after lighttpd's one decode (security review 2026-11-03,
+    # SR-01): the gateway used to decode these four times, decide on "/" or
+    # "/x", and forward them as sent. Now refused outright. The full sweep of
+    # spellings, through a stand-in lighttpd, is test_funnel_gateway_decode_once.py.
+    "/tar1090/data/receiver.json/%252e%252e/%252e%252e/%252e%252e",
+    "/tar1090/data/aircraft.json/%252e%252e/%252e%252e/%252e%252e",
+    "/data/notable-people.json/%252e%252e/%252e%252e", "/setup/%252e%252e/x",
+    "/photo/%252e%252e/x?/photo/abcdef", "/wake/%252e%252e/alive", "/tts/%252e%252e/x?text=hi",
+    "/tar1090/data/stats.json/%252E%252e/%252e%252e/%252e%252e", "/setup/%25252e%25252e/x",
 ]
 
 # Paths that merely start with the same letters must NOT be caught. Each one
@@ -133,14 +142,19 @@ def main():
     MUST_ROUND = [
         "/tar1090/data/receiver.json", "/tar1090/data/receiver.json/",
         "/tar1090/data/receiver.json?x=1", "/tar1090/data/receiver.json#f",
-        "//tar1090/data/receiver.json", "/./tar1090/data/receiver.json",
-        "/tar1090/data/receiver.json?",
+        "/tar1090/data/receiver.json?", "/tar1090/data/receiver%2ejson",
     ]
     round_checks = 0
     for p in MUST_ROUND:
         round_checks += 1
         if not is_rounded_receiver_json(p):
             failures.append(f"NOT ROUNDED (coordinate leak): {p!r}")
+    # Spellings with an empty or dot segment are refused outright since SR-01
+    # (2026-11-03), not collapsed and guessed at: never served at all.
+    for p in ["//tar1090/data/receiver.json", "/./tar1090/data/receiver.json"]:
+        round_checks += 1
+        if fg.Handler._normalise(p) is not None:
+            failures.append(f"NOT REFUSED (ambiguous spelling): {p!r}")
 
     # A path that merely starts with the same characters is a different
     # resource and must not be caught -- there's no rounding logic to run for
@@ -155,12 +169,16 @@ def main():
     # the file must be served stripped. These variants all returned the raw
     # feed through the live tunnel before the fix.
     strip_checks = 0
-    for p in ["/tar1090/data/aircraft.json", "/tar1090//data/aircraft.json",
-              "/tar1090/data/./aircraft.json", "/tar1090/data/aircraft.json?x=1",
-              "/tar1090/data/aircraft%2Ejson", "/x/../tar1090/data/aircraft.json"]:
+    for p in ["/tar1090/data/aircraft.json", "/tar1090/data/aircraft.json?x=1",
+              "/tar1090/data/aircraft%2Ejson", "/TAR1090/data/aircraft.json"]:
         strip_checks += 1
         if fg.Handler._normalise(p) != fg.STRIPPED_PATH:
             failures.append(f"NOT STRIPPED (location leak): {p!r}")
+    for p in ["/tar1090//data/aircraft.json", "/tar1090/data/./aircraft.json",
+              "/x/../tar1090/data/aircraft.json"]:
+        strip_checks += 1
+        if fg.Handler._normalise(p) is not None:
+            failures.append(f"NOT REFUSED (ambiguous spelling): {p!r}")
     sample = {"now": 1, "aircraft": [{"hex": "abc123", "lat": 35.9, "lon": -78.7, "r_dst": 3.2, "r_dir": 41.0},
                                      {"hex": "def456", "alt_baro": 3000}]}
     out = fg.strip_antenna_relative(sample)

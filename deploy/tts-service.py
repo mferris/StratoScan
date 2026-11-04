@@ -88,6 +88,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        # funnel-gateway.py marks everything from the public tunnel. Speech is
+        # for the house only, so a marked request is refused here as well as
+        # in the gateway (security review 2026-11-03, SR-01).
+        if self.headers.get("X-FR-Public") is not None:
+            return self._send(404, b"not found\n", "text/plain")
         url = urllib.parse.urlparse(self.path)
         if url.path.rstrip("/") != "/tts":
             return self._send(404, b"not found\n", "text/plain")
