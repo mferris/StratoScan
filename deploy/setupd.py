@@ -1615,6 +1615,8 @@ def reset_full():
     with contextlib.suppress(Exception):
         run([SYSTEMCTL, "stop", *stores], timeout=60)
     for path in (os.path.join(STATE_DIR, "setup.json"),
+                 # the sign-in throttle's list of the owner's devices (setup-server.py)
+                 os.path.join(STATE_DIR, "throttle-good.json"),
                  CONFIG_JSON,
                  "/var/lib/stratoscan-sightings/sightings.json",
                  *APPROACH_FILES,

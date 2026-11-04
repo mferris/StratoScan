@@ -51,18 +51,27 @@ _sessions = {}          # sha256(token) -> {created, seen}
 _lock = threading.Lock()
 # Failed sign-ins, PER ADDRESS: one device on the LAN failing on purpose used
 # to keep the owner out for up to 15 minutes, because the count was global
-# (security review 2026-10-04, item 2). A slower global backstop remains, so
-# a crowd of addresses can't run through passwords together.
+# (security review 2026-10-04, item 2). A global backstop remains, so a crowd
+# of addresses can't run through passwords together: past FAIL_ALL_LIMIT it
+# backs off exponentially, like one address, and is forgotten only after a
+# quiet spell, so many addresses guess no faster than one would (2026-11-03).
 _fail = {}                      # address -> {"count", "until", "last"}
-_fail_all = {"count": 0, "until": 0.0, "window": 0.0}
+_fail_all = {"count": 0, "until": 0.0, "last": 0.0}
 FAIL_FORGET_S = 15 * 60         # an address's failures are forgotten after this quiet spell
-FAIL_ALL_WINDOW_S = 15 * 60
-FAIL_ALL_LIMIT = 50             # failures from every address together, per window...
-FAIL_ALL_DELAY_S = 30           # ...then everyone waits this long between tries
-_good = {}                      # address -> when it last signed in (kept in memory only)
+FAIL_MAX_DELAY_S = 900          # nothing ever waits longer than this
+FAIL_ALL_WINDOW_S = 15 * 60     # ...and the backstop's, after this quiet spell
+FAIL_ALL_LIMIT = 50             # failures from every address together...
+FAIL_ALL_DELAY_S = 30           # ...then a wait for everyone new, doubling per failure
+# Addresses that have signed in, exempt from the backstop, so a neighbour
+# keeping it up slows strangers, never the owner's own devices (SR-25). Kept
+# on disk too, so a restart (every OTA) doesn't reopen the lockout; the file
+# holds keyed hashes, not the addresses.
+_good = {}                      # hash of an address -> when it last signed in
+_good_state = {"loaded": False, "salt": None, "saved": 0.0}
+GOOD_FILE = "throttle-good.json"   # in STATE_DIR
 GOOD_FORGET_S = 30 * 86400      # ...exempt from the backstop for this long
 GOOD_MAX = 64
-
+GOOD_RESAVE_S = 86400           # a known address's time is written at most daily (card writes)
 
 # ------------------------------------------------------------------ state
 
@@ -143,9 +152,20 @@ def claim_code():
     """
     try:
         with open(CLAIM_FILE) as f:
-            return f.read().strip()
+            code = f.read().strip()
     except Exception:
         return None
+    if code and code.upper() not in _codes_seen:
+        _codes_seen.append(code.upper())
+        del _codes_seen[:-4]
+    return code
+
+
+# The codes this process has read. setupd makes a new one each time it starts
+# on a radar not yet set up, and the kiosk page keeps the one it was shown
+# until it next asks: a change sent with the previous code is stale, not a
+# guess, and is not counted against the screen.
+_codes_seen = []
 
 
 # ------------------------------------------------------------- setupd link
@@ -275,11 +295,16 @@ def proxy_uid():
 
 
 def _ip_or_none(s):
+    """An address in one spelling: an IPv4 client that reached an IPv6
+    socket (::ffff:a.b.c.d) is the same device as a.b.c.d."""
     import ipaddress
     try:
-        return str(ipaddress.ip_address((s or "").strip()))
+        ip = ipaddress.ip_address((s or "").strip())
     except ValueError:
         return None
+    if ip.version == 6 and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return str(ip)
 
 
 def client_key(peer, local, xff, uid=None):
@@ -291,6 +316,12 @@ def client_key(peer, local, xff, uid=None):
     as the LAST X-Forwarded-For entry (anything before it came from the
     client and is ignored), and it is believed only when the connection is
     lighttpd's own: any other local program could write the header itself.
+
+    An IPv6 device is keyed on its whole address, not its /64: on a home LAN
+    every device shares one /64, so that would be the one bucket again. One
+    device taking many addresses gains a few free tries per address, and no
+    more: the global backstop (note_failure) holds every address that has
+    never signed in to one address's pace.
     """
     host = peer[0] if peer else ""
     if not host.startswith("127.") and host != "::1":
@@ -343,17 +374,79 @@ def drop_sessions():
 def _forget_old_failures(now):
     for addr in [a for a, f in _fail.items() if now - f["last"] > FAIL_FORGET_S and now >= f["until"]]:
         del _fail[addr]
-    if now - _fail_all["window"] > FAIL_ALL_WINDOW_S:
-        _fail_all.update(count=0, window=now)
+    if now - _fail_all["last"] > FAIL_ALL_WINDOW_S and now >= _fail_all["until"]:
+        _fail_all.update(count=0, until=0.0)
 
 
-def throttled(addr):
+def _good_path():
+    return os.path.join(STATE_DIR, GOOD_FILE)
+
+
+def _load_good():
+    """The signed-in addresses kept on disk, once per process (under _lock)."""
+    if _good_state["loaded"]:
+        return
+    _good_state["loaded"] = True
+    try:
+        with open(_good_path()) as f:
+            d = json.load(f)
+        salt = bytes.fromhex(d["salt"])
+        keys = {str(k): float(v) for k, v in d.get("keys", {}).items()}
+    except Exception:
+        return
+    if len(salt) >= 16:
+        _good_state["salt"] = salt
+        for k, v in keys.items():
+            _good.setdefault(k, v)
+
+
+def _good_id(addr):
+    """A keyed hash of an address: the file must not be a list of the LAN's."""
+    if _good_state["salt"] is None:
+        _good_state["salt"] = os.urandom(16)
+    return hmac.new(_good_state["salt"], str(addr).encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def _save_good(now):
+    """Write the signed-in list (under _lock). A failure only costs the
+    exemption after the next restart, never a sign-in."""
+    try:
+        os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+        tmp = _good_path() + ".tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump({"salt": _good_state["salt"].hex(), "keys": _good}, f)
+        os.replace(tmp, _good_path())
+        _good_state["saved"] = now
+    except Exception:
+        pass
+
+
+def _is_good(addr, now):
+    t = _good.get(_good_id(addr))
+    return t is not None and now - t <= GOOD_FORGET_S
+
+
+def forget_good():
+    """After an erase: the next owner's devices start as strangers."""
+    with _lock:
+        _good.clear()
+        _good_state.update(loaded=True, salt=None)
+        try:
+            os.unlink(_good_path())
+        except OSError:
+            pass
+
+
+def throttled(addr, backstop=True):
     """Exponential backoff for this address, capped, always self-clearing.
 
     Never a permanent lockout: the owner forgetting their password must not
     require re-flashing the device. The global backstop does not hold up an
     address that has signed in before (GOOD_FORGET_S), so a neighbour with a
-    crowd of addresses slows strangers, never the owner's own devices.
+    crowd of addresses slows strangers, never the owner's own devices; and
+    backstop=False leaves it out (the radar's own screen, whose caller the
+    kernel has already named).
     """
     now = time.time()
     with _lock:
@@ -361,12 +454,13 @@ def throttled(addr):
         f = _fail.get(addr)
         if f and now < f["until"]:
             return True
-        if now < _fail_all["until"]:
-            return now - _good.get(addr, -GOOD_FORGET_S - 1) > GOOD_FORGET_S
+        if backstop and now < _fail_all["until"]:
+            _load_good()
+            return not _is_good(addr, now)
         return False
 
 
-def note_failure(addr):
+def note_failure(addr, backstop=True):
     now = time.time()
     with _lock:
         _forget_old_failures(now)
@@ -374,18 +468,32 @@ def note_failure(addr):
         f["count"] += 1
         f["last"] = now
         if f["count"] >= 5:
-            f["until"] = now + min(900, 2 ** (f["count"] - 5))
+            f["until"] = now + min(FAIL_MAX_DELAY_S, 2 ** min(f["count"] - 5, 20))
+        if not backstop:
+            return
         _fail_all["count"] += 1
-        if _fail_all["count"] >= FAIL_ALL_LIMIT:
-            _fail_all["until"] = now + FAIL_ALL_DELAY_S
+        _fail_all["last"] = now
+        over = _fail_all["count"] - FAIL_ALL_LIMIT
+        if over >= 0:
+            _fail_all["until"] = now + min(FAIL_MAX_DELAY_S, FAIL_ALL_DELAY_S * 2 ** min(over, 20))
 
 
-def note_success(addr):
+def note_success(addr, remember=True):
+    now = time.time()
     with _lock:
         _fail.pop(addr, None)
-        _good[addr] = time.time()
-        if len(_good) > GOOD_MAX:
+        if not remember:
+            return
+        _load_good()
+        k = _good_id(addr)
+        known = k in _good and now - _good[k] < GOOD_RESAVE_S
+        _good[k] = now
+        for old in [g for g, t in _good.items() if now - t > GOOD_FORGET_S]:
+            del _good[old]
+        while len(_good) > GOOD_MAX:
             del _good[min(_good, key=_good.get)]
+        if not known:
+            _save_good(now)
 
 
 # -------------------------------------------------------------------- HTTP
@@ -819,6 +927,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # The state file is gone; drop every session so the device is
             # genuinely unclaimed rather than still driveable by this tab.
             drop_sessions()
+            forget_good()
         else:
             st.pop("location", None)
             st.pop("airport", None)
@@ -1191,7 +1300,10 @@ ONBOARD_LISTEN = ("127.0.0.1", 8090)
 #     127.0.0.1), and a change only from the kiosk page's own origin;
 #   - on a radar not yet set up, a change carries the code on its screen;
 #   - on one that is, the changes that would hand it to someone else
-#     (ONBOARD_OWNER_ONLY) need its admin password, or a /setup session.
+#     (ONBOARD_OWNER_ONLY, and pairing a phone or removing one) need its
+#     admin password, or a /setup session.
+# Its throttle is the screen's own (PANEL_KEY): the kernel has already said
+# the caller is the kiosk, so the LAN's failures never hold it up.
 # Erasing stays open to the screen: it is the way back for a lost password,
 # and it leaves a blank radar with a new code, not a quiet foothold.
 ONBOARD_HOSTS = ("localhost", "127.0.0.1")
@@ -1200,6 +1312,9 @@ ONBOARD_CLAIM_HEADER = "X-StratoScan-Claim"
 ONBOARD_READS = {"/onboard/wifi/scan", "/onboard/remote/status"}   # POSTs that change nothing
 ONBOARD_OWNER_ONLY = {"/onboard/password", "/onboard/wifi/connect",
                       "/onboard/remote/start", "/onboard/remote/funnel"}
+# Pairing a phone gives it the radar's events for good, and removing one cuts
+# the owner's off; checking on a pairing or cancelling one changes neither.
+ONBOARD_OWNER_ONLY_PAIR = {"start", "remove"}
 PANEL_KEY = "panel"         # the throttle's key for passwords and codes typed on the screen
 
 
@@ -1250,35 +1365,44 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             if expected is None:
                 self._refuse(503, "no_claim_code", "The radar has not finished starting up.")
                 return False
-            if throttled(PANEL_KEY):
+            given = (self.headers.get(ONBOARD_CLAIM_HEADER) or "").strip().upper()
+            if not given:
+                self._refuse(403, "claim_required", "This screen's setup code was not sent. Try again in a moment.")
+                return False
+            if throttled(PANEL_KEY, backstop=False):
                 self._refuse(429, "too_many_attempts", "Too many tries. Wait a moment.")
                 return False
-            given = (self.headers.get(ONBOARD_CLAIM_HEADER) or "").strip().upper()
-            if given and hmac.compare_digest(given.encode(), expected.strip().upper().encode()):
+            if hmac.compare_digest(given.encode(), expected.strip().upper().encode()):
                 return True
-            if given:
-                note_failure(PANEL_KEY)
-            self._refuse(403, "claim_required", "This screen's setup code was not sent. Try again in a moment.")
+            if given not in _codes_seen:
+                note_failure(PANEL_KEY, backstop=False)
+            self._refuse(403, "claim_required", "This screen's setup code has changed. Try again in a moment.")
             return False
-        if path not in ONBOARD_OWNER_ONLY:
+        if not self._owner_only(path, body):
             return True
         auth = self.headers.get("Authorization") or ""
         if auth.startswith("Bearer ") and valid_session(auth[7:]):
             return True
-        if throttled(PANEL_KEY):
+        pw = body.get("adminPassword") if isinstance(body, dict) else None
+        if not (isinstance(pw, str) and pw):
+            self._refuse(401, "admin_required", "This change needs the radar's admin password.")
+            return False
+        if throttled(PANEL_KEY, backstop=False):
             self._refuse(429, "too_many_attempts", "Too many tries. Wait a moment.")
             return False
-        pw = body.get("adminPassword") if isinstance(body, dict) else None
-        if isinstance(pw, str) and pw and verify_password(pw, st.get("password")):
-            note_success(PANEL_KEY)
+        if verify_password(pw, st.get("password")):
+            note_success(PANEL_KEY, remember=False)
             return True
-        if isinstance(pw, str) and pw:
-            note_failure(PANEL_KEY)
-            msg = "That password was not accepted. If it is lost, Erase everything resets the radar."
-        else:
-            msg = "This change needs the radar's admin password."
-        self._refuse(401, "admin_required", msg)
+        note_failure(PANEL_KEY, backstop=False)
+        self._refuse(401, "admin_required",
+                     "That password was not accepted. If it is lost, Erase everything resets the radar.")
         return False
+
+    @staticmethod
+    def _owner_only(path, body):
+        if path in ONBOARD_OWNER_ONLY:
+            return True
+        return path == "/onboard/pair" and body.get("action") in ONBOARD_OWNER_ONLY_PAIR
 
     def do_POST(self):
         """Device-local setup actions, for the radar's own touchscreen.
@@ -1403,7 +1527,11 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             # the UI so a stray tap can never reach it.
             if body.get("confirm") != "ERASE":
                 return self._json(400, {"error": {"message": "Confirmation missing."}})
-            return self._verb("reset_full", timeout=180)
+            r = call_setupd("reset_full", timeout=180)
+            if r.get("ok"):
+                drop_sessions()
+                forget_good()
+            return self._relay(r)
         return self._json(404, {})
 
     def _verb(self, verb, params=None, timeout=120):
@@ -1431,8 +1559,13 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
     def _origin_ok(origin):
         """The kiosk page's own origin only: http://localhost or
         http://127.0.0.1 on port 80. Any loopback port used to do, which
-        included tar1090's pages and the public gateway's (SR-49); it stops
-        some other page in the kiosk browser from reading the claim code."""
+        included the public gateway's and other local services' pages; it
+        stops some other page in the kiosk browser from reading the claim
+        code. It does NOT separate tar1090, which lighttpd serves under
+        /tar1090/ on this same origin: what keeps a tar1090 page off this
+        listener is its Content-Security-Policy, whose connect-src leaves
+        :8090 out (88-stratoscan-tar1090.conf; tests/test_onboard_access.py
+        pins it)."""
         return origin in ONBOARD_ORIGINS
 
     def _allowed_origin(self):

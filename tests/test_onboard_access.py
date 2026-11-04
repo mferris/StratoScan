@@ -70,9 +70,15 @@ ss.actual_airport = lambda: None
 
 
 def reset_throttle():
+    """As after a restart: nothing in memory (and nothing signed in on disk)."""
     ss._fail.clear()
     getattr(ss, "_good", {}).clear()
-    ss._fail_all.update(count=0, until=0.0, window=ss.time.time())
+    if hasattr(ss, "_good_state"):
+        ss._good_state.update(loaded=False, salt=None)
+    good = os.path.join(tmp, getattr(ss, "GOOD_FILE", "-"))
+    if os.path.exists(good):
+        os.unlink(good)
+    ss._fail_all.update(count=0, until=0.0, window=ss.time.time(), last=ss.time.time())
 
 
 def set_state(st):
@@ -198,6 +204,100 @@ codes = [ask("POST", "/onboard/remote/start", {"hostname": "x", "adminPassword":
          for i in range(8)]
 check(codes[-1] == 429, "repeated wrong passwords at the panel are slowed down (%s)" % codes)
 reset_throttle()
+
+# ---- the LAN's failures never hold up the screen (SR-25 follow-up) -------------------
+# A neighbour failing /setup sign-ins from many addresses raises the global
+# backstop. The kernel has already said this caller is the kiosk, so the
+# screen keeps only its own count: a right code or password still works.
+def flood():
+    for i in range(ss.FAIL_ALL_LIMIT + 10):
+        ss.note_failure("192.168.1.%d" % (100 + i % 100))
+
+
+set_state({"schema": 1, "claimed": False})
+reset_throttle()
+flood()
+verbs.clear()
+code, _, _ = ask("POST", "/onboard/name", {"name": "Den"}, claim="K7Q2XM")
+check(code == 200, "unclaimed, after a LAN flood: the screen still names the radar with its code (%s)" % code)
+code, _, _ = ask("POST", "/onboard/wifi/connect", {"ssid": "x", "psk": "y"}, claim="K7Q2XM")
+check(code == 200 and "wifi_connect" in verbs, "and joins a network (%s)" % code)
+code, _, _ = ask("POST", "/onboard/password", {"password": "hunter2hunter2"}, claim="K7Q2XM")
+check(code == 200 and claimed(), "and claims it (%s)" % code)
+# Claimed, after a restart (nothing in memory), during a flood.
+reset_throttle()
+flood()
+code, _, _ = ask("POST", "/onboard/wifi/connect", {"ssid": "x", "psk": "y", "adminPassword": "hunter2hunter2"})
+check(code == 200, "claimed, after a restart and a LAN flood: the admin password at the screen still works (%s)" % code)
+check(ss._fail_all["count"] == ss.FAIL_ALL_LIMIT + 10,
+      "and the screen's tries don't add to the LAN's count")
+
+# A code from before setupd restarted is stale, not a guess.
+set_state({"schema": 1, "claimed": False})
+reset_throttle()
+getattr(ss, "_codes_seen", []).clear()
+code, _, _ = ask("GET", "/onboard", origin=None)          # the screen is shown K7Q2XM
+with open(ss.CLAIM_FILE, "w") as f:
+    f.write("P4W9RT\n")                                  # setupd restarted: a new code
+for _ in range(8):
+    code, body, _ = ask("POST", "/onboard/name", {"name": "Den"}, claim="K7Q2XM")
+check(code == 403 and body["error"]["code"] == "claim_required",
+      "a change with the previous code is refused, asking the page to fetch the new one (%s)" % code)
+code, _, _ = ask("POST", "/onboard/name", {"name": "Den"}, claim="P4W9RT")
+check(code == 200, "and is not counted as a guess: the new code works at once (%s)" % code)
+for i in range(8):
+    code, _, _ = ask("POST", "/onboard/name", {"name": "Den"}, claim="ZZZZ%02d" % i)
+check(code == 429, "real wrong codes are still slowed down (%s)" % code)
+with open(ss.CLAIM_FILE, "w") as f:
+    f.write("K7Q2XM\n")
+
+# ---- pairing a phone, on a claimed radar (SR-11 follow-up) ----------------------------
+set_state({"schema": 1, "claimed": True, "password": ss.hash_password("hunter2hunter2")})
+reset_throttle()
+verbs.clear()
+for action in ("start", "remove"):
+    code, body, _ = ask("POST", "/onboard/pair", {"action": action, "phone": "p1"})
+    check(code == 401 and body["error"]["code"] == "admin_required" and not verbs,
+          f"claimed: pair {action} without the admin password is refused")
+    code, _, _ = ask("POST", "/onboard/pair", {"action": action, "phone": "p1",
+                                               "adminPassword": "hunter2hunter2"})
+    check(code == 200 and verbs, f"claimed: pair {action} with it goes ahead")
+    verbs.clear()
+code, _, _ = ask("POST", "/onboard/pair", {"action": "cancel"})
+check(code == 200 and "pair_cancel" in verbs, "cancelling a pairing needs nothing")
+code, _, _ = ask("GET", "/onboard/pair", origin=None)
+check(code == 200, "nor does its status")
+
+# ---- an erase forgets which devices signed in -------------------------------------------
+reset_throttle()
+ss.note_success("192.168.1.23")
+code, _, _ = ask("POST", "/onboard/reset", {"confirm": "ERASE"})
+check(code == 200 and not os.path.exists(os.path.join(tmp, getattr(ss, "GOOD_FILE", "-"))) and not ss._good,
+      "Erase everything leaves the next owner's devices as strangers to the throttle")
+
+# ---- what keeps tar1090's pages off this listener (SR-49) ---------------------------------
+# tar1090 is served on the kiosk page's own origin, so the origin check can't
+# tell them apart; its CSP's connect-src, which leaves :8090 out, does.
+conf = (ROOT / "deploy" / "88-stratoscan-tar1090.conf").read_text()
+import re as _re
+m = _re.search(r"connect-src ([^;\"]*)", conf)
+check(bool(m) and "8090" not in m.group(1) and "*" not in m.group(1)
+      and "localhost:" not in m.group(1) and "127.0.0.1:" not in m.group(1),
+      "tar1090's connect-src can't reach the on-screen listener")
+src = (ROOT / "deploy" / "setup-server.py").read_text()
+check("tar1090's pages and the public gateway's (SR-49)" not in src,
+      "and the origin check no longer claims to be what does it")
+
+# ---- the kiosk page's side ------------------------------------------------------------
+page = (ROOT / "index.html").read_text()
+fn = page[page.index("async function deviceApi("):]
+fn = fn[:fn.index("\n}\n")]
+check("claim_required" in fn and "retried" in fn and "deviceApi('/onboard'" in fn,
+      "the page fetches the current code and retries once when its code is stale")
+tap = page[page.index("async function handlePhoneTap("):]
+tap = tap[:tap.index("\n}\n")]
+check("adminProof()" in tap and "action: 'start', ...proof" in tap and "action: 'remove', phone: unpair, ...proof" in tap,
+      "the page asks the admin password before pairing a phone or removing one")
 
 # ---- peer_uid reads the kernel's table ----------------------------------------------
 tbl = os.path.join(tmp, "tcp")
