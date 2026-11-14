@@ -127,6 +127,7 @@ phone ──(pairing, notification rules)──▶ relay
 | 2.29 | The app through the relay's shared cache: the network's aircraft and routes (#68) | A view away from home loads from the cache on the owner's iPhone |
 | 2.30 | The app opens with the radar's trails: the core feed keeps a short trail per aircraft (antenna and network) and serves it once to a screen that has just opened (#84) | On a real iPhone, an aircraft in range for ten minutes shows ten minutes of trail at once |
 | 2.31 | The app's network view through the radar when looking near home: the radar's `/network/around` first, then the relay, then adsb.lol; Sky view's "around me" stays off the radar (#88) | A view near RDU past the ring fills from the radar, at home and away; with the radar off, it falls back within seconds |
+| 2.32 | iPhone Duo: the app folded, unfolded and sideways; folding mid-use loses nothing (details, Compass), Sky view's labels land on both displays, and Sky view and the Compass measure from the screen they are on (#101) | On a real iPhone Duo, fold and unfold mid-use; Sky view on real aircraft folded and unfolded; nothing changed on other iPhones or the iPad |
 ## Phase 3: the wrist
 
 | # | Item | Done when |

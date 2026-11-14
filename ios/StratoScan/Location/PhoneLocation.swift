@@ -1,4 +1,5 @@
 import CoreLocation
+import UIKit
 import Foundation
 
 /// Where this phone is, for the radar's "You" marker and "centre on me"
@@ -51,7 +52,18 @@ final class PhoneLocation: NSObject, ObservableObject, CLLocationManagerDelegate
         manager.startUpdatingHeading()
     }
 
-    func stopHeading() { manager.stopUpdatingHeading() }
+    func stopHeading() {
+        manager.stopUpdatingHeading()
+        if #available(iOS 27.0, *) { manager.headingBody = nil }   // it holds the view
+    }
+
+    /// Measure the heading from the Compass's own screen (#101, BodyAnchor):
+    /// on iOS 27 "ahead" is then the top of that screen, which on the iPhone
+    /// Duo unfolded and turned sideways is no longer the top of the phone.
+    func measureHeading(from view: UIView) {
+        guard #available(iOS 27.0, *) else { return }
+        if manager.headingBody !== view { manager.headingBody = view }
+    }
 
     nonisolated func locationManager(_ m: CLLocationManager, didUpdateHeading h: CLHeading) {
         let isTrue = h.trueHeading >= 0

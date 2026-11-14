@@ -172,7 +172,24 @@ final class RadarViewModel: ObservableObject {
     @Published private(set) var viaAway = false
 
     /// The aircraft whose details are open, by hex.
-    @Published var selectedHex: String?
+    @Published var selectedHex: String? {
+        // a Compass belongs to the details it was opened from
+        didSet { if let c = compass, c.onRadar, c.hex != selectedHex { compass = nil } }
+    }
+    /// The Compass open over an aircraft's details: which aircraft, and
+    /// whether those are the radar screen's details (sheet or side panel) or
+    /// Sky view's. Kept here rather than in the details so it outlives them:
+    /// folding or unfolding an iPhone Duo moves the radar's details between a
+    /// sheet and the side panel, and the Compass comes back over the new ones
+    /// (#101). Which screen is kept too, so the side panel's details, still
+    /// there under Sky view, never open a Compass Sky view's details asked for.
+    struct CompassOpen: Equatable { let hex: String; let onRadar: Bool }
+    @Published var compass: CompassOpen?
+    /// Whether the details show in the side panel (true) or a sheet (false),
+    /// as ContentView last laid them out. Not published: it is read only when
+    /// a sheet closes, to tell a close the layout caused, which keeps what was
+    /// open, from one the owner made (#101).
+    var detailsInPanel = false
 
     /// How much each label says. Tapping a plane shows everything, so the
     /// default keeps the map readable.

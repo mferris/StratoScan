@@ -52,7 +52,9 @@ struct SkyView: View {
         GeometryReader { geo in
             ZStack {
                 Color.black
-                CameraPreview(session: camera.session)
+                CameraPreview(session: camera.session, device: camera.device)
+                // what motion is measured from, on iOS 27 (#101)
+                BodyAnchor { motion.measure(from: $0) }.allowsHitTesting(false)
                 // redrawn 30 times a second, so labels glide between reports
                 TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in
                     ZStack {
@@ -98,8 +100,11 @@ struct SkyView: View {
                 .allowsHitTesting(false)
                 if let d = sideways { sidewaysPanel(d, in: geo.size) }
             }
-            .ignoresSafeArea()
         }
+        // The size and middle the aircraft are projected with are the whole
+        // screen's, as the camera picture and the labels fill it (#101); the
+        // safe area's were a little off on every iPhone, and more sideways.
+        .ignoresSafeArea()
         .onAppear {
             location.start()
             motion.start()
@@ -108,6 +113,7 @@ struct SkyView: View {
         .onDisappear {
             motion.stop()
             camera.stop()
+            if viewModel.compass?.onRadar == false { viewModel.compass = nil }
             viewModel.nearMe = [:]
         }
         // Aircraft around the phone, every 5 s, while away and turned on.
@@ -242,7 +248,7 @@ struct SkyView: View {
     private func tracks(in size: CGSize) -> some View {
         Canvas { ctx, _ in
             guard let from = location.coordinate ?? viewModel.home, let m = motion.deviceFromWorld else { return }
-            let f = (size.height / 2) / tan(camera.fieldOfView * .pi / 360)
+            let f = SkyLens.focalLength(size: size, longFovDegrees: camera.fieldOfView)
             let now = Date()
             let near = shown.compactMap { p -> (PlaneState, Coordinate, Double)? in
                 guard let fix = Self.estimatedPosition(p, at: now) else { return nil }
@@ -298,7 +304,7 @@ struct SkyView: View {
             guard let from, let m = motion.deviceFromWorld else { return [] }
             // Portrait, aspect-fill: the screen's height spans the camera's
             // full wide field of view (its long side).
-            let f = (size.height / 2) / tan(camera.fieldOfView * .pi / 360)
+            let f = SkyLens.focalLength(size: size, longFovDegrees: camera.fieldOfView)
             let now = Date()
             return shown.compactMap { p in
                 guard let fix = Self.estimatedPosition(p, at: now) else { return nil }
@@ -554,7 +560,21 @@ final class SkyMotion: ObservableObject {
         }
     }
 
-    func stop() { manager.stopDeviceMotionUpdates() }
+    func stop() {
+        manager.stopDeviceMotionUpdates()
+        if #available(iOS 27.0, *) { manager.deviceMotionBody = nil }   // it holds the view
+    }
+
+    /// Measure from Sky view's own screen (#101, BodyAnchor): on iOS 27 the
+    /// axes then follow that screen, so the projection's "right" and "up the
+    /// screen" hold on the iPhone Duo unfolded and turned sideways too.
+    func measure(from view: UIView) {
+        guard #available(iOS 27.0, *) else { return }
+        guard manager.deviceMotionBody !== view else { return }
+        manager.deviceMotionBody = view
+        // Gravity settles the matrix's direction again in the new axes.
+        transposed = nil
+    }
 
     private func update(_ motion: CMDeviceMotion) {
         let r = motion.attitude.rotationMatrix
@@ -589,6 +609,9 @@ final class SkyMotion: ObservableObject {
 /// the app (AVCaptureSession addInput: exception, 2026-10-01).
 final class SkyCamera: ObservableObject {
     let session = AVCaptureSession()
+    /// The camera in use, once it is in the session: the preview needs it to
+    /// keep the picture upright (#101).
+    @MainActor @Published private(set) var device: AVCaptureDevice?
     /// The camera's field of view across its long side, in degrees.
     private(set) var fieldOfView: Double = 65
     private let queue = DispatchQueue(label: "stratoscan.sky.camera")
@@ -606,6 +629,7 @@ final class SkyCamera: ObservableObject {
                     session.addInput(input)
                     session.commitConfiguration()
                     fieldOfView = Double(cam.activeFormat.videoFieldOfView)
+                    Task { @MainActor in self.device = cam }
                 }
                 if !session.isRunning { session.startRunning() }
             }
@@ -619,10 +643,43 @@ final class SkyCamera: ObservableObject {
 
 private struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
+    let device: AVCaptureDevice?
 
+    /// Keeps the picture upright on the screen (#101). The app is portrait on
+    /// iPhones, but the iPhone Duo's inner display turns with the phone anyway,
+    /// and a picture left at portrait would lie on its side. Apple's rotation
+    /// coordinator knows how the camera sits against whichever display shows
+    /// the picture, so nothing here assumes a phone's shape; it reports every
+    /// turn, half turns included, which a change of size alone would miss.
     final class PreviewView: UIView {
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
         var preview: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+        private var coordinator: AVCaptureDevice.RotationCoordinator?
+        private var watch: NSKeyValueObservation?
+
+        func follow(_ device: AVCaptureDevice) {
+            guard coordinator?.device !== device else { return }
+            let c = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: preview)
+            coordinator = c
+            watch = c.observe(\.videoRotationAngleForHorizonLevelPreview, options: [.initial, .new]) { [weak self] _, _ in
+                DispatchQueue.main.async { self?.applyAngle() }
+            }
+        }
+
+        /// Also on layout: the preview's connection exists only once the
+        /// camera is in the session.
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            applyAngle()
+        }
+
+        private func applyAngle() {
+            guard let c = coordinator, let connection = preview.connection else { return }
+            let angle = c.videoRotationAngleForHorizonLevelPreview
+            if connection.isVideoRotationAngleSupported(angle), connection.videoRotationAngle != angle {
+                connection.videoRotationAngle = angle
+            }
+        }
     }
 
     func makeUIView(context: Context) -> PreviewView {
@@ -632,5 +689,7 @@ private struct CameraPreview: UIViewRepresentable {
         return v
     }
 
-    func updateUIView(_ uiView: PreviewView, context: Context) {}
+    func updateUIView(_ uiView: PreviewView, context: Context) {
+        if let device { uiView.follow(device) }
+    }
 }

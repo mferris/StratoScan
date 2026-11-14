@@ -11,7 +11,11 @@ struct AircraftDetailView: View {
     var findInSky: (() -> Void)? = nil
     @State private var photo: Photo?
     @State private var photoImage: UIImage?
-    @State private var showCompass = false
+    /// Where these details are shown, on the radar's screen: the side panel
+    /// (true) or a sheet (false); nil elsewhere (Sky view). See
+    /// RadarViewModel.detailsInPanel.
+    var inPanel: Bool? = nil
+    private var compassHere: RadarViewModel.CompassOpen { .init(hex: hex, onRadar: inPanel != nil) }
     @Environment(\.dismiss) private var dismiss
 
     struct Photo: Decodable {
@@ -46,8 +50,19 @@ struct AircraftDetailView: View {
         }
         .task(id: hex) { await loadPhoto() }
         .task { await NotablePeople.shared.load() }
-        .sheet(isPresented: $showCompass) {
+        .sheet(isPresented: Binding(
+            get: { viewModel.compass == compassHere },
+            set: { shown in
+                if shown { viewModel.compass = compassHere; return }
+                // Closed because a fold moved these details elsewhere: the
+                // Compass reopens there, so leave it open (#101).
+                if let inPanel, inPanel != viewModel.detailsInPanel { return }
+                if viewModel.compass == compassHere { viewModel.compass = nil }
+            })) {
             CompassView(viewModel: viewModel, location: location, hex: hex)
+                // dark inside too: over the side panel, which sets its own
+                // scheme, the text came out dark on the dark sheet (#101)
+                .environment(\.colorScheme, .dark)
                 .preferredColorScheme(.dark)
         }
     }
@@ -70,7 +85,7 @@ struct AircraftDetailView: View {
             }
             if p != nil {
                 // Point the phone at it (roadmap 3.4).
-                Button("Compass") { showCompass = true }
+                Button("Compass") { viewModel.compass = compassHere }
                     .buttonStyle(.bordered)
                 if let findInSky {
                     Button { findInSky() } label: { Label("Find in the sky", systemImage: "binoculars") }

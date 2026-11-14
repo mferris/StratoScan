@@ -88,6 +88,9 @@ struct SettingsView: View {
                 }
             }
         }
+        // one column even on a wide screen (the iPhone Duo unfolded, #101),
+        // never a sidebar with an empty page beside it
+        .navigationViewStyle(.stack)
         .fullScreenCover(isPresented: $scanning) {
             ZStack(alignment: .topTrailing) {
                 PairingScannerView { url in

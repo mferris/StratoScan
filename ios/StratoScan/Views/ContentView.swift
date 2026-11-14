@@ -42,6 +42,8 @@ struct ContentView: View {
             let full = CGSize(width: geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing,
                               height: geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom)
             let radius = Double(RadarView.radius(full))
+            // Read when a sheet closes (#101): see RadarViewModel.detailsInPanel.
+            let _ = (viewModel.detailsInPanel = isPad)
 
             ZStack {
                 pal.bg.ignoresSafeArea()
@@ -163,7 +165,7 @@ struct ContentView: View {
                             }
                             .padding([.top, .horizontal], 12)
                             AircraftDetailView(viewModel: viewModel, location: location, hex: hex,
-                                               findInSky: { findInSky(hex) })
+                                               findInSky: { findInSky(hex) }, inPanel: true)
                         }
                         .frame(width: panelW)
                         .background(Color(.systemBackground).opacity(0.96))
@@ -218,10 +220,16 @@ struct ContentView: View {
         }
         .sheet(item: Binding(
             // the iPad shows details in its side panel instead
-            get: { isPad ? nil : viewModel.selectedHex.map(SelectedAircraft.init) },
-            set: { viewModel.selectedHex = $0?.id })) { sel in
+            // (and not under Sky view: folding there waits till it closes)
+            get: { isPad || showSky ? nil : viewModel.selectedHex.map(SelectedAircraft.init) },
+            set: { sel in
+                // Closed because the iPhone Duo unfolded: the same aircraft
+                // stays selected and its details move to the side panel (#101).
+                if sel == nil && (viewModel.detailsInPanel || showSky) { return }
+                viewModel.selectedHex = sel?.id
+            })) { sel in
             AircraftDetailView(viewModel: viewModel, location: location, hex: sel.id,
-                               findInSky: { findInSky(sel.id) })
+                               findInSky: { findInSky(sel.id) }, inPanel: false)
                 .presentationDetents([.medium, .large])
                 .preferredColorScheme(pal.dark ? .dark : .light)
         }

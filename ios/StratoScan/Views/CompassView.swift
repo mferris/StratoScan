@@ -55,6 +55,8 @@ struct CompassView: View {
             }
             .padding(24)
         }
+        // what the heading is measured from, on iOS 27 (#101)
+        .background(BodyAnchor { location.measureHeading(from: $0) }.allowsHitTesting(false))
         .onAppear { location.startHeading() }
         .onDisappear { location.stopHeading() }
     }
