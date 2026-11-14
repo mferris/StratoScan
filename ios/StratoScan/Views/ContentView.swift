@@ -63,12 +63,16 @@ struct ContentView: View {
                 RadarView(viewModel: viewModel, uiScale: ui)
                     .ignoresSafeArea()
 
+                // The logo and the lines under it move with the buttons, and
+                // fit the room the buttons leave (ClearOfScreenCorners).
+                let corners = ClearOfScreenCorners.extra(geo.safeAreaInsets)
                 VStack {
-                    hud(geo.size.width)
+                    hud(geo.size.width - corners.leading - corners.trailing)
                     Spacer()
                     footer(geo)
                 }
                 .padding(.top, 8)
+                .clearOfScreenCorners()
 
                 if inWallMode && nightNow {
                     // After dark the wall radar dims, as the kiosk does (its
@@ -90,9 +94,10 @@ struct ContentView: View {
                         }
                         Spacer()
                     }
+                    .clearOfScreenCorners()
                 } else {
                 VStack {
-                    HStack {
+                    HStack(spacing: ContentView.barSpacing) {
                         // Labels: compact → full → off.
                         Button {
                             viewModel.labelMode = viewModel.labelMode.next
@@ -147,6 +152,7 @@ struct ContentView: View {
                     .font(.system(size: 17 * ui))
                     Spacer()
                 }
+                .clearOfScreenCorners()
                 }
 
                 // iPad: an aircraft's details beside the radar, not over it,
@@ -331,10 +337,15 @@ struct ContentView: View {
     /// overlaps the StratoScan icon"). So it is sized to the gap that is left
     /// on both sides of the centre, and on a phone so narrow that it would be
     /// too small to read, it moves below the buttons instead.
+    /// The gap between the top bar's buttons.
+    static let barSpacing: CGFloat = 8
+
     private func logoLayout(_ width: CGFloat) -> (height: CGFloat, below: Bool) {
         let full = 32 * ui
         if inWallMode { return (full, false) }        // no buttons up there
-        let group: CGFloat = 3 * 44                    // the wider group
+        // the wider group: three discs and the two gaps between them (the
+        // gaps were left out, and the binoculars covered the logo's edge)
+        let group: CGFloat = 3 * 44 + 2 * Self.barSpacing
         let gap = width - 2 * (group + 8)              // centred: clear of it on both sides
         let fit = gap / StratoScanLogo.widthPerHeight
         if fit >= full { return (full, false) }
@@ -534,4 +545,39 @@ extension View {
     func topBarIcon(_ pal: Palette, tint: Color? = nil) -> some View {
         modifier(TopBarIcon(pal: pal, tint: tint))
     }
+}
+
+/// Keeps a screen's top controls off its rounded corners (#101). Where
+/// something already sits across the top (an iPhone's Dynamic Island or
+/// notch, upright), the safe area puts the controls below it, well clear of
+/// the corners. Where nothing does, the safe area reaches the very top and
+/// sides: the iPhone Duo unfolded, with the status bar hidden, put the
+/// outermost buttons right into its large rounded corners, half out of
+/// sight (2026-11-14). There they come in from the top and the sides.
+struct ClearOfScreenCorners: ViewModifier {
+    /// Less than this across the top: nothing there, the corners are bare.
+    static let bare: CGFloat = 20
+    static let top: CGFloat = 12
+    static let side: CGFloat = 22
+    /// What the controls need beyond the safe area, given its insets.
+    static func extra(_ i: EdgeInsets) -> EdgeInsets {
+        guard i.top < bare else { return EdgeInsets() }
+        return EdgeInsets(top: max(0, top - i.top), leading: max(0, side - i.leading),
+                          bottom: 0, trailing: max(0, side - i.trailing))
+    }
+    func body(content: Content) -> some View {
+        // Inside the safe area, the reader is told the screen's insets
+        // (ignoring the safe area would tell it none), and the controls only
+        // need what the safe area doesn't already give.
+        GeometryReader { g in
+            content.padding(Self.extra(g.safeAreaInsets))
+                // a reader puts what it holds at its top left: the logo,
+                // narrower than the screen, stays centred
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+    }
+}
+
+extension View {
+    func clearOfScreenCorners() -> some View { modifier(ClearOfScreenCorners()) }
 }

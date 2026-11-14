@@ -15,6 +15,8 @@ whatever is open. So:
   whole screen, as the picture does;
 - an aircraft's details, and a Compass open over them, survive the change
   between the sheet (folded) and the side panel (unfolded);
+- Sky view's controls stay inside the safe area, so Close is never under
+  the camera or the status icons (the Duo's outer screen hid it);
 - Settings stays one column.
 
 The first part reads the app's Swift. Where swiftc is installed the second
@@ -77,8 +79,34 @@ check("AVCaptureDevice.RotationCoordinator(device: device, previewLayer: preview
 check("CameraPreview(session: camera.session, device: camera.device)" in sky and "self.device = cam" in sky,
       "the coordinator starts once the camera is in the session, when the preview has its connection")
 body = sky.split("var body: some View {")[1].split(".onAppear")[0]
-check(body.rstrip().endswith(".ignoresSafeArea()") and body.count(".ignoresSafeArea()") == 1,
+scene, _, controls = body.partition(".overlay {")
+controls, _, panel = controls.partition(".overlay {")
+check(scene.rstrip().endswith(".ignoresSafeArea()") and body.count(".ignoresSafeArea()") == 2,
       "the projection's size and middle are the whole screen's, as the picture and labels are")
+check('accessibilityLabel("Close Sky view")' in controls and "Back to the radar" in controls
+      and "Close Sky view" not in scene and "gnoringSafeArea" not in controls and "gnoresSafeArea" not in controls
+      and all(int(n) <= 8 for n in re.findall(r"\.padding\(\.top, (\d+)\)", controls)),
+      "Sky view's Close and Back sit inside the safe area, clear of the Duo's camera and status icons")
+check(".clearOfScreenCorners()" in controls,
+      "and come in from the screen's rounded corners where nothing sits across the top (the Duo unfolded)")
+check('controlLabel("Close", systemImage: "xmark")' in controls and ".fixedSize()" in controls
+      and "xmark.circle.fill" not in controls,
+      "Close is a word on a dark capsule, never squeezed, not a small bare cross")
+check("sidewaysPanel(d, in: geo.size)" in panel and "sidewaysPanel" not in scene + controls
+      and ".ignoresSafeArea()" in panel,
+      "the sideways details panel still covers the controls, at the whole screen's size")
+m = re.search(r"\.padding\(\.bottom, (\d+)\)", controls)
+check(m is not None and int(m.group(1)) >= 14 + 26 + 4, "the prompts end above Sky view's logo")
+corner = content.split("struct ClearOfScreenCorners")[1]
+check("guard i.top < bare else { return EdgeInsets() }" in corner and "static let bare: CGFloat = 20" in corner
+      and "max(0, side - i.leading)" in corner and "max(0, side - i.trailing)" in corner
+      and "ignoresSafeArea" not in corner,
+      "the corner margin is only added where the top is bare, and only what the safe area doesn't give")
+check(content.count(".clearOfScreenCorners()") == 3
+      and "hud(geo.size.width - corners.leading - corners.trailing)" in content,
+      "the radar's top bar, the wall mode's way out and the logo's column all keep off the corners")
+check("3 * 44 + 2 * Self.barSpacing" in content and "HStack(spacing: ContentView.barSpacing)" in content,
+      "the logo is fitted to the room the buttons and the gaps between them leave")
 check("if sel == nil && (viewModel.detailsInPanel || showSky) { return }" in content
       and "viewModel.detailsInPanel = isPad" in content,
       "unfolding with details open moves them to the side panel instead of closing them")

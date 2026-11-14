@@ -30,6 +30,7 @@ struct SkyView: View {
     /// shows the aircraft around the phone from adsb.lol when it is on.
     private var nearMeOn: Bool { AircraftFeedClient.showNetwork }
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var sizeClass
     /// Opened from an aircraft's details ("Find in the sky"): that aircraft
     /// is always shown -- label, track, or an arrow to it -- and picked out.
     var focus: String? = nil
@@ -62,24 +63,37 @@ struct SkyView: View {
                         labels(in: geo.size)
                     }
                 }
+            }
+        }
+        // The size and middle the aircraft are projected with are the whole
+        // screen's, as the camera picture and the labels fill it (#101); the
+        // safe area's were a little off on every iPhone, and more sideways.
+        .ignoresSafeArea()
+        // The controls stay inside the safe area (they used to sit a fixed
+        // 56 pt down, which on the iPhone Duo's outer screen put Close under
+        // the camera and status icons at the top right, with no way back).
+        .overlay {
+            ZStack {
                 VStack(spacing: 12) {
                     HStack(alignment: .top) {
                         if let focus, let back = backToRadar {
                             Button { back(focus) } label: {
-                                Label("Back to the radar", systemImage: "chevron.left")
-                                    .font(.callout.weight(.semibold))
-                                    .padding(.horizontal, 12).padding(.vertical, 8)
-                                    .background(.black.opacity(0.6), in: Capsule())
-                                    .foregroundStyle(.white)
+                                controlLabel("Back to the radar", systemImage: "chevron.left")
                             }
                         } else {
                             Text(status)
                                 .font(.caption).padding(8).background(.black.opacity(0.55)).clipShape(Capsule())
+                                .foregroundStyle(.white)        // on its dark capsule in a light theme too
                         }
                         Spacer()
+                        // A word on a dark capsule, as big as "Back to the
+                        // radar": a bare ✕ was small, and easy to lose on a
+                        // bright sky, unfolded most of all (2026-11-14).
                         Button { dismiss() } label: {
-                            Image(systemName: "xmark.circle.fill").font(.title).foregroundStyle(.white, .black.opacity(0.5))
+                            controlLabel("Close", systemImage: "xmark")
+                                .fixedSize()        // never squeezed to "C…" by what is beside it
                         }
+                        .layoutPriority(1)
                         .accessibilityLabel("Close Sky view")
                     }
                     Spacer()
@@ -91,20 +105,24 @@ struct SkyView: View {
                     if location.denied { settingsPrompt("Allow location to aim from where you stand.") }
                     if isAway && !nearMeOn { nearMePrompt }
                 }
-                .padding(.horizontal).padding(.top, 56).padding(.bottom, 40)
+                .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 48)    // above the logo (14 + 26 high)
+                .clearOfScreenCorners()
                 // whose view this is
                 VStack {
                     Spacer()
                     StratoScanLogo(height: 26, onLight: false).opacity(0.85).padding(.bottom, 14)
                 }
                 .allowsHitTesting(false)
-                if let d = sideways { sidewaysPanel(d, in: geo.size) }
             }
         }
-        // The size and middle the aircraft are projected with are the whole
-        // screen's, as the camera picture and the labels fill it (#101); the
-        // safe area's were a little off on every iPhone, and more sideways.
-        .ignoresSafeArea()
+        // Over the controls, as it always was, and the whole screen's size:
+        // its dimmed backdrop covers Close and the prompts, so a tap meant
+        // for the panel can't leave Sky view.
+        .overlay {
+            if let d = sideways {
+                GeometryReader { geo in sidewaysPanel(d, in: geo.size) }.ignoresSafeArea()
+            }
+        }
         .onAppear {
             location.start()
             motion.start()
@@ -196,6 +214,23 @@ struct SkyView: View {
         .frame(width: size.width - 24, height: size.height - 100)
         .position(x: size.width / 2, y: size.height / 2)
         .transition(.opacity)
+    }
+
+    /// Close and Back to the radar: white on a dark capsule with a light
+    /// edge, readable on any sky; larger on a wide screen (the iPhone Duo
+    /// unfolded, an iPad), where the old ✕ looked smallest.
+    private func controlLabel(_ title: String, systemImage: String) -> some View {
+        let wide = sizeClass == .regular
+        return Label(title, systemImage: systemImage)
+            .font((wide ? Font.title3 : .body).weight(.semibold))
+            .padding(.horizontal, wide ? 20 : 16).padding(.vertical, wide ? 13 : 10)
+            .background(.black.opacity(0.65), in: Capsule())
+            .overlay(Capsule().stroke(.white.opacity(0.4), lineWidth: 1))
+            .foregroundStyle(.white)
+            .contentShape(Capsule())
+            // already large; at the largest text sizes the two would not fit a phone's width
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+            .lineLimit(1).minimumScaleFactor(0.7)
     }
 
     private func settingsPrompt(_ text: String) -> some View {
