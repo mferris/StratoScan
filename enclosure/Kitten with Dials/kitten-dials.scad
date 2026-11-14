@@ -371,9 +371,20 @@ module shell_head_dials() difference() { shell_head(); col_wire_slot(); }
 // ============================================================
 // pictures
 // ============================================================
-c_head   = "#26262A";   // the kitten's head, black
-c_face   = "#2E2E33";
-c_collar = "#B5452F";   // a red leather collar
+// The colours, as the README's table gives them (2026-11-05): a white kitten
+// with black inner ears, foot pads, nails and tail, white toes and a white
+// tail tip, in a cherry red collar with white lettering and a white knob.
+// Only the pictures use these: the filaments are set in the slicer.
+c_white  = "#F1F0EB";
+c_black  = "#1C1C1C";
+c_head   = c_white;
+c_face   = c_white;
+c_collar = "#C8102E";
+// These two are first assigned in dial-controls.scad (black and cream, for the
+// retro), so OpenSCAD works them out up there, before c_white and c_black
+// exist: they have to be written out, or they come out with no colour at all.
+c_knob   = "#F1F0EB";
+c_label  = "#F1F0EB";
 c_glass  = "#08140E";
 
 module screen_picture_k() {
@@ -390,7 +401,7 @@ module collar_controls() {
     color(c_label) collar_text();
 }
 
-c_ear    = "#E59AA6";   // the inner ears' second colour, in the pictures
+c_ear    = c_black;     // the inner ears' second colour, in the pictures
 module head_dials_assembled(twotone = false) {
     if (twotone) { color(c_head) shell_head_dials(); color(c_ear) shell_inner_ears(); }
     else color(c_head) shell_dials();
@@ -406,12 +417,12 @@ module posed_k() {
     translate([0, 0, base_h + cradle_od/2 - 3]) rotate([90 - stand_angle, 0, 0]) translate([0, 0, -shell_depth/2]) children();
 }
 module in_stand_dials(twotone = false) {
-    color("#1c1c1c") part_stand_body();
-    color("#f4f4f2") part_stand_paws();
-    color("#1c1c1c") part_stand_toes();
-    color("#1c1c1c") part_stand_tail();
-    color("#f4f4f2") part_stand_tail_tip();
-    color("#f4f4f2") part_stand_claws();
+    color(c_white) part_stand_body();
+    color(c_black) part_stand_paws();
+    color(c_white) part_stand_toes();
+    color(c_black) part_stand_tail();
+    color(c_white) part_stand_tail_tip();
+    color(c_black) part_stand_claws();
     posed_k() head_dials_assembled(twotone);
 }
 
@@ -477,6 +488,13 @@ else if (dpart == "collar_print") translate([0, 0, col_z1]) rotate([180, 0, 0]) 
 else if (dpart == "collar_text_print") translate([0, 0, col_z1]) rotate([180, 0, 0]) collar_text();
 else if (dpart == "coupon_print") translate([0, 0, col_z1]) rotate([180, 0, 0]) test_lettering_collar();
 else if (dpart == "coupon_text_print") translate([0, 0, col_z1]) rotate([180, 0, 0]) test_lettering_collar_text();
+// the stand's six bodies, the kitten's own, for this case's colours' 3MF
+else if (dpart == "stand_body") part_stand_body();
+else if (dpart == "stand_paws") part_stand_paws();
+else if (dpart == "stand_toes") part_stand_toes();
+else if (dpart == "stand_claws") part_stand_claws();
+else if (dpart == "stand_tail") part_stand_tail();
+else if (dpart == "stand_tail_tip") part_stand_tail_tip();
 else if (dpart == "collar") collar();
 else if (dpart == "in_stand") in_stand_dials();
 // the head in two colours in its stand, for the pictures

@@ -9,7 +9,7 @@ three controls set in it (2026-11-01):
 | **STATUS** jewel lamp | on the collar's tag, under the chin | Green while the radar hears aircraft. Amber when the receiver has gone deaf. Red when the power supply is dipping. |
 | **RANGE** dial | right cheek | Turning it zooms the radar out or in; pinch still works. Pushing it returns to the home view. |
 
-![The kitten in its stand, wearing the collar, its inner ears lined in a second colour](images/three-quarter.png)
+![The white kitten in its stand, wearing a red collar, with black inner ears, feet and tail](images/three-quarter.png)
 
 Everything except the collar is the kitten case, unchanged:
 `kitten-dials.scad` includes
@@ -60,10 +60,37 @@ as something worn, not a plate on the face. The words for SCREEN and RANGE
 stand beside their controls, along the band, not under them: the knob's
 24 mm skirt fills the band's width. STATUS is on the tag, under the jewel.
 
+## The colours
+
+A white kitten with black ears, feet and tail, in a cherry red collar. For
+the head, stand, back plate and antenna cover, load **white as filament 1 and
+black as filament 2**. For the collar and its coupon, load **red as filament 1
+and white as filament 2**.
+
+| Part | Colour | File |
+|---|---|---|
+| Head | white | `kitten-head-dials-twotone.3mf` |
+| Inner ears | black | the same file |
+| Face (the trim, with its nose) | white | `front_trim_dials.stl` |
+| Collar | cherry red | `collar_twotone.3mf` |
+| Lettering and the two studs | white | the same file |
+| RANGE knob | white | `../Retro Radar with Dials/knob.stl` |
+| Stand's body, toes and tail tip | white | `kitten-stand-dials-white.3mf` |
+| Foot pads, nails and tail | black | the same file |
+| Back plate and antenna cover | white, black lettering | their `_twotone.3mf` files in the kitten folder |
+
+Red tints white easily, so print the collar's coupon first and look for pink
+in the lettering. Over the paw, the black tail lies on a black foot, so its
+white tip is what stands out. Plastic also passes some light: before trusting
+the collar, hold the lit lamp behind a printed one and see whether the tag
+glows.
+
 ## Print
 
 | File | What | Notes |
 |---|---|---|
+| `kitten-stand-dials-white.3mf` | The stand in this case's colours | The kitten's six stand bodies, unchanged, on filaments that make the table above. Replaces the kitten's `kitten-stand-twotone.3mf`, and prints as it does ([the kitten's README](../Kitten%20Enclosure%20Two-Tone/README.md)). |
+| `stand_body.stl`, `stand_paws.stl`, `stand_toes.stl`, `stand_claws.stl`, `stand_tail.stl`, `stand_tail_tip.stl` | The stand as separate meshes | The kitten folder's files, exported here unchanged so the 3MF's builder finds them. |
 | `kitten-head-dials-twotone.3mf` | The head with the wires' slot, its inner ears in a second colour | Replaces `kitten-head-twotone.3mf`: `shell_head_dials` on filament 1 and `shell_inner_ears` on filament 2. Print it as the [kitten's two-colour head](../Kitten%20Enclosure%20Two-Tone/README.md#the-inner-ears-in-a-second-colour); the slot, under the chin, is nowhere near the ears and changes nothing in how it prints. |
 | `shell_head_dials.stl`, `shell_inner_ears.stl` | The same as separate meshes | `shell_inner_ears.stl` is the kitten folder's file, exported here unchanged so the 3MF's builder finds it. |
 | `shell_dials.stl` | The head in one colour, with the slot | Replaces `shell.stl`. Print it the same way, in ASA. |
@@ -215,10 +242,10 @@ rest (check 13).
 `sh render-views.sh` remakes the pictures in `images/`.
 `python3 make-collar-3mf.py` remakes the two-colour files, after exporting
 `collar.stl`, `collar_text.stl`, `test_lettering_collar.stl`,
-`test_lettering_collar_text.stl`, `shell_head_dials.stl` and
-`shell_inner_ears.stl` as binary STL (`dpart` `collar_print`,
-`collar_text_print`, `coupon_print`, `coupon_text_print`,
-`shell_head_dials` and `shell_inner_ears`).
+`test_lettering_collar_text.stl`, `shell_head_dials.stl`,
+`shell_inner_ears.stl` and the six `stand_*.stl` as binary STL (`dpart`
+`collar_print`, `collar_text_print`, `coupon_print`, `coupon_text_print`,
+`shell_head_dials`, `shell_inner_ears`, and each stand file's own name).
 
 ## Still to measure or decide
 
@@ -232,6 +259,5 @@ rest (check 13).
 - **The button.** As for the Retro with Dials: 16 mm deep or less behind
   the panel, tags included, its nut no more than 16 mm across. The checks
   take it as a 16 mm round 16 mm deep, as the arc's do.
-- **The colour.** The pictures show a red collar on a black head with pink
-  inner ears. Any colours work; the collar, its lettering and the ears are
-  separate prints, so each can be any filament.
+- **The lamp through the collar.** Nothing has tested how much of the lamp's
+  light a red collar lets through ([The colours](#the-colours)).

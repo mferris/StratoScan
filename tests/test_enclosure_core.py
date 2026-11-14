@@ -39,8 +39,11 @@ VARIANTS = {
     # the kitten with the same three controls in a collar under its chin
     # (2026-11-01); its knob and lens are the Retro with Dials' files. Its
     # head comes in one colour or two, as the kitten's: the head less its
-    # ears' lining, with the slot, and the kitten's lining itself.
+    # ears' lining, with the slot, and the kitten's lining itself. Its stand's
+    # six bodies are the kitten's, for its own colours' 3MF (2026-11-05).
     "Kitten with Dials": ("kitten-dials.scad", KITTEN, {
+        "stand_body.stl": "stand_body", "stand_paws.stl": "stand_paws", "stand_toes.stl": "stand_toes",
+        "stand_claws.stl": "stand_claws", "stand_tail.stl": "stand_tail", "stand_tail_tip.stl": "stand_tail_tip",
         "shell_dials.stl": "shell_dials", "shell_head_dials.stl": "shell_head_dials",
         "shell_inner_ears.stl": "shell_inner_ears", "front_trim_dials.stl": "front_trim_dials",
         "collar.stl": "collar_print", "collar_text.stl": "collar_text_print",

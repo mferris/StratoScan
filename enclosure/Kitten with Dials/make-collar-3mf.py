@@ -34,6 +34,15 @@ PROJECTS = {
     # shell_inner_ears.stl is the kitten's lining, exported here unchanged
     "kitten-head-dials-twotone.3mf": ("kitten head with dials",
                                       [("shell_head_dials", 1), ("shell_inner_ears", 2)]),
+    # The stand in this case's colours (2026-11-05), white on filament 1 and
+    # black on 2: a white body, black foot pads with white toes and black
+    # nails, a black tail with a white tip. The kitten's stand 3MF can't do
+    # that by swapping its two filaments: it has the tail on the body's
+    # filament. The six STLs are the kitten folder's, unchanged, and the
+    # parts keep the order of its make-3mf.py.
+    "kitten-stand-dials-white.3mf": ("kitten stand, white", [
+        ("stand_body", 1), ("stand_toes", 1), ("stand_tail", 2),
+        ("stand_paws", 2), ("stand_tail_tip", 1), ("stand_claws", 2)]),
 }
 
 if __name__ == "__main__":
