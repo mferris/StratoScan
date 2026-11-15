@@ -206,7 +206,7 @@ the airline's web domain and nothing else; those services see your IP
 address, like any web request. Logos are the airlines' trademarks and none
 is shipped in the app or the repository.
 
-**Sky view away from home** (with the public network on). When the phone is more than 3 nm from the radar, Sky view shows the aircraft around the phone, asked for the same way as above (from the relay's shared copy when it has them, else from adsb.lol): your location rounded to about 5 km, every 5 seconds while Sky view is open.
+**Sky view away from home, or with no radar** (with the public network on). When the phone is more than 3 nm from the radar, or no radar is set up, Sky view shows the aircraft around the phone, asked for the same way as above (from the relay's shared copy when it has them, else from adsb.lol): your location rounded to about 5 km, every 5 seconds while Sky view is open.
 
 ### Setting up a radar from the app
 

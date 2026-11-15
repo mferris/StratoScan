@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
@@ -9,6 +10,10 @@ struct ContentView: View {
     @State private var skyFocus: String?
     @State private var showLogbook = false
     @State private var showSettings = false
+    @State private var showInvite = false
+    /// The invitation on the radar screen, put away by its owner. What a
+    /// radar adds stays in Settings and behind the logbook's button.
+    @AppStorage("stratoscan.inviteDismissed") private var inviteDismissed = false
     @EnvironmentObject private var pairing: PairingStore
     @EnvironmentObject private var setup: RadarSetup
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -69,6 +74,7 @@ struct ContentView: View {
                 VStack {
                     hud(geo.size.width - corners.leading - corners.trailing)
                     Spacer()
+                    if wantsInvite { invitePill }
                     footer(geo)
                 }
                 .padding(.top, 8)
@@ -198,7 +204,7 @@ struct ContentView: View {
         .onChange(of: viewModel.wantsLocation) { _, wants in if wants { location.start() } }
         .onChange(of: viewModel.centreOnMe) { _, on in if on { location.start() } }
         // back from the background: say "connecting" until the radar answers
-        .onChange(of: scenePhase) { _, phase in if phase == .active { viewModel.resume() } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { syncHasRadar(); viewModel.resume() } }
         .onReceive(location.$coordinate) { viewModel.me = $0 }
         // An alert was tapped (#61): its aircraft's details, and the view on it.
         .onReceive(PushManager.shared.$openHex) { hex in
@@ -240,7 +246,9 @@ struct ContentView: View {
                 .preferredColorScheme(pal.dark ? .dark : .light)
         }
         .sheet(isPresented: $showLogbook) {
-            LogbookView(noRadar: !viewModel.hasRadar).preferredColorScheme(pal.dark ? .dark : .light)
+            // the demo has a logbook of its own, radar or no radar
+            LogbookView(noRadar: !viewModel.hasRadar && !viewModel.isDemo, tryDemo: { viewModel.setDemo(true) })
+                .preferredColorScheme(pal.dark ? .dark : .light)
         }
         .fullScreenCover(isPresented: $showSky) {
             SkyView(viewModel: viewModel, location: location, focus: skyFocus, backToRadar: { hex in
@@ -249,7 +257,16 @@ struct ContentView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { viewModel.selectedHex = hex }
             })
         }
-        .sheet(isPresented: $showSettings) {
+        .sheet(isPresented: $showInvite) {
+            RadarInviteSheet(viewModel: viewModel, pair: {
+                showInvite = false
+                // after this sheet has gone: one presentation at a time
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { showSettings = true }
+            })
+            .preferredColorScheme(pal.dark ? .dark : .light)
+        }
+        // an address typed or cleared in Settings is a radar gained or lost
+        .sheet(isPresented: $showSettings, onDismiss: syncHasRadar) {
             SettingsView(viewModel: viewModel).environmentObject(pairing).environmentObject(PushManager.shared)
                 .environmentObject(setup)
         }
@@ -313,6 +330,43 @@ struct ContentView: View {
     /// A radar is paired, or one was typed in by address.
     private func syncHasRadar() {
         viewModel.hasRadar = !pairing.radars.isEmpty || APIConfig.baseURL != APIConfig.defaultBaseURL
+        // for the widgets, which can't see the pairing: "no radar yet" is
+        // not "your radar can't be reached"
+        if APIConfig.hasRadar != viewModel.hasRadar {
+            APIConfig.hasRadar = viewModel.hasRadar
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
+
+    /// Without a radar, on the sky around the phone, until its owner puts it
+    /// away: the way to what a radar adds. Not over the demo, wall mode, or
+    /// the words about location being off.
+    private var wantsInvite: Bool {
+        !viewModel.hasRadar && !viewModel.isDemo && !inviteDismissed && !inWallMode
+            && viewModel.networkOn && viewModel.hasViewCentre
+    }
+
+    private var invitePill: some View {
+        HStack(spacing: 0) {
+            Button { showInvite = true } label: {
+                Label("See what a StratoScan radar adds", systemImage: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 13 * ui, weight: .semibold))
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .padding(.leading, 14).padding(.vertical, 10)
+            }
+            Button { withAnimation { inviteDismissed = true } } label: {
+                Image(systemName: "xmark").font(.system(size: 11 * ui, weight: .bold))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+                    .foregroundColor(pal.textDim)
+            }
+            .accessibilityLabel("Don't show this again")
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(pal.mid)
+        .background(pal.bg.opacity(0.9), in: Capsule())
+        .overlay(Capsule().stroke(pal.mid.opacity(0.5), lineWidth: 1))
+        .padding(.horizontal, 16).padding(.bottom, 8)
     }
 
     /// Between sunset and sunrise at the radar (Sun), checked once a minute
@@ -437,10 +491,19 @@ struct ContentView: View {
         if viewModel.panCentre != nil, let br = viewModel.viewFromRadar, viewModel.hasRadar, br.range > 1 {
             return fromRadar(br, "LOOKING") + " · " + rangeText
         }
-        guard let home = viewModel.home else { return viewModel.hasRadar ? "LOCATING…" : "FINDING YOU…" }
-        let ns = home.lat >= 0 ? "N" : "S"
-        let ew = home.lon >= 0 ? "E" : "W"
-        return String(format: "%.4f°%@ %.4f°%@ · ", abs(home.lat), ns, abs(home.lon), ew) + rangeText
+        func place(_ c: Coordinate) -> String {
+            String(format: "%.4f°%@ %.4f°%@ · ", abs(c.lat), c.lat >= 0 ? "N" : "S", abs(c.lon), c.lon >= 0 ? "E" : "W") + rangeText
+        }
+        if !viewModel.hasRadar && !viewModel.isDemo {
+            // Without a radar the view rests on the phone. It said "FINDING
+            // YOU…" for as long as the centre-on-me button was untouched,
+            // with the map already on the phone (2026-11-15).
+            if let moved = viewModel.panCentre { return place(moved) }
+            if viewModel.me != nil { return "AROUND YOU · " + rangeText }
+            return location.denied ? "LOCATION IS OFF FOR STRATOSCAN IN SETTINGS" : "FINDING YOU…"
+        }
+        guard let home = viewModel.home else { return "LOCATING…" }
+        return place(home)
     }
 
     /// The line at the bottom: where the aircraft are coming from, or what
@@ -451,6 +514,39 @@ struct ContentView: View {
         let pad = geo.size.height * 0.06
         if viewModel.isDemo {
             Text("DEMO · TRAFFIC RECORDED NEAR RDU").font(mono).tracking(2).foregroundColor(pal.textDim).padding(.bottom, pad)
+        } else if viewModel.networkOn && !viewModel.hasViewCentre && (!viewModel.hasRadar || (!viewModel.connecting && !viewModel.connected)) {
+            // Without a radar (or with one that can't be reached and whose
+            // place was never read) the view is the sky around the phone, and
+            // this is before the phone's location: asked for and not here yet,
+            // or refused. Refused, the screen was an empty sea with no word of
+            // why (2026-11-15).
+            if location.denied {
+                VStack(spacing: 8) {
+                    Text("LOCATION IS OFF FOR STRATOSCAN").font(mono).tracking(2).foregroundColor(pal.bad)
+                    Text("The aircraft around you are found from where you are.")
+                        .font(.system(size: 11 * ui)).foregroundColor(pal.textDim).multilineTextAlignment(.center)
+                    Button("Turn it on in Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                    }
+                    .font(.system(size: 13 * ui, weight: .medium)).foregroundColor(pal.mid)
+                    Button("Or try the demo") { viewModel.setDemo(true) }
+                        .font(.system(size: 13 * ui, weight: .medium)).foregroundColor(pal.mid)
+                }
+                .padding(.horizontal, 24).padding(.bottom, pad)
+            } else {
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small).tint(pal.textDim)
+                        Text("FINDING YOU…").font(mono).tracking(2).foregroundColor(pal.textDim)
+                    }
+                    // a way on if the phone is never found (indoors, a simulator)
+                    if !viewModel.hasRadar {
+                        Button("Or try the demo") { viewModel.setDemo(true) }
+                            .font(.system(size: 13 * ui, weight: .medium)).foregroundColor(pal.mid)
+                    }
+                }
+                .padding(.bottom, pad)
+            }
         } else if viewModel.connecting {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small).tint(pal.textDim)
@@ -470,11 +566,18 @@ struct ContentView: View {
             .padding(.bottom, pad)
         } else if viewModel.source == .network {
             // the network's data, and its licence's credit
-            let why = !viewModel.hasRadar ? "AROUND YOU" : (!viewModel.connected && !viewModel.beyondRadar ? "YOUR RADAR IS OUT OF REACH" : "BEYOND YOUR RADAR")
+            // Said first, and in a word: whose aircraft these are. Without a
+            // radar they are the public network's, around the phone or
+            // wherever the map was moved to.
+            let why = !viewModel.hasRadar ? (viewModel.panCentre == nil ? "PUBLIC NETWORK · AROUND YOU" : "PUBLIC NETWORK")
+                : (!viewModel.connected && !viewModel.beyondRadar ? "YOUR RADAR IS OUT OF REACH" : "BEYOND YOUR RADAR")
             let covered = NetworkFeed.discs(around: viewModel.viewCentre, halfNm: viewModel.rangeNm).coveredNm
             let reach = covered < viewModel.rangeNm ? " · WITHIN \(Int(covered)) NM OF THE MIDDLE" : ""
+            // read as easily as the header's lines: in the dim colour it
+            // was lost on a dark map
             Text("\(why) · DATA © ADSB.LOL (ODbL)\(reach)")
-                .font(mono).tracking(2).foregroundColor(pal.textDim).multilineTextAlignment(.center)
+                .font(mono).tracking(2).foregroundColor(pal.text.opacity(0.85)).shadow(color: pal.bg.opacity(0.9), radius: 2)
+                .multilineTextAlignment(.center)
                 .padding(.horizontal, 24).padding(.bottom, pad)
         } else if viewModel.viaAway && !viewModel.isStale {
             Text("AWAY · VIA THE RADAR'S PUBLIC PAGE").font(mono).tracking(2).foregroundColor(pal.textDim).padding(.bottom, pad)
@@ -511,6 +614,10 @@ struct ContentView: View {
                 }
             }
             .padding(.bottom, pad)
+        } else if viewModel.source == .radar && !inWallMode {
+            // and with one, at home, they are its own: nothing said so
+            Text("YOUR RADAR · LIVE").font(mono).tracking(2)
+                .foregroundColor(pal.text.opacity(0.85)).shadow(color: pal.bg.opacity(0.9), radius: 2).padding(.bottom, pad)
         }
     }
 }

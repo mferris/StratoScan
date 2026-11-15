@@ -8,6 +8,8 @@ import SwiftUI
 struct LogbookView: View {
     /// Using the app without a radar (#41): there is no logbook to show.
     var noRadar = false
+    /// Turns the demo on, which has a logbook of its own.
+    var tryDemo: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var stats: LogStats?
     @State private var year: LogYear?
@@ -22,7 +24,9 @@ struct LogbookView: View {
                     } description: {
                         Text("A StratoScan radar keeps a logbook of everything it hears: records, regulars, what flies over and when. The aircraft around you come from a public network, which keeps no history for you.")
                     } actions: {
-                        Link("How to build a StratoScan radar", destination: URL(string: "https://github.com/mferris/StratoScan#readme")!)
+                        Link("How to build a StratoScan radar", destination: RadarInvite.buildURL)
+                        // says what it does: the whole app goes to the demo
+                        if let tryDemo { Button("Try the demo, with a sample logbook") { tryDemo() } }
                     }
                 } else if let stats {
                     List {
@@ -48,7 +52,8 @@ struct LogbookView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .refreshable { await load() }
         }
-        .task { if !noRadar { await load() } }
+        // again when the demo is turned on from here
+        .task(id: noRadar) { if !noRadar { await load() } }
     }
 
     // MARK: sections

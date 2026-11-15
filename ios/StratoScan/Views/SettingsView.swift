@@ -19,7 +19,19 @@ struct SettingsView: View {
                 }
                 .listRowBackground(Color.clear)
                 PairedRadarsSection(scanning: $scanning)
-                if !pairing.radars.isEmpty { AlertsSection() }
+                if !pairing.radars.isEmpty {
+                    AlertsSection()
+                } else {
+                    // Alerts used to be a section that wasn't there: nothing
+                    // said they exist, or what they need.
+                    Section {
+                        NavigationLink("What a radar adds") { RadarInvite(viewModel: viewModel, afterDemo: { dismiss() }) }
+                    } header: {
+                        Text("Alerts")
+                    } footer: {
+                        Text("Alerts come from a StratoScan radar. It watches the sky all day and tells this phone what flew by: emergencies, notable aircraft, low passes, and aircraft coming your way. Pair with one above to turn them on.")
+                    }
+                }
                 ThemeSection()
                 WeatherSection()
 

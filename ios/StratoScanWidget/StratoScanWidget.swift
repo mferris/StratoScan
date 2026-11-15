@@ -9,6 +9,8 @@ struct Entry: TimelineEntry {
     let date: Date
     let nearby: Nearby?
     let demo: Bool
+    /// A radar is set up in the app: without one, the words are an invitation, not a fault.
+    var hasRadar = true
 }
 
 struct Provider: TimelineProvider {
@@ -34,7 +36,7 @@ struct Provider: TimelineProvider {
     private func load() async -> Entry {
         // inside WidgetKit's time (#86): "not reachable" beats an old entry
         let nearby = await Nearby.load(within: Nearby.widgetSeconds)
-        return Entry(date: .now, nearby: nearby, demo: DemoFeed.isOn)
+        return Entry(date: .now, nearby: nearby, demo: DemoFeed.isOn, hasRadar: APIConfig.hasRadar || DemoFeed.isOn)
     }
 }
 
@@ -53,7 +55,7 @@ struct StratoScanWidgetView: View {
                 Text(n.planes.first.map { "✈︎ \(n.count) · \($0.callsign) \(String(format: "%.0f", $0.distanceNm * 1.15078)) mi \($0.direction)" }
                      ?? "✈︎ Quiet sky")
             } else {
-                Text("✈︎ Radar not reachable")
+                Text(entry.hasRadar ? "✈︎ Radar not reachable" : "✈︎ No radar yet")
             }
         case .accessoryCircular:
             VStack(spacing: 0) {
@@ -62,7 +64,7 @@ struct StratoScanWidgetView: View {
             }
         case .accessoryRectangular:
             VStack(alignment: .leading, spacing: 1) {
-                Text(entry.nearby.map { "✈︎ \($0.count) aircraft" } ?? "✈︎ Radar not reachable").font(.headline)
+                Text(entry.nearby.map { "✈︎ \($0.count) aircraft" } ?? (entry.hasRadar ? "✈︎ Radar not reachable" : "✈︎ No radar yet")).font(.headline)
                 if let p = entry.nearby?.planes.first {
                     Text(line(p)).font(.caption)
                 }
@@ -94,8 +96,15 @@ struct StratoScanWidgetView: View {
                 }
                 if n.planes.isEmpty { Text("Quiet sky").font(.caption).foregroundColor(.secondary) }
             } else {
-                Text("Radar not reachable").font(.callout)
-                Text("Works on your home WiFi").font(.caption).foregroundColor(.secondary)
+                // No radar is not a radar out of reach (2026-11-15).
+                if entry.hasRadar {
+                    Text("Radar not reachable").font(.callout)
+                    Text("Works on your home WiFi").font(.caption).foregroundColor(.secondary)
+                } else {
+                    Text("No radar yet").font(.callout)
+                    Text("Open the app for the aircraft around you.")
+                        .font(.caption).foregroundColor(.secondary)
+                }
             }
             Spacer(minLength: 0)
         }

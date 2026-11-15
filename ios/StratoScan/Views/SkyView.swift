@@ -153,7 +153,14 @@ struct SkyView: View {
         guard let me = location.coordinate, let home = viewModel.home else { return nil }
         return Geo.haversineBearingRange(lat1: home.lat, lon1: home.lon, lat2: me.lat, lon2: me.lon).range
     }
-    private var isAway: Bool { (distanceFromRadar ?? 0) > Self.awayNm }
+    /// Away from the radar, or with no radar at all: the aircraft around the
+    /// phone are then the public network's. Without a radar there was no
+    /// distance to be away by, so Sky view opened on an empty sky
+    /// (2026-11-15). Not in the demo, whose aircraft are a recording.
+    private var isAway: Bool {
+        if viewModel.isDemo { return false }
+        return !viewModel.hasRadar || (distanceFromRadar ?? 0) > Self.awayNm
+    }
     /// Restarts the near-me polling when it is switched, or the phone moves
     /// to a different ~5 km square.
     private var nearMeKey: String {
@@ -179,7 +186,10 @@ struct SkyView: View {
 
     private var status: String {
         if !motion.available { return "This phone can't tell which way it's pointing." }
-        if location.coordinate == nil { return "Aimed from the radar." }
+        if location.coordinate == nil {
+            if viewModel.hasRadar { return "Aimed from the radar." }
+            return location.denied ? "Location is off for StratoScan." : "Finding where you are…"
+        }
         if isAway && nearMeOn { return "Aircraft around you, from adsb.lol." }
         return "Point the phone at the sky."
     }
@@ -247,7 +257,9 @@ struct SkyView: View {
 
     private var nearMePrompt: some View {
         VStack(spacing: 6) {
-            Text("You're away from your radar. Turn on the public network in Settings to see the aircraft around you here.")
+            Text(viewModel.hasRadar
+                 ? "You're away from your radar. Turn on the public network in Settings to see the aircraft around you here."
+                 : "Turn on the public network in Settings to see the aircraft around you here.")
                 .font(.caption).multilineTextAlignment(.center)
         }
         .padding(10).background(.black.opacity(0.55)).clipShape(RoundedRectangle(cornerRadius: 10))

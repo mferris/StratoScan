@@ -218,8 +218,8 @@ scanning a QR code on its screen:
 - **Compass** — turn and the needle points at an aircraft, with which way it's
   coming from and going
 - **Sky view** — hold the phone up and each aircraft's label sits where it is
-  in the sky; tap one for its details. Away from home it shows the
-  aircraft around you (with the public network on; see [privacy](docs/privacy.md))
+  in the sky; tap one for its details. Away from home, or with no radar, it
+  shows the aircraft around you (with the public network on; see [privacy](docs/privacy.md))
 - **Logbook** — what your radar has seen: today, all-time totals, records
   (farthest, closest, highest, fastest), what flies over, when, and the
   regulars
@@ -234,7 +234,8 @@ scanning a QR code on its screen:
 - **iPad** — a big radar with details alongside, and a wall mode that dims
   at night
 - **No radar yet?** — see live aircraft around you from the public
-  adsb.lol network, or play the demo
+  adsb.lol network, on the map and in Sky view, or play the demo; the app
+  says what a radar adds (its own antenna, alerts, the logbook, widgets)
 - **Home and away** — on your WiFi the app talks to the radar directly; away
   from home it switches to the radar's public HTTPS page by itself. The away
   address is learned from the radar

@@ -65,8 +65,18 @@ final class RadarViewModel: ObservableObject {
     var viewCentre: Coordinate {
         if let h = followHex, let p = planes[h] ?? viewNetwork[h], let c = p.displayCoordinate { return c }
         if centreOnMe, let m = me { return m }
-        return panCentre ?? home ?? me ?? Coordinate(lat: 0, lon: 0)
+        return panCentre ?? radarPlace ?? me ?? Coordinate(lat: 0, lon: 0)
     }
+    /// The radar's place, while there is a radar (or the demo's recording).
+    /// A radar unpaired a moment ago leaves its place behind: without this
+    /// the view stayed there and called it "around you" (review, 2026-11-15).
+    private var radarPlace: Coordinate? { (hasRadar || isDemo) ? home : nil }
+
+    /// The view has somewhere to be. Without a radar it has none until the
+    /// phone's location arrives or the owner moves the map: until then its
+    /// centre was 0°N 0°E, in the sea off Africa, and the public network was
+    /// asked for the aircraft there (2026-11-15).
+    var hasViewCentre: Bool { panCentre != nil || radarPlace != nil || me != nil }
 
     /// Where a plane is relative to the middle of the view, in nm east and
     /// north on the view's own flat map (Geo.localOffset).
@@ -416,7 +426,7 @@ final class RadarViewModel: ObservableObject {
     }
 
     private var networkTask: Task<Void, Never>?
-    private var wantsViewNetwork: Bool { networkOn && !DemoFeed.isOn && (!hasRadar || beyondRadar || !connected) }
+    private var wantsViewNetwork: Bool { networkOn && !DemoFeed.isOn && hasViewCentre && (!hasRadar || beyondRadar || !connected) }
     /// The radar, for a view of the network near it (#88, 2026-10-26): its
     /// place while its polling answers, so that view comes from the copy
     /// the radar keeps for its own screen. Not for a view that would say

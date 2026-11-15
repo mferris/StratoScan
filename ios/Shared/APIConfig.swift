@@ -32,6 +32,16 @@ enum APIConfig {
         return d
     }()
 
+    /// A radar is paired or its address typed in, as the app last knew: for
+    /// the widgets, which can't see the pairing. Taken as yes until the app
+    /// has said, so a widget on a phone whose app hasn't been opened since
+    /// this was added reads as it did.
+    private static let hasRadarKey = "stratoscan.hasRadar"
+    static var hasRadar: Bool {
+        get { shared.object(forKey: hasRadarKey) as? Bool ?? true }
+        set { shared.set(newValue, forKey: hasRadarKey) }
+    }
+
     /// The home address.
     static var baseURL: String {
         get { shared.string(forKey: homeKey) ?? defaultBaseURL }
