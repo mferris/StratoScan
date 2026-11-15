@@ -132,7 +132,7 @@ final class PairingStore: ObservableObject {
         busy = true
         defer { busy = false }
         do {
-            try await relay.pair(unit: link.unit, secret: link.secret, name: UIDevice.current.name)
+            try await relay.pair(unit: link.unit, secret: link.secret, name: PhoneName.current)
             let name = link.name ?? "Radar \(radars.count + 1)"
             if let i = radars.firstIndex(where: { $0.unit == link.unit }) {
                 radars[i].host = link.host ?? radars[i].host

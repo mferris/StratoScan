@@ -9,6 +9,22 @@ struct PairedRadarsSection: View {
     /// list redraws its rows (Settings follows the live radar), and a sheet
     /// attached to a row goes with it.
     @Binding var scanning: Bool
+    /// What this phone's radars call it; empty is its model (PhoneName).
+    @State private var phoneName = PhoneName.custom ?? ""
+    /// The name in use, kept here so the words under the section follow a save.
+    @State private var listedAs = PhoneName.current
+    @State private var named = PhoneName.custom != nil
+
+    /// Kept, and its radars told, when it has changed.
+    private func saveName() {
+        let typed = PhoneName.clean(phoneName)
+        guard typed != PhoneName.custom else { return }
+        PhoneName.custom = typed
+        phoneName = typed ?? ""
+        listedAs = PhoneName.current
+        named = typed != nil
+        if !pairing.radars.isEmpty { PushManager.shared.nameChanged() }
+    }
 
     var body: some View {
         Section {
@@ -42,6 +58,16 @@ struct PairedRadarsSection: View {
             if PairingScannerView.isAvailable {
                 Button("Scan a radar's code") { scanning = true }
             }
+            // A radar lists its paired phones by name, and iOS gives every
+            // app the same one, "iPhone": this is how two are told apart.
+            LabeledContent("This phone") {
+                TextField(PhoneName.model, text: $phoneName)
+                    .multilineTextAlignment(.trailing)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .onSubmit { saveName() }
+            }
+            .onDisappear { saveName() }
             if pairing.busy { ProgressView() }
             // Said here while Settings is open; ContentView says it otherwise.
             if let msg = pairing.message {
@@ -51,8 +77,9 @@ struct PairedRadarsSection: View {
             Text("Paired radars")
         } footer: {
             Text(pairing.radars.isEmpty
-                 ? "A new radar: scan the code on its first screen to set it up from here. One already set up: on the radar, open Settings › Phone & Watch › Pair a phone, and scan that code."
-                 : "Alerts say what flew by and roughly how far away, never where the radar is.")
+                 ? "A new radar: scan the code on its first screen to set it up from here. One already set up: on the radar, open Settings › Phone & Watch › Pair a phone, and scan that code. A radar will list this phone as \(listedAs); type another name above to change it."
+                 : "Alerts say what flew by and roughly how far away, never where the radar is. A radar lists this phone as \(listedAs); "
+                   + (named ? "clear the name above to use its model." : "type another name above if you have two of the same model."))
         }
         .task {
             await pairing.refresh()

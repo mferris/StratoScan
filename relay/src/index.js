@@ -375,7 +375,14 @@ async function phoneRegister(request, env) {
   const token = payload.token;
   const kinds = cleanKinds(payload.kinds);
   const la = payload.la_start_token;
+  // What its radars call this phone. iOS gives every app the same device
+  // name, "iPhone", so a radar with two phones listed two the same; the app
+  // now sends the model, or a name its owner typed, at pairing and here, so
+  // a phone paired before that is renamed without pairing again
+  // (2026-11-15). Only this phone's own pairings, and only a real change.
+  const name = cleanPhoneName(payload.name);
   await db.batch([
+    ...(name ? [db.prepare('UPDATE pairings SET name = ?1 WHERE phone = ?2 AND (name IS NULL OR name != ?1)').bind(name, auth.unit)] : []),
     db.prepare(
       `INSERT INTO phones (id, token, env, kinds, updated) VALUES (?1, ?2, ?3, ?4, ?5)
        ON CONFLICT(id) DO UPDATE SET token = ?2, env = ?3, kinds = ?4, updated = ?5`
@@ -387,6 +394,21 @@ async function phoneRegister(request, env) {
        : db.prepare('DELETE FROM live_activity_phones WHERE phone = ?').bind(auth.unit),
   ]);
   return json(200, { ok: true, kinds, push: apns.configured(env) });
+}
+
+// A paired phone's name, for one that has no push token to register with
+// (notifications off): its own pairings only, as phoneRegister does.
+async function phoneName(request, env) {
+  const db = env.DB;
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, async (p, a) => {
+    if (!cleanPhoneName(p.name)) return json(400, { error: 'expected a name' });
+    const paired = await db.prepare('SELECT 1 FROM pairings WHERE phone = ?').bind(a.unit).first();
+    return paired ? null : json(403, { error: 'pair with a radar first' });
+  }, phoneBudget);
+  if (error) return error;
+  const name = cleanPhoneName(payload.name);
+  await db.prepare('UPDATE pairings SET name = ?1 WHERE phone = ?2 AND (name IS NULL OR name != ?1)').bind(name, auth.unit).run();
+  return json(200, { ok: true, name });
 }
 
 // The phone reports the update token of a Live Activity it just started, so
@@ -969,6 +991,7 @@ async function route(request, env, ctx) {
   if (pathname === '/v1/phone/units' && m === 'GET') return phoneUnits(request, env);
   if (pathname === '/v1/phone/unpair' && m === 'POST') return phoneUnpair(request, env);
   if (pathname === '/v1/phone/register' && m === 'POST') return phoneRegister(request, env);
+  if (pathname === '/v1/phone/name' && m === 'POST') return phoneName(request, env);
   if (pathname === '/v1/phone/test' && m === 'POST') return phoneTest(request, env);
   if (pathname === '/v1/phone/activity' && m === 'POST') return phoneActivity(request, env, ctx);
   if (pathname === '/v1/unit/boxkey' && m === 'POST') return unitBoxKey(request, env);

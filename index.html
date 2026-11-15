@@ -1221,13 +1221,16 @@
     gap: 10px;
     background: rgba(0,0,0,0.97);
     z-index: 70;
-    padding: 6%;
+    padding: 0;
     font-family: 'JetBrains Mono', monospace;
   }
   #kbd.show { display: flex; }
+  /* Room for two lines of typing from the start: grown one line at a time,
+     the block (centred) moved every key down under the finger at the 50th
+     character of an address or a long WiFi password. */
   #kbdField {
-    width: 86%;
-    min-height: 84px;
+    width: 80%;
+    min-height: 122px;
     padding: 12px 18px;
     border: 2px solid var(--mid);
     border-radius: 8px;
@@ -1259,21 +1262,46 @@
      class it used was never defined, so it rendered as a stray key. The
      result was one wrapped blob in which the bottom row could vanish
      entirely. Rows are now real containers. */
-  #kbdKeys { display: flex; flex-direction: column; gap: 7px; align-items: center; width: 100%; }
+  /* Laid out as a phone's keyboard is (2026-11-15): every row the same
+     width, the third flanked by shift and delete, a wide space bar. It was
+     rows of 10, 9 and 7 small keys centred under each other, so it tapered
+     toward the bottom and took barely half the screen's width. The block is
+     80% of the round panel's width, which leaves it 60% of the height
+     inside the circle; it takes about 42%. Keys grow from units (--u), so a
+     row's keys always fill it. */
+  #kbdBar { display: flex; justify-content: space-between; width: 80%; min-height: 40px; }
+  #kbdBar div {
+    padding: 9px 20px;
+    border: 1px solid var(--panel-border);
+    border-radius: 7px;
+    background: var(--panel-bg-strong);
+    color: var(--text-dim);
+    font-size: .9rem;
+  }
+  #kbdBar div:empty { visibility: hidden; }
+  #kbdKeys { display: flex; flex-direction: column; gap: 8px; align-items: center; width: 80%; }
   .kbd-row { display: flex; gap: 6px; justify-content: center; width: 100%; }
   .kbd-row div {
-    min-width: 46px;
-    padding: 12px 3px;
+    flex: var(--u, 1) 1 0;
+    min-width: 0;
+    height: clamp(46px, 6.6vmin, 76px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: var(--panel-bg-strong);
     border: 1px solid var(--panel-border);
     border-radius: 7px;
-    text-align: center;
-    font-size: 1rem;
+    font-size: clamp(1.05rem, 2.7vmin, 1.7rem);
     color: var(--text);
-    flex: 0 0 auto;
   }
-  .kbd-row div.wide { min-width: 78px; font-size: .85rem; }
+  .kbd-row div.wide { font-size: clamp(.8rem, 1.9vmin, 1.15rem); color: var(--text-dim); }
+  .kbd-row div.glyph { font-size: clamp(1.2rem, 3vmin, 1.9rem); color: var(--text); }
+  .kbd-row div.on { border-color: var(--mid); color: var(--mid); }
   .kbd-row div.go { border-color: var(--mid); color: var(--mid); }
+  .kbd-row div.pad { visibility: hidden; }
+  /* A key shows it was pressed: with a password hidden, one more dot was
+     the only sign a tap had landed. */
+  .kbd-row div:active, #kbdBar div:active { background: var(--mid); border-color: var(--mid); color: var(--bg); }
 
   /* Night dimming. Sits above everything (including the panels) so the
      whole display dims uniformly, and pointer-events:none so it never
@@ -1393,7 +1421,7 @@
   <div id="splash" aria-hidden="true"><!--brand:logo--><svg class="ss-logo" viewBox="0 0 473 100" role="img" aria-label="StratoScan"><rect width="100" height="100" rx="22" fill="#0a1a3a"/><g transform="translate(10 10) scale(0.8)"><circle cx="50" cy="50" r="36" fill="none" stroke="#274a86" stroke-width="4"/><path d="M50 50 L50 14 A36 36 0 0 1 81.2 32 Z" fill="#5ee7ff" opacity="0.32"/><line x1="50" y1="50" x2="81.2" y2="32" stroke="#5ee7ff" stroke-width="4.5" stroke-linecap="round"/><circle cx="50" cy="50" r="3.4" fill="#5ee7ff"/><circle cx="27" cy="67" r="3.4" fill="#3ddc97"/><circle cx="35" cy="53" r="4.2" fill="#5ee7ff"/><circle cx="46" cy="36" r="5" fill="#ffffff"/></g><g transform="translate(116 71)"><path class="ss-strato" d="M3.3 -6.18V-11.459999999999999H10.139999999999999V-8.28L12.42 -6.0H25.5L27.9 -8.4V-16.14L25.56 -18.48H9.6L3.42 -24.599999999999998V-35.82L9.6 -42.0H28.08L34.26 -35.82V-30.48H27.419999999999998V-33.72L25.08 -36.0H12.6L10.26 -33.72V-26.759999999999998L12.6 -24.48H28.56L34.74 -18.3V-6.3L28.439999999999998 0.0H9.48ZM44.34 -5.9399999999999995V-24.119999999999997H38.940000000000005V-29.88H44.46V-39.6H51.120000000000005V-29.88H60.3V-24.119999999999997H51.120000000000005V-8.1L53.46 -5.76H60.3V0.0H50.28ZM66.0 -29.88H72.3V-24.779999999999998L77.28 -29.88H85.56V-24.06H78.78L72.78 -17.939999999999998V0.0H66.0ZM89.16 -5.34V-12.42L94.5 -17.7H109.91999999999999V-22.14L107.69999999999999 -24.36H98.28L96.06 -22.14V-20.22H89.39999999999999V-23.7L95.52 -29.88H110.46L116.58 -23.7V0.0H110.39999999999999V-4.62L105.6 0.0H94.5ZM104.94 -5.34 109.91999999999999 -10.139999999999999V-12.66H97.74L95.82 -10.799999999999999V-7.14L97.61999999999999 -5.34ZM126.77999999999999 -5.9399999999999995V-24.119999999999997H121.38V-29.88H126.89999999999999V-39.6H133.56V-29.88H142.73999999999998V-24.119999999999997H133.56V-8.1L135.89999999999998 -5.76H142.73999999999998V0.0H132.72ZM147.84 -6.0V-23.88L153.78 -29.88H170.34L176.33999999999997 -23.88V-6.0L170.34 0.0H153.78ZM167.16 -5.7 169.56 -8.1V-21.779999999999998L167.16 -24.18H157.01999999999998L154.62 -21.779999999999998V-8.1L157.01999999999998 -5.7Z"/><path class="ss-scan" d="M182.94 -6.18V-11.459999999999999H189.77999999999997V-8.28L192.05999999999997 -6.0H205.14L207.54 -8.4V-16.14L205.2 -18.48H189.23999999999998L183.05999999999997 -24.599999999999998V-35.82L189.23999999999998 -42.0H207.71999999999997L213.89999999999998 -35.82V-30.48H207.05999999999997V-33.72L204.71999999999997 -36.0H192.23999999999998L189.89999999999998 -33.72V-26.759999999999998L192.23999999999998 -24.48H208.2L214.38 -18.3V-6.3L208.07999999999998 0.0H189.11999999999998ZM220.68 -5.9399999999999995V-23.939999999999998L226.56 -29.88H242.34L248.28 -23.88V-18.96H241.5V-21.72L239.1 -24.06H229.85999999999999L227.46 -21.72V-8.16L229.85999999999999 -5.819999999999999H239.1L241.5 -8.16V-10.92H248.28V-6.0L242.34 0.0H226.56ZM253.38 -5.34V-12.42L258.71999999999997 -17.7H274.14V-22.14L271.92 -24.36H262.5L260.28 -22.14V-20.22H253.62V-23.7L259.74 -29.88H274.68L280.8 -23.7V0.0H274.62V-4.62L269.82 0.0H258.71999999999997ZM269.15999999999997 -5.34 274.14 -10.139999999999999V-12.66H261.96L260.04 -10.799999999999999V-7.14L261.84 -5.34ZM288.29999999999995 -29.88H294.59999999999997V-24.419999999999998L300.06 -29.88H309.53999999999996L315.84 -23.58V0.0H309.06V-21.72L306.71999999999997 -24.06H301.32L295.08 -17.759999999999998V0.0H288.29999999999995Z"/><path class="ss-strato" d="M326.2923782234957 -38.230830945558736H321.96V-42.0H335.08710601719196V-38.230830945558736H330.7114040114613V-26.880000000000003H326.2923782234957ZM336.6900859598854 -42.0H341.02246418338103L344.87828080229224 -34.375014326647566H344.9216045845272L348.82074498567334 -42.0H353.153123209169V-26.880000000000003H348.90739255014324V-35.11151862464183H348.82074498567334L345.78808022922635 -29.436103151862465H344.0118051575931L341.02246418338103 -35.11151862464183H340.93581661891113V-26.880000000000003H336.6900859598854Z"/></g></svg><!--/brand:logo--></div>
   <div id="nightDim"></div>
   <div id="onboard"><div id="onboardInner"></div></div>
-  <div id="kbd"><div id="kbdField"><span id="kbdLabel"></span><span id="kbdValue"></span></div><div id="kbdKeys"></div></div>
+  <div id="kbd"><div id="kbdBar"><div data-action="cancel">Cancel</div><div id="kbdMask" data-action="mask"></div></div><div id="kbdField"><span id="kbdLabel"></span><span id="kbdValue"></span></div><div id="kbdKeys"></div></div>
 </div>
 
 <script>
@@ -3799,11 +3827,17 @@ function playLightningAlertSound() {
 // have no phone, and someone who has forgotten the admin password has no
 // other way in at all. That makes a touch keyboard a hard requirement, not
 // a convenience.
+// Three layers, as on a phone: letters, numbers with the common marks, and
+// the rest. Between them they hold every printable ASCII character, which
+// is what a WiFi password may be made of; the old keyboard had no quotes,
+// brackets, comma or semicolon, so some passwords couldn't be typed at all.
 const KBD_ROWS = {
   lower: ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'],
   upper: ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'],
-  num:   ['1234567890', '-_.:/@#&+', '!?$%*()='],
+  num:   ['1234567890', '-/:;()$&@"', ".,?!'_="],
+  sym:   ['[]{}#%^*+=', '_\\|~<>`&@$', ".,?!':;"],
 };
+// mode: lower, upper (one letter, then back to lower), caps, num, sym
 let kbdState = { mode: 'lower', value: '', onDone: null, secret: false };
 
 function openKeyboard(label, initial, { secret = false, mode = 'lower' } = {}) {
@@ -3816,7 +3850,8 @@ function openKeyboard(label, initial, { secret = false, mode = 'lower' } = {}) {
     // unfamiliar touch keyboard a mistyped WiFi password is near-certain and
     // invisible, and this screen is in someone's home, not in public. A Hide
     // key is offered for anyone who wants it.
-    kbdState = { mode, value: initial || '', onDone: resolve, secret, masked: false };
+    // A field that opens on capitals wants them all (ERASE): caps, not one.
+    kbdState = { mode: mode === 'upper' ? 'caps' : mode, value: initial || '', onDone: resolve, secret, masked: false };
     document.getElementById('kbdLabel').textContent = label;
     document.getElementById('kbd').classList.add('show');
     drawKeyboard();
@@ -3838,6 +3873,8 @@ function drawKeyboard() {
   valueEl.textContent = shown;
   valueEl.classList.toggle('empty', kbdState.value.length === 0);
   valueEl.dataset.placeholder = 'type here…';
+  // Hide/Show sits beside Cancel, above the field, out of the typing rows.
+  document.getElementById('kbdMask').textContent = kbdState.secret ? (kbdState.masked ? 'Show' : 'Hide') : '';
   const keys = document.getElementById('kbdKeys');
   keys.textContent = '';
   const newRow = () => {
@@ -3846,43 +3883,56 @@ function drawKeyboard() {
     keys.appendChild(r);
     return r;
   };
-  const add = (row, text, cls, action) => {
+  // units: how many letter keys wide (every row adds up to ten)
+  const add = (row, text, cls, action, units) => {
     const d = document.createElement('div');
     d.textContent = text;
     if (cls) d.className = cls;
     d.dataset.action = action || '';
+    if (units) d.style.setProperty('--u', units);
     row.appendChild(d);
   };
-  // One container per letter row, so the layout is what it looks like rather
-  // than whatever flex-wrap happens to produce at this width.
-  KBD_ROWS[kbdState.mode].forEach(row => {
-    const r = newRow();
-    [...row].forEach(ch => add(r, ch));
-  });
-  const fn = newRow();
-  add(fn, kbdState.mode === 'num' ? 'abc' : '123', 'wide', 'mode');
-  add(fn, kbdState.mode === 'upper' ? 'abc' : 'ABC', 'wide', 'case');
-  add(fn, 'space', 'wide', 'space');
-  add(fn, '\u232B', 'wide', 'back');
-  const fn2 = newRow();
-  if (kbdState.secret) add(fn2, kbdState.masked ? 'Show' : 'Hide', 'wide', 'mask');
-  add(fn2, 'Cancel', 'wide', 'cancel');
-  add(fn2, 'Done', 'wide go', 'done');
+  const mode = kbdState.mode;
+  const letters = mode === 'lower' || mode === 'upper' || mode === 'caps';
+  const rows = KBD_ROWS[mode === 'caps' ? 'upper' : mode];
+  const r1 = newRow();
+  [...rows[0]].forEach(ch => add(r1, ch));
+  const r2 = newRow();
+  // nine letters sit half a key in from each side, as on a phone
+  if (rows[1].length < 10) add(r2, '', 'pad', 'none', 0.5);
+  [...rows[1]].forEach(ch => add(r2, ch));
+  if (rows[1].length < 10) add(r2, '', 'pad', 'none', 0.5);
+  const r3 = newRow();
+  if (letters) add(r3, mode === 'caps' ? '\u21EA' : '\u21E7', 'wide glyph' + (mode === 'lower' ? '' : ' on'), 'shift', 1.5);
+  else add(r3, mode === 'num' ? '#+=' : '123', 'wide', 'more', 1.5);
+  [...rows[2]].forEach(ch => add(r3, ch));
+  add(r3, '\u232B', 'wide glyph', 'back', 1.5);
+  const r4 = newRow();
+  add(r4, letters ? '123' : 'abc', 'wide', 'mode', 2.5);
+  add(r4, 'space', 'wide', 'space', 5);
+  add(r4, 'Done', 'wide go', 'done', 2.5);
 }
 
 document.getElementById('kbd').addEventListener('pointerup', (e) => {
   e.stopPropagation();
-  const k = e.target.closest('.kbd-row div');
+  const k = e.target.closest('.kbd-row div, #kbdBar div');
   if (!k) return;
   const a = k.dataset.action;
+  const letters = ['lower', 'upper', 'caps'].includes(kbdState.mode);
+  if (a === 'none') return;
   if (a === 'done') return closeKeyboard(kbdState.value);
   if (a === 'cancel') return closeKeyboard(null);
   if (a === 'back') kbdState.value = kbdState.value.slice(0, -1);
   else if (a === 'space') kbdState.value += ' ';
-  else if (a === 'mode') kbdState.mode = kbdState.mode === 'num' ? 'lower' : 'num';
-  else if (a === 'case') kbdState.mode = kbdState.mode === 'upper' ? 'lower' : 'upper';
-  else if (a === 'mask') kbdState.masked = !kbdState.masked;
-  else if (!a && k.textContent.length === 1) kbdState.value += k.textContent;
+  else if (a === 'mode') kbdState.mode = letters ? 'num' : 'lower';
+  else if (a === 'more') kbdState.mode = kbdState.mode === 'num' ? 'sym' : 'num';
+  // shift: one capital, then again for all capitals, then again for none
+  else if (a === 'shift') kbdState.mode = { lower: 'upper', upper: 'caps', caps: 'lower' }[kbdState.mode];
+  else if (a === 'mask') { if (kbdState.secret) kbdState.masked = !kbdState.masked; }
+  else if (!a && k.textContent.length === 1) {
+    kbdState.value += k.textContent;
+    if (kbdState.mode === 'upper') kbdState.mode = 'lower';
+  }
   drawKeyboard();
 });
 

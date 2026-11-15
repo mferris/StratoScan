@@ -37,7 +37,7 @@ unit), only long enough to deliver them. The fleet page shows how many
 arrived, never what they were.
 
 For **pairing** (roadmap 2.3): which phones are paired with which unit,
-each phone's public key (its id) and the name it gave itself ("iPhone"),
+each phone's public key (its id) and the name it gave (its model, "iPhone 16 Pro", or one typed in the app),
 and while a code is showing on a unit's screen, that code's SHA-256. The
 code itself reaches the relay only when a phone presents it, is compared
 and then discarded; it works once, and expires after 10 minutes. A wrong

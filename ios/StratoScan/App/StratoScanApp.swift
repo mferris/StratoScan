@@ -57,6 +57,8 @@ struct StratoScanApp: App {
                     WatchSync.shared.push()
                     // At home: pick up a rename made on the radar (2.17).
                     Task { await pairing.refreshNames() }
+                    // and its radars this phone's name, if they haven't it
+                    Task { await PushManager.shared.syncName(paired: !pairing.radars.isEmpty) }
                 }
         }
     }

@@ -210,7 +210,10 @@ export const PAIRING_IDLE_S = 90 * 86400;
 
 export function cleanPhoneName(v) {
   if (typeof v !== 'string') return null;
-  const t = v.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, '').trim().slice(0, 40);
+  // 40 UTF-16 units; a cut through an emoji leaves half of it, which is
+  // dropped, and the end is trimmed again (the app cuts the same way).
+  const t = v.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, '').trim().slice(0, 40)
+    .replace(/[\ud800-\udbff]$/, '').trim();
   return t || null;
 }
 

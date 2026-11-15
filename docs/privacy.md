@@ -123,7 +123,9 @@ it gives the StratoScan relay:
 
 - a random key it generates (so your radars can recognise your phone);
 - Apple's push-notification address for your phone;
-- the generic device name iOS provides (for example "iPhone").
+- a name for the phone, so a radar can list the phones paired with it: its
+  model (for example "iPhone 16 Pro"), or a name you type in Settings.
+  iOS doesn't give apps the name you gave the phone itself.
 
 It collects nothing else: no location (but see Sky view below), contacts,
 usage analytics or advertising identifiers.
@@ -235,7 +237,7 @@ The relay is a small service run by the StratoScan maintainer on Cloudflare.
 
 | What | Kept for |
 |---|---|
-| Which phones are paired with which radar, and the name each phone gives itself (such as "Alex's iPhone"), which the radar's settings show | Until either side unpairs, or neither has used the relay for 90 days |
+| Which phones are paired with which radar, and the name each phone gives (its model, such as "iPhone 16 Pro", or one typed in the app), which the radar's settings show | Until either side unpairs, or neither has used the relay for 90 days |
 | A phone's push address and alert choices, and the push addresses of its Live Activities | Until it is no longer paired with any radar (a Live Activity's, until it ends) |
 | A phone's location, if it shares one with its radar for approach alerts: sealed so only that radar can read it | At most 6 hours |
 | Alerts waiting to be delivered | At most 48 hours (500 per radar) |

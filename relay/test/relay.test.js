@@ -336,6 +336,35 @@ test('a phone that presents the code on screen is paired, once', async () => {
   assert.equal(list.offer, null, 'the code is spent');
   assert.deepEqual((await getAs(e, phone, '/v1/phone/units', 'X-FR-Phone')).units.map(x => x.unit), [u.id]);
 
+  // Renamed when it registers for alerts (iOS calls every phone "iPhone";
+  // the app sends its model, or a name its owner typed): this phone's
+  // pairings only, cleaned as at pairing, and nothing without a name.
+  const other = await newUnit(), u2 = await newUnit();
+  clock += 1;
+  await offer(e, u2, TEST_PAIRING_CODE); assert.equal((await pair(e, other, u2, TEST_PAIRING_CODE, 'iPhone')).status, 200);
+  clock += 1;
+  assert.equal((await register(e, phone, { token: TOKEN, env: 'sandbox', name: '  iPhone Duo\u0007  ' })).status, 200);
+  assert.deepEqual((await getAs(e, u, '/v1/unit/phones')).phones.map(p => p.name), ['iPhone Duo']);
+  assert.deepEqual((await getAs(e, u2, '/v1/unit/phones')).phones.map(p => p.name), ['iPhone'], "another phone's name is not touched");
+  clock += 1;
+  assert.equal((await register(e, phone, { token: TOKEN, env: 'sandbox' })).status, 200);
+  assert.equal((await register(e, phone, { token: TOKEN, env: 'sandbox', name: 7 })).status, 200);
+  assert.deepEqual((await getAs(e, u, '/v1/unit/phones')).phones.map(p => p.name), ['iPhone Duo'], 'no name, or not a name, changes nothing');
+
+  // A phone with notifications off has no token to register with: it names
+  // itself on its own. Cut at 40 units without leaving half an emoji.
+  const named = async (who, body) => worker.fetch(await signed(who, JSON.stringify(body), { path: '/v1/phone/name', as: 'X-FR-Phone' }), e);
+  clock += 1;
+  assert.equal((await named(phone, { name: 'Kitchen phone' })).status, 200);
+  assert.deepEqual((await getAs(e, u, '/v1/unit/phones')).phones.map(p => p.name), ['Kitchen phone']);
+  assert.deepEqual((await getAs(e, u2, '/v1/unit/phones')).phones.map(p => p.name), ['iPhone']);
+  clock += 1;
+  assert.equal((await named(phone, { name: '   ' })).status, 400, 'an empty name is refused');
+  assert.equal((await named(await newUnit(), { name: 'Stranger' })).status, 403, 'a phone paired with nothing has no name to set');
+  clock += 1;
+  assert.equal((await named(phone, { name: 'x'.repeat(39) + '\u{1F6E9}tail' })).status, 200);
+  assert.deepEqual((await getAs(e, u, '/v1/unit/phones')).phones.map(p => p.name), ['x'.repeat(39)], 'no half emoji at the cut');
+
   clock += 1;
   assert.equal((await pair(e, late, u, TEST_PAIRING_CODE)).status, 404, 'a second phone cannot reuse the same code');
 });

@@ -130,12 +130,31 @@ final class PushManager: ObservableObject {
         message = "Could not register for notifications: \(error.localizedDescription)"
     }
 
+    /// This phone's name was changed in Settings: its radars are told.
+    func nameChanged() { Task { await syncName(paired: true) } }
+
+    /// The name the relay last took from this phone.
+    private static let sentNameKey = "stratoscan.phoneNameSent"
+    /// Tells the relay this phone's name when it hasn't the current one. With
+    /// a token it goes with the registration; without one (notifications
+    /// off) on its own, or such a phone stayed "iPhone" on its radar for
+    /// good (review, 2026-11-15). Asked at each opening of the app, and sent
+    /// only when the name is not the one last taken.
+    func syncName(paired: Bool) async {
+        guard paired else { return }
+        let name = PhoneName.current
+        guard UserDefaults.standard.string(forKey: Self.sentNameKey) != name else { return }
+        if token != nil { await sendRegistration(); return }
+        if (try? await relay.setName(name)) != nil { UserDefaults.standard.set(name, forKey: Self.sentNameKey) }
+    }
+
     private func sendRegistration() async {
         guard let token else { return }
         do {
             let where_: [String] = place == .radar ? ["near_radar"] : place == .me ? ["near_me"] : ["near_radar", "near_me"]
             try await relay.register(token: token, environment: environment, kinds: kinds.map(\.rawValue) + where_,
-                                     liveActivityToken: liveActivityToken)
+                                     liveActivityToken: liveActivityToken, name: PhoneName.current)
+            UserDefaults.standard.set(PhoneName.current, forKey: Self.sentNameKey)
             registered = true
         } catch {
             // Not paired yet is expected before the first pairing; anything

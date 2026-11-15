@@ -63,7 +63,7 @@ CREATE INDEX IF NOT EXISTS pairing_offers_expires ON pairing_offers (expires);
 CREATE TABLE IF NOT EXISTS pairings (
   unit     TEXT NOT NULL,
   phone    TEXT NOT NULL,           -- base64url Ed25519 public key; the phone's identity
-  name     TEXT,                    -- what the phone calls itself ("Alex's iPhone")
+  name     TEXT,                    -- what the phone gives: its model ("iPhone 16 Pro") or a typed name
   created  INTEGER NOT NULL,
   -- A pairing's first day (SR-03): its own hourly count of emergencies and
   -- tests (limits.js YOUNG_PAIRING_*). Added to the live database by

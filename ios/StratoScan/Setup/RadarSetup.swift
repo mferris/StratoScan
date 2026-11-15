@@ -302,7 +302,7 @@ final class RadarSetup: ObservableObject {
         var lastError = ""
         while Date() < deadline, !Task.isCancelled {
             do {
-                try await relay.pair(unit: u, secret: s, name: UIDevice.current.name)
+                try await relay.pair(unit: u, secret: s, name: PhoneName.current)
                 // paired at the relay: the phone keeps it even if cancelled now
                 store.adopt(unit: u, name: PairingStore.cleanName(name) ?? "StratoScan", host: nil)
                 if !Task.isCancelled { await find() }
