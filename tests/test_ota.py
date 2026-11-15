@@ -138,6 +138,9 @@ def run(tmp, cmd, state, allowed, env_extra=None, ring=None, flags=()):
         # A ring file that does not exist, unless the case puts the unit in
         # one: the default is what a unit nobody placed gets.
         "STRATOSCAN_RING_FILE": os.path.join(state, "ring"),
+        # The fixtures' serials are single digits; the built-in floor has its
+        # own cases at the end, which set it.
+        "STRATOSCAN_OTA_FLOOR": "0",
     })
     env.update(env_extra or {})
     if ring is not None:
@@ -468,6 +471,120 @@ def main():
     else:
         os.environ["STRATOSCAN_KIOSK_USER"] = saved
     shutil.rmtree(d, ignore_errors=True)
+
+    # --- one update at a time (security review 2026-11-03) -------------------
+    # Two overlapping applies broke the rollback: the second saved the first's
+    # unverified files as "the previous version". Here another run holds the
+    # lock, as a nightly update in the middle of its paint check would.
+    import fcntl
+    publish(serial=5)
+    st = os.path.join(tmp, "lock")
+    os.makedirs(st)
+    with open(os.path.join(st, "status.json"), "w") as f:
+        json.dump({"state": "applying", "serial": 4}, f)
+    holder = open(os.path.join(st, "ota.lock"), "w")
+    fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    for cmd in ("stage", "apply"):
+        r = run(ctx, cmd, st, allowed)
+        ok(r.returncode == 1 and "already running" in r.stdout + r.stderr,
+           f"{cmd} while another update holds the lock must fail and say why")
+    ok(not os.path.exists(os.path.join(st, "staging")),
+       "a run that could not take the lock must not touch the staging directory")
+    r = run(ctx, "check", st, allowed)
+    ok(r.returncode == 0 and "already running" in r.stdout + r.stderr
+       and "update available" not in r.stdout + r.stderr,
+       "a check during an update is no error, and must not announce an update")
+    ok(status_of(st) == {"state": "applying", "serial": 4},
+       "status.json belongs to the running update; a refused run must not overwrite it")
+    r = run(ctx, "status", st, allowed)
+    ok(r.returncode == 0 and "applying" in r.stdout, "status needs no lock")
+    fcntl.flock(holder, fcntl.LOCK_UN)
+    holder.close()
+    r = run(ctx, "stage", st, allowed)
+    ok(r.returncode == 0 and os.path.isfile(os.path.join(st, "staging", "index.html")),
+       "positive control: once the lock is free the same unit stages")
+    # And the other way round: the lock as ota.py itself takes it turns a
+    # second run away, and is free again once its holder has gone.
+    real_lock = ota.LOCK
+    ota.LOCK = os.path.join(st, "ota.lock")
+    try:
+        first = ota.take_lock()
+        ok(first is not None, "the first run takes the lock")
+        r = run(ctx, "stage", st, allowed)
+        ok(r.returncode == 1, "a second run is refused while the first holds it")
+        ok(ota.take_lock() is None, "and so is a second taker in the same way")
+        first.close()
+        again = ota.take_lock()
+        ok(again is not None, "the lock is free once its holder has gone")
+        again.close()
+        link = os.path.join(st, "link.lock")
+        os.symlink(os.path.join(st, "status.json"), link)
+        ota.LOCK = link
+        try:
+            ota.take_lock()
+            ok(False, "a lock path that is a symlink must not be followed")
+        except OSError:
+            ok(True, "a lock path that is a symlink must not be followed")
+    finally:
+        ota.LOCK = real_lock
+
+    # --- the built-in floor (security review 2026-11-03) ---------------------
+    # A fresh card or a rebuilt unit has no installed.json, so its floor was
+    # 0 and an old signed release marked "latest" was an update for it.
+    floor = {"STRATOSCAN_OTA_FLOOR": "700"}
+    publish(serial=650)
+    st = os.path.join(tmp, "floor1")
+    r = run(ctx, "check", st, allowed, env_extra=floor)
+    ok(r.returncode == 0 and "update available" not in r.stdout + r.stderr
+       and status_of(st).get("update_available") is False,
+       "a unit with no installed.json must not be offered a release below this build's floor")
+    ok("at or below serial 700" in r.stdout + r.stderr, "and the log says why")
+    r = run(ctx, "stage", st, allowed, env_extra=floor)
+    ok(r.returncode == 0 and not os.path.exists(os.path.join(st, "staging", "index.html")),
+       "nor stage it")
+    publish(serial=700)
+    r = run(ctx, "check", os.path.join(tmp, "floor2"), allowed, env_extra=floor)
+    ok("update available" not in r.stdout + r.stderr, "the floor's own serial is not newer either")
+    publish(serial=701)
+    r = run(ctx, "stage", os.path.join(tmp, "floor3"), allowed, env_extra=floor)
+    ok(r.returncode == 0 and os.path.isfile(os.path.join(tmp, "floor3", "staging", "index.html")),
+       "positive control: a release above the floor stages on the same fresh unit")
+    # apply() checks again for itself: a release staged before the floor rose
+    # (or put in staging by hand) is not installed.
+    real = (ota.STAGING, ota.INSTALLED, ota.FLOOR_SERIAL)
+    saved_env = os.environ.pop("STRATOSCAN_OTA_FLOOR", None)
+    ota.STAGING, ota.INSTALLED = os.path.join(tmp, "floor3", "staging"), os.path.join(tmp, "floor3", "installed.json")
+    try:
+        ota.FLOOR_SERIAL = 800
+        try:
+            ota.apply()
+            ok(False, "apply refuses a staged release at or below the floor")
+        except ota.Fail as e:
+            ok("not newer" in str(e), "apply refuses a staged release at or below the floor")
+        ok(ota.floor_serial() == 800 and ota.installed_serial() == 0,
+           "with no installed.json the floor is the built-in one, and the reported serial stays 0")
+        with open(ota.INSTALLED, "w") as f:
+            json.dump({"serial": 900, "version": "x"}, f)
+        ok(ota.floor_serial() == 900, "a higher installed.json still wins: the floor never lowers it")
+        os.environ["STRATOSCAN_OTA_FLOOR"] = "junk"
+        ok(ota.floor_serial() == 900, "a floor override that is not a number is ignored")
+        del os.environ["STRATOSCAN_OTA_FLOOR"]
+    finally:
+        ota.STAGING, ota.INSTALLED, ota.FLOOR_SERIAL = real
+        if saved_env is not None:
+            os.environ["STRATOSCAN_OTA_FLOOR"] = saved_env
+    # The shipped floor must stay below the serial of any commit that carries
+    # it (a release's serial is its commit count). Above that, every unit
+    # would refuse the next release. Skipped where there is no full history.
+    root = os.path.join(HERE, "..")
+    shallow = subprocess.run(["git", "-C", root, "rev-parse", "--is-shallow-repository"],
+                             capture_output=True, text=True)
+    count = subprocess.run(["git", "-C", root, "rev-list", "--count", "HEAD"],
+                           capture_output=True, text=True)
+    ok(isinstance(ota.FLOOR_SERIAL, int) and ota.FLOOR_SERIAL > 0, "the built-in floor is a positive whole number")
+    if shallow.returncode == 0 and shallow.stdout.strip() == "false" and count.returncode == 0:
+        ok(ota.FLOOR_SERIAL < int(count.stdout),
+           "the built-in floor is below this commit's serial, so the next release is still an update")
 
     httpd.shutdown()
     shutil.rmtree(tmp, ignore_errors=True)

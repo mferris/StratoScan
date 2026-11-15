@@ -38,6 +38,7 @@ Usage:  ota.py check         look for a newer release, verify it, stage nothing
                              policy holds back from this unit; for a hand on
                              the unit, never for the timer
 """
+import fcntl
 import filecmp
 import hashlib
 import json
@@ -87,6 +88,17 @@ STATUS = os.path.join(STATE_DIR, "status.json")
 STAGING = os.path.join(STATE_DIR, "staging")
 ROLLBACK = os.path.join(STATE_DIR, "rollback")
 LOCK = os.path.join(STATE_DIR, "ota.lock")
+# The oldest release this build will ever install over itself (security
+# review 2026-11-03). installed.json is the anti-rollback floor, and a fresh
+# card, a flashed image or a rebuilt unit has none: its floor was 0, so any
+# release ever signed counted as "newer", including ones with faults fixed
+# since. A unit running this file is by construction running code from after
+# release 2026.11.04.1 (serial 739), so nothing at or below that serial is an
+# update for it, whatever installed.json says or fails to say. Raise it to a
+# shipped release's serial when that release fixes something no unit should
+# go back past; never above the newest release's serial, or every unit would
+# refuse the next one (tests/test_ota.py checks it against the commit count).
+FLOOR_SERIAL = 739
 LIGHTDM_CONFS = ["/etc/lightdm/lightdm.conf"]
 
 
@@ -324,6 +336,40 @@ def installed_serial():
         return 0
 
 
+def floor_serial():
+    """The serial a release must be above to be installed.
+
+    installed.json when the unit has one and it is higher, otherwise the
+    floor built into this file. The test override can only be read from the
+    environment, like the trust root's path above it.
+    """
+    try:
+        built_in = int(os.environ.get("STRATOSCAN_OTA_FLOOR", FLOOR_SERIAL))
+    except ValueError:
+        built_in = FLOOR_SERIAL
+    return max(installed_serial(), built_in)
+
+
+def take_lock():
+    """One update at a time (security review 2026-11-03).
+
+    The nightly update and one started from the settings screen could
+    overlap. The second run then saved the first run's half-checked files as
+    "the previous version", so a failed paint check rolled back to the build
+    it had just rejected. The lock is held until this process exits, which
+    covers staging, the apply, the paint check and any rollback. Returns the
+    open file, or None when another run holds it.
+    """
+    fd = os.open(LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    f = os.fdopen(fd, "r+")
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.close()
+        return None
+    return f
+
+
 def installed_version():
     """The version string this device is actually running.
 
@@ -458,7 +504,8 @@ def check():
     tag, assets = latest_release()
     manifest = verified_manifest(assets)
     have, want = installed_serial(), int(manifest["serial"])
-    newer = want > have
+    floor = floor_serial()
+    newer = want > floor
     ring = unit_ring()
     rollout = {"unit_ring": ring}
     allowed, held = True, None
@@ -488,6 +535,10 @@ def check():
             outcome += f" (rollout at ring {rollout['ring']}, this unit in ring {ring})"
     elif newer:
         outcome = f"held: {held}"
+    elif want > have:
+        # Only a unit with no record of its own (a fresh card, a rebuild)
+        # gets here: the release is older than the code it was built from.
+        outcome = f"not an update: this build takes nothing at or below serial {floor}"
     else:
         outcome = "up to date"
     log(f"{tag} serial {want}, installed {have} -> {outcome}")
@@ -749,7 +800,7 @@ def apply():
         raise Fail("nothing staged")
     with open(manifest_path) as f:
         manifest = json.load(f)
-    if int(manifest["serial"]) <= installed_serial():
+    if int(manifest["serial"]) <= floor_serial():
         raise Fail("staged release is not newer than what is installed")
 
     plan = []
@@ -858,6 +909,12 @@ def main():
                                   "installed_version": installed_version(),
                                   "installed_serial": installed_serial()}))
             return 0
+        # Held until exit. Nothing is written to status.json when another run
+        # has it: that file is the running update's to report in.
+        lock = take_lock()
+        if lock is None:
+            log("another update is already running; this one did nothing")
+            return 0 if cmd == "check" else 1
         if cmd == "check":
             check(); return 0
         if cmd == "stage":

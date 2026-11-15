@@ -38,6 +38,16 @@
 # the pause; a unit that already has the release keeps it, since there is no
 # downgrade -- a fix is the next release.
 #
+# THE KEY IS USED THROUGH ssh-agent, AND ONLY FOR THE RUN (security review
+# 2026-11-03). A run signs three things. Signing with the key file asked for
+# the passphrase three times, and the other habit -- a plain ssh-add first --
+# left the key in the agent afterwards, where any program running as the
+# maintainer could sign a release with it. So the script loads the key itself
+# when it is not loaded already: once, with a lifetime of a few minutes, just
+# before it signs. However the run ends, it takes that key out again. A key
+# that was in the agent before the run is used and left alone. Start an agent
+# first if there is none; the script does not start one.
+#
 # Usage: sh scripts/release.sh <version> [--ring N] [--commit REF] [--dry-run]
 #        sh scripts/release.sh rollout <version>                      show the policy
 #        sh scripts/release.sh rollout <version> --ring N [--force]   widen, or narrow
@@ -80,6 +90,83 @@ case "${RING:-0}" in 0|1|2|3) ;; *) echo "the ring is 0, 1, 2 or 3, not '$RING'"
 [ -f "$KEY" ] || { echo "no signing key at $KEY" >&2; exit 1; }
 
 cd "$REPO_ROOT"
+
+# ---- the signing key, in ssh-agent for this run only -----------------------
+KEY_LIFETIME_S=300   # if the removal below never runs (kill -9, power), the agent drops the key itself
+KEY_FP=""            # the key's fingerprint, read from the key file without the passphrase
+KEY_READY=""         # 1 once the agent holds the key
+KEY_ADDED=""         # 1 only when this run put it there
+
+key_in_agent() {
+    ssh-add -l 2>/dev/null | awk '{ print $2 }' | grep -qxF "$KEY_FP"
+}
+
+# Runs on every way out. It removes this one key and only if this run added
+# it: never a key that was already loaded, never the agent's other keys.
+unload_key() {
+    [ -n "$KEY_ADDED" ] || return 0
+    KEY_ADDED=""
+    # a second Ctrl-C while this runs used to stop the removal itself
+    trap '' HUP INT TERM
+    key_in_agent || return 0          # never got in (a wrong passphrase, an interrupt at the prompt)
+    # Removed by the copy the agent itself holds, matched by fingerprint: a
+    # stale <key>.pub beside the key file names some other key, and the real
+    # one stayed loaded while this said it was gone.
+    held=$(mktemp)
+    ssh-add -L 2>/dev/null | while IFS= read -r line; do
+        fp=$(printf '%s\n' "$line" | ssh-keygen -l -f - 2>/dev/null | awk '{ print $2 }')
+        [ "$fp" = "$KEY_FP" ] && printf '%s\n' "$line" > "$held"
+    done
+    [ -s "$held" ] && ssh-add -q -d "$held" >/dev/null 2>&1
+    rm -f "$held"
+    if key_in_agent; then
+        echo "  WARNING: the signing key is still in ssh-agent (it expires within $KEY_LIFETIME_S s). Remove it now: ssh-add -d $KEY" >&2
+    else
+        echo "  signing key removed from ssh-agent"
+    fi
+}
+trap unload_key EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# Makes sure the agent holds the key, asking for the passphrase at most once
+# in a run. Called just before the first signature, so a run that a guard
+# refuses never asks at all.
+load_key() {
+    [ -z "$KEY_READY" ] || return 0
+    KEY_FP=$(ssh-keygen -l -f "$KEY" 2>/dev/null | awk '{ print $2 }') || true
+    [ -n "$KEY_FP" ] || { echo "cannot read the public half of the signing key at $KEY" >&2; exit 1; }
+    # It has to be a key the devices trust, by their own list. This also
+    # catches a <key>.pub beside the key file that is some other key's, which
+    # is what ssh-keygen reads the fingerprint from when there is one.
+    awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^(ssh-|ecdsa-|sk-)/) { print $i, $(i + 1); break } }' "$SIGNERS" 2>/dev/null \
+        | ssh-keygen -l -f - 2>/dev/null | awk '{ print $2 }' | grep -qxF "$KEY_FP" \
+        || { echo "the key at $KEY is not one deploy/allowed_signers names (or the .pub file beside it is another key's) -- nothing signed" >&2; exit 1; }
+    rc=0; ssh-add -l >/dev/null 2>&1 || rc=$?
+    if [ "$rc" -ge 2 ]; then
+        echo "no ssh-agent to hold the signing key (SSH_AUTH_SOCK is unset, or nothing answers there)." >&2
+        echo "Start one in this shell and run this again:  eval \"\$(ssh-agent -s)\"" >&2
+        exit 1
+    fi
+    if key_in_agent; then
+        echo "  NOTE: the signing key was already in ssh-agent: using it, and leaving it there." >&2
+        echo "        Anything running as you can sign with it meanwhile; remove it after with: ssh-add -d $KEY" >&2
+    else
+        # Set before the add, so an interrupt at the passphrase prompt still
+        # checks the agent on the way out.
+        KEY_ADDED=1
+        ssh-add -q -t "$KEY_LIFETIME_S" "$KEY" \
+            || { echo "the signing key was not loaded -- nothing signed" >&2; exit 1; }
+        key_in_agent || { echo "ssh-agent does not hold the signing key after loading it -- nothing signed" >&2; exit 1; }
+    fi
+    KEY_READY=1
+}
+
+# Checks $1 against the public key the devices carry, as a device would.
+verified() {   # <file> <signature> <namespace> <signer name>
+    [ -f "$1" ] && [ -f "$2" ] && ssh-keygen -Y verify -f "$SIGNERS" -I "$4" -n "$3" -s "$2" < "$1" >/dev/null 2>&1
+}
 
 # In a dry run a guard only warns, so the bundle can still be inspected
 # offline or before a push; for real it refuses.
@@ -176,6 +263,11 @@ PY
 
 # Signs $1/rollout.json in its own namespace and checks it as a device would.
 sign_policy() {
+    load_key
+    # A rollout downloads the old policy's signature to check it; ssh-keygen
+    # asks before it writes over a signature, and "no" would leave the old
+    # one beside the new policy.
+    rm -f "$1/rollout.json.sig"
     ssh-keygen -Y sign -f "$KEY" -n stratoscan-rollout "$1/rollout.json" >/dev/null
     ssh-keygen -Y verify -f "$SIGNERS" -I stratoscan-release -n stratoscan-rollout \
         -s "$1/rollout.json.sig" < "$1/rollout.json" >/dev/null \
@@ -190,9 +282,25 @@ if [ "$MODE" = rollout ]; then
     [ "$PAUSE" = pause ] && ACTION=pause
     [ "$PAUSE" = resume ] && ACTION=resume
     T=$(mktemp -d)
-    gh release download "$VERSION" --pattern manifest.json --pattern rollout.json --dir "$T" >/dev/null 2>&1 \
+    gh release download "$VERSION" --pattern manifest.json --pattern manifest.stratoscan.sig \
+        --pattern manifest.json.sig --pattern rollout.json --pattern rollout.json.sig --dir "$T" >/dev/null 2>&1 \
         || { echo "no release $VERSION on GitHub, or it has no manifest" >&2; exit 1; }
     [ -f "$T/manifest.json" ] || { echo "release $VERSION has no manifest.json" >&2; exit 1; }
+    # A release's files can be replaced on GitHub after it is published, and
+    # the next policy is built from these two: the serial and version from the
+    # manifest, the ring and the release time (which the soak check reads)
+    # from the policy. So neither is believed until its signature checks out
+    # against deploy/allowed_signers (security review 2026-11-03). A release
+    # from before the rename carries only the older manifest signature.
+    verified "$T/manifest.json" "$T/manifest.stratoscan.sig" stratoscan stratoscan-release \
+        || verified "$T/manifest.json" "$T/manifest.json.sig" flightradar flightradar-release \
+        || { echo "REFUSED: the manifest downloaded for $VERSION is not signed by the release key -- nothing in it is trusted, nothing signed" >&2; exit 1; }
+    python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("version") == sys.argv[2] else 1)' "$T/manifest.json" "$VERSION" \
+        || { echo "REFUSED: the signed manifest attached to $VERSION is some other release's" >&2; exit 1; }
+    if [ -f "$T/rollout.json" ] || [ -f "$T/rollout.json.sig" ]; then
+        verified "$T/rollout.json" "$T/rollout.json.sig" stratoscan-rollout stratoscan-release \
+            || { echo "REFUSED: the rollout policy downloaded for $VERSION is not signed by the release key -- nothing in it is trusted, nothing signed" >&2; exit 1; }
+    fi
     LATEST=$(gh release view --json tagName -q .tagName 2>/dev/null || true)
     [ "$LATEST" = "$VERSION" ] || echo "  note: the latest release is $LATEST, not $VERSION; units read only the latest, so this policy decides nothing until $VERSION is"
     write_policy "$T" "$ACTION" "$RING" "${FORCE:-0}"
@@ -307,6 +415,7 @@ PY
 # Two signatures while units move over (2026-09-30): the 'stratoscan' one that
 # current updaters prefer, and the 'flightradar' one that updaters from before
 # the rename can read (they only look for manifest.json.sig). Same key.
+load_key
 ssh-keygen -Y sign -f "$KEY" -n stratoscan "$OUT/manifest.json" >/dev/null
 mv "$OUT/manifest.json.sig" "$OUT/manifest.stratoscan.sig"
 ssh-keygen -Y sign -f "$KEY" -n flightradar "$OUT/manifest.json" >/dev/null
