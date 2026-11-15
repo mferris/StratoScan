@@ -22,6 +22,8 @@ final class WatchSync: NSObject, WCSessionDelegate {
             "home": APIConfig.baseURL,
             "away": APIConfig.awayURL ?? "",
             "demo": DemoFeed.isOn,
+            // so the Watch can tell "no radar yet" from "can't reach it"
+            "hasRadar": APIConfig.hasRadar,
         ])
     }
 

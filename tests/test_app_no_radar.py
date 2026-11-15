@@ -115,7 +115,7 @@ check("**Sky view away from home, or with no radar**" in privacy and "or no rada
 # ---- the labels -------------------------------------------------------------------------
 check('"PUBLIC NETWORK · AROUND YOU"' in foot and '"PUBLIC NETWORK"' in foot and "DATA © ADSB.LOL (ODbL)" in foot,
       "without a radar the screen says its aircraft are the public network's, with adsb.lol's credit")
-check(re.search(r'viewModel\.source == \.radar && !inWallMode \{\s*Text\("YOUR RADAR · LIVE"\)', foot) is not None,
+check("} else if viewModel.source == .radar && !inWallMode {" in foot and '"YOUR RADAR · LIVE"' in foot,
       "with one, at home, it says they are the radar's own")
 
 # ---- the widgets ------------------------------------------------------------------------
@@ -125,6 +125,52 @@ check('shared.object(forKey: hasRadarKey) as? Bool ?? true' in config and "APICo
 check(widget.count("No radar yet") == 3 and widget.count("Radar not reachable") == 3
       and "hasRadar: APIConfig.hasRadar || DemoFeed.isOn" in widget,
       "and a widget says 'No radar yet', not 'Radar not reachable', to someone with none")
+
+# ---- the rest of the review (2026-11-15) ------------------------------------------------
+watch = code("StratoScanWatch/WatchRadarView.swift")
+watch_app = code("StratoScanWatch/StratoScanWatchApp.swift")
+complication = code("StratoScanWatchWidget/StratoScanWatchWidget.swift")
+sync = code("StratoScan/Watch/WatchSync.swift")
+store = code("StratoScan/Pairing/PairingStore.swift")
+feed = code("Shared/Aircraft.swift")
+check('"hasRadar": APIConfig.hasRadar' in sync and 'if let has = c["hasRadar"] as? Bool { APIConfig.hasRadar = has }' in watch_app
+      and "WatchSync.shared.push()" in content.split("private func syncHasRadar()")[1].split("\n    }\n")[0],
+      "the Watch is told whether a radar is set up, when that changes")
+check("No radar yet." in watch and "Can't reach the radar." in watch and "receiver.hasRadar || DemoFeed.isOn" in watch
+      and "@Published var hasRadar = APIConfig.hasRadar" in watch_app and ".onChange(of: receiver.radarChanges)" in watch
+      and "WidgetCenter.shared.reloadAllTimelines()" in watch_app,
+      "and its app says 'No radar yet', not that it can't reach one")
+check(re.search(r'\} else if entry\.nearby != nil \{\s*Text\("Nothing nearby"\)', complication) is not None
+      and '"No radar in reach"' in complication and "APIConfig.hasRadar" not in complication,
+      "its complication says 'Nothing nearby' only of a sky it has heard from")
+check('(entry.hasRadar ? "STRATOSCAN" : "NO RADAR YET")' in widget, "and the StandBy radar says so too")
+
+gone = store.split("func unpair(_ radar: Radar) async {")[1].split("\n    }\n")[0]
+check('let wasRead = radar.host.map { APIConfig.baseURL == "http://\\($0)" } ?? false' in gone
+      and 'radars.compactMap(\\.host).first.map { "http://\\($0)" } ?? APIConfig.defaultBaseURL' in gone
+      and "if wasRead || (radars.isEmpty && APIConfig.baseURL == APIConfig.defaultBaseURL) {" in gone and "APIConfig.awayURL = nil" in gone,
+      "unpairing a radar takes its addresses out of the radar view (an address typed for another stays)")
+
+check("var networkPaused: Bool { networkPauseOwner != nil }" in model and "if networkPaused {" in model
+      and "viewModel.networkPauseOwner = mine" in sky
+      and "defer { if viewModel.networkPauseOwner == mine { viewModel.networkPauseOwner = nil } }" in sky
+      and sky.count("viewModel.networkPauseOwner = nil") >= 3 and "if !networkPaused, now.timeIntervalSince(viewNetworkFetchedAt)" in model,
+      "while Sky view asks the network for the aircraft around the phone, the radar screen under it doesn't ask too")
+check("networkPaused ? nearMe[hex] ?? viewNetwork[hex] : viewNetwork[hex] ?? nearMe[hex]" in model,
+      "and an aircraft's details then come from Sky view's fresh copy")
+
+check("var heardAt: Double? = nil" in feed and "feed.now! - feed.heardAt!" in model
+      and "var receiverReporting: Bool { (receiverLag ?? 0) < Self.receiverQuietS }" in model,
+      "the app knows how far behind the radar's answer its receiver is (a radar that doesn't say counts as live)")
+check('viewModel.receiverReporting ? "YOUR RADAR · LIVE" : "YOUR RADAR · ITS RECEIVER HAS STOPPED REPORTING"' in foot,
+      "and says LIVE only while the receiver is writing its list")
+core = (ROOT / "deploy" / "core-feed.py").read_text()
+check(".onChange(of: pairing.radars.count) { _, _ in" in settings and "baseURL = APIConfig.baseURL" in settings,
+      "Settings takes the addresses an unpair changed, and doesn't write the old ones back on closing")
+check("func radarChanged() {" in model and "viewModel.radarChanged()" in content and "let origin = radarPlace ?? me ?? centre" in model,
+      "another radar's addresses, or none, drop the last radar's place, runways and aircraft")
+check('"heardAt": heard_at,' in core and 'heard = data.get("now")' in core and "self._heard_at = round(_now(), 1)" in core,
+      "the radar's feed carries when its receiver last wrote its list")
 
 print("app no-radar checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)

@@ -19,6 +19,10 @@ enum Altitude: Equatable {
 struct AircraftFeedResponse: Decodable {
     let aircraft: [RawAircraft]
     let now: Double?
+    /// When the receiver last wrote its list, by the radar's clock, as `now`
+    /// is (core feeds since 2026-11-15; nil from an older radar, or when the
+    /// list couldn't be read).
+    var heardAt: Double? = nil
     /// Only from the core feed (/api/aircraft): the 20 nm ring's counts,
     /// worked out on the radar exactly as the kiosk counts.
     var counts: FeedCounts? = nil

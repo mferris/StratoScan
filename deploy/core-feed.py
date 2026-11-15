@@ -560,6 +560,10 @@ class Feed:
         self.uat = uat if uat is not None else UatHeard()
         self.sightings = sightings if sightings is not None else SightingCounts()
         self._antenna = (0.0, [])
+        # readsb's own "now" in the last list that could be read; until one
+        # has been, this service's start, so a receiver that never wrote a
+        # list reads as stopped once that is 30 s ago, not as live
+        self._heard_at = round(_now(), 1)
         self._network = (0.0, [])       # (when network-compare fetched them, the network's aircraft)
         self._network_due = 0.0         # when they are asked for again
         self._network_worker = None     # the one refresh of the network's aircraft running, if any
@@ -593,15 +597,25 @@ class Feed:
         return (lat, lon) if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) else None
 
     def _antenna_raw(self):
+        return self._antenna_heard()[0]
+
+    def _antenna_heard(self):
+        """The receiver's aircraft, and when it wrote that list (its own
+        clock), from the one read."""
         with self.lock:
             at, ac = self._antenna
             if _now() - at < AIRCRAFT_CACHE_S:
-                return ac
+                return ac, self._heard_at
             data = _read_json(AIRCRAFT_JSON) or {}
             ac = [a for a in data.get("aircraft", []) if isinstance(a, dict) and a.get("hex")
                   and (a.get("seen") is None or a.get("seen") <= STALE_S)]
             self._antenna = (_now(), ac)
-            return ac
+            # A list that is missing or can't be read (readsb stopped: its
+            # folder goes with it) leaves the last time standing, so it ages.
+            heard = data.get("now")
+            if isinstance(heard, (int, float)) and not isinstance(heard, bool):
+                self._heard_at = round(float(heard), 1)
+            return ac, self._heard_at
 
     def _network_raw(self):
         """The network's aircraft: the last list, refreshed behind the feed
@@ -703,7 +717,7 @@ class Feed:
 
     def build(self, with_network=False):
         centre = ring_centre(self._receiver())
-        antenna = self._antenna_raw()
+        antenna, heard_at = self._antenna_heard()
         heard = {a["hex"].lower().lstrip("~") for a in antenna}
         counts = self.sightings.get()
         aircraft = [self.label(a, "antenna", counts) for a in antenna]
@@ -719,7 +733,12 @@ class Feed:
                 return False
             return _nm(centre[0], centre[1], x["lat"], x["lon"]) <= RING_NM
 
+        # heardAt: when the receiver last wrote its list (readsb's own clock,
+        # the same machine's). "now" is this answer's time, and goes on
+        # ticking with the receiver stopped; a screen that says "live" needs
+        # the other (2026-11-15). It stands still when the list can't be read.
         return {"now": round(_now(), 1),
+                "heardAt": heard_at,
                 "counts": {"heard": sum(1 for x in aircraft if x["source"] == "antenna" and in_ring(x)),
                            "notHeard": sum(1 for x in network if in_ring(x)) if with_network else None,
                            "on978": sum(1 for x in aircraft if x.get("band", "").startswith("978") and in_ring(x))},

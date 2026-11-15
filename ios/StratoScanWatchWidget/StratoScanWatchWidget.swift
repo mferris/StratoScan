@@ -41,8 +41,14 @@ struct WatchComplicationView: View {
                 if let p = entry.nearby?.planes.first {
                     Text("\(p.callsign) · \(p.altitudeText)").font(.caption)
                     Text(String(format: "%.1f NM %@", p.distanceNm, p.direction)).font(.caption2)
-                } else {
+                } else if entry.nearby != nil {
                     Text("Nothing nearby").font(.caption)
+                } else {
+                    // Not an empty sky: no radar, or one that can't be
+                    // reached. The complication can't tell which: it doesn't
+                    // share the Watch app's settings (no app group on the
+                    // Watch targets), so it says what is true of both.
+                    Text("No radar in reach").font(.caption)
                 }
             }
         }

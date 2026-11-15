@@ -177,7 +177,7 @@ struct RadarWidgetView: View {
             }
             VStack {
                 Spacer()
-                Text(entry.nearby.map { "\($0.count) AIRCRAFT" } ?? "STRATOSCAN")
+                Text(entry.nearby.map { "\($0.count) AIRCRAFT" } ?? (entry.hasRadar ? "STRATOSCAN" : "NO RADAR YET"))
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundColor(teal)
             }

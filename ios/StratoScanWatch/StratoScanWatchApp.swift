@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 import UserNotifications
 import WatchConnectivity
 
@@ -18,6 +19,11 @@ struct StratoScanWatchApp: App {
 final class WatchReceiver: NSObject, ObservableObject, WCSessionDelegate, UNUserNotificationCenterDelegate {
     static let shared = WatchReceiver()
     @Published var highlightHex: String?
+    /// A radar is set up on the phone, as it last said (yes until it has).
+    @Published var hasRadar = APIConfig.hasRadar
+    /// Counts up when the phone sends another radar's addresses, or none:
+    /// what the glance was showing is the last one's.
+    @Published var radarChanges = 0
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         guard let info = response.notification.request.content.userInfo["stratoscan"] as? [String: Any],
@@ -32,9 +38,20 @@ final class WatchReceiver: NSObject, ObservableObject, WCSessionDelegate, UNUser
     }
 
     private func apply(_ c: [String: Any]) {
+        let before = "\(APIConfig.baseURL)|\(APIConfig.awayURL ?? "")|\(DemoFeed.isOn)|\(APIConfig.hasRadar)"
         if let home = c["home"] as? String, !home.isEmpty { APIConfig.baseURL = home }
         if let away = c["away"] as? String { APIConfig.awayURL = away.isEmpty ? nil : away }
         if let demo = c["demo"] as? Bool { DemoFeed.isOn = demo }
+        if let has = c["hasRadar"] as? Bool { APIConfig.hasRadar = has }
+        let after = "\(APIConfig.baseURL)|\(APIConfig.awayURL ?? "")|\(DemoFeed.isOn)|\(APIConfig.hasRadar)"
+        let has = APIConfig.hasRadar
+        DispatchQueue.main.async {
+            self.hasRadar = has
+            if before != after {
+                self.radarChanges += 1
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+        }
     }
 
     func session(_ s: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {

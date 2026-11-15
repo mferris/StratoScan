@@ -11,6 +11,8 @@ struct ContentView: View {
     @State private var showLogbook = false
     @State private var showSettings = false
     @State private var showInvite = false
+    /// The addresses the radar view last read, to notice when they change.
+    @State private var radarRead: String?
     /// The invitation on the radar screen, put away by its owner. What a
     /// radar adds stays in Settings and behind the logbook's button.
     @AppStorage("stratoscan.inviteDismissed") private var inviteDismissed = false
@@ -330,11 +332,20 @@ struct ContentView: View {
     /// A radar is paired, or one was typed in by address.
     private func syncHasRadar() {
         viewModel.hasRadar = !pairing.radars.isEmpty || APIConfig.baseURL != APIConfig.defaultBaseURL
+        // another radar's addresses, or none: the last one's place isn't this one's
+        let reads = APIConfig.baseURL + "|" + (APIConfig.awayURL ?? "") + "|" + (viewModel.hasRadar ? "1" : "0")
+        if let was = radarRead, was != reads {
+            viewModel.radarChanged()
+            WatchSync.shared.push()
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+        radarRead = reads
         // for the widgets, which can't see the pairing: "no radar yet" is
         // not "your radar can't be reached"
         if APIConfig.hasRadar != viewModel.hasRadar {
             APIConfig.hasRadar = viewModel.hasRadar
             WidgetCenter.shared.reloadAllTimelines()
+            WatchSync.shared.push()
         }
     }
 
@@ -616,8 +627,13 @@ struct ContentView: View {
             .padding(.bottom, pad)
         } else if viewModel.source == .radar && !inWallMode {
             // and with one, at home, they are its own: nothing said so
-            Text("YOUR RADAR · LIVE").font(mono).tracking(2)
-                .foregroundColor(pal.text.opacity(0.85)).shadow(color: pal.bg.opacity(0.9), radius: 2).padding(.bottom, pad)
+            // "live" only while its receiver is writing its list: the radar's
+            // web side answers with the receiver stopped too
+            Text(viewModel.receiverReporting ? "YOUR RADAR · LIVE" : "YOUR RADAR · ITS RECEIVER HAS STOPPED REPORTING")
+                .font(mono).tracking(2)
+                .foregroundColor(viewModel.receiverReporting ? pal.text.opacity(0.85) : pal.bad)
+                .shadow(color: pal.bg.opacity(0.9), radius: 2)
+                .multilineTextAlignment(.center).padding(.horizontal, 24).padding(.bottom, pad)
         }
     }
 }

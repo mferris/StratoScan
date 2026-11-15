@@ -238,7 +238,28 @@ final class RadarViewModel: ObservableObject {
     /// radar, its counts and its alerts never mix them in.
     @Published var nearMe: [String: PlaneState] = [:]
     /// An aircraft by hex, wherever it came from.
-    func plane(_ hex: String) -> PlaneState? { planes[hex] ?? viewNetwork[hex] ?? nearMe[hex] }
+    /// While Sky view asks for the aircraft around the phone itself, its copy
+    /// is the fresh one.
+    func plane(_ hex: String) -> PlaneState? {
+        planes[hex] ?? (networkPaused ? nearMe[hex] ?? viewNetwork[hex] : viewNetwork[hex] ?? nearMe[hex])
+    }
+    /// Sky view is open and asking the network for the aircraft around the
+    /// phone: the radar screen under it stops asking for its own, so the
+    /// volunteer-run network gets one question every 5 s, not two (review,
+    /// 2026-11-15). What the screen had is kept for when Sky view closes.
+    var networkPaused: Bool { networkPauseOwner != nil }
+    /// Whichever of Sky view's polling tasks holds the pause. A plain switch
+    /// was turned off by the old task's ending after the new one had turned
+    /// it on (the phone crossing into another 5 km square).
+    @Published var networkPauseOwner: UUID?
+    /// How far behind the radar's answer its receiver's list is, in seconds,
+    /// by the radar's own clock; nil when the radar doesn't say (an older
+    /// one, the demo).
+    @Published private(set) var receiverLag: Double?
+    /// The radar answers and its receiver is writing its list: "live" is
+    /// true. A radar's web side goes on answering with the receiver stopped.
+    var receiverReporting: Bool { (receiverLag ?? 0) < Self.receiverQuietS }
+    static let receiverQuietS = 30.0
     private var lastGoodFetch: Date = .distantPast
 
     // Plain (non-Published) render-loop state, mutated directly from
@@ -320,6 +341,19 @@ final class RadarViewModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: UInt64(self.currentFetchInterval * 1_000_000_000))
             }
         }
+    }
+
+    /// The radar the view reads is another one, or none (an unpair, an
+    /// address typed in Settings): the old one's place, runways and aircraft
+    /// are not the new one's. Its place is read again when it answers.
+    func radarChanged() {
+        guard !isDemo else { return }
+        home = nil
+        runwayGeoJSON = nil
+        planes.removeAll()
+        aircraftCount = 0
+        notHeardCount = 0
+        receiverLag = nil
     }
 
     /// Switch between the owner's radar and the demo recording.
@@ -410,7 +444,9 @@ final class RadarViewModel: ObservableObject {
         // or when there is none. In a task of its own (#86, 2026-10-26): a wide
         // view is up to nine questions to adsb.lol, 8-20 s, and minutes when
         // it was silent, and the radar's own aircraft stood still meanwhile.
-        if wantsViewNetwork {
+        if networkPaused {
+            // Sky view is asking; keep what the screen had
+        } else if wantsViewNetwork {
             if networkTask == nil {
                 networkTask = Task { [weak self] in
                     await self?.pollNetworkAroundView()
@@ -449,7 +485,11 @@ final class RadarViewModel: ObservableObject {
 
     private func pollRadar() async {
         do {
-            let raw = try await AircraftFeedClient.fetchFeed(network: networkOn).aircraft
+            let feed = try await AircraftFeedClient.fetchFeed(network: networkOn)
+            let raw = feed.aircraft
+            // both by the radar's own clock, so the phone's doesn't come into it
+            let lag = (feed.now != nil && feed.heardAt != nil) ? feed.now! - feed.heardAt! : nil
+            if lag != receiverLag { receiverLag = lag }
             lastGoodFetch = Date()
             connected = true
             connecting = false
@@ -512,7 +552,7 @@ final class RadarViewModel: ObservableObject {
         connecting = false
         // bearing and range are from the radar when there is one, else from
         // the phone: what the labels and the ring count read
-        let origin = home ?? me ?? centre
+        let origin = radarPlace ?? me ?? centre
         var next: [String: PlaneState] = [:]
         for (raw, extra) in list {
             guard planes[raw.hex] == nil,
@@ -596,7 +636,7 @@ final class RadarViewModel: ObservableObject {
             aircraftCount = 0
             notHeardCount = 0
         }
-        if now.timeIntervalSince(viewNetworkFetchedAt) > dropInterval, !viewNetwork.isEmpty {
+        if !networkPaused, now.timeIntervalSince(viewNetworkFetchedAt) > dropInterval, !viewNetwork.isEmpty {
             viewNetwork.removeAll()
             networkCount = 0
         }

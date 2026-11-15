@@ -133,10 +133,17 @@ struct SkyView: View {
             camera.stop()
             if viewModel.compass?.onRadar == false { viewModel.compass = nil }
             viewModel.nearMe = [:]
+            viewModel.networkPauseOwner = nil
         }
         // Aircraft around the phone, every 5 s, while away and turned on.
         .task(id: nearMeKey) {
-            guard nearMeOn, isAway, let me = location.coordinate else { viewModel.nearMe = [:]; return }
+            guard nearMeOn, isAway, let me = location.coordinate else { viewModel.nearMe = [:]; viewModel.networkPauseOwner = nil; return }
+            // one question to the network, not two: see networkPaused. Let go
+            // only by the task that holds it: an older one ends after its
+            // successor has begun.
+            let mine = UUID()
+            viewModel.networkPauseOwner = mine
+            defer { if viewModel.networkPauseOwner == mine { viewModel.networkPauseOwner = nil } }
             while !Task.isCancelled {
                 if let list = await NetworkFeed.fetch(around: me) { NearMeFeed.apply(list, from: me, to: viewModel) }
                 try? await Task.sleep(for: .seconds(5))

@@ -201,6 +201,25 @@ final class PairingStore: ObservableObject {
             radars.removeAll { $0.unit == radar.unit }
             save()
             message = "Unpaired from \(radar.name)."
+            // The radar view's addresses, when pairing with this radar filled
+            // them in: left behind, the app went on counting a radar it no
+            // longer had, and the screens for someone without one never
+            // showed (review, 2026-11-15). An address typed by hand for some
+            // other radar is its owner's, and stays.
+            // The view goes to another paired radar's home address when there
+            // is one. The away address is the radar's at the home address, so
+            // it goes with it (the next radar gives its own at home). With no
+            // radar left and no address typed, nothing may read an away
+            // address either: one paired by its public address alone left it.
+            let wasRead = radar.host.map { APIConfig.baseURL == "http://\($0)" } ?? false
+            if wasRead {
+                APIConfig.baseURL = radars.compactMap(\.host).first.map { "http://\($0)" } ?? APIConfig.defaultBaseURL
+                message = "Unpaired from \(radar.name). The radar view no longer reads it."
+            }
+            if wasRead || (radars.isEmpty && APIConfig.baseURL == APIConfig.defaultBaseURL) {
+                APIConfig.awayURL = nil
+                APIConfig.awayOffered = nil
+            }
         } catch {
             message = error.localizedDescription
         }

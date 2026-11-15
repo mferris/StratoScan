@@ -92,6 +92,12 @@ struct SettingsView: View {
             }
             // Saved however the sheet closes, Done or a swipe down.
             .onDisappear { save() }
+            // Pairing and unpairing change the addresses under this screen:
+            // its copies of them, written back on closing, undid an unpair.
+            .onChange(of: pairing.radars.count) { _, _ in
+                baseURL = APIConfig.baseURL
+                awayURL = APIConfig.awayURL ?? ""
+            }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

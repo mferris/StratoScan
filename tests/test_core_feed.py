@@ -123,6 +123,8 @@ with tempfile.TemporaryDirectory() as t:
         check(by["a3711a"]["alt"] == "ground", "on the ground reads as ground")
         check(by["a1b2c3"]["vrate"] == -704 and by["a1b2c3"]["squawk"] == "4611", "vertical rate and squawk carried")
         check(all(a["source"] == "antenna" for a in feed["aircraft"]), "without ?network=1, only the antenna's aircraft")
+        check("heardAt" in feed and feed["heardAt"] == AIRCRAFT["now"] and feed["now"] > 1e9,
+              "heardAt is the receiver's own time for its list, beside the answer's now, so a screen can tell a stopped receiver")
 
         # nothing that could locate the receiver
         text = raw.decode()
@@ -148,6 +150,17 @@ with tempfile.TemporaryDirectory() as t:
         # read-only, and nothing else served
         check(get(port, "/api/aircraft", "POST")[0] == 405, "POST refused")
         check(get(port, "/api/other")[0] == 404, "other paths 404")
+
+        # The receiver stops: readsb's list is gone (its folder goes with it).
+        # The answer still comes, with no aircraft, and heardAt stands where
+        # the last list left it, so it falls behind "now" and a screen can
+        # say the receiver has stopped. Not null, which would read as an
+        # older radar that never says.
+        os.remove(os.path.join(t, "aircraft.json"))
+        time.sleep(1.3)
+        gone = json.loads(get(port, "/api/aircraft")[1])
+        check(gone["aircraft"] == [] and gone["heardAt"] == AIRCRAFT["now"] and gone["now"] - gone["heardAt"] > 30,
+              "with the receiver's list gone, heardAt stands still and falls behind now")
     finally:
         proc.terminate()
         proc.wait(5)

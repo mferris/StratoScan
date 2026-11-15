@@ -32,7 +32,10 @@ struct WatchRadarView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 } else if failed {
-                    Text("Can't reach the radar. Open StratoScan on your iPhone once to set it up.")
+                    // no radar is not a radar out of reach (2026-11-15)
+                    Text(receiver.hasRadar || DemoFeed.isOn
+                         ? "Can't reach the radar. Open StratoScan on your iPhone once to set it up."
+                         : "No radar yet. The Watch shows what a StratoScan radar hears; the iPhone app shows the aircraft around you.")
                         .font(.caption2).multilineTextAlignment(.center).foregroundColor(.secondary)
                 } else {
                     ProgressView()
@@ -45,6 +48,11 @@ struct WatchRadarView: View {
                 await refresh()
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
+        }
+        // another radar, or none: what was on screen was the last one's
+        .onChange(of: receiver.radarChanges) { _, _ in
+            home = nil; aircraft = []; nearby = nil; failed = false
+            Task { await refresh() }
         }
     }
 
@@ -76,6 +84,8 @@ struct WatchRadarView: View {
     }
 
     private func refresh() async {
+        // no radar: nothing to ask, and the default address isn't one
+        guard receiver.hasRadar || DemoFeed.isOn else { home = nil; aircraft = []; nearby = nil; failed = true; return }
         do {
             // the radar's position as kept, read again once a day (#86): its
             // own look-up in front of every first look held the glance up
