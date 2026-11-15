@@ -178,6 +178,7 @@ def check_reset(fails):
         d.READSB_DEFAULT = os.path.join(tmp, "readsb")
         d.READSB_ORIG = os.path.join(tmp, "orig")
         d.PENDING = os.path.join(tmp, "pending.json")
+        d.HOTSPOT_PSK = os.path.join(tmp, "hotspot-psk")
         d.APPROACH_FILES = (os.path.join(tmp, "approaches.json"), os.path.join(tmp, "approaches.json.points-v1"))
         pristine = 'DECODER_OPTIONS="--lat 0.00000 --lon 0.00000"\n'
 

@@ -47,6 +47,7 @@ import json
 import math
 import os
 import shutil
+import stat
 import struct
 import sys
 import time
@@ -512,8 +513,17 @@ def current_meta():
 
 
 def receiver_location():
-    with open(RECEIVER_JSON) as f:
-        d = json.load(f)
+    # readsb's own directory, and net-watchdog asks this as root every two
+    # minutes: only a plain file, never through a link, and no more than
+    # 64 KB of it (2026-11-15). A link there to /dev/zero was read until the
+    # unit ran out of memory. The real file is a few hundred bytes.
+    fd = os.open(RECEIVER_JSON, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError(f"{RECEIVER_JSON} is not a plain file")
+        d = json.loads(os.read(fd, 65536))
+    finally:
+        os.close(fd)
     return float(d["lat"]), float(d["lon"])
 
 

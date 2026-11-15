@@ -531,7 +531,12 @@ def wifi_scan():
 
 
 def write_pending(rec):
-    atomic_write(PENDING, json.dumps(rec), mode=0o660)
+    # 0640 since 2026-11-15; it was 0660. Only setupd writes this record and
+    # only root reads it (setupd here, net-watchdog for the journal line);
+    # the web tier asks through the "pending" verb. A file of root's that
+    # the web tier's group could write was also one it could set the time
+    # on, which is what net-watchdog's reboot marker must never be.
+    atomic_write(PENDING, json.dumps(rec), mode=0o640)
 
 
 def read_pending():
@@ -582,6 +587,93 @@ def connectivity_ok():
     return True, None
 
 
+# Where NetworkManager keeps the profiles it saves: root's, mode 0600.
+NM_KEYFILE_DIR = "/etc/NetworkManager/system-connections"
+NM_PSK_SECTIONS = ("[wifi-security]", "[802-11-wireless-security]")
+
+
+def keyfile_value(text):
+    """`text` as a keyfile string value, written as NetworkManager's own
+    writer (GLib's) writes one: a backslash doubled, each leading space as backslash-s.
+    Nothing else is special in a value; v_psk has already refused control
+    characters."""
+    out = text.replace("\\", "\\\\")
+    lead = len(out) - len(out.lstrip(" "))
+    return "\\s" * lead + out[lead:]
+
+
+def profile_keyfile(name):
+    """The keyfile NetworkManager saved profile `name` in, or None: no such
+    profile, more than one, or one kept anywhere else (netplan's are under
+    /run and are not NetworkManager's to reload)."""
+    p = run([NMCLI, "-t", "-f", "NAME,FILENAME", "connection", "show"], timeout=20)
+    if p.returncode != 0:
+        return None
+    found = []
+    for line in p.stdout.decode("utf-8", "replace").splitlines():
+        # nmcli -t writes a literal colon as \: and a backslash as \\
+        parts = [re.sub(r"\\(.)", r"\1", part) for part in re.split(r"(?<!\\):", line)]
+        if len(parts) == 2 and parts[0] == name:
+            found.append(parts[1])
+    if len(found) != 1 or os.path.dirname(found[0]) != NM_KEYFILE_DIR:
+        return None
+    return found[0]
+
+
+def stored_psk_is(profile, psk):
+    """Whether NetworkManager holds exactly `psk` for `profile`. It answers on
+    stdout (a pipe only this process reads), unescaped, so the comparison is
+    character for character."""
+    p = run([NMCLI, "-s", "-e", "no", "-g", "802-11-wireless-security.psk",
+             "connection", "show", profile], timeout=20)
+    out = p.stdout.decode("utf-8", "replace")
+    return p.returncode == 0 and (out[:-1] if out.endswith("\n") else out) == psk
+
+
+def wifi_psk_by_keyfile(profile, psk):
+    """Give `profile` its password without it ever being a command's
+    argument (2026-11-15). True only when NetworkManager then answers with
+    exactly that password; False leaves the profile as it was found, for the
+    caller to fall back on the old route.
+
+    The profile is one nmcli has just made, so the file is NetworkManager's
+    own writing; all that is added is one psk= line under its security
+    section, and the file is put back by rename, still root's and 0600 (the
+    temporary name starts with a dot, which NetworkManager does not read).
+    Then NetworkManager is told to read that one file again.
+    """
+    try:
+        path = profile_keyfile(profile)
+        text = read_shared(path) if path else None
+        if text is None:
+            return False
+        lines = text.split("\n")
+        heads = [i for i, line in enumerate(lines) if line.strip() in NM_PSK_SECTIONS]
+        if len(heads) != 1:
+            return False
+        for line in lines[heads[0] + 1:]:
+            if line.startswith("["):
+                break
+            if line.split("=", 1)[0].strip() == "psk":
+                return False
+        lines.insert(heads[0] + 1, "psk=" + keyfile_value(psk))
+    except Exception:
+        return False
+    try:
+        atomic_write(path, "\n".join(lines), mode=0o600)
+        if run([NMCLI, "connection", "load", path], timeout=20).returncode == 0 \
+                and stored_psk_is(profile, psk):
+            return True
+    except Exception:
+        pass
+    # It did not take. NetworkManager's own file goes back, and is read again,
+    # so what the caller deletes and makes afresh is a profile it knows.
+    with contextlib.suppress(Exception):
+        atomic_write(path, text, mode=0o600)
+        run([NMCLI, "connection", "load", path], timeout=20)
+    return False
+
+
 def wifi_connect(ssid, psk, hidden=False):
     """Add a candidate profile and try it, without disturbing the working one.
 
@@ -607,35 +699,43 @@ def wifi_connect(ssid, psk, hidden=False):
     with contextlib.suppress(Exception):
         nm_delete_profile(CANDIDATE_PROFILE)
 
-    argv = [NMCLI, "connection", "add", "type", "wifi", "con-name", CANDIDATE_PROFILE,
-            "ifname", "wlan0", "ssid", ssid,
-            "connection.autoconnect", "no"]
-    if hidden:
-        argv += ["wifi.hidden", "yes"]
-    run(argv, timeout=20, check=True)
+    def add_candidate():
+        argv = [NMCLI, "connection", "add", "type", "wifi", "con-name", CANDIDATE_PROFILE,
+                "ifname", "wlan0", "ssid", ssid,
+                "connection.autoconnect", "no"]
+        if hidden:
+            argv += ["wifi.hidden", "yes"]
+        run(argv, timeout=20, check=True)
+        if psk:
+            run([NMCLI, "connection", "modify", CANDIDATE_PROFILE,
+                 "wifi-sec.key-mgmt", "wpa-psk"], timeout=20, check=True)
 
-    if psk:
-        # NOTE: the PSK *is* in argv for the second call below, and is
-        # readable from /proc/<pid>/cmdline for as long as that nmcli runs.
+    add_candidate()
+    if psk and not wifi_psk_by_keyfile(CANDIDATE_PROFILE, psk):
+        # The password went to nmcli as an argument until 2026-11-15, where
+        # any local user could read it from /proc while that nmcli ran; nmcli
+        # takes a property's value no other way. It now goes into the
+        # profile's own keyfile (wifi_psk_by_keyfile), and this is the old
+        # route, kept for when that one does not take: a profile that is not
+        # a keyfile, a file laid out differently, a NetworkManager that
+        # answers with anything but the password it was given. Joining the
+        # WiFi matters more than the sub-second window, so the profile is
+        # made again from nothing, exactly as before.
         #
-        # This comment used to claim the opposite -- "the key never appears in
-        # argv" -- describing a protection the code did not implement. That is
-        # worse than no comment: it is the same failure as the X-FR-Public
-        # marker, a defence that exists only in prose. secret_file() is real
-        # and is used for the Tailscale auth key (see tailscale_up); it is
-        # NOT usable here, because nmcli takes property values only as
-        # arguments, with no file or stdin form.
-        #
-        # Left as-is deliberately. Closing it means writing the secret into
-        # the keyfile under /etc/NetworkManager/system-connections (already
-        # 0600 root:root) and reloading, which cannot be rehearsed on a
-        # remote device whose only link is the WiFi being reconfigured: a
-        # mistake there strands the unit with no way back in. The exposure it
-        # would buy back is narrow -- a local process running as some other
-        # service user, sampling /proc during a sub-second window, to learn
-        # the WiFi password of the network it is already attached to.
-        run([NMCLI, "connection", "modify", CANDIDATE_PROFILE,
-             "wifi-sec.key-mgmt", "wpa-psk"], timeout=20, check=True)
+        # Each time that happens the journal gets one line at warning
+        # priority (the "<4>" is systemd's prefix for it), so a unit that
+        # always falls back shows up in `journalctl -p warning` instead of
+        # looking as if the keyfile route worked. A journal line and not a
+        # count in the health report: nothing the report reads is setupd's
+        # to write. On a radar running Raspberry Pi OS trixie the WiFi profile was seen to be a
+        # keyfile under /etc/NetworkManager/system-connections on
+        # 2026-11-15, which is the case the keyfile route expects; a real
+        # join through it has not been run on a unit yet.
+        print("<4>setupd: the WiFi password could not be set through the profile's keyfile; "
+              "set through nmcli's arguments instead", flush=True)
+        with contextlib.suppress(Exception):
+            nm_delete_profile(CANDIDATE_PROFILE)
+        add_candidate()
         run([NMCLI, "connection", "modify", CANDIDATE_PROFILE,
              "wifi-sec.psk", psk], timeout=20, check=True)
 
@@ -714,16 +814,81 @@ def v_hotspot_psk(text):
     return psk
 
 
+# The setup network's password: 12 characters from 31 that are hard to
+# misread (about 59 bits) for any made since 2026-11-15; it was 10. One a
+# unit already has is kept as it is until that unit is erased.
+HOTSPOT_PSK_CHARS = "23456789abcdefghjkmnpqrstuvwxyz"
+HOTSPOT_PSK_LEN = 12
+
+
+def new_hotspot_psk():
+    """Make and save a new setup-network password. ONLY while the setup
+    network is down, and only by a caller that holds the state lock: the
+    screen and the setup QR show what this file holds, and hotspot_start
+    gives the network what this file holds, so the two agree as long as the
+    file never changes under a running network or between hotspot_start
+    reading it and raising the network."""
+    import secrets as _s
+    psk = "".join(_s.choice(HOTSPOT_PSK_CHARS) for _ in range(HOTSPOT_PSK_LEN))
+    atomic_write(HOTSPOT_PSK, psk, mode=0o600)
+    return psk
+
+
 def hotspot_psk():
-    """Stable per-device PSK, so the label/on-screen value stays valid."""
+    """The setup network's password: the same one every time it comes up, so
+    a phone that joined once rejoins by itself and the value on the screen
+    stays right. A new one is made when there is none, when the saved one is
+    not a password the network could be raised with (an empty or damaged
+    file would otherwise mean no setup network at all), and when the unit is
+    erased for its next owner (reset_full). Because it may write, it is for
+    callers that hold the state lock (hotspot_start, under every verb that
+    reaches it); hotspot_info reads with saved_hotspot_psk."""
+    psk = saved_hotspot_psk()
+    return psk if psk is not None else new_hotspot_psk()
+
+
+def saved_hotspot_psk():
+    """The saved setup-network password, or None when there is none the
+    network could be raised with. Never writes."""
     try:
         with open(HOTSPOT_PSK) as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        import secrets as _s
-        psk = "".join(_s.choice("23456789abcdefghjkmnpqrstuvwxyz") for _ in range(10))
-        atomic_write(HOTSPOT_PSK, psk, mode=0o600)
-        return psk
+            return v_hotspot_psk(f.read(256))
+    except (FileNotFoundError, ValueError, Err):
+        return None
+
+
+def hotspot_info():
+    """What the screen and the setup QR show: the setup network's name, its
+    password, whether it is up, and its address.
+
+    A read, so it runs without the state lock, and until 2026-11-15 it could
+    still write: with no usable password saved it made one, at any moment,
+    including between hotspot_start (under the lock) reading the password
+    and raising the network -- the screen then showed one password and the
+    network used another. Now it only reads. When there is nothing to read
+    it takes the lock to make one; if a change is in progress it answers
+    with no password this time (that change may be raising the network and
+    making it) and the next look, a few seconds later, has it.
+    """
+    psk = saved_hotspot_psk()
+    if psk is None:
+        try:
+            with state_lock():
+                psk = hotspot_psk()
+        except Err as e:
+            if e.code != "busy":
+                raise
+    return {"ssid": "StratoScan-Setup", "psk": psk,
+            "active": hotspot_active(), "address": hotspot_address()}
+
+
+def hotspot_state():
+    """True when the setup network is up, False when it is down, None when
+    NetworkManager did not answer (nmcli failed), which is neither."""
+    p = run([NMCLI, "-t", "-f", "NAME", "connection", "show", "--active"], timeout=15)
+    if p.returncode != 0:
+        return None
+    return HOTSPOT_PROFILE in p.stdout.decode("utf-8", "replace")
 
 
 def hotspot_active():
@@ -733,8 +898,7 @@ def hotspot_active():
     'StratoScan-Setup' when the device is already on their WiFi sends them
     looking for a network that does not exist.
     """
-    p = run([NMCLI, "-t", "-f", "NAME", "connection", "show", "--active"], timeout=15)
-    return HOTSPOT_PROFILE in p.stdout.decode("utf-8", "replace")
+    return bool(hotspot_state())
 
 
 def hotspot_stop():
@@ -1691,12 +1855,42 @@ def reset_full():
     with contextlib.suppress(Exception):
         code = ensure_claim_code()
 
+    # 5a. a new setup-network password (2026-11-15). The old one was the
+    # previous owner's to know, and it used to outlive the erase: anyone who
+    # had it could join whenever the setup network was up. Only with that
+    # network down (step 1 removed its profile), and before step 6 raises it
+    # again with whatever the file then holds -- so if this fails, or can't
+    # tell, the old password stays in the file and on the air together.
+    # When it stays, the erase says so (hotspotPasswordKept, and one journal
+    # line at warning priority) instead of answering as if it had changed:
+    # whoever is handing the unit on needs to know the last owner's setup
+    # password still works, and can erase again.
+    kept = None
+    try:
+        up = hotspot_state()
+    except Exception:
+        up = None
+    if up:
+        kept = "the setup network was still up"
+    elif up is None:
+        kept = "NetworkManager could not say whether the setup network was up"
+    else:
+        try:
+            new_hotspot_psk()
+        except Exception:
+            kept = "a new password could not be saved"
+    if kept:
+        print(f"<4>setupd: erase kept the old setup-network password: {kept}", flush=True)
+
     # 6. leave it reachable and claimable by its next owner
     hs = None
     with contextlib.suppress(Exception):
         hs = hotspot_start()
-    return {"reset": "full", "hotspot": (hs or {}).get("ssid", "StratoScan-Setup"),
-            "claimCode": code}
+    out = {"reset": "full", "hotspot": (hs or {}).get("ssid", "StratoScan-Setup"),
+           "claimCode": code, "hotspotPassword": "kept" if kept else "new"}
+    if kept:
+        out["hotspotPasswordKept"] = kept
+    return out
 
 
 # ------------------------------------------------------------------- verbs
@@ -1708,9 +1902,7 @@ VERBS = {
     "wifi_rollback": lambda p: wifi_rollback(),
     "hotspot_start": lambda p: hotspot_start(),
     "hotspot_stop": lambda p: hotspot_stop(),
-    "hotspot_info": lambda p: {"ssid": "StratoScan-Setup", "psk": hotspot_psk(),
-                               "active": hotspot_active(),
-                               "address": hotspot_address()},
+    "hotspot_info": lambda p: hotspot_info(),
     "set_location": lambda p: set_location(p.get("lat"), p.get("lon")),
     "geocode": lambda p: geocode(p.get("query")),
     "ota_status": lambda p: ota_status(),
@@ -1915,6 +2107,13 @@ def main():
         # Not a reason to stay down: this is the recovery path for the network.
         print(f"setupd: could not move its own files out of {STATE_DIR}: {e}", flush=True)
     share_state_dir()
+    # The setup network's password is made here if there is none yet, before
+    # the socket exists (2026-11-15), so hotspot_info, which no longer
+    # writes without the state lock, has one to read from the first request
+    # and never needs that lock on a new unit's first boot, when the
+    # watchdog is about to ask for the network to be raised.
+    with contextlib.suppress(Exception):
+        hotspot_psk()
     code = ensure_claim_code()
     if code:
         # Where the code is, never the code: the journal is readable by the

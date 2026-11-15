@@ -37,6 +37,16 @@ with tempfile.TemporaryDirectory() as tmp:
     m.AIRCRAFT_JSON = os.path.join(tmp, "aircraft.json")
     m.RECEIVER_RESTARTS = os.path.join(tmp, "net", "receiver-restarts")
     m.LAST_REBOOT = os.path.join(tmp, "state", "last-watchdog-reboot")
+    m.LAST_REBOOT_OLD = os.path.join(tmp, "web-tier", "last-watchdog-reboot")
+
+    def forget_reboot():
+        # Only the watchdog's own marker is the brake (2026-11-15). The old
+        # one, beside the web tier's files, is kept up for the health report
+        # and is left here on purpose: touched since this boot, it must not
+        # hold the next reboot back.
+        os.remove(m.LAST_REBOOT)
+        check("each reboot also leaves the old marker for the health report",
+              os.path.isfile(m.LAST_REBOOT_OLD))
     m.KIOSK_STUCK_GLOB = os.path.join(tmp, "user", "*", "stratoscan-kiosk-stuck")
     calls = []
     m.run = lambda argv, timeout=45: calls.append(argv[1:])
@@ -95,7 +105,7 @@ with tempfile.TemporaryDirectory() as tmp:
     calls.clear()
     m.check_receiver()
     check("a second cycle inside the interval is refused; the reboot follows", calls == [["reboot"]])
-    os.remove(m.LAST_REBOOT)
+    forget_reboot()
     os.remove(m.UHUBCTL)
     os.remove(m.USB_CYCLED)
 
@@ -167,7 +177,7 @@ with tempfile.TemporaryDirectory() as tmp:
     calls.clear()
 
     # ---- kiosk -----------------------------------------------------------
-    os.remove(m.LAST_REBOOT)
+    forget_reboot()
     stuck_dir = os.path.join(tmp, "user", "1000")
     os.makedirs(stuck_dir)
     stuck = os.path.join(stuck_dir, "stratoscan-kiosk-stuck")

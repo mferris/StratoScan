@@ -83,6 +83,16 @@ check(json.loads((state / "pending.json").read_text()).get("ssid") == "HomeNet"
       and not (state / "pending.json").is_symlink(), "and pending.json is written, as a file of its own")
 check(not [n for n in os.listdir(state) if n.startswith(".pending.json.") and n != ".pending.json.tmp"],
       "leaving no temporary file behind")
+# 0640 since 2026-11-15 (it was 0660): a file of root's that the web tier's
+# group can write is one it can rename and set the time on, which is how the
+# watchdog's old reboot marker could be forged. Nothing in the web tier
+# writes or opens this file; it asks setupd's "pending" verb.
+check(stat.S_IMODE((state / "pending.json").stat().st_mode) == 0o640,
+      "pending.json is 0640: the web tier's group cannot write it")
+check(d.read_pending() is not None and d.read_pending()["ssid"] == "HomeNet", "and setupd still reads it back")
+server = (ROOT / "deploy" / "setup-server.py").read_text()
+check("pending.json" not in server and 'call_setupd("pending")' in server,
+      "the web tier never opens pending.json itself; it asks setupd")
 
 # ---- the lock ----------------------------------------------------------------------
 v = victim("locked")

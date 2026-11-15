@@ -918,6 +918,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if b.get("confirm") != "ERASE":
                 return self._err(400, "confirm_required", "Type ERASE to confirm.")
             r = call_setupd("reset_full", timeout=180)
+            forget_probe()
         else:
             return self._err(400, "bad_scope", "Unknown reset type.")
         if not r.get("ok"):
@@ -1528,6 +1529,7 @@ class OnboardHandler(http.server.BaseHTTPRequestHandler):
             if body.get("confirm") != "ERASE":
                 return self._json(400, {"error": {"message": "Confirmation missing."}})
             r = call_setupd("reset_full", timeout=180)
+            forget_probe()
             if r.get("ok"):
                 drop_sessions()
                 forget_good()
@@ -1687,6 +1689,15 @@ def _onboard_probe():
                  unwrap(call_setupd("tailscale_status")))
         _probe_cache.update(at=now, value=value)
         return value
+
+
+def forget_probe():
+    """Have the next look at the setup network, the WiFi and Tailscale ask
+    setupd afresh. An erase gives the setup network a new password
+    (2026-11-15), and the screen must not show the old one for the rest of
+    the cache's 20 seconds. Only the age is dropped: the app's hello keeps
+    the last answer until the new one lands."""
+    _probe_cache["at"] = float("-inf")
 
 
 def _probe_cached():

@@ -26,6 +26,7 @@ periods.
 import errno
 import json
 import os
+import stat
 import subprocess
 import sys
 import time
@@ -103,7 +104,23 @@ KIOSK_REBOOT_AFTER = 4
 # However broken things are, never reboot more often than this: a fault a
 # reboot cannot fix (a missing SDR stick) must degrade to "reboots a few
 # times a day", not a loop that makes the unit unusable.
-LAST_REBOOT = os.path.join(STATE_DIR, "last-watchdog-reboot")
+# The brake's own marker is in a directory only root can write (2026-11-15).
+# It was in STATE_DIR, which the web tier can write: a link left at its name,
+# to a file that is touched often, read as "rebooted a moment ago" for good
+# and no fault was ever rebooted away; removing it took the brake off.
+#
+# Only this marker is the brake. The old one is looked at once, the first
+# time a reboot is wanted and there is no marker here (last_reboot_time), so
+# a unit that rebooted just before this arrived waits out its six hours;
+# never again after that.
+# Looking at it on every decision, as the first version of this did, left
+# the same hole: STATE_DIR is group-writable and not sticky, so the web tier
+# could rename a file of root's that its group may write (pending.json was
+# one) to the old marker's name and touch it every few hours. The old one is
+# still made fresh after each reboot, because the health report gives its
+# age (heartbeat.py, last_watchdog_reboot_age_s).
+LAST_REBOOT = "/var/lib/stratoscan-net/last-watchdog-reboot"
+LAST_REBOOT_OLD = os.path.join(STATE_DIR, "last-watchdog-reboot")
 OFFLINE_MAP = "/opt/stratoscan/offline-map.py"
 HEARTBEAT = "/opt/stratoscan/heartbeat.py"
 NOTABLE_DB = "/opt/stratoscan/notable-db.py"
@@ -164,6 +181,29 @@ def call_setupd(verb, params=None, timeout=120):
         s.close()
 
 
+def read_small(path, limit=65536):
+    """The text of `path`, or None: only a plain file with no other name, no
+    larger than `limit`, opened without following a link (2026-11-15; the
+    same rule as setupd's read_shared). This runs as root, and STATE_DIR is
+    the web tier's and /run/user/<id> the desktop user's: a link left there
+    to /dev/zero was read until the unit ran out of memory, and one to a
+    file of root's was read as if it were theirs."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError:
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_size > limit:
+            return None
+        data = os.read(fd, limit + 1)
+        return data.decode("utf-8") if len(data) <= limit else None
+    except (OSError, UnicodeDecodeError):
+        return None
+    finally:
+        os.close(fd)
+
+
 def is_claimed():
     """Has anyone finished setting this unit up?
 
@@ -171,8 +211,7 @@ def is_claimed():
     that service may not be listening yet.
     """
     try:
-        with open(os.path.join(STATE_DIR, "setup.json")) as f:
-            return bool(json.load(f).get("claimed"))
+        return bool(json.loads(read_small(os.path.join(STATE_DIR, "setup.json"), 1 << 20)).get("claimed"))
     except Exception:
         return False    # unreadable or absent => treat as not yet set up
 
@@ -249,7 +288,7 @@ def touch_runtime(path):
     d = os.path.dirname(path)
     if d:
         os.makedirs(d, exist_ok=True)
-    # Never through a link (security review 2026-10-26). LAST_REBOOT sits in
+    # Never through a link (security review 2026-10-26). LAST_REBOOT_OLD sits in
     # the web tier's own directory and this runs as root, so a link planted
     # there would have had root truncate whatever it named. A link in the way
     # is removed (unlinking never follows one) and the marker made fresh.
@@ -313,8 +352,7 @@ def _uptime():
 
 def _read_int(path):
     try:
-        with open(path) as f:
-            return int(f.read().strip() or 0)
+        return int((read_small(path, 64) or "").strip() or 0)
     except Exception:
         return 0
 
@@ -325,17 +363,81 @@ def _write_int(path, n):
         f.write(str(n))
 
 
-def watchdog_reboot(reason):
+def _own_mtime(path):
+    """When `path` was last touched, or 0 unless it is a plain file of root's
+    with no other name. The file itself is looked at, never what a link at
+    its name points to."""
     try:
-        last = os.path.getmtime(LAST_REBOOT)
+        st = os.lstat(path)
     except OSError:
-        last = 0
-    if time.time() - last < MIN_REBOOT_INTERVAL_S:
+        return 0
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid() or st.st_nlink != 1:
+        return 0
+    return st.st_mtime
+
+
+def _old_marker_time():
+    """The time on the old marker, in the web tier's directory, or 0 when it
+    is not one this watchdog could have left before the last reboot.
+
+    The watchdog made it as root, mode 0644, and touched it a moment before
+    it rebooted. So it counts only if it is a plain file of root's with no
+    other name, with no permission beyond 0644 (the web tier's group cannot
+    write it, so it cannot have set its time), and its time is earlier than
+    this boot. Anything else in that directory may be the web tier's doing.
+    """
+    try:
+        st = os.lstat(LAST_REBOOT_OLD)
+        booted = time.time() - _uptime()
+    except (OSError, ValueError, IndexError):
+        return 0
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid() or st.st_nlink != 1:
+        return 0
+    if stat.S_IMODE(st.st_mode) & ~0o644:
+        return 0
+    if not 0 < st.st_mtime < booted:
+        return 0
+    return st.st_mtime
+
+
+def last_reboot_time():
+    """When this watchdog last rebooted the unit, from its own marker; 0 for
+    never.
+
+    The first time it is asked and there is no marker (after this version
+    arrived, or on a new unit) the marker is made, and given the old marker's
+    time if that one can be believed (_old_marker_time), otherwise 0. That is
+    the only look the old marker ever gets. If the marker cannot be made this raises, and
+    there is no reboot: a brake that cannot be recorded must not become a
+    loop of reboots.
+    """
+    try:
+        os.lstat(LAST_REBOOT)
+    except OSError:
+        t = _old_marker_time()
+        touch_runtime(LAST_REBOOT)
+        os.utime(LAST_REBOOT, (t, t), follow_symlinks=False)
+        return t
+    return _own_mtime(LAST_REBOOT)
+
+
+def watchdog_reboot(reason):
+    if time.time() - last_reboot_time() < MIN_REBOOT_INTERVAL_S:
         print(f"health: would reboot ({reason}) but rebooted recently; holding",
               flush=True)
         return
     print(f"health: rebooting -- {reason}", flush=True)
     touch_runtime(LAST_REBOOT)
+    try:
+        # Made fresh each time, so whatever the web tier left at that name
+        # (a link, a second name for a file elsewhere) is dropped, not written.
+        try:
+            os.unlink(LAST_REBOOT_OLD)
+        except FileNotFoundError:
+            pass
+        touch_runtime(LAST_REBOOT_OLD)
+    except OSError:
+        pass                        # only for the health report; the brake is the one above
     run([SYSTEMCTL, "reboot"], timeout=30)
 
 
@@ -788,13 +890,15 @@ def main():
     check_health()
 
     # 1. roll back anything left unconfirmed
-    if os.path.exists(PENDING):
+    # Anything at that name is rolled back, whatever it is: setupd checks the
+    # record itself. It is read here only to name the network in the journal,
+    # so never through a link, and no more than a record's worth (2026-11-15).
+    if os.path.lexists(PENDING):
         try:
-            with open(PENDING) as f:
-                pend = json.load(f)
+            ssid = str(json.loads(read_small(PENDING)).get("ssid"))[:64]
         except Exception:
-            pend = {"ssid": "?"}
-        print(f"net-watchdog: unconfirmed change to {pend.get('ssid')!r}; rolling back",
+            ssid = "?"
+        print(f"net-watchdog: unconfirmed change to {ssid!r}; rolling back",
               flush=True)
         call_setupd("wifi_rollback")
 
