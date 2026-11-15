@@ -6,7 +6,9 @@ os-update.py moves them, but only to versions named in the signed release's
 os-packages.json, and only with a way back:
 
 - Chromium: the replaced versions are kept as .debs; the new browser must
-  paint, or they go back and that version is never tried again here.
+  paint, or they go back and that version is never tried again here. A
+  pinned version apt no longer offers is noted once and nothing is touched;
+  an install that fails with nothing unpacked puts nothing back.
 - The kernel: one trial boot from its own folder (tryboot); kept only if it
   boots, paints and has a network; otherwise the old kernel is what boots and
   the new one is removed.
@@ -64,6 +66,10 @@ class World:
         self.download_ok = True
         self.repack_ok = True
         self.install_ok = True
+        self.install_partial = []      # packages apt replaces before it fails
+        self.withdrawn = set()         # packages whose pinned version no archive offers
+        self.update_ok = True          # apt-get update reaches the archives
+        self.madison_ok = True
         self.on_install = None
         self.pkg_of_modules = {}
         self.purge_also = []           # what apt would remove besides the packages named
@@ -87,8 +93,27 @@ class World:
                 (pathlib.Path(cwd) / f"{cmd[1]}_repacked.deb").write_text("deb")
                 return 0, "", ""
             return 1, "", "no"
+        if c == "apt-get" and cmd[1] == "update":
+            return (0 if self.update_ok else 100), "", ""
+        if c == "apt-cache" and cmd[1] == "madison":
+            # What the archives offer: an older build of each package asked
+            # for, and the version os-packages.json pins unless withdrawn.
+            if not self.madison_ok:
+                return 100, "", "E: could not open the cache"
+            pins = json.loads((tmp / "os-packages.json").read_text())["packages"]
+            src = "http://archive.example.com/debian trixie/main arm64 Packages"
+            out = ""
+            for n in cmd[2:]:
+                if n not in self.withdrawn:
+                    out += f" {n} | {pins[n]} | {src}\n"
+                out += f" {n} | 1:100.0-1 | {src}\n"
+            return 0, out, ""
         if c == "apt-get" and cmd[1] == "install":
             if not self.install_ok:
+                for spec_ in [a for a in cmd if "=" in a and not a.startswith("-") and "::" not in a]:
+                    n, v = spec_.split("=", 1)
+                    if n in self.install_partial:
+                        self.have[n] = v
                 return 100, "", "E: broken"
             for spec_ in [a for a in cmd if "=" in a and not a.startswith("-") and "::" not in a]:
                 n, v = spec_.split("=", 1)
@@ -182,6 +207,36 @@ check(osu.wanted_versions() == {}, "a broken file is ignored")
 shipped = json.loads((D / "os-packages.json").read_text())
 check(shipped["kind"] == "os-packages" and isinstance(shipped["packages"], dict),
       "the shipped os-packages.json has the right shape")
+# Chromium 156 (security review 2026-11-03, SR-09): four packages at one
+# build. chromium-sandbox is among them again (2026-11-15): the archive
+# offers it at that version, checked on ring 0, which only lacks the package
+# itself. Left out, a unit that has it would keep a 154 sandbox beside a 156
+# browser.
+pk = shipped["packages"]
+cr = {n: v for n, v in pk.items() if n.startswith("chromium")}
+check(sorted(cr) == ["chromium", "chromium-common", "chromium-l10n", "chromium-sandbox"],
+      "the shipped list pins the four Chromium packages, chromium-sandbox among them")
+check(set(cr.values()) == {"1:156.0.8078.79-1~deb13u1+rpt1"}, "all at the same 156 build")
+check(all(osu.package_class(n) == "app" for n in cr), "each is one os-update.py moves as the browser")
+check(pk.get("linux-image-rpi-2712") == "1:6.18.50-1+rpt1" and pk.get("raspi-firmware") == "1:1.20260915-1",
+      "the kernel and firmware pins are as they were: a kernel move is its own trial")
+check("156" in shipped["tested_on"] and "on trial from 2026-11-15" in shipped["tested_on"]
+      and "not passed" in shipped["tested_on"], "its note says 156 is on trial at ring 0, not that it has passed")
+check("chromium-sandbox is pinned" in shipped["tested_on"] and "not listed" not in shipped["tested_on"]
+      and "offered none" not in shipped["tested_on"],
+      "and that chromium-sandbox is pinned, no longer that the archive had none")
+write_packages(pk)
+world = World()
+fresh(world)
+old = "1:154.0.8037.92-1~deb13u1+rpt1"
+steps = osu.plan(osu.wanted_versions(), {"chromium": old, "chromium-common": old, "chromium-l10n": old,
+                                         "chromium-sandbox": old, "linux-image-rpi-2712": "1:6.18.50-1+rpt1"}, {})
+check([s[0] for s in steps] == ["chromium", "chromium-common", "chromium-l10n", "chromium-sandbox"]
+      and all(s[3] == "app" for s in steps), "on a unit at 154 that has all four, the four move together")
+steps = osu.plan(osu.wanted_versions(), {"chromium": old, "chromium-common": old, "chromium-l10n": old,
+                                         "linux-image-rpi-2712": "1:6.18.50-1+rpt1"}, {})
+check([s[0] for s in steps] == ["chromium", "chromium-common", "chromium-l10n"],
+      "on a unit without chromium-sandbox (ring 0) three move, and apt is not asked to install a fourth")
 
 world = World()
 fresh(world)
@@ -242,12 +297,102 @@ osu.run()
 check(world.ran("dpkg-repack") and world.have["chromium"] == "141",
       "an old version no longer in the archive is rebuilt from the installed one")
 
+write_packages({"chromium": "141", "chromium-common": "141"})
 world = World()
-world.have = {"chromium": "140"}
+world.have = {"chromium": "140", "chromium-common": "140"}
+world.install_ok = False
+world.install_partial = ["chromium-common"]
+fresh(world)
+rc = osu.run()
+check(rc == 1 and world.ran("dpkg", "-i"), "apt failing part-way (one package replaced) puts the kept versions back")
+
+# apt failing before it unpacked anything: the browser that is running is
+# whole, so nothing is put back over it (2026-11-15).
+world = World()
+world.have = {"chromium": "140", "chromium-common": "140"}
 world.install_ok = False
 fresh(world)
 rc = osu.run()
-check(rc == 1 and world.ran("dpkg", "-i"), "apt failing part-way puts the kept versions back")
+st = osu.load_state()
+check(rc == 1 and world.ran("apt-get", "install") and not world.ran("dpkg", "-i") and osu._ota.restarts == 0,
+      "apt failing with nothing unpacked: nothing is put back over the running browser, and the kiosk is not restarted")
+check(world.have == {"chromium": "140", "chromium-common": "140"} and "apt could not install" in st["result"]["why"]
+      and "failed" not in st, "the versions are as they were, it says why, and the version may be tried again")
+
+# A pinned version the archives no longer offer (2026-11-15): asked first,
+# noted once, and nothing else happens, that day or the next.
+class Watched(FakeOta):
+    woken = 0
+
+    def wake_display(self):
+        self.woken += 1
+        return True
+
+
+world = World()
+world.have = {"chromium": "140", "chromium-common": "140", "linux-image-rpi-2712": "1"}
+world.withdrawn = {"chromium-common"}
+fake = Watched()
+fresh(world, fake)
+write_packages({"chromium": "141", "chromium-common": "141", "linux-image-rpi-2712": "2"})
+rc = osu.run()
+st = osu.load_state()
+check(world.ran("apt-cache", "madison") == [["apt-cache", "madison", "chromium", "chromium-common"]],
+      "apt is asked whether every pinned browser version is offered")
+check(rc == 1 and st["result"]["why"] == "pinned version no longer offered: chromium-common 141"
+      and st["result"]["ok"] is False and st["not_offered"] == {"chromium-common": "141"},
+      "one that is not is a clear result, naming the package and version")
+check(not world.ran("apt-get", "download") and not world.ran("dpkg-repack") and not (tmp / "state" / "os-stash").exists(),
+      "nothing is kept")
+check(fake.woken == 0 and fake.restarts == 0, "the display is not woken and the kiosk not restarted")
+check(not world.ran("apt-get", "install") and not world.ran("dpkg", "-i") and "failed" not in st
+      and world.have["chromium"] == "140", "nothing is installed or put back, and no version is marked failed")
+check(not world.ran("systemctl", "reboot") and "trial" not in st, "and the kernel waits behind the browser")
+check(osu.status()["held_update"] == "refused" and st["versions"]["chromium"] == "140" and "checked" in st,
+      "the heartbeat says refused, and the rest of the daily run still happens")
+at = st["result"]["at"]
+world.calls.clear()
+real_time = osu.time.time
+osu.time.time = lambda: at + 86400
+rc = osu.run()
+osu.time.time = real_time
+st = osu.load_state()
+check(rc == 0 and st["result"]["at"] == at, "the next day the same stale pin is not recorded again, and does not fail the run")
+check(len(world.ran("apt-cache", "madison")) == 1 and not world.ran("apt-get", "download") and not world.ran("apt-get", "install")
+      and not world.ran("dpkg", "-i") and fake.woken == 0, "it costs one question to apt: no keeping, waking or installing")
+world.withdrawn = set()
+world.calls.clear()
+write_packages({"chromium": "141", "chromium-common": "141"})     # (no kernel step: that is tested below)
+rc = osu.run()
+st = osu.load_state()
+check(world.have["chromium"] == "141" and world.have["chromium-common"] == "141" and "not_offered" not in st
+      and st["result"]["ok"], "once the version is offered again it is installed, and the note is gone")
+check(world.calls.index(["apt-cache", "madison", "chromium", "chromium-common"])
+      < min(world.calls.index(c) for c in world.calls if c[:2] in (["apt-get", "download"], ["apt-get", "install"]))
+      and len(world.ran("apt-get", "update")) == 1,
+      "the question comes before anything is kept or installed, with one refresh of apt's lists")
+
+# apt that cannot be asked, or lists that could not be refreshed and lack the
+# version, say nothing about the archive: refused, but not remembered.
+for how in ("madison_ok", "update_ok"):
+    world = World()
+    world.have = {"chromium": "140"}
+    setattr(world, how, False)
+    world.withdrawn = {"chromium"}
+    fake = Watched()
+    fresh(world, fake)
+    write_packages({"chromium": "141"})
+    rc = osu.run()
+    st = osu.load_state()
+    check(rc == 1 and "not_offered" not in st and "no longer offered" not in st["result"]["why"]
+          and not world.ran("apt-get", "download") and not world.ran("apt-get", "install") and fake.woken == 0,
+          f"apt unable to answer ({how.split('_')[0]}): refused untouched, and asked again tomorrow")
+world = World()
+world.have = {"chromium": "140"}
+world.update_ok = False
+fresh(world)
+osu.run()
+check(world.have["chromium"] == "141", "lists that could not be refreshed but already have the version: the install goes ahead")
 
 write_packages({})
 world = World()

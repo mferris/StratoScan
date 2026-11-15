@@ -1,0 +1,90 @@
+#!/usr/sbin/nft -f
+# Install to /etc/stratoscan/filter.nft (loaded by stratoscan-filter.service).
+#
+# Nobody on the internet opens a connection to the radar over IPv6 (security
+# review 2026-11-03, SR-10; IPv6-only since 2026-11-15).
+#
+# The radar's page (80, and 443/4443 for the app's setup) and SSH (22) listen
+# on every address the radar has, and on a network with IPv6 one of those is
+# a global address. Whether the internet can reach it there is up to the home
+# router, and in someone else's house the router is unknown.
+#
+# IPv4 IS NOT FILTERED AT ALL. The first rule accepts every IPv4 packet, from
+# any address, to any port, exactly as with no filter. A home router shares
+# one IPv4 address between everything behind it (NAT), so nothing outside
+# reaches the radar over IPv4 unless the owner forwards a port to it. And an
+# earlier version of this file, which let IPv4 in only from the private
+# ranges, would have shut an owner out of a radar on a home network numbered
+# outside them: SSH from that network is the one way into a radar with no
+# keyboard.
+#
+# IPv6. Always let in:
+#   - answers to what the radar itself asked for (established, related);
+#   - the radar itself (loopback), which is also how its screen reaches it;
+#   - anything arriving on the tailnet's interface (tailscale0): the
+#     tailnet's own policy decides there;
+#   - all ICMPv6: ping, path MTU, and neighbour discovery and router
+#     advertisements, without which the radar has no IPv6 at all;
+#   - anything sent from a link-local (fe80::/10) or unique-local (fc00::/7)
+#     address: the house. Neither is routed on the internet;
+#   - the answers of the home router's DHCPv6 (to port 546, at the radar's
+#     link-local address);
+#   - Bonjour (mDNS) sent to its multicast group (ff02::fb), which never
+#     crosses a router.
+# Every other new inbound IPv6 connection is refused: TCP with a reset, the
+# same answer a closed port gives, so a phone or laptop that tried the
+# radar's global IPv6 address first moves straight on to its IPv4 one instead
+# of waiting out a timeout; the rest is dropped. That includes a phone or
+# laptop in the house when it uses its own global IPv6 address: it gets the
+# reset and carries on over IPv4.
+#
+# Tailscale's own UDP port is not opened to the internet over IPv6. Two
+# tailnet devices still reach each other: the radar's own packets to the
+# other device make the answers "established", and failing that the tailnet
+# uses IPv4 or its relays.
+#
+# What this does not touch: anything the radar sends, forwarding and NAT (the
+# setup hotspot's sharing is NetworkManager's), the 443 redirect
+# (stratoscan-https.nft), a managed unit's SSH rule (stratoscan-managed.nft)
+# and Tailscale's own tables. A packet must pass every table, so those rules
+# and these add up; none replaces another.
+#
+# It replaces only its own table, never the whole ruleset. (The empty
+# declaration first lets the delete succeed when the table is not there yet.)
+# The chain's policy is accept and the refusal is the last two rules. nft
+# loads a file whole or not at all: if any line here is refused, nothing
+# changes and the radar is reachable as it was without it.
+#
+# AFTER ANY EDIT this file must be checked again by nft itself, on a radar,
+# in a private network namespace where it can change nothing:
+#     unshare -rn nft -c -f stratoscan-filter.nft
+# The version before this one was checked that way, and loaded there, on
+# 2026-11-15. This version uses the same constructs and one more, the first
+# rule's `meta nfproto ipv4`, and has not been checked that way yet. The
+# image build runs the same check and fails on an error (image/build.sh), and
+# the installer asks nft before it switches the filter on.
+#
+# Stopping stratoscan-filter.service takes the table away again. Until the
+# service is enabled, so does a power cycle.
+table inet stratoscan_filter
+delete table inet stratoscan_filter
+table inet stratoscan_filter {
+    set house6 {
+        type ipv6_addr
+        flags interval
+        elements = { fe80::/10, fc00::/7 }
+    }
+    chain input {
+        type filter hook input priority 10; policy accept;
+        meta nfproto ipv4 accept
+        ct state established,related accept
+        iifname "lo" accept
+        iifname "tailscale0" accept
+        meta l4proto ipv6-icmp accept
+        ip6 saddr @house6 accept
+        ip6 daddr fe80::/10 udp dport 546 accept
+        ip6 daddr ff02::fb udp dport 5353 accept
+        meta l4proto tcp counter reject with tcp reset
+        counter drop
+    }
+}

@@ -61,5 +61,24 @@ check("STRATOSCAN_LIVE=0 sh deploy/trim-os.sh" in inst, "and doesn't try to stop
 check(units.index("rpcbind.socket") < units.index("rpcbind.service"), "rpcbind's socket is turned off before its service")
 check(not any(w in script for w in ("apt-get remove", "apt-get purge", "apt remove", "apt purge", "dpkg -r", "dpkg -P")),
       "it removes no packages")
+
+# PackageKit (security review 2026-11-03, SR-12): masked, so the Pi OS package
+# tools have no root service to ask. The radar's own updates must not need it:
+# os-update.py and the daily security updates run apt and dpkg themselves.
+for u in ("packagekit.service", "packagekit-offline-update.service"):
+    check(u in script.split('SYSTEM_UNITS="')[1].split('"')[0].split(), f"turns off {u}")
+for f in sorted((ROOT / "deploy").iterdir()):
+    if f.suffix in (".py", ".sh", ".service", ".timer") and f.name != "trim-os.sh":
+        text = f.read_text().lower()
+        uses = [w for w in ("pkcon", "pkexec", "org.freedesktop.packagekit", "gui-pkinst", "gui-updater", "rp-prefapps")
+                if w in text and f.name != "install-setup-server.sh"]
+        check(not uses, f"{f.name} does not rely on PackageKit or the Pi OS package tools")
+osu = (ROOT / "deploy" / "os-update.py").read_text()
+check('["apt-get", "install"' in osu and '["dpkg", "-i"' in osu and "packagekit" not in osu.lower(),
+      "os-update.py installs and puts back the held packages with apt and dpkg alone")
+uu = (ROOT / "deploy" / "52stratoscan-unattended-upgrades").read_text() + (ROOT / "deploy" / "20auto-upgrades").read_text()
+check("packagekit" not in uu.lower(), "the daily security updates are apt's own, not PackageKit's")
+build = (ROOT / "image" / "build.sh").read_text()
+check("packagekit.service" in build.split("is not masked")[0].split("for u in ")[-1], "the factory image is checked for the mask")
 print("trim os checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)

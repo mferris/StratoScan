@@ -57,12 +57,50 @@ KIOSK_USER="$KIOSK_USER" sh deploy/migrate-names.sh
 # Pinned third-party installs. Changing a version is a deliberate edit here.
 READSB_INSTALLER_COMMIT=f933123935631da855a7f8a16c0cb7ad4eedca48   # wiedehopf/adsb-scripts (MIT)
 READSB_TAG=v3.16.17                                                 # wiedehopf/readsb (GPL-3.0-or-later)
+READSB_COMMIT=094720939c01943de82b14df6f42f67fff1cd514              # what that tag is, as dump978's below (security review 2026-11-03, SR-35)
 DUMP978_TAG=v11.1                                                   # flightaware/dump978 (GPL-2.0-or-later), the 978 MHz decoder
 DUMP978_COMMIT=f40aa9a0d2d0a0067c0c628b44ba316f7049b8ce             # what that tag is: a tag can be moved, a commit can't (audit 2026-10-12)
 TAR1090_COMMIT=383a9cb085860277c6c1972a4aca5be7e56bcc66             # wiedehopf/tar1090 (GPL-2.0-or-later)
+TAR1090_DB_COMMIT=6e14dcfd6b300475c239b1fe668ec71a79c949a3          # wiedehopf/tar1090-db, the aircraft database tar1090 serves: its master on 2026-11-15, not whatever master is on the day (SR-35)
 PIPER_VERSION=1.8.0                                                 # piper-tts (GPL-3.0-or-later)
 VOICE=en_US-ljspeech-medium                                         # public-domain dataset
+# The release signing key this installer will put on a unit, by fingerprint
+# (as `ssh-keygen -lf` prints it). See "the trust root" below.
+SIGNERS_FINGERPRINT=SHA256:vB/YWmvqG4/GBjpqYUqIf7/VRora4r7TBoMc33oVHb8
 export DEBIAN_FRONTEND=noninteractive
+
+# The trust root, checked before anything is installed (security review
+# 2026-11-03, SR-32). deploy/allowed_signers names the key whose releases
+# every unit installs as root, and an update can never take a key back out of
+# it. So a copy naming any other key is not installed just because it is the
+# file in this tree: every key in it must be the one pinned above. Changing
+# the signing key is then two deliberate acts, not one edit: the new key's
+# fingerprint given by hand as ROTATE_SIGNERS=SHA256:... for a file that
+# carries both keys while units move over, and the pin above changed.
+python3 - "$SIGNERS_FINGERPRINT" "${ROTATE_SIGNERS:-}" <<'PY'
+import base64, hashlib, sys
+allowed = {fp for fp in sys.argv[1:3] if fp}
+found, other = 0, []
+for line in open("deploy/allowed_signers"):
+    parts = line.split()
+    if not parts or parts[0].startswith("#"):
+        continue
+    try:
+        at = next(i for i, t in enumerate(parts) if t.startswith(("ssh-", "ecdsa-", "sk-")))
+        blob = base64.b64decode(parts[at + 1], validate=True)
+    except (StopIteration, IndexError, ValueError):
+        sys.exit("deploy/allowed_signers has a line that is not a key; refusing to install it as the trust root")
+    fp = "SHA256:" + base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip("=")
+    found += 1
+    if fp not in allowed:
+        other.append(fp)
+if other:
+    sys.exit("deploy/allowed_signers names a key this installer does not pin (" + ", ".join(sorted(set(other)))
+             + "); refusing to install it as the trust root. To change the signing key on purpose, give the new"
+             " key's fingerprint as ROTATE_SIGNERS=")
+if not found:
+    sys.exit("deploy/allowed_signers names no key; a unit with it could never take an update")
+PY
 
 echo "== packages =="
 apt-get install -y -q lighttpd lighttpd-mod-openssl git curl ca-certificates python3-venv python3-cryptography \
@@ -71,12 +109,28 @@ echo "  ok"
 
 echo "== receiver: readsb $READSB_TAG =="
 if ! command -v readsb >/dev/null 2>&1; then
+  # A tag can be moved, a commit can't (SR-35). wiedehopf's installer clones
+  # the tag and builds it at once, as root, so the tag is asked for first and
+  # nothing is fetched or built unless it is still the commit pinned above;
+  # and what was built is checked again afterwards, from its own clone. (The
+  # second line of the answer, when there is one, is what an annotated tag
+  # points at.)
+  READSB_REPO=https://github.com/wiedehopf/readsb.git
+  READSB_NOW=$(timeout 120 git ls-remote "$READSB_REPO" "refs/tags/$READSB_TAG" "refs/tags/$READSB_TAG^{}" | awk 'END { print $1 }')
+  [ "$READSB_NOW" = "$READSB_COMMIT" ] \
+    || { echo "  readsb $READSB_TAG is not the commit we pinned ($READSB_COMMIT; it is '${READSB_NOW:-unknown}'); refusing to build it"; exit 1; }
   curl -fsSL --connect-timeout 15 --max-time 300 \
     "https://raw.githubusercontent.com/wiedehopf/adsb-scripts/$READSB_INSTALLER_COMMIT/readsb-install.sh" \
     -o /tmp/readsb-install.sh
   bash /tmp/readsb-install.sh "tag=$READSB_TAG" no-tar1090 >/tmp/readsb-install.log 2>&1 \
     || { tail -30 /tmp/readsb-install.log; exit 1; }
   rm -f /tmp/readsb-install.sh
+  # Taken away again if it is not the pinned commit, so that a second run does
+  # not find a readsb and call it installed.
+  if [ "$(git -C /usr/local/share/adsb-wiki/readsb-install/git rev-parse HEAD 2>/dev/null)" != "$READSB_COMMIT" ]; then
+    rm -f /usr/bin/readsb /usr/bin/viewadsb
+    echo "  the readsb that was built is not the commit we pinned ($READSB_COMMIT); removed"; exit 1
+  fi
   echo "  installed"
 else
   echo "  already installed: $(readsb --version 2>&1 | head -1)"
@@ -147,9 +201,31 @@ if [ "$(cat /usr/local/share/tar1090/git/.stratoscan-commit 2>/dev/null)" != "$T
   rm -rf /tmp/tar1090-src
   timeout 900 git clone -q https://github.com/wiedehopf/tar1090.git /tmp/tar1090-src
   git -C /tmp/tar1090-src checkout -q "$TAR1090_COMMIT"
+  # The aircraft database (SR-35). tar1090's installer takes tar1090-db's
+  # master as it is that day; here it is fetched first, at the pinned commit,
+  # into the folder that installer uses, and the one line of the installer
+  # that would replace it with master is taken out of this checkout (a known
+  # text: the checkout is pinned too). Both are then proved: the line is gone
+  # before the installer runs, and the database is still the pinned commit
+  # after it.
+  TAR1090_DB=/usr/local/share/tar1090/git-db
+  rm -rf "$TAR1090_DB"
+  install -d -m 0755 /usr/local/share/tar1090
+  git init -q "$TAR1090_DB"
+  timeout 900 git -C "$TAR1090_DB" fetch -q --depth 1 https://github.com/wiedehopf/tar1090-db.git "$TAR1090_DB_COMMIT"
+  git -C "$TAR1090_DB" checkout -q FETCH_HEAD
+  [ "$(git -C "$TAR1090_DB" rev-parse HEAD)" = "$TAR1090_DB_COMMIT" ] \
+    || { echo "  tar1090-db is not the commit we pinned ($TAR1090_DB_COMMIT); refusing to install it"; exit 1; }
+  sed -i 's,^\([[:space:]]*\)getGIT "\$db_repo" "master" "\$gpath/git-db" || true$,\1true   # StratoScan: the database is pinned,' /tmp/tar1090-src/install.sh
+  if grep -q 'getGIT "\$db_repo"' /tmp/tar1090-src/install.sh; then
+    echo "  tar1090's installer would still fetch its database from master; refusing to run it"; exit 1
+  fi
   git_source=/tmp/tar1090-src bash /tmp/tar1090-src/install.sh /run/readsb >/tmp/tar1090-install.log 2>&1 \
     || { tail -30 /tmp/tar1090-install.log; exit 1; }
+  [ "$(git -C "$TAR1090_DB" rev-parse HEAD 2>/dev/null)" = "$TAR1090_DB_COMMIT" ] \
+    || { echo "  tar1090's installer replaced the pinned database; refusing to go on"; exit 1; }
   echo "$TAR1090_COMMIT" > /usr/local/share/tar1090/git/.stratoscan-commit
+  echo "$TAR1090_DB_COMMIT" > /usr/local/share/tar1090/git/.stratoscan-db-commit
   rm -rf /tmp/tar1090-src
   echo "  installed"
 else
@@ -207,6 +283,48 @@ install -m 0644 deploy/setup-ui.html deploy/airports.json deploy/airlines.json d
 # key over the same channel as the update would make the signature pointless.
 # NOT installable by an update, deliberately -- see deploy/allowed_signers.
 install -m 0644 deploy/allowed_signers /opt/stratoscan/allowed_signers
+# Which release this unit starts from (security review 2026-11-03, SR-28).
+# The updater takes only a release with a higher serial than the one it
+# recorded (/var/lib/stratoscan-ota/installed.json), and a new card, a flashed
+# image or a rebuilt unit has no record, so all that stood between it and
+# every older signed release was the floor built into ota.py. A release's
+# serial is its commit's count (scripts/release.sh), so this tree's count is
+# the serial of the code just installed: the image build writes it into
+# .build-serial (the image carries no git history), and a checkout with its
+# whole history is counted here. It is written only where the unit has no
+# record: one an update wrote is never lowered, raised or replaced. A tree
+# that cannot say (a shallow clone, no git) writes nothing, and the built-in
+# floor applies as before.
+BUILD_SERIAL=""
+if [ -s .build-serial ]; then
+  BUILD_SERIAL=$(cat .build-serial)
+elif [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = "false" ]; then
+  BUILD_SERIAL=$(git rev-list --count HEAD 2>/dev/null || true)
+fi
+python3 - "$BUILD_SERIAL" <<'PY' || echo "  release floor: could not be recorded; the updater's built-in floor applies"
+import json, os, sys
+path = os.path.join(os.environ.get("STRATOSCAN_OTA_STATE", "/var/lib/stratoscan-ota"), "installed.json")
+try:
+    serial = int(sys.argv[1])
+except ValueError:
+    serial = 0
+try:
+    with open(path) as f:
+        have = int(json.load(f).get("serial", 0))
+except (OSError, ValueError, TypeError, AttributeError):
+    have = 0
+if have > 0:
+    print(f"  release floor: this unit's own record is kept (serial {have})")
+elif serial > 0:
+    os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
+    with open(path + ".tmp", "w") as f:
+        json.dump({"serial": serial, "source": "install"}, f)
+    os.chmod(path + ".tmp", 0o644)
+    os.replace(path + ".tmp", path)
+    print(f"  release floor: serial {serial}, the code this installer came with")
+else:
+    print("  release floor: this tree does not say which release it is; the updater's built-in floor applies")
+PY
 
 echo "== the radar page =="
 # Signed updates keep these current afterwards; this is the first copy.
@@ -271,6 +389,12 @@ mv "$OWN_LIGHTTPD.new" "$OWN_LIGHTTPD"
 install -d -m 0755 /etc/stratoscan
 install -m 0644 deploy/stratoscan-https.nft /etc/stratoscan/https.nft
 if live; then nft -c -f /etc/stratoscan/https.nft; fi
+# No new connections to the radar from the internet over IPv6; IPv4 is not
+# filtered (security review 2026-11-03, SR-10; IPv6-only since 2026-11-15).
+# See the file. Only put in place here; it is switched on at the end, by
+# itself, and never fails the install.
+install -m 0644 deploy/stratoscan-filter.nft /etc/stratoscan/filter.nft
+install -m 0644 deploy/stratoscan-filter.service /etc/systemd/system/
 # A unit built before 2026-10-09 has the directory closed (0750), which kept
 # the setup server from reading the certificate: open it, the key stays 0640.
 if [ -d /etc/stratoscan/tls ]; then chmod 0755 /etc/stratoscan/tls; fi
@@ -373,6 +497,17 @@ install -m 0644 deploy/90-stratoscan-sysctl.conf        /etc/sysctl.d/90-stratos
 install -d -m 0755 /etc/ssh/sshd_config.d
 install -m 0644 deploy/10-stratoscan-ssh.conf /etc/ssh/sshd_config.d/10-stratoscan.conf
 if live && command -v sshd >/dev/null 2>&1; then
+  # A unit flashed from the factory image may have no host keys at all
+  # (security review 2026-11-03, SR-43): the image ships none, rightly, and
+  # the OS's own first-boot step that makes them may not run on it. Without
+  # them sshd cannot start, and `sshd -t` below fails, which would take the
+  # key-only rule back out. Only missing keys are made; existing ones stay.
+  if ! ls /etc/ssh/ssh_host_*_key >/dev/null 2>&1; then
+    if ssh-keygen -A >/dev/null 2>&1; then
+      echo "  ssh: this unit had no host keys; made its own"
+      if systemctl is-enabled --quiet ssh 2>/dev/null; then systemctl start ssh 2>/dev/null || true; fi
+    fi
+  fi
   if sshd -t 2>/dev/null; then
     systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
     echo "  ssh: key-only"
@@ -714,6 +849,28 @@ for u in stratoscan-setupd.service stratoscan-setup.service stratoscan-funnel-ga
          stratoscan-https.service; do
   enable_unit "$u"
 done
+# The connection filter (SR-10), apart from the rest: it is the one unit here
+# that could keep an owner out of their own radar, so it goes on only when
+# nft takes the file and deploy/filter-peers.py can say that every SSH
+# session open now comes from an address it lets in (any IPv4 address, or a
+# link-local or unique-local IPv6 one). If a session would be refused, or
+# that check cannot list the sessions, understand one, or read the rules, it
+# exits non-zero and the filter is not switched on (2026-11-15). Anything
+# short of on leaves the radar reachable as it was, with the install carrying
+# on. HOST_FILTER=0 leaves it alone altogether.
+if [ "${HOST_FILTER:-1}" = "0" ]; then
+  echo "  connection filter: left as it is (HOST_FILTER=0)"
+elif ! live; then
+  systemctl enable stratoscan-filter.service >/dev/null 2>&1 || true
+elif ! nft -c -f /etc/stratoscan/filter.nft >/dev/null 2>&1; then
+  echo "  WARNING: nft would not take the connection filter; left as it was, the radar is reachable as before"
+elif ! python3 deploy/filter-peers.py --file /etc/stratoscan/filter.nft; then
+  echo "  WARNING: connection filter left as it was: an SSH session open now would be refused, or that could not be checked (see the lines above)"
+elif systemctl enable stratoscan-filter.service >/dev/null 2>&1 && systemctl restart stratoscan-filter.service; then
+  echo "  connection filter: on (no new IPv6 connections from outside the house and the tailnet; IPv4 is not filtered)"
+else
+  echo "  WARNING: the connection filter did not load; the radar is reachable as before"
+fi
 if ! live; then
   echo "  enabled; nothing started (image build). First boot finishes the job."
   exit 0

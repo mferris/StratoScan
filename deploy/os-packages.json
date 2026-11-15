@@ -1,12 +1,12 @@
 {
  "kind": "os-packages",
  "about": "The exact versions of the held packages (Chromium, the kernel, Wi-Fi firmware) a radar may install, tested on ring 0 first. os-update.py installs them; see #73. Empty: every radar keeps the versions it has.",
- "tested_on": "ring 0 (RDU), 2026-10-13: kernel 6.18.34 to 6.18.50 on trial, firmware with it; Chromium 154 since 10-12",
+ "tested_on": "ring 0 (RDU), 2026-10-13: kernel 6.18.34 to 6.18.50 on trial, firmware with it. Chromium 156 goes to ring 0 on trial from 2026-11-15 and has not passed yet (154 ran there from 10-12). chromium-sandbox is pinned at the same build as the other three: the archive offered it at that version on 2026-11-15; ring 0 does not have that package installed, and os-update.py leaves alone a package a radar does not have",
  "packages": {
-  "chromium": "1:154.0.8037.92-1~deb13u1+rpt1",
-  "chromium-common": "1:154.0.8037.92-1~deb13u1+rpt1",
-  "chromium-l10n": "1:154.0.8037.92-1~deb13u1+rpt1",
-  "chromium-sandbox": "1:154.0.8037.92-1~deb13u1+rpt1",
+  "chromium": "1:156.0.8078.79-1~deb13u1+rpt1",
+  "chromium-common": "1:156.0.8078.79-1~deb13u1+rpt1",
+  "chromium-l10n": "1:156.0.8078.79-1~deb13u1+rpt1",
+  "chromium-sandbox": "1:156.0.8078.79-1~deb13u1+rpt1",
   "linux-image-rpi-2712": "1:6.18.50-1+rpt1",
   "linux-image-rpi-v8": "1:6.18.50-1+rpt1",
   "linux-headers-rpi-2712": "1:6.18.50-1+rpt1",

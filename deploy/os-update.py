@@ -22,7 +22,11 @@ path instead:
   2. CHROMIUM PROVES ITSELF LIKE A RELEASE DOES. The versions it replaces are
      kept as .debs first; after the upgrade the kiosk restarts and the new
      browser must paint a frame within ota.py's limit, or the kept versions go
-     back and that version is never tried again on this radar.
+     back and that version is never tried again on this radar. Before any of
+     that, apt is asked whether every version named is still offered: one
+     that an archive has withdrawn is noted once and nothing is touched, and
+     an install that fails with nothing unpacked leaves the running browser
+     as it is (both since 2026-11-15).
 
   3. A NEW KERNEL BOOTS ONCE ON TRIAL. Its boot files go into their own folder
      on the boot partition, and the Pi's firmware is asked to boot from there
@@ -227,8 +231,50 @@ def restore_stash():
     return True
 
 
-def apt_install(steps):
-    run_cmd(["apt-get", "update", "-q"], timeout=600)
+def not_offered(steps):
+    """The steps whose wanted version no archive this radar reads offers,
+    after refreshing apt's lists. apt refuses a whole install over one
+    version it cannot find, so this is asked before anything is kept, woken
+    or installed. `apt-cache madison` names only what the archives offer (a
+    version that exists only as the installed one is not among them), one
+    line each: name | version | where. Fail when apt cannot be asked, or its
+    lists could not be refreshed and do not have the version: that says
+    nothing about the archive, and tomorrow's run asks again."""
+    refreshed, _, _ = run_cmd(["apt-get", "update", "-q"], timeout=600)
+    rc, out, err = run_cmd(["apt-cache", "madison", *[s[0] for s in steps]], timeout=120)
+    if rc != 0:
+        raise Fail("apt could not say which versions it offers: " + err.strip()[-200:])
+    offered = set()
+    for line in out.splitlines():
+        cols = [c.strip() for c in line.split("|")]
+        if len(cols) >= 2:
+            offered.add((cols[0], cols[1]))
+    missing = [s for s in steps if (s[0], s[2]) not in offered]
+    if missing and refreshed != 0:
+        raise Fail("apt's lists could not be refreshed, and they do not have "
+                   + ", ".join(f"{n} {v}" for n, _, v, _ in missing))
+    return missing
+
+
+def note_not_offered(missing, state):
+    """Record, once, that a pinned version is no longer offered. True when
+    this is news. The same stale pins on a later day are one log line and no
+    new result: the pin only changes with the next release's
+    os-packages.json, and the check that found it costs one list refresh."""
+    pins = {n: v for n, _, v, _ in missing}
+    if state.get("not_offered") == pins:
+        log("pinned version still not offered (" + ", ".join(sorted(pins)) + "); the browser stays as it is")
+        return False
+    state["not_offered"] = pins
+    why = "pinned version no longer offered: " + ", ".join(f"{n} {v}" for n, v in sorted(pins.items()))
+    state["result"] = {"at": int(time.time()), "ok": False, "not_offered": pins, "why": why}
+    log(f"REFUSED: {why}. Nothing was kept, installed or put back")
+    return True
+
+
+def apt_install(steps, refresh=True):
+    if refresh:
+        run_cmd(["apt-get", "update", "-q"], timeout=600)
     rc, _, err = run_cmd(
         ["apt-get", "install", "-y", "-q", "--no-install-recommends",
          "--allow-downgrades", "--allow-change-held-packages",
@@ -243,14 +289,25 @@ def apt_install(steps):
 # ---- Chromium: upgrade, prove, or put back --------------------------------
 
 def update_app(steps, state):
+    """run() has already asked apt that every version here is offered
+    (not_offered), and refreshed its lists doing so."""
     o = ota()
     stash(steps)
     o.wake_display()
     kiosk_was = o.kiosk_started_at()
     try:
-        apt_install(steps)
+        apt_install(steps, refresh=False)
     except Fail:
-        restore_stash()
+        # Put the kept versions back only if apt changed something. When it
+        # stopped before unpacking anything (a version it could not fetch, a
+        # lock, no network), every package is still installed at the version
+        # it had, and dpkg -i of the kept .debs over a browser that is
+        # running and whole would be the only change made (2026-11-15).
+        now = installed_packages()
+        if any(now.get(n) != cur for n, cur, _, _ in steps):
+            restore_stash()
+        else:
+            shutil.rmtree(STASH, ignore_errors=True)
         raise
     o.restart_kiosk()
     if o.wait_for_new_paint(kiosk_was):
@@ -594,7 +651,18 @@ def run():
     boot = [s for s in steps if s[3] == "boot"]
     ok = True
     try:
-        if app:
+        # A browser pin an archive no longer offers stops here: nothing kept,
+        # the display not woken, nothing installed or put back. It fails the
+        # run on the day it is found and is quiet after that, and the kernel
+        # waits behind the browser as it does behind any browser step that
+        # is not done.
+        missing = not_offered(app) if app else []
+        if missing:
+            ok = not note_not_offered(missing, state)
+            boot = []
+        else:
+            state.pop("not_offered", None)
+        if app and not missing:
             ok = update_app(app, state)
             save_state(state)
             have = installed_packages()

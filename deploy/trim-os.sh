@@ -15,6 +15,16 @@
 # it); its socket is listed before the service, so stopping the service
 # doesn't leave the socket to start it again.
 #
+# PackageKit (security review 2026-11-03, SR-12): the desktop's package
+# service, which Raspberry Pi OS's own tools (gui-pkinst, gui-updater,
+# rp-prefapps) ask to install and remove packages as root. A radar has no use
+# for any of them: security updates come from unattended-upgrades and the
+# held packages from os-update.py, and both run apt themselves. The polkit
+# rule (deploy/polkit-stratoscan.rules) already asks for an administrator;
+# masked, the service cannot be started over D-Bus at all, so the three tools
+# have nothing to ask. Nothing is uninstalled: apt's own hook that tells
+# PackageKit the package lists changed is written to pass when nobody answers.
+#
 # Kept on purpose: avahi (the app finds a radar by its .local name on the
 # LAN), pipewire and wireplumber (the speakers are the screen's HDMI audio),
 # the desktop portals (Chromium calls them), cron, the consoles (a way in
@@ -33,7 +43,8 @@ CONFIG_TXT="$ROOT/boot/firmware/config.txt"
 # package update or a D-Bus request cannot start them again.
 SYSTEM_UNITS="bluetooth.service cups.service cups.socket cups-browsed.service
 wayvnc-control.service wayvnc.service udisks2.service upower.service
-nfs-blkmap.service rpcbind.socket rpcbind.service ModemManager.service"
+nfs-blkmap.service rpcbind.socket rpcbind.service ModemManager.service
+packagekit.service packagekit-offline-update.service"
 # The kiosk user's session: Bluetooth media control and GNOME's virtual
 # filesystems.
 USER_UNITS="mpris-proxy.service gvfs-daemon.service"
@@ -65,4 +76,4 @@ if [ -f "$CONFIG_TXT" ] && ! grep -q '^dtoverlay=disable-bt' "$CONFIG_TXT"; then
   printf '\n# StratoScan: no Bluetooth (deploy/trim-os.sh)\n[all]\ndtoverlay=disable-bt\n' >> "$CONFIG_TXT"
 fi
 
-echo "  unused OS services off: printing, Bluetooth, VNC helper, USB automount, battery monitor, NFS, cloud-init"
+echo "  unused OS services off: printing, Bluetooth, VNC helper, USB automount, battery monitor, NFS, cloud-init, PackageKit"

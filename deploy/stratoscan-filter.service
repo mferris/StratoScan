@@ -1,0 +1,21 @@
+[Unit]
+Description=StratoScan: no new connections to the radar from the internet over IPv6
+# Its own table, loaded by its own unit (security review 2026-11-03, SR-10).
+# IPv4 is not filtered. Debian's nftables.service, where a managed unit
+# enables it, starts its config with `flush ruleset`, which would drop this
+# table as well: so this loads after it, and again whenever it is restarted.
+After=nftables.service
+PartOf=nftables.service
+# Nothing depends on this unit. If nft refuses the file the unit fails, the
+# table is not there, and the radar is reachable exactly as it was before.
+# Stopping it takes the table away; so does a power cycle while it is not
+# enabled.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/stratoscan/filter.nft
+ExecStop=-/usr/sbin/nft delete table inet stratoscan_filter
+
+[Install]
+WantedBy=multi-user.target
