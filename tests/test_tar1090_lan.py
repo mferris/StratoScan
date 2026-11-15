@@ -82,8 +82,12 @@ for _ in range(3000):
 check(not missed, "every spelling tar1090 would read is refused (3000 tried)%s" % (": " + missed[0] if missed else ""))
 
 # ---- what its page may fetch from ------------------------------------------------
-sm = re.search(r'setenv\.set-response-header = \( "Content-Security-Policy" => "([^"]+)" \)', body)
+hm = re.search(r'setenv\.set-response-header = \(\n(.*?)\n  \)\n', body, re.S)
+headers = dict(re.findall(r'^\s*"([^"]+)" => "([^"]+)",?$', hm.group(1) if hm else "", re.M))
+sm = re.match(r"(.+)", headers.get("Content-Security-Policy", ""))
 check(sm is not None, "tar1090's pages get a Content-Security-Policy")
+check(conf.count("setenv.") == conf.count("setenv.set-response-header = (") == 1 and conf.count('"') % 2 == 0,
+      "in one list of headers, the only one in the file, every quote closed")
 check("setenv.add-response-header" not in conf,
       "set with set-response-header, so 88-tar1090.conf's own headers (binCraft's gzip) are left alone")
 policy = {}
@@ -104,6 +108,23 @@ check(policy.get("object-src") == ["'none'"] and policy.get("base-uri") == ["'no
       and policy.get("frame-ancestors") == ["'none'"], "no plugins, no <base>, not framed")
 check("script-src" not in policy and "default-src" not in policy and "img-src" not in policy,
       "scripts and map tiles are left as tar1090 has them (its inline handlers, its tile servers)")
+
+# The fuller policy is only watched, never acted on (SR-26, 2026-11-15): tar1090
+# is upstream's page, and a policy that refused one of its scripts would
+# break the map history at home.
+check(set(headers) == {"Content-Security-Policy", "Content-Security-Policy-Report-Only"},
+      "two headers: the enforced policy and a report-only one")
+watched = {}
+for part in headers.get("Content-Security-Policy-Report-Only", "").split(";"):
+    words = part.split()
+    if words:
+        watched[words[0]] = words[1:]
+check(watched.get("default-src") == ["'none'"] and watched.get("script-src", [])[:2] == ["'self'", "'unsafe-inline'"]
+      and not any(s.startswith("http") or s == "*" for s in watched.get("script-src", [])),
+      "report-only: nothing unlisted, scripts from the radar itself and no other host")
+check(watched.get("connect-src") == connect, "report-only: the same fetch list as the enforced policy")
+check("report-uri" not in watched and "report-to" not in watched,
+      "report-only: reports go nowhere (nothing on the LAN collects them), only to the browser's console")
 
 # ---- the radar's own page and the app still read tar1090's files ------------------
 page = (ROOT / "index.html").read_text()

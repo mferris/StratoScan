@@ -268,5 +268,173 @@ FakeRelay.answer = None
 nc.RELAY = False
 check(nc.relay_on() is False, "STRATOSCAN_NET_RELAY=0 keeps everything direct whatever heartbeat says")
 nc.TILE_IN_THREAD = True
+
+# ---- what the public address may ask (SR-24, 2026-11-15) --------------------
+# A request the gateway marked public is answered only for a view near the
+# radar and no wider than one disc; the kiosk and the LAN ask as before.
+import http.client
+import threading
+HOME = (35.88, -78.79)                 # RDU, as the public receiver.json gives it
+may = nc.public_may_ask
+check(may(35.88, -78.79, 25, None, HOME) and may(35.9, -78.8, 250, 100, HOME) and may(36.9, -78.0, 25, 190, HOME),
+      "public: a view near the radar, up to one disc wide, is answered")
+check(not may(40.7, -74.0, 25, 30, HOME) and not may(51.5, -0.1, 25, None, HOME) and not may(-35.88, 101.21, 25, 30, HOME),
+      "public: a view anywhere else is not")
+check(not may(35.88, -78.79, 25, 191, HOME) and not may(35.88, -78.79, 25, 100000, HOME)
+      and not may(35.88, -78.79, 25, float("nan"), HOME) and not may(35.88, -78.79, float("inf"), None, HOME),
+      "public: nor a view wider than one disc, wherever it is")
+check(not may(35.88, -78.79, 25, 30, None), "public: nor anything while the radar's position can't be read")
+edge = nc.PUBLIC_AROUND_NM / 60
+check(may(35.88 + edge * 0.99, -78.79, 25, 30, HOME) and not may(35.88 + edge * 1.01, -78.79, 25, 30, HOME),
+      "public: the line is %d nm from the radar, as the app asks the radar for" % nc.PUBLIC_AROUND_NM)
+spec_fg = importlib.util.spec_from_file_location("fg", root / "deploy" / "funnel-gateway.py")
+fg = importlib.util.module_from_spec(spec_fg)
+spec_fg.loader.exec_module(fg)
+check(nc.HOME_DP == fg.COORD_PRECISION and nc.PUBLIC_MARKER == fg.PUBLIC_MARKER,
+      "measured from the position as the public receiver.json rounds it, on the gateway's own marker")
+
+# ---- public askers have a budget of their own (SR-24, 2026-11-15) -----------
+# The real payload functions, a clock handed in, and adsb.lol stood in for.
+steps = sorted({nc.public_half(r, h) for r in (1, 25, 100, 250) for h in [None] + list(range(-5, 191))})
+check(steps == list(nc.PUBLIC_HALF_STEPS_NM) and len(steps) <= 4 and steps[-1] == nc.TILE_SINGLE_UP_TO_NM,
+      "public: however far a view reaches, it is asked as one of %s nm" % (steps,))
+check(nc.public_half(25, 37) == 50 and nc.public_half(25, 50) == 50 and nc.public_half(25, 51) == 100
+      and nc.public_half(25, 190) == 190 and nc.public_half(250, None) == 190 and nc.public_half(60, None) == 50,
+      "public: snapped up, so the view asked for is always covered")
+check(nc.PUBLIC_UPSTREAM_GAP_S == 30, "public: one new question upstream every 30 s")
+
+
+def fresh_around():
+    nc._around["cache"].clear(); nc._around["last_upstream"] = 0.0
+    nc._public_budget["last"] = -1e9
+    asked.clear()
+
+
+nc.get_json = fake_get_json
+fresh_around()
+T = 50000.0
+check(nc.around_payload(35.9, -78.8, 65, now=T) is not None and len(asked) == 1, "the kiosk asks about a place")
+check(nc.around_payload(36.5, -78.0, 65, now=T + 1, public=True) is not None and len(asked) == 2,
+      "a public asker, a second later and elsewhere, is not held to the kiosk's gap: it has its own")
+got = [nc.around_payload(35.0 + i * 0.05, -79.5, 65, now=T + 1.5 + i, public=True) for i in range(28)]
+check(all(g is None for g in got) and len(asked) == 2,
+      "28 more public questions about 28 new places in the next 29 s: none asked upstream, each told to try again")
+check(nc.around_payload(34.0, -79.0, 65, now=T + 5.5) is not None and len(asked) == 3
+      and nc.around_payload(34.5, -77.5, 65, now=T + 11) is not None and len(asked) == 4,
+      "and the kiosk, meanwhile, asks about new places every %d s as it always did" % nc.AROUND_UPSTREAM_GAP_S)
+check(nc._public_budget["last"] == T + 1, "the kiosk's questions take nothing from the public budget")
+hit = nc.around_payload(34.5, -77.5, 65, now=T + 12, public=True)
+check(hit is not None and hit["fetched"] == 1.0 and "stale" not in hit and len(asked) == 4,
+      "a public asker looking where the kiosk just looked gets the kept answer, nothing asked")
+old = nc.around_payload(36.5, -78.0, 65, now=T + 20, public=True)
+check(old is not None and old.get("stale") is True and len(asked) == 4,
+      "and its own place, past its keep time with the budget spent: the last answer, marked stale")
+check(nc.around_payload(35.0, -79.5, 65, now=T + 31.5, public=True) is not None and len(asked) == 5,
+      "30 s after the last public question, the next one is asked")
+last = nc._around["last_upstream"]
+check(last == T + 11, "a public question does not reset the kiosk's gap")
+
+# The same through the relay's lattice: one disc per 30 s, outside the
+# kiosk's window and its one stream of questions.
+fetched = []
+real_fetch_disc = nc.fetch_disc
+nc.fetch_disc = lambda d, lattice: fetched.append(d) or []
+nc.TILE_IN_THREAD = False
+reset()
+nc._public_budget["last"] = -1e9
+T = 60000.0
+wide, _ = nc.plan_discs(35.88, -78.79, 190, lattice=True)
+check(len(wide) > 1, "(a public view at its widest needs %d lattice discs here)" % len(wide))
+first = nc.tiles_payload(35.88, -78.79, 190, now=T, lattice=True, public=True)
+check(len(fetched) == 1 and first is not None and first["partial"] and first["answered"] == 1,
+      "public, through the relay: one disc fetched for a view that needs several, the answer partial")
+check(nc._tiles["calls"] == [] and nc._tiles["fetching"] is False,
+      "it is not counted in the kiosk's window and does not hold the kiosk's stream")
+for i in range(1, 30):
+    nc.tiles_payload(35.88 + (i % 5) * 0.3, -78.79 - (i % 7) * 0.3, 190, now=T + i, lattice=True, public=True)
+check(len(fetched) == 1, "29 more public views in the next 29 s: no more discs fetched")
+nc.tiles_payload(35.88, -78.79, 190, now=T + 30, lattice=True, public=True)
+check(len(fetched) == 2 and fetched[1] != fetched[0], "after 30 s, the next disc")
+check(not nc._tiles["cache"], "a public view is not written over the kiosk's kept views")
+nc._tiles["discs"].clear(); nc._tiles["busy"].clear()
+nc._public_budget["last"] = T + 40
+check(nc.tiles_payload(35.88, -78.79, 50, now=T + 41, lattice=True, public=True) is None and len(fetched) == 2,
+      "nothing kept and the budget spent: the usual 429, nothing asked")
+k = nc.tiles_payload(35.88, -78.79, 900, now=T + 42, lattice=True)
+check(k is not None and len(fetched) == 2 + min(nc.RELAY_CALLS, nc.LATTICE_MAX_DISCS) and len(nc._tiles["calls"]) == len(fetched) - 2,
+      "the kiosk's wide view right after still gets its whole window of questions")
+nc.fetch_disc = real_fetch_disc
+nc.TILE_IN_THREAD = True
+reset()
+
+# What the documents tell a visitor and an owner about it.
+privacy = " ".join((root / "docs" / "privacy.md").read_text().split())
+readme = " ".join((root / "README.md").read_text().split())
+check("middle is within %d nm of the radar" % nc.PUBLIC_AROUND_NM in privacy
+      and "one new question every %d seconds" % nc.PUBLIC_UPSTREAM_GAP_S in privacy
+      and "The public page and the app (below) can do the same" not in privacy,
+      "privacy.md: a visitor's view has its middle within 100 nm of the radar, one new question in 30 s")
+check("middle is within %d nm of the radar" % nc.PUBLIC_AROUND_NM in readme,
+      "README: the same limit on a visitor's view")
+
+answered = []
+passed = []            # what the handler handed each payload function
+nc.around_payload = lambda lat, lon, radius, now=None, **kw: (
+    passed.append(("around", radius, kw)), answered.append((lat, lon))) and None or {"ac": [], "radius": 25}
+nc.tiles_payload = lambda lat, lon, half, now=None, lattice=None, **kw: (
+    passed.append(("tiles", half, lattice, kw)), answered.append((lat, lon))) and None or {"ac": [], "covered": 25}
+home_reads = []
+nc.home = lambda: home_reads.append(1) or HOME
+srv = nc.http.server.ThreadingHTTPServer(("127.0.0.1", 0), nc.Handler)
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+
+def around(query, public):
+    c = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=10)
+    c.request("GET", "/network/around?" + query, headers={nc.PUBLIC_MARKER: "1"} if public else {})
+    r = c.getresponse()
+    body = r.read()
+    c.close()
+    return r.status, body
+
+
+check(around("lat=35.900&lon=-78.800&half=100", True)[0] == 200 and answered == [(35.9, -78.8)],
+      "through the gateway: the page's view near the radar is answered")
+far = [around(q, True) for q in ("lat=40.700&lon=-74.000&half=30", "lat=51.5&lon=-0.1&r=250", "lat=-33.9&lon=151.2&half=100",
+                                 "lat=35.900&lon=-78.800&half=5000", "lat=35.900&lon=-78.800&half=nan")]
+check(all(st == 400 for st, _ in far) and len({b for _, b in far}) == 1 and len(answered) == 1,
+      "through the gateway: a far or wide view is 400, in the same words each time, and nothing is asked")
+check(not any(t in far[0][1] for t in (b"35.", b"78.", b"nm", b"within")), "the refusal names no place and no distance")
+check(len(home_reads) == 1, "the radar's position is read once for all of them, not per public request")
+check(around("lat=40.700&lon=-74.000&half=30", False)[0] == 200 and around("lat=51.5&lon=-0.1&half=5000", False)[0] == 200
+      and answered[1:] == [(40.7, -74.0), (51.5, -0.1)] and len(home_reads) == 1,
+      "the kiosk and the LAN, which never pass the gateway, ask for any view as before")
+check(passed[0] == ("around", 100 * 1.3, {"public": True}),
+      "through the gateway: asked at a snapped reach, on the public budget")
+check(passed[1:] == [("around", 30 * 1.3, {}), ("tiles", 5000.0, False, {})],
+      "the kiosk and the LAN: the reach as sent and the call exactly as before today")
+del passed[:]
+around("lat=35.900&lon=-78.800&half=37", True); around("lat=35.900&lon=-78.800&r=60", True)
+around("lat=35.900&lon=-78.800&r=60", False)
+check(passed == [("around", 50 * 1.3, {"public": True}), ("around", 50 * 1.3, {"public": True}), ("around", 60.0, {})],
+      "a public half=37 and a public r=60 are the same question; the LAN's r=60 is its own, unsnapped")
+del passed[:]
+nc.relay_on = lambda: True
+around("lat=35.900&lon=-78.800&half=37", True); around("lat=35.900&lon=-78.800&half=37", False)
+around("lat=35.900&lon=-78.800&r=60", False)
+check(passed == [("tiles", 50, True, {"public": True}), ("tiles", 37.0, True, {}), ("tiles", 60 / 1.3, True, {})],
+      "with the relay on: the public view snapped and on its budget, the LAN's as before")
+nc.relay_on = lambda: False
+
+
+def no_home():
+    raise OSError("receiver.json not there")
+
+
+nc.home = no_home
+nc._public_home.update(at=-1e9, pos=None)
+unknown = around("lat=35.900&lon=-78.800&half=100", True)
+check(unknown == far[0], "position unreadable: the same refusal, word for word")
+srv.shutdown()
 print("network around checks passed" if not fails else "%d FAILED" % fails)
 sys.exit(1 if fails else 0)

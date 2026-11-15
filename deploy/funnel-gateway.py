@@ -108,6 +108,26 @@ READ_ONLY_PUBLIC_PATHS = ("/sightings", "/approaches", "/network", "/api")
 # the same rewrite as a GET and gets its headers without the body.
 PUBLIC_METHODS = ("GET", "HEAD")
 
+# A GET or HEAD carries no body, and one that claims to is refused before
+# anything is read (SR-23, 2026-11-15). The gateway used to read whatever
+# Content-Length a public GET named, whole, into memory, and hand it on to
+# lighttpd; the tunnel passes such bodies along. Nothing is read now and
+# nothing is sent upstream as a body. The one body the public address takes
+# is a browser's violation report, at most CSP_REPORT_MAX_BYTES.
+def claims_body(headers):
+    """Whether a request's headers say a body follows: any Transfer-Encoding,
+    or a Content-Length that is not plain zero."""
+    if headers.get("Transfer-Encoding") is not None:
+        return True
+    lengths = headers.get_all("Content-Length") or []
+    return any(v.strip().strip("0") != "" or not v.strip() for v in lengths)
+
+# There is no limit on how many requests are answered at once, on purpose.
+# One was tried on 2026-11-15 (48, closing the next connection unanswered)
+# and taken out the same day: a few slow connections held every place, and
+# the public address then answered nobody. Each connection still gives up on
+# a silent client after the handler's 30 s.
+
 # tar1090's URL parameters that point its page at another server for data or
 # map tiles (aiscatcher_server, droneJson, customTiles; tar1090 reads names
 # case-blind). Nothing on the public page uses them, so a public request
@@ -383,6 +403,23 @@ def forward_headers(items):
 # not meaningful to relay from an internal proxy hop).
 HOP_BY_HOP = {"connection", "keep-alive", "transfer-encoding", "content-length", "host", "server"}
 
+# The web server's own policy headers never reach a public caller
+# (2026-11-15). lighttpd sends the radar's page to the home LAN with a
+# Content-Security-Policy of its own (86-stratoscan-nocache.conf), which
+# allows inline scripts because lighttpd can't hash the page, and tar1090's
+# with one and a report-only one (88-stratoscan-tar1090.conf). Relayed, they
+# would arrive beside the gateway's: two policies on a 200, and on a 304 the
+# LAN's alone, which a browser then stores over the strict one it had. So
+# these are dropped from every relayed answer, whatever its status, and the
+# only ones a public caller gets are the gateway's own: SECURITY_HEADERS on
+# every answer, and the policy on a 200 of the page (page_csp) or on
+# tar1090's page. A 304 of the page carries no policy at all, as it never
+# has, and the browser keeps the one it stored with the page.
+# tests/test_funnel_gateway_upstream_policy.py.
+UPSTREAM_POLICY_HEADERS = frozenset({
+    "content-security-policy", "content-security-policy-report-only",
+    "x-frame-options", "x-content-type-options"})
+
 # Marks a request as having arrived from the public tunnel, so a backend can
 # refuse it even if the path filter above has a gap. setup-server.py has
 # checked for this header since it was written -- but nothing ever set it, so
@@ -566,6 +603,11 @@ VISITS_SAVE_S = 600
 APP_HEADER = "X-StratoScan-App"
 PAGE_PATHS = ("/", "/index.html")
 MAX_REFERRERS = 20                         # per day; the rest are "other"
+# Today's visitor hashes are kept until midnight, and a caller can make as
+# many as it likes (a new X-Forwarded-For or User-Agent each time). Past this
+# many in a day no more are kept, and a visitor not already among them is
+# counted as a view but not as a new visitor (SR-23, 2026-11-15).
+MAX_SEEN = 20000
 BOT_RE = re.compile(r"bot|crawl|spider|slurp|curl|wget|python|httpclient|okhttp|headless"
                     r"|preview|facebookexternalhit|whatsapp|discord|slack|telegram", re.I)
 
@@ -684,7 +726,7 @@ class Visits:
                 if minute not in self._app_minutes:
                     self._app_minutes.add(minute)
                     d["app_minutes"] += 1
-                if v and v not in self._app_seen:
+                if v and v not in self._app_seen and len(self._app_seen) < MAX_SEEN:
                     self._app_seen.add(v)
                     d["app_devices"] += 1
             else:
@@ -695,7 +737,7 @@ class Visits:
                     d["views"] += 1
                     d["hours"][lt.tm_hour] += 1
                     d["devices"][kind] = d["devices"].get(kind, 0) + 1
-                    if v and v not in self._seen:
+                    if v and v not in self._seen and len(self._seen) < MAX_SEEN:
                         self._seen.add(v)
                         d["unique"] += 1
                     site = referrer_site(headers.get("Referer"), headers.get("Host"))
@@ -841,6 +883,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self._canon is None:
             self._refuse_path()
             return
+        if self.command in PUBLIC_METHODS and claims_body(self.headers):
+            self._refuse_path()         # 400, the same answer; nothing is read (SR-23)
+            return
         self._query = request_query(self.path)
         self._base = base = match_key(self._canon)
         if _matches(base, LOCAL_ONLY_PATHS) or (
@@ -858,7 +903,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # A browser reporting a policy violation (see CSP_DIRECTIVES): counted,
         # answered, never forwarded.
         if self.command == "POST" and base == "/csp-report":
-            length = int(self.headers.get("Content-Length", 0) or 0)
+            try:
+                length = int(self.headers.get("Content-Length", 0) or 0)
+            except ValueError:
+                length = 0
             if 0 < length <= CSP_REPORT_MAX_BYTES:
                 note_csp_report(self.rfile.read(length))
             self.send_response(204)
@@ -951,13 +999,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(body)
 
     def _proxy(self):
-        length = int(self.headers.get("Content-Length", 0) or 0)
-        body = self.rfile.read(length) if length else None
-
+        # Only a GET or HEAD gets here, and one with a body was refused in
+        # _dispatch: nothing is read from the client and no body goes
+        # upstream (SR-23).
         req_headers = forward_headers(self.headers.items())
         # The canonical path, re-encoded, never self.path (SR-01).
         url = UPSTREAM + upstream_target(self._canon, self._query)
-        req = urllib.request.Request(url, data=body, headers=req_headers, method=self.command)
+        req = urllib.request.Request(url, headers=req_headers, method=self.command)
 
         try:
             with _opener.open(req, timeout=10) as upstream:
@@ -972,7 +1020,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         body = resp.read()
         self.send_response(status)
         for k, v in resp.getheaders():
-            if k.lower() not in HOP_BY_HOP:
+            if k.lower() not in HOP_BY_HOP and k.lower() not in UPSTREAM_POLICY_HEADERS:
                 self.send_header(k, v)
         self._send_security_headers()
         # Only a GET carries the document the policy is for: a HEAD has no

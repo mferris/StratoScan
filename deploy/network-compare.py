@@ -104,7 +104,9 @@ MAX_BODY = 400_000
 # The network round a point the radar's screen is looking at (roadmap 2.23 on
 # the kiosk, 2026-10-08): what adsb.lol serves round a point, how long one
 # answer is kept for the same place, and how often adsb.lol may be asked at
-# all, whoever asks -- the public page can, through the gateway.
+# all for the radar's own screen and the house. A visitor at the public
+# address asks through the gateway on a budget of their own (PUBLIC_*,
+# below), so they can't use up this one.
 AROUND_MIN_NM, AROUND_MAX_NM = 25, 250
 AROUND_CACHE_S = 10
 AROUND_UPSTREAM_GAP_S = 5
@@ -112,6 +114,38 @@ AROUND_WAIT_S = 3               # an answer waits this long for adsb.lol, then s
 AROUND_MAX_BODY = 3_000_000     # a busy 250 nm disc is well over MAX_BODY
 AROUND_PLACES = 8               # answers kept at once
 _around = {"cache": {}, "last_upstream": 0.0}
+# What the public address may ask of /network/around (SR-24, 2026-11-15).
+# Through the gateway anyone could have this radar, from its home address,
+# ask adsb.lol about any point on Earth, on the one budget the owner's own
+# screens share. A request the gateway marked public (PUBLIC_MARKER) is now
+# answered only for a view whose middle is within PUBLIC_AROUND_NM of the
+# radar and no wider than one disc: what the app asks the radar for away
+# from home, and the public page's view until it is dragged or zoomed far
+# from the radar. Anything else, and anything while the radar's position
+# can't be read, gets the same 400 with the same words. The distance is from
+# the position at HOME_DP places, which the public receiver.json already
+# gives, so where the refusals start says nothing new. The kiosk, the LAN
+# and the phone at home never pass the gateway and ask as before.
+PUBLIC_MARKER = "X-FR-Public"       # set by funnel-gateway.py, which drops a client's own
+PUBLIC_AROUND_NM = 100
+PUBLIC_HOME_KEEP_S = 300            # the rounded position is read this often for public askers
+PUBLIC_REFUSAL = {"error": "not available for this view"}
+_public_home = {"at": -1e9, "pos": None}
+# Public askers have a budget of their own (SR-24, 2026-11-15). They used to
+# share the kiosk's (AROUND_UPSTREAM_GAP_S, and TILE_CALLS in TILE_WINDOW_S),
+# so a stranger asking for one new place after another, all within the limit
+# above, could use it up and leave the owner's screen with "asked too often".
+# Now all public askers together cause at most one new question upstream
+# (one place, or one disc) in any PUBLIC_UPSTREAM_GAP_S, counted here and
+# nowhere else: it takes nothing from the kiosk's gap or window, and the
+# kiosk's questions take nothing from it. A public asker is otherwise given
+# what is already kept, the kiosk's answers among it, or the usual 429. How
+# far a public view reaches is first snapped up to one of PUBLIC_HALF_STEPS_NM,
+# so the places a stranger can have kept differ by a few radii, not by every
+# whole mile.
+PUBLIC_UPSTREAM_GAP_S = 30
+PUBLIC_HALF_STEPS_NM = (50, 100, 190)   # the last is TILE_SINGLE_UP_TO_NM: one disc
+_public_budget = {"last": -1e9}
 # A view wider than one disc (the owner's ask, 2026-10-08): several discs on
 # a square grid, spaced so they leave no gap, at most 3 x 3 of them covering
 # the middle of the view; the rest of a continent stays empty, and the answer
@@ -130,6 +164,7 @@ TILE_KEEP_S = 120               # a disc's last answer is shown this long while 
 TILE_IN_THREAD = True           # the discs are fetched in the background (tests set False)
 TILE_DEADLINE_S = 30            # one stream of questions, all its discs, at most this long
 _tiles = {"cache": {}, "discs": {}, "calls": [], "busy": set(), "fetching": False}
+assert PUBLIC_HALF_STEPS_NM[-1] == TILE_SINGLE_UP_TO_NM, "a public view is never wider than one disc"
 # The relay's shared cache, and the lattice its discs are on (see the module
 # docstring). The lattice is rows of 250 nm discs every 180/LATTICE_ROWS
 # degrees of latitude (about 348 nm) with as many columns as fit
@@ -623,7 +658,7 @@ def _fetch_discs(need, now, lattice=False):
             _tiles["fetching"] = False
 
 
-def tiles_payload(lat, lon, half, now=None, lattice=None):
+def tiles_payload(lat, lon, half, now=None, lattice=None, public=False):
     """The network's aircraft over a view: every disc of plan_discs() the
     unit has an answer for, merged by hex, AT ONCE -- with the discs it is
     still fetching counted as pending, so the page asks again soon and the
@@ -635,7 +670,11 @@ def tiles_payload(lat, lon, half, now=None, lattice=None):
     Every disc is fetched behind the answer, the one disc a lattice view
     needs too (#86, 2026-10-26): fetched before answering, it held the kiosk
     and the public page for the relay's and adsb.lol's time limits in turn,
-    and the page asks again in a few seconds while one is pending."""
+    and the page asks again in a few seconds while one is pending.
+
+    `public` (a request the gateway marked): at most one disc is fetched,
+    and only when the public budget allows (_public_take); the window, the
+    one-stream rule and the kept views are the kiosk's and are left alone."""
     now = time.time() if now is None else now
     lattice = relay_on() if lattice is None else lattice
     discs, covered = plan_discs(lat, lon, half, lattice)
@@ -651,18 +690,35 @@ def tiles_payload(lat, lon, half, now=None, lattice=None):
         need = [d for d in discs
                 if not (_tiles["discs"].get(d) and now - _tiles["discs"][d][0] < fresh_s)
                 and d not in _tiles["busy"]]
-        room = (RELAY_CALLS if lattice else TILE_CALLS) - len(_tiles["calls"])
-        # One paced stream of questions at a time: a second worker beside
-        # the first would be the burst adsb.lol refuses.
-        if _tiles["fetching"] and TILE_IN_THREAD:
-            need = []
-        need = need[:max(0, room)]
-        _tiles["calls"].extend([now] * len(need))
-        _tiles["busy"].update(need)
-        if need:
-            _tiles["fetching"] = True
+        if public:
+            # One disc, on the public budget: not counted in the kiosk's
+            # window, and not its stream (a single question is no burst).
+            # The disc with no kept answer first, else the oldest: taken in
+            # plan order, the first two went stale and were asked for again
+            # before a third was ever fetched, and a wide view never filled
+            # in past two discs (review, 2026-11-15).
+            need.sort(key=lambda d: _tiles["discs"].get(d, (0,))[0])
+            need = need[:1] if need and _public_take(now) else []
+            _tiles["busy"].update(need)
+        else:
+            room = (RELAY_CALLS if lattice else TILE_CALLS) - len(_tiles["calls"])
+            # One paced stream of questions at a time: a second worker beside
+            # the first would be the burst adsb.lol refuses.
+            if _tiles["fetching"] and TILE_IN_THREAD:
+                need = []
+            need = need[:max(0, room)]
+            _tiles["calls"].extend([now] * len(need))
+            _tiles["busy"].update(need)
+            if need:
+                _tiles["fetching"] = True
         pending = [d for d in discs if d in _tiles["busy"]]
-    if need:
+    if need and public:
+        if TILE_IN_THREAD:
+            threading.Thread(target=_fetch_public_disc, args=(need, now, lattice), daemon=True).start()
+        else:
+            _fetch_public_disc(need, now, lattice)
+            pending = []
+    elif need:
         if TILE_IN_THREAD:
             threading.Thread(target=_fetch_discs, args=(need, now, lattice), daemon=True).start()
         else:
@@ -686,13 +742,25 @@ def tiles_payload(lat, lon, half, now=None, lattice=None):
                "covered": covered, "discs": len(discs), "answered": answered, "pending": len(pending),
                "partial": answered < len(discs), "source": SOURCE_NAME,
                "via": "relay" if lattice else "direct", "at": now}
-    if answered == len(discs) and not pending:      # only a whole, settled view is worth keeping
+    if answered == len(discs) and not pending and not public:   # only a whole, settled view is worth keeping
         with lock:
             if len(_tiles["cache"]) >= AROUND_PLACES:
                 _tiles["cache"].clear()
             _tiles["cache"][key] = (now, payload)
     out = dict(payload); out["fetched"] = 0.0
     return out
+
+
+def _fetch_public_disc(need, now, lattice=False):
+    """The one disc a public asker's budget allowed, fetched as any other
+    and kept with the rest. It leaves the kiosk's "fetching" mark alone:
+    setting it would hold the kiosk's own discs back until this one landed."""
+    try:
+        _fetch_discs_inner(need, now, lattice)
+    finally:
+        with lock:
+            for d in need:
+                _tiles["busy"].discard(d)
 
 
 def _fetch_discs_inner(need, now, lattice=False):
@@ -715,7 +783,16 @@ def _fetch_discs_inner(need, now, lattice=False):
             _tiles["discs"][d] = (time.time() if TILE_IN_THREAD else now, entries)
 
 
-def around_payload(lat, lon, radius, now=None):
+def _public_take(now):
+    """Take the public askers' one question for this PUBLIC_UPSTREAM_GAP_S,
+    or False when it has been taken. Called with `lock` held."""
+    if now - _public_budget["last"] < PUBLIC_UPSTREAM_GAP_S:
+        return False
+    _public_budget["last"] = now
+    return True
+
+
+def around_payload(lat, lon, radius, now=None, public=False):
     """The network's aircraft round a point: for the radar's screen when its
     view is panned or zoomed out past the ring. The point is rounded to 0.05
     degrees before it leaves the unit (as the app does; it is a place on a
@@ -727,7 +804,11 @@ def around_payload(lat, lon, radius, now=None):
 
     The question is asked behind the answer (#86, 2026-10-26), which waits
     for it at most AROUND_WAIT_S: past that, the place's last answer marked
-    stale, or none yet, and either way "pending", so the page asks again."""
+    stale, or none yet, and either way "pending", so the page asks again.
+
+    `public` (a request the gateway marked): the question is asked on the
+    public budget (_public_take) instead of the gap above, which it neither
+    waits for nor resets."""
     now = time.time() if now is None else now
     key = (round(round(lat * 20) / 20, 2), round(round(lon * 20) / 20, 2),
            int(max(AROUND_MIN_NM, min(AROUND_MAX_NM, radius))))
@@ -736,12 +817,13 @@ def around_payload(lat, lon, radius, now=None):
         if hit and now - hit[0] < AROUND_CACHE_S:
             out = dict(hit[1]); out["fetched"] = round(now - hit[0], 1)
             return out
-        if now - _around["last_upstream"] < AROUND_UPSTREAM_GAP_S:
+        if (not _public_take(now)) if public else (now - _around["last_upstream"] < AROUND_UPSTREAM_GAP_S):
             if hit:
                 out = dict(hit[1]); out["fetched"] = round(now - hit[0], 1); out["stale"] = True
                 return out
             return None
-        _around["last_upstream"] = now
+        if not public:
+            _around["last_upstream"] = now
     box = {}
     worker = threading.Thread(target=_around_fetch, args=(key, now, box), daemon=True)
     worker.start()
@@ -786,6 +868,40 @@ def _around_fetch(key, now, box):
     box["payload"] = payload
 
 
+def public_may_ask(lat, lon, radius, half, pos):
+    """Whether a public caller may have the view (lat, lon, radius or half)
+    from a radar at `pos` (its rounded position, or None when unknown)."""
+    if pos is None:
+        return False
+    if not (half <= TILE_SINGLE_UP_TO_NM if half is not None else radius <= AROUND_MAX_NM):
+        return False                    # wider than one disc; a NaN too
+    return haversine(pos[0], pos[1], lat, lon)[0] <= PUBLIC_AROUND_NM
+
+
+def public_half(radius, half):
+    """How far a public view reaches, snapped up to one of
+    PUBLIC_HALF_STEPS_NM. `half` when the view gave one, else what a disc
+    of `radius` covers (a disc is asked 1.3 times as wide as its view)."""
+    want = half if half is not None else radius / 1.3
+    return next((s for s in PUBLIC_HALF_STEPS_NM if want <= s), PUBLIC_HALF_STEPS_NM[-1])
+
+
+def public_home(now=None):
+    """The radar's rounded position for public_may_ask, read at most every
+    PUBLIC_HOME_KEEP_S; None while it can't be read."""
+    now = time.time() if now is None else now
+    with lock:
+        if _public_home["pos"] is not None and now - _public_home["at"] < PUBLIC_HOME_KEEP_S:
+            return _public_home["pos"]
+    try:
+        pos = home()
+    except Exception:
+        return None
+    with lock:
+        _public_home.update(at=now, pos=pos)
+    return pos
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     # A client that connects and then sends nothing (or reads nothing) held a
     # thread for good; now the socket gives up after this many seconds
@@ -827,9 +943,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._json(400, {"error": "lat, lon, r and half must be numbers"})
             if not (-90 <= lat <= 90 and -180 <= lon <= 180 and radius == radius):
                 return self._json(400, {"error": "lat or lon out of range"})
+            public = self.headers.get(PUBLIC_MARKER) is not None
+            if public:
+                if not public_may_ask(lat, lon, radius, half, public_home()):
+                    return self._json(400, PUBLIC_REFUSAL)
+                half = public_half(radius, half)        # a few steps, and its own budget below
             try:
                 lattice = relay_on()
-                if lattice or (half is not None and half > TILE_SINGLE_UP_TO_NM):
+                if public:
+                    out = (tiles_payload(lat, lon, half, lattice=True, public=True) if lattice
+                           else around_payload(lat, lon, half * 1.3, public=True))
+                elif lattice or (half is not None and half > TILE_SINGLE_UP_TO_NM):
                     out = tiles_payload(lat, lon, min(half if half is not None else radius / 1.3, 100000.0),
                                         lattice=lattice)
                 else:

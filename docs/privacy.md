@@ -111,10 +111,15 @@ turn on:
   disc or discs of the world that cover the view, from the StratoScan
   relay's shared cache (above); with them off, from adsb.lol, round the
   middle of the view rounded to about 5 km, a place on a map, not anyone's
-  location. The public page and the app (below) can do the same, so the
+  location. The app (below) can do the same, so the
   radar answers at most one such question every five seconds (a view wider
   than one disc is up to nine questions, a second apart, nine in any twenty
   seconds in all), and nothing about these aircraft is recorded or counted.
+  A visitor at the radar's public address can do it only near the radar
+  (since 2026-11-15): a visitor can look at the network's aircraft only in a view whose
+  middle is within 100 nm of the radar, and all visitors together have the
+  radar ask at most one new question every 30 seconds. The radar's own
+  screen and the owner's app at home are not limited this way.
 
 ## The iPhone app
 

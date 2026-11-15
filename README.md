@@ -59,7 +59,10 @@ too.
   appear round the middle of the view: adsb.lol serves 250 nm discs, so a
   wide view is a grid of up to nine of them, about 530 nm round the middle,
   asked a second apart (the radar asks, so a visitor's browser still talks
-  only to the radar; the phone app does the same for itself); the map
+  only to the radar; the phone app does the same for itself). A visitor at
+  the radar's public address sees the network's aircraft only in a view
+  whose middle is within 100 nm of the radar; the radar's own screen and the
+  owner's app at home are unchanged. The map
   follows, the sweep turns about the radar wherever it is, and after 45
   seconds without a touch the view comes home by itself. The antenna's
   picture ends at its ring, and the display says so when you look past it
