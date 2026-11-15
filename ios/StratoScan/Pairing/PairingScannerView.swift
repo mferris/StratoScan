@@ -37,7 +37,7 @@ struct PairingScannerView: UIViewControllerRepresentable {
             guard !done else { return }
             for case .barcode(let code) in items {
                 if let s = code.payloadStringValue, let url = URL(string: s),
-                   PairingStore.parse(url) != nil || RadarSetup.parse(url) != nil {
+                   PairingStore.parse(url) != nil || RadarSetup.parse(url) != nil || RadarSetup.namesBadCertificate(url) {
                     done = true
                     scanner.stopScanning()
                     onFound(url)

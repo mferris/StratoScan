@@ -44,6 +44,12 @@ struct AlertsSection: View {
                 Text("Your location isn't being sent: the StratoScan service lists a radar this phone didn't pair with (see Paired radars).")
                     .font(.callout).foregroundColor(.orange)
             }
+            if push.needsLocation, let line = Self.withheldLine(pairing.radars.filter { $0.shareLocation == false }.count) {
+                // Says how things stand and where the switch is, and no more
+                // (2026-11-15): the choice is the owner's, radar by radar. It
+                // gives a count, not names: a radar's name comes from the radar.
+                Text(line).font(.callout).foregroundColor(.secondary)
+            }
             if push.needsLocation && reporter.needsAlways {
                 // Without Always, iOS won't wake the app when the phone moves.
                 Button("Set location to Always for “Approaching me”") {
@@ -63,5 +69,14 @@ struct AlertsSection: View {
         }
         .task { await push.refreshPermission() }
         .onDisappear { push.message = nil }
+    }
+
+    /// The line for `count` paired radars that aren't told where the phone
+    /// is; nil when every one is.
+    static func withheldLine(_ count: Int) -> String? {
+        guard count > 0 else { return nil }
+        return count == 1
+            ? "1 paired radar isn't told where this phone is. The switch is on that radar's page, under Paired radars."
+            : "\(count) paired radars aren't told where this phone is. The switch is on each radar's page, under Paired radars."
     }
 }

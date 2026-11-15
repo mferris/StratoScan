@@ -108,7 +108,10 @@ final class ApproachReporter: NSObject, ObservableObject, CLLocationManagerDeleg
         guard let phone = try? RelayIdentity.id(), let units = try? await relay.units(),
               let recipients = vet(units.map(\.unit)) else { return }
         let ts = Int(l.timestamp.timeIntervalSince1970)
-        for unit in recipients {
+        // not to a radar the owner keeps it from (2026-11-15): one set up
+        // from this phone, until they turn it on for that radar
+        let withheld = PairingStore.locationWithheld()
+        for unit in recipients where !withheld.contains(unit) {
             guard let box = await boxKey(for: unit),
                   let blob = try? LocationBox.seal(lat: l.coordinate.latitude, lon: l.coordinate.longitude,
                                                    ts: ts, to: box, phone: phone) else { continue }
@@ -142,6 +145,18 @@ final class ApproachReporter: NSObject, ObservableObject, CLLocationManagerDeleg
         guard strangers.contains(unit) else { return }
         strangers.removeAll { $0 == unit }
         UserDefaults.standard.set(strangers, forKey: Self.strangersKey)
+    }
+
+    /// The owner switched one radar's share of the location (2026-11-15).
+    /// Off takes back what the relay holds for it; on sends the position
+    /// now, when the alerts that need it are on.
+    func sharingChanged(unit: String, on: Bool) {
+        if on {
+            lastSent = .distantPast
+            if enabled, let l = manager.location { Task { await report(l) } }
+        } else {
+            Task { try? await relay.location(unit: unit, blob: nil) }
+        }
     }
 
     private var backgroundTask = UIBackgroundTaskIdentifier.invalid

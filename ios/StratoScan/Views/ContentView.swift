@@ -281,8 +281,11 @@ struct ContentView: View {
             Text(pairingMessage)
         }
         // A new radar's setup link, opened from outside the app (2.18): it
-        // joins a WiFi network and sends it the home WiFi password, so it
-        // needs a yes first, the same as pairing.
+        // joins a WiFi network, sends it the home WiFi password and pairs
+        // this phone with the radar, so it needs a yes first, the same as
+        // pairing. Only a link naming a certificate gets this far
+        // (RadarSetup.handle, 2026-11-15). The certificate keeps the setup
+        // private to whatever holds it; it doesn't say whose radar that is.
         .confirmationDialog("Set up a new radar?", isPresented: Binding(
             get: { setup.pendingLink != nil },
             set: { if !$0 { setup.pendingLink = nil } }), titleVisibility: .visible) {
@@ -290,6 +293,17 @@ struct ContentView: View {
             Button("Cancel", role: .cancel) { setup.pendingLink = nil }
         } message: {
             Text(setupMessage)
+        }
+        // A code scanned in the app that names no certificate (a radar made
+        // before certificates): asked once before anything is sent
+        // (2026-11-15).
+        .confirmationDialog("This radar has no certificate", isPresented: Binding(
+            get: { setup.unprotectedLink != nil },
+            set: { if !$0 { setup.unprotectedLink = nil } }), titleVisibility: .visible) {
+            Button("Continue") { setup.confirmUnprotected() }
+            Button("Cancel", role: .cancel) { setup.unprotectedLink = nil }
+        } message: {
+            Text(RadarSetup.unprotectedQuestion(onSetupNetwork: setup.unprotectedLink?.onSetupNetwork ?? true))
         }
         .alert(pairing.message ?? "", isPresented: Binding(
             get: { pairing.message != nil && !showSettings },
@@ -305,7 +319,16 @@ struct ContentView: View {
     private var pairingMessage: String {
         guard let link = pairing.pendingLink else { return "" }
         var text = "Only pair with a code shown on your own radar's screen. This phone will get that radar's alerts."
-        text += " While Approaching me, or nearby alerts about where you are, is on, that radar also gets this phone's location."
+        // What the radar is told of this phone's location, as it will be
+        // (2026-11-15): a radar new to this phone by a link starts without it,
+        // and one already paired keeps the owner's choice.
+        if let known = pairing.radars.first(where: { $0.unit == link.unit }) {
+            text += known.shareLocation == false
+                ? " It stays as you set it: not told where this phone is."
+                : " As now, while Approaching me, or nearby alerts about where you are, is on, that radar gets this phone's location."
+        } else {
+            text += " It won't get this phone's location unless you turn that on afterwards, on its page under Settings › Paired radars; Approaching me and nearby alerts about where you are need it."
+        }
         if let name = link.name {
             text += "\nIt calls itself “\(name)”."
             if pairing.radars.contains(where: { $0.name == name && $0.unit != link.unit }) {
@@ -319,13 +342,18 @@ struct ContentView: View {
         return text
     }
 
+    // Says only what the app knows (2026-11-15): the link names the radar,
+    // and nothing in it shows whose radar that is.
     private var setupMessage: String {
-        var text = "Only from the code on a radar's own first screen. "
+        var text = "The link names the radar; the app can't tell whose it is. Continue only if you just scanned the code on your own new radar's screen. "
         if let ssid = setup.pendingLink?.ssid {
             text += "Your phone will join its setup network “\(ssid)” and send it your home WiFi password. "
         } else if let lan = setup.pendingLink?.lan {
             text += "It will set up the radar at \(lan) on this network. "
         }
+        // what else a yes does (SR-06, 2026-11-15)
+        text += "This phone will pair with that radar and get its alerts. "
+        text += "The radar gets this phone's location only if you choose that."
         return text
     }
 

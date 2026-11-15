@@ -18,6 +18,12 @@ final class PairingStore: ObservableObject {
         /// (roadmap 2.17) then no longer replaces it. Optional so radars
         /// saved before this decode.
         var ownName: Bool?
+        /// False for a radar this phone's location is kept from: one set up
+        /// from the phone, or paired by a link opened from outside the app,
+        /// starts so (SR-06, 2026-11-15), until the owner turns it on for
+        /// that radar. Optional so radars saved before this decode; they go
+        /// on as they were (nil shares).
+        var shareLocation: Bool?
         var id: String { unit }
     }
 
@@ -67,6 +73,25 @@ final class PairingStore: ObservableObject {
     /// reads now, nor replaces its away address.
     nonisolated static var radarViewUnset: Bool {
         APIConfig.baseURL == APIConfig.defaultBaseURL && APIConfig.awayURL == nil
+    }
+
+    /// Of the radars paired here, those the owner has kept this phone's
+    /// location from (shareLocation false), as saved: for the location
+    /// report, as savedUnits() is.
+    nonisolated static func locationWithheld() -> Set<String> {
+        struct Saved: Decodable { let unit: String; let shareLocation: Bool? }
+        guard let data = UserDefaults.standard.data(forKey: storeKey),
+              let saved = try? JSONDecoder().decode([Saved].self, from: data) else { return [] }
+        return Set(saved.filter { $0.shareLocation == false }.map(\.unit))
+    }
+
+    /// The owner's switch for one radar (Settings › Paired radars). Off
+    /// also takes back what the relay holds for it.
+    func setShareLocation(_ on: Bool, unit: String) {
+        guard let i = radars.firstIndex(where: { $0.unit == unit }), (radars[i].shareLocation != false) != on else { return }
+        radars[i].shareLocation = on
+        save()
+        ApproachReporter.shared.sharingChanged(unit: unit, on: on)
     }
 
     struct Link: Equatable {
@@ -122,23 +147,34 @@ final class PairingStore: ObservableObject {
         return true
     }
 
+    /// The owner's yes to a link opened from outside the app.
     func confirmPending() {
         guard let link = pendingLink else { return }
         pendingLink = nil
-        Task { await pair(link) }
+        Task { await pair(link, fromOutside: true) }
     }
 
-    func pair(_ link: Link) async {
+    /// Pairs with the radar a link names. `fromOutside` is true for a link
+    /// some other app, page or message opened, and false for a code read in
+    /// the app's own scanner, where the owner is standing at their radar.
+    /// A radar new to this phone by an outside link starts without the
+    /// phone's location (SR-06, 2026-11-15), as one set up from the phone
+    /// does: the link alone says which radar it is. Pairing again with a
+    /// radar already here never changes the owner's choice for it.
+    func pair(_ link: Link, fromOutside: Bool) async {
         busy = true
         defer { busy = false }
         do {
             try await relay.pair(unit: link.unit, secret: link.secret, name: PhoneName.current)
             let name = link.name ?? "Radar \(radars.count + 1)"
+            var withheld = false
             if let i = radars.firstIndex(where: { $0.unit == link.unit }) {
                 radars[i].host = link.host ?? radars[i].host
                 if radars[i].ownName != true, let n = link.name { radars[i].name = n }
             } else {
-                radars.append(Radar(unit: link.unit, name: name, host: link.host, pairedAt: Date(), ownName: false))
+                radars.append(Radar(unit: link.unit, name: name, host: link.host, pairedAt: Date(), ownName: false,
+                                    shareLocation: fromOutside ? false : nil))
+                withheld = fromOutside
             }
             save()
             ApproachReporter.shared.forgetStranger(link.unit)
@@ -148,6 +184,9 @@ final class PairingStore: ObservableObject {
                 if let p = link.publicURL { APIConfig.awayURL = p }
             } else if link.host != nil || link.publicURL != nil {
                 said += " The radar view's addresses are as they were; Settings › Radar view has them."
+            }
+            if withheld {
+                said += " It isn't told where this phone is. For alerts about where you are, turn that on under Settings › Paired radars, on this radar's page."
             }
             message = said
             // Now the reason for notifications is obvious; ask (once) and register.
@@ -159,16 +198,22 @@ final class PairingStore: ObservableObject {
 
     /// A radar just paired by setting it up from this phone (2.18): the
     /// relay already linked them, so this only records it and asks for alerts.
+    /// A radar new to this phone starts without the phone's location
+    /// (SR-06, 2026-11-15): the setup flow takes the radar's id from whatever
+    /// answered, so the owner turns that on for it afterwards, by name.
     func adopt(unit: String, name: String, host: String?) {
         if let i = radars.firstIndex(where: { $0.unit == unit }) {
             radars[i].host = host ?? radars[i].host
             if radars[i].ownName != true { radars[i].name = name }
         } else {
-            radars.append(Radar(unit: unit, name: name, host: host, pairedAt: Date(), ownName: false))
+            radars.append(Radar(unit: unit, name: name, host: host, pairedAt: Date(), ownName: false, shareLocation: false))
         }
         save()
         ApproachReporter.shared.forgetStranger(unit)
         message = "Set up and paired. Alerts from \(name) will come to this phone."
+        if radars.first(where: { $0.unit == unit })?.shareLocation == false {
+            message = (message ?? "") + " It doesn't get this phone's location; for alerts about where you are, turn that on under Settings › Paired radars › \(name)."
+        }
         Task { await PushManager.shared.enable() }
     }
 

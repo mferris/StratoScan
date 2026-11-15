@@ -115,7 +115,7 @@ struct SettingsView: View {
                     scanning = false
                     // Scanned on purpose from this screen: that is the confirmation.
                     if let link = PairingStore.parse(url) {
-                        Task { await pairing.pair(link) }
+                        Task { await pairing.pair(link, fromOutside: false) }
                     } else {
                         // A new radar's setup code. Settings closes so the
                         // setup screens (presented from the root) can show.
@@ -123,7 +123,11 @@ struct SettingsView: View {
                         Task {
                             // after Settings has gone: one screen can't present over another closing
                             try? await Task.sleep(for: .milliseconds(700))
-                            if let l = RadarSetup.parse(url) { setup.start(l, pairing: pairing) }   // scanned on purpose: that's the yes
+                            // Scanned on purpose: that's the yes, when the code
+                            // names the radar's certificate. One without is
+                            // asked about first, and one whose certificate is
+                            // not written as one is refused (2026-11-15).
+                            setup.scanned(url, pairing: pairing)
                         }
                     }
                 }

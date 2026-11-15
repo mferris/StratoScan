@@ -20,6 +20,16 @@ chosen that radar. Now:
   radar view only when the app has none of its own: it never moves the radar
   view off the radar it reads, nor replaces the away address.
 
+Since 2026-11-15 (security review 2026-11-03, SR-06) a radar set up from the
+phone starts without the phone's location, until the owner turns it on for
+that radar; and nothing but the setup flow's own switch sends the phone's
+position to a radar's home address. So does a radar new to the phone by a
+pairing link opened from outside the app; a code read in the app's own
+scanner pairs as before, and pairing again never changes a radar's setting.
+The question before pairing says which of these will hold, and the alerts
+settings give a count of the radars not told and where the switch is, with
+no radar's name and no urging.
+
 The first part reads the app's Swift. Where swiftc is installed the second
 compiles the shared LocationBox and runs it with a radar the relay lists on
 its own, carrying a box key its own id signs.
@@ -105,7 +115,7 @@ check("for u in units { try? await relay.location(unit: u.unit, blob: nil) }" in
 saved = body(ps, "nonisolated static func savedUnits()")
 check("UserDefaults.standard.data(forKey: storeKey)" in saved and 'storeKey = "radome.pairedRadars"' in ps,
       "the phone's own list is what pairing saved, readable in the background")
-pair = body(ps, "func pair(_ link: Link)")
+pair = body(ps, "func pair(_ link: Link, fromOutside: Bool)")
 adopt = body(ps, "func adopt(")
 check(len(re.findall(r"radars\.append\(", ps)) == 2 and "radars.append(" in pair and "radars.append(" in adopt,
       "the list grows only by pairing with a code or setting a radar up")
@@ -122,6 +132,72 @@ check("ForEach(reporter.strangers" in prs and "pairing.unpair(stranger: unit)" i
 check("reporter.strangers.isEmpty" in SWIFT["ios/StratoScan/Views/AlertsSection.swift"],
       "and the alerts settings say the location isn't being sent")
 
+# ---- a radar set up from the phone starts without it (SR-06, 2026-11-15) ---------------
+check("for unit in recipients where !withheld.contains(unit)" in rep
+      and before(rep, "let withheld = PairingStore.locationWithheld()", "LocationBox.seal("),
+      "a report leaves out the radars the owner keeps the location from")
+wh = body(ps, "nonisolated static func locationWithheld()")
+check("$0.shareLocation == false" in wh and "UserDefaults.standard.data(forKey: storeKey)" in wh,
+      "which are those saved with sharing off, readable in the background")
+check("var shareLocation: Bool?" in body(ps, "struct Radar:"), "radars saved before this still decode, and go on as they were")
+check("shareLocation: false" in adopt, "a radar new to the phone by setup starts with sharing off")
+check("shareLocation: fromOutside ? false : nil" in pair and "func pair(_ link: Link, fromOutside: Bool) async" in ps,
+      "one new by a pairing link opened from outside starts with it off; by a code read in the app's scanner, as before")
+check("await pair(link, fromOutside: true)" in body(ps, "func confirmPending()")
+      and "pairing.pair(link, fromOutside: false)" in SWIFT["ios/StratoScan/Views/SettingsView.swift"]
+      and sum(len(re.findall(r"\bpair\(link\b", t)) for t in SWIFT.values()) == 2,
+      "the outside dialog's yes is the one, the scanner the other, and nothing else pairs by a link")
+known = body(pair, "if let i = radars.firstIndex(where: { $0.unit == link.unit })")
+check(known != "" and "shareLocation" not in known.split("} else {")[0] and not re.search(r"radars\[i\]\.shareLocation\s*=", pair),
+      "pairing again with a radar already here leaves the owner's choice alone")
+check("withheld = fromOutside" in pair and before(pair, "if withheld {", "message = said")
+      and "turn that on under Settings › Paired radars" in body(pair, "if withheld {"),
+      "and the closing message says where to turn it on")
+check(not re.search(r"radars\[i\]\.shareLocation\s*=", adopt), "setting up a radar already paired here leaves the owner's choice alone")
+check("turn that on under Settings" in adopt, "and the phone says so when the setup ends")
+ssl = body(ps, "func setShareLocation(")
+check("radars[i].shareLocation = on" in ssl and "ApproachReporter.shared.sharingChanged(unit: unit, on: on)" in ssl
+      and len(re.findall(r"\.shareLocation\s*=[^=]", ps)) == 1,
+      "only the owner's switch changes it")
+sc = body(ar, "func sharingChanged(")
+check("relay.location(unit: unit, blob: nil)" in sc, "switching it off takes back what the relay holds for that radar")
+check("pairing.setShareLocation($0, unit: radar.unit)" in prs and "Share this phone's location" in prs,
+      "the switch is on the radar's own page in Settings")
+als = SWIFT["ios/StratoScan/Views/AlertsSection.swift"]
+wl = body(als, "static func withheldLine(")
+check("if push.needsLocation, let line = Self.withheldLine(pairing.radars.filter { $0.shareLocation == false }.count)" in als,
+      "the alerts settings count the radars not told where the phone is, only while an alert that needs it is on")
+check(wl != "" and ".name" not in als and "kept" not in als, "with no radar's name in the line")
+check("guard count > 0 else { return nil }" in wl and "page" in wl and "Paired radars" in wl,
+      "which says where the switch is, and nothing when every radar is told")
+check(not re.search(r"[Tt]urn (that|it|this) on|can't send|should|so it can't", wl) and "Turn that on" not in als,
+      "and doesn't urge turning it on")
+
+# ---- nothing of the phone's goes to the home address (SR-44) -----------------------------
+# The home address is plain http and whatever answers is taken for the radar.
+# The app only reads from it; the one flow that writes to a radar is setup,
+# on the session pinned to the radar's certificate when the code names one.
+posters = sorted(f for f, s in SWIFT.items() if re.search(r'httpMethod = (method|"POST"|"PUT")', s))
+check(posters == ["ios/StratoScan/Networking/RouteLookupClient.swift", "ios/StratoScan/Networking/RunwayClient.swift",
+                  "ios/StratoScan/Pairing/RelayClient.swift", "ios/StratoScan/Setup/RadarSetup.swift"],
+      "only setup, the relay client and two look-ups send a body anywhere: %s" % posters)
+for f in ("ios/StratoScan/Networking/RouteLookupClient.swift", "ios/StratoScan/Networking/RunwayClient.swift"):
+    s = SWIFT[f]
+    at = s.index('httpMethod = "POST"')
+    req = s[s.rfind("URLRequest(", 0, at):at]
+    name = re.match(r"URLRequest\(url: (\w+URL)\)", req)
+    check(name is not None and re.search(name.group(1) + r' = URL\(string: "https://', s) is not None and "CLLocation" not in s,
+          "%s sends its body to a fixed https service, not the radar's address, and never reads the phone's position" % f.rsplit("/", 1)[1])
+readers = sorted(f for f, s in SWIFT.items() if "AdminPassword.load(" in s)
+check(readers == [], "the radar's admin password is sent nowhere after setup: %s" % readers)
+rs = SWIFT["ios/StratoScan/Setup/RadarSetup.swift"]
+check(len(re.findall(r"\boneLocation\(", rs)) == 2 and "Self.oneLocation(" in body(rs, "private func sendPhoneLocation("),
+      "in setup, the phone's position is read in one place")
+save = body(rs, "func saveName()")
+check(len(re.findall(r"sendPhoneLocation\(", rs)) == 2 and "if usePhoneLocation {" in save
+      and save.index("if usePhoneLocation {") < save.index("await sendPhoneLocation(stillWanted:"),
+      "and sent only from the name screen, with the owner's switch on")
+
 # ---- a pairing link --------------------------------------------------------------------
 parse = body(ps, "nonisolated static func parse(")
 check('q("h").flatMap { RadarSetup.isPrivateHost($0) ? $0 : nil }' in parse,
@@ -136,6 +212,14 @@ check("APIConfig.baseURL == APIConfig.defaultBaseURL && APIConfig.awayURL == nil
 pm = body(cv, "private var pairingMessage: String")
 check("Approaching me" in pm and "this phone's location" in pm,
       "the pairing question says the radar gets this phone's location while those alerts are on")
+check("that radar also gets this phone's location" not in pm
+      and "if let known = pairing.radars.first(where: { $0.unit == link.unit })" in pm,
+      "but doesn't promise it: it goes by whether the radar is new to this phone")
+new_case = pm[pm.index("} else {", pm.index("if let known")):] if "if let known" in pm else ""
+check("It won't get this phone's location unless you turn that on afterwards" in new_case.split("if let name")[0],
+      "a new radar is said to start without it, and where to turn it on")
+check(re.search(r'known\.shareLocation == false\s*\? "[^"]*not told where this phone is\."\s*: "[^"]*gets this phone\'s location\."', pm) is not None,
+      "and one already paired is said to stay as its switch has it")
 check("You already have a radar by that name" in pm and "$0.unit != link.unit" in pm,
       "and flags a name another paired radar already has")
 check("PairingStore.radarViewUnset" in pm and "The radar view stays on the radar it reads now." in pm,
@@ -169,6 +253,11 @@ print("ONLY", names(LocationBox.recipients(listed: [added.id], paired: [mine.id]
 print("MINE", names(LocationBox.recipients(listed: [mine.id], paired: [mine.id, other.id])))
 print("NONE", names(LocationBox.recipients(listed: [], paired: [mine.id])))
 print("REINSTALLED", names(LocationBox.recipients(listed: [mine.id], paired: [])))
+enum AlertsSection {
+""" + (body((IOS / "StratoScan" / "Views" / "AlertsSection.swift").read_text(), "static func withheldLine(")
+       or "static func withheldLine(_ count: Int) -> String? { \"missing\" }") + """
+}
+for n in [0, 1, 3] { print("LINE\\(n)", AlertsSection.withheldLine(n) ?? "nil") }
 """)
     arch = "arm64" if platform.machine() == "arm64" else "x86_64"
     built = subprocess.run([swiftc, "-target", arch + "-apple-macos14", "-o", str(work / "box"),
@@ -185,6 +274,10 @@ print("REINSTALLED", names(LocationBox.recipients(listed: [mine.id], paired: [])
         check(out.get("NONE") == ["-"], "nothing listed, nothing sent: %s" % out.get("NONE"))
         check(out.get("REINSTALLED") == ["none"],
               "with nothing paired here (the app reinstalled) a listed radar is a stranger until paired again: %s" % out.get("REINSTALLED"))
+        lines = {n: " ".join(out.get("LINE%d" % n, [])) for n in (0, 1, 3)}
+        check(lines[0] == "nil" and lines[1].startswith("1 paired radar isn't told where this phone is.")
+              and lines[3].startswith("3 paired radars aren't told where this phone is."),
+              "the alerts line gives the count, and nothing when no radar is kept from it: %s" % lines)
         if ran.returncode != 0:
             check(False, "the run ended badly: " + ran.stderr[-400:])
 

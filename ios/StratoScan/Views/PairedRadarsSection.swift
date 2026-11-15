@@ -97,6 +97,7 @@ struct RadarDetailView: View {
     @State private var name = ""
     @State private var confirming = false
     @State private var visits: Visits?
+    @State private var sharesLocation = true
 
     /// The public page's visitor counts, from the radar itself (its setup
     /// server, LAN only), so only at home.
@@ -119,6 +120,17 @@ struct RadarDetailView: View {
                 Text(radar.ownName == true
                      ? "Your name for it, on this phone. Clear it to use the name set on the radar."
                      : "The name set on the radar. Type your own to use it on this phone instead.")
+            }
+            // This phone's location, radar by radar (SR-06, 2026-11-15): a
+            // radar set up from the phone starts without it.
+            Section {
+                Toggle("Share this phone's location", isOn: Binding(
+                    get: { sharesLocation },
+                    set: { sharesLocation = $0; pairing.setShareLocation($0, unit: radar.unit) }))
+            } footer: {
+                Text(sharesLocation
+                     ? "While Approaching me, or nearby alerts about where you are, is on, this radar is told where this phone is, encrypted so only it can read it."
+                     : "This radar isn't told where this phone is, so it can't alert about aircraft near you, only near itself.")
             }
             if let v = visits {
                 Section {
@@ -146,7 +158,10 @@ struct RadarDetailView: View {
             }
         }
         .navigationTitle(radar.name)
-        .onAppear { name = radar.name }
+        .onAppear {
+            name = radar.name
+            sharesLocation = radar.shareLocation != false
+        }
         .task {
             guard let host = radar.host, let url = URL(string: "http://\(host)/setup/api/visits"),
                   let (data, resp) = try? await URLSession.radar.data(for: URLRequest(url: url, timeoutInterval: 4)),
