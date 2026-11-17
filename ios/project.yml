@@ -63,6 +63,21 @@ targets:
           NSAllowsLocalNetworking: true
         UIStatusBarHidden: true
         UIRequiresFullScreen: false
+        # Kept on purpose, though nothing here uses it as Apple documents it:
+        # the mode is for silent (content-available) pushes, the relay sends
+        # none, and the app has no didReceiveRemoteNotification. The one thing
+        # that might lean on it is the wake after the relay starts a lock-screen
+        # countdown by push: iOS then runs the app in the background so it can
+        # hand the relay that countdown's own token (PushManager's
+        # watchLiveActivities and report), and without that token the relay
+        # can't update or end the countdown. Apple's ActivityKit pages ask only
+        # for the Push Notifications capability and never mention this mode,
+        # but nowhere say the wake works without it.
+        # To remove it: take this line out, regenerate, install on a real
+        # phone, and have the relay start a countdown (a) with the app
+        # suspended and (b) with it not running since a restart of the phone
+        # (not swiped away). If the relay gets the countdown's token both
+        # times, and the countdown updates and ends, the mode can go.
         UIBackgroundModes: [remote-notification]
         NSSupportsLiveActivities: true
         # Only HTTPS and CryptoKit signing: exempt (App Store export compliance).
@@ -77,7 +92,7 @@ targets:
         # it again after the router gives it a new address.
         NSBonjourServices: [_stratoscan._tcp]
         NSLocationWhenInUseUsageDescription: "To show where you are on the radar, and to aim the compass and Sky view. It stays on this phone unless you turn on a feature that says otherwise."
-        NSLocationAlwaysAndWhenInUseUsageDescription: "Only if you turn on alerts for aircraft approaching you: when you move, your location is sent encrypted so only your own radar can read it, to warn you of aircraft about to pass over. Turn it off any time in Settings."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Only if you turn on alerts for aircraft approaching you, or nearby alerts about where you are: when you move, your location is sent encrypted so only your own radar can read it, to warn you of aircraft near you or about to pass over. Turn it off any time in Settings."
         CFBundleDisplayName: StratoScan
     settings:
       base:

@@ -2,16 +2,46 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   StratoScan's privacy manifest (see docs/privacy.md for what the app sends and why).
-  The only thing that leaves the phone for the StratoScan relay is its
-  notification address (APNs device token) and a random public key that
-  identifies it to its paired radars. Neither is linked to the owner, and
-  nothing is used for tracking. The radar's live data is read from the
-  owner's own radar, not collected.
-  Location is used on the phone (the "You" marker, the compass, Sky view)
-  and not sent anywhere -- except, with the public network on, away from
-  home the app asks for the aircraft around them, with the location rounded
-  to about 5 km, from the StratoScan relay's shared cache (which keeps none
-  of it) or adsb.lol: declared below as coarse location, not linked.
+  Nothing is used for tracking, and there is no account. The radar's live
+  data is read from the owner's own radar, not collected.
+
+  What leaves the phone for the StratoScan relay, and how it is declared:
+
+  - Its notification address (APNs device token), the addresses of its
+    lock-screen countdowns, and a random public key that identifies it to
+    its paired radars: Device ID. Kept while the phone is paired.
+  - The phone's name as its radars list it: its model ("iPhone 16 Pro"), or
+    one its owner typed in Settings, which could be anything, a person's
+    name included: Other User Content.
+  - The alert choices (which kinds of alert, and whether the nearby ones are
+    about the radar or where the phone is): Other Usage Data, the nearest
+    type Apple has for a saved setting.
+  These three are kept in the clear against the phone's key and push
+  address. There is no account, but Apple counts data tied to a device as
+  linked, so they are declared linked.
+
+  - Only with "Approaching me" on, or nearby alerts about "Where I am" or
+    "Both": the phone's precise location, each time it moves about 500 m,
+    sealed on the phone so only the paired radar can read it. The relay
+    holds the sealed blob for at most 6 hours and can't open it. Apple's
+    definition of collecting turns on the developer being able to read the
+    data and says nothing about end-to-end encryption, so whether this
+    counts is unsettled; it is declared, to be safe: Precise Location, not
+    linked (nobody but the owner's own radar can read it).
+  - With the public network on, away from home the app asks for the aircraft
+    around the phone, with the location rounded to about 5 km, from the
+    relay's shared cache (which keeps none of it) or adsb.lol: Coarse
+    Location, not linked.
+
+  Location is otherwise used on the phone (the "You" marker, the compass,
+  Sky view) and not sent. Setting up a new radar can send the phone's
+  location, if its owner switches that on, straight to that radar over its
+  own setup network, the owner's own device, not to the relay: not collected.
+
+  The relay also learns which radars a phone is paired with (against the
+  phone's key, covered by Device ID above), and is asked for the routes of
+  aircraft on screen by callsign and the aircraft's position, which is not
+  the owner's data.
 -->
 <plist version="1.0">
 <dict>
@@ -24,6 +54,42 @@
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUsageData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePreciseLocation</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>

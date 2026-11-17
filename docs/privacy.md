@@ -1,6 +1,6 @@
 # StratoScan privacy policy
 
-*Last updated 2026-10-26.*
+*Last updated 2026-11-17.*
 
 StratoScan is an open-source radar for the aircraft flying over your home,
 built around a receiver you own. This page covers the StratoScan radar, the
@@ -127,13 +127,18 @@ The app reads your radar directly on your home network. To deliver alerts
 it gives the StratoScan relay:
 
 - a random key it generates (so your radars can recognise your phone);
-- Apple's push-notification address for your phone;
+- Apple's push-notification address for your phone, and the addresses of
+  its lock-screen countdowns;
+- your alert choices: which kinds of alert you want, and whether the nearby
+  ones are about your radar or where you are;
 - a name for the phone, so a radar can list the phones paired with it: its
   model (for example "iPhone 16 Pro"), or a name you type in Settings.
   iOS doesn't give apps the name you gave the phone itself.
 
-It collects nothing else: no location (but see Sky view below), contacts,
-usage analytics or advertising identifiers.
+It collects nothing else: no contacts, usage analytics or advertising
+identifiers, and no location except as the sections below say (sealed for
+your own radar when you turn on alerts about where you are; rounded to
+about 5 km for the public network).
 
 **Your location.** If you tap the location button to see yourself on the
 radar, iOS asks whether the app may use your location while it's open. It
@@ -142,8 +147,9 @@ compass and Sky view. It is never sent to your radar or the relay. You can
 turn it off at any time in the iPhone's Settings.
 
 **Alerts for aircraft approaching you** (off unless you turn on
-"Approaching me" in the app's alert settings). So your radar can warn you of
-an aircraft about to pass over where *you* are, the app tells your paired
+"Approaching me" in the app's alert settings, or set the nearby alerts to
+"Where I am" or "Both"). So your radar can warn you of
+an aircraft near or about to pass over where *you* are, the app tells your paired
 radar where your phone is when it moves significantly (iOS's
 significant-change service: roughly every 500 m or more, which needs the
 "Always" location permission). The location is **end-to-end encrypted to
@@ -158,7 +164,7 @@ never writes it down, logs it or sends it on. The alert itself names the
 aircraft and when it will pass, not how far or which way from you; but an
 aircraft's track is public, so an alert does hint where you were, to
 anyone who could read it on its way through the relay (it is kept only
-briefly). Turning the option off withdraws your location from every radar.
+briefly). Turning these off withdraws your location from every radar.
 
 **The public network in the app** (Settings › Public network: one switch,
 on by default, since 2026-10-08). At home it adds the aircraft your radar
