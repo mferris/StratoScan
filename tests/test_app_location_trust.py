@@ -109,7 +109,8 @@ check(before(bk, "guard PairingStore.savedUnits().contains(unit) else { return n
       "a box key is used, or asked for, only for a radar paired here")
 sealers = [f for f, s in SWIFT.items() if "LocationBox.seal(" in s]
 check(sealers == ["ios/StratoScan/Location/ApproachReporter.swift"], "nothing else seals the location: %s" % sealers)
-check("for u in units { try? await relay.location(unit: u.unit, blob: nil) }" in body(ar, "private func withdraw()"),
+wd = body(ar, "private func withdraw()")
+check(before(wd, "for u in units {", "try await relay.location(unit: u.unit, blob: nil)") and "vet(" not in wd,
       "turning it off still withdraws it from every radar the relay lists (a withdrawal carries nothing)")
 
 saved = body(ps, "nonisolated static func savedUnits()")

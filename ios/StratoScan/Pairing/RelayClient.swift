@@ -14,6 +14,8 @@ struct RelayClient {
 
     struct Failure: LocalizedError {
         let message: String
+        /// The relay's HTTP status; 0 when it never answered.
+        var status = 0
         var errorDescription: String? { message }
     }
 
@@ -48,6 +50,15 @@ struct RelayClient {
     /// for alerts (no notifications, so no token to register with).
     func setName(_ name: String) async throws {
         _ = try await send("POST", "/v1/phone/name", ["name": name])
+    }
+
+    /// Which alerts this phone wants, for a phone with no push token to
+    /// register with (notifications off in iOS). An empty list means "send
+    /// this phone nothing". Answers whether the relay holds a token for it.
+    func setKinds(_ kinds: [String]) async throws -> Bool {
+        struct Reply: Decodable { let registered: Bool? }
+        let data = try await send("POST", "/v1/phone/kinds", ["kinds": kinds])
+        return (try? JSONDecoder().decode(Reply.self, from: data))?.registered ?? false
     }
 
     /// The update token of a Live Activity the relay just started, so it can end it.
@@ -130,7 +141,7 @@ struct RelayClient {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            throw Failure(message: msg ?? "The StratoScan service said no (HTTP \(status)).")
+            throw Failure(message: msg ?? "The StratoScan service said no (HTTP \(status)).", status: status)
         }
         return data
     }

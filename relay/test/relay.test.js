@@ -932,3 +932,172 @@ test('every response carries HSTS and refuses framing', async () => {
   const own = withSecurityHeaders(new Response('', { headers: { 'Content-Security-Policy': "default-src 'none'" } }));
   assert.equal(own.headers.get('Content-Security-Policy'), "default-src 'none'; frame-ancestors 'none'");
 });
+
+// ---- which alerts a phone wants, on their own (/v1/phone/kinds) --------------
+
+const setKinds = async (e, phone, body, opts = {}) => worker.fetch(await signed(phone, JSON.stringify(body),
+  { path: '/v1/phone/kinds', as: 'X-FR-Phone', ...opts }), e);
+const phoneRow = (e, phone) => e.DB.raw.prepare('SELECT token, env, kinds FROM phones WHERE id = ?').get(phone.id);
+const startTokens = (e, phone) => e.DB.raw.prepare('SELECT COUNT(*) AS n FROM live_activity_phones WHERE phone = ?').get(phone.id).n;
+
+test('a phone with no push token can still say which alerts it wants, and no row is made for it', async () => {
+  const { e } = await pushEnv();
+  const u = await newUnit(), phone = await newUnit();
+  clock += 1000;
+  await offer(e, u, TEST_PAIRING_CODE);
+  assert.equal((await pair(e, phone, u, TEST_PAIRING_CODE)).status, 200);    // paired, never registered
+  clock += 1;
+  const r = await setKinds(e, phone, { kinds: ['emergency'] });
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { ok: true, kinds: ['emergency'], registered: false });
+  assert.equal(e.DB.raw.prepare('SELECT COUNT(*) AS n FROM phones').get().n, 0, 'nothing to push to, so nothing stored');
+});
+
+test('changing the alerts a phone wants leaves its push token and environment alone', async () => {
+  const { e } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  const phone = await pairedPhone(e, u, { env: 'production', kinds: ['helicopter', 'notable'] });
+  clock += 1;
+  const r = await setKinds(e, phone, { kinds: ['notable', 'near_me'] });
+  assert.deepEqual(await r.json(), { ok: true, kinds: ['notable', 'near_me'], registered: true });
+  assert.deepEqual({ ...phoneRow(e, phone) }, { token: TOKEN, env: 'production', kinds: '["notable","near_me"]' });
+});
+
+test('a phone that wants no alerts is sent none, of any kind', async () => {
+  const { e, a } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  const phone = await pairedPhone(e, u, { kinds: ['emergency', 'notable', 'low_overhead', 'helicopter', 'approach', 'approach_me'] });
+  clock += 1;
+  await register(e, phone, { token: TOKEN, env: 'sandbox', kinds: ['emergency', 'notable', 'low_overhead', 'helicopter', 'approach', 'approach_me'],
+                             la_start_token: LA_TOKEN });
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'helicopter', hex: 'a00001' })]);
+  assert.equal(a.sent.length, 1, 'wanted: sent');
+  a.sent.length = 0;
+  clock += 1;
+  const r = await setKinds(e, phone, { kinds: [] });
+  assert.deepEqual(await r.json(), { ok: true, kinds: [], registered: true });
+  clock += 1;
+  await postEvents(e, u, [
+    evt({ kind: 'emergency', hex: 'a00002', squawk: '7700' }),
+    evt({ kind: 'notable', hex: 'a00003' }),
+    evt({ kind: 'low_overhead', hex: 'a00004' }),
+    evt({ kind: 'helicopter', hex: 'a00005' }),
+    evt({ kind: 'helicopter', hex: 'a00006', phone: phone.id, dist_nm: undefined, dir: undefined }),
+    evt({ kind: 'approach', hex: 'a00007', eta_s: 120 }),
+    evt({ kind: 'approach', hex: 'a00008', eta_s: 120, phone: phone.id }),
+    { kind: 'test', ts: clock },
+  ]);
+  assert.equal(a.sent.length, 0, "nothing, not even an emergency, a countdown or its radar's test");
+  assert.equal(phoneRow(e, phone).token, TOKEN, 'and it can turn them back on without registering again');
+  clock += 1;
+  assert.equal((await setKinds(e, phone, { kinds: ['helicopter'] })).status, 200);
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'helicopter', hex: 'a00009' })]);
+  assert.equal(a.sent.length, 1, 'back on');
+});
+
+test('a phone that turns approaches off can no longer be sent a countdown', async () => {
+  const { e, a } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  const phone = await pairedPhone(e, u, { kinds: ['helicopter', 'approach'] });
+  clock += 1;
+  await register(e, phone, { token: TOKEN, env: 'sandbox', kinds: ['helicopter', 'approach'], la_start_token: LA_TOKEN });
+  assert.equal(startTokens(e, phone), 1);
+
+  // Other alerts change; approaches stay wanted, either kind.
+  clock += 1;
+  await setKinds(e, phone, { kinds: ['approach'] });
+  assert.equal(startTokens(e, phone), 1, 'still wanted: kept');
+  clock += 1;
+  await setKinds(e, phone, { kinds: ['notable', 'approach_me'] });
+  assert.equal(startTokens(e, phone), 1, 'approaches to the phone itself count too');
+
+  clock += 1;
+  await setKinds(e, phone, { kinds: ['helicopter'] });
+  assert.equal(startTokens(e, phone), 0, 'no approaches wanted: the start token is forgotten');
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90002', eta_s: 120 })]);
+  assert.equal(a.sent.length, 0);
+  // Wanting them again is not enough without a fresh start token: the app registers one.
+  clock += 1;
+  await setKinds(e, phone, { kinds: ['approach'] });
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90003', eta_s: 120 })]);
+  assert.equal(a.sent.length, 0, 'wanted, but no start token: none');
+  // The app's way back: it registers again, start token and all.
+  clock += 1;
+  assert.equal((await register(e, phone, { token: TOKEN, env: 'sandbox', kinds: ['approach'], la_start_token: LA_TOKEN })).status, 200);
+  assert.equal(startTokens(e, phone), 1, 'kept again');
+  clock += 1;
+  await postEvents(e, u, [evt({ kind: 'approach', hex: 'a90004', eta_s: 120 })]);
+  assert.equal(a.sent.length, 1, 'and countdowns are back');
+  assert.ok(a.sent[0].url.endsWith('/3/device/' + LA_TOKEN), 'to the start token');
+});
+
+test("a phone whose push token Apple called dead is not told it is registered", async () => {
+  const { e } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  const phone = await pairedPhone(e, u, { kinds: ['helicopter'] });
+  e.DB.raw.prepare('UPDATE phones SET token = NULL WHERE id = ?').run(phone.id);
+  clock += 1;
+  const r = await setKinds(e, phone, { kinds: ['notable'] });
+  assert.deepEqual(await r.json(), { ok: true, kinds: ['notable'], registered: false });
+  assert.equal(phoneRow(e, phone).kinds, '["notable"]', 'its choice is kept all the same');
+});
+
+test('registering keeps a start token only for a phone that wants approaches', async () => {
+  const { e } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  const phone = await pairedPhone(e, u, { kinds: ['approach_me'] });
+  clock += 1;
+  await register(e, phone, { token: TOKEN, env: 'sandbox', kinds: ['approach_me'], la_start_token: LA_TOKEN });
+  assert.equal(startTokens(e, phone), 1, 'wanted: kept');
+  clock += 1;
+  assert.equal((await register(e, phone, { token: TOKEN, env: 'sandbox', kinds: ['helicopter'], la_start_token: LA_TOKEN })).status, 200);
+  assert.equal(startTokens(e, phone), 0, 'sent, but not wanted: dropped');
+  clock += 1;
+  assert.equal((await register(e, phone, { token: TOKEN, env: 'sandbox', kinds: [], la_start_token: LA_TOKEN })).status, 200);
+  assert.equal(startTokens(e, phone), 0);
+  assert.equal(phoneRow(e, phone).kinds, '[]');
+});
+
+test('only a paired phone, signing for itself, with kinds the relay knows, can change its alerts', async () => {
+  const { e } = await pushEnv();
+  const u = await newUnit();
+  clock += 1000;
+  const phone = await pairedPhone(e, u, { kinds: ['helicopter'] });
+  const before = { ...phoneRow(e, phone) };
+  clock += 1;
+  assert.equal((await setKinds(e, await newUnit(), { kinds: ['helicopter'] })).status, 403, 'paired with nothing');
+  for (const kinds of [['helicopter', 'everything'], ['test'], 'helicopter', null, 7]) {
+    clock += 1;
+    const r = await setKinds(e, phone, { kinds });
+    assert.equal(r.status, 400, JSON.stringify(kinds));
+    assert.deepEqual(await r.json(), { error: 'unknown alert kind' });
+  }
+  clock += 1;
+  assert.equal((await setKinds(e, phone, {})).status, 400, 'no list is not "everything"');
+
+  clock += 1;
+  const body = JSON.stringify({ kinds: [] });
+  const unsigned = new Request(BASE + '/v1/phone/kinds', { method: 'POST', body, headers: { 'X-FR-Phone': phone.id } });
+  assert.equal((await worker.fetch(unsigned, e)).status, 401, 'no signature');
+  assert.equal((await setKinds(e, phone, { kinds: [] }, { tamper: JSON.stringify({ kinds: ['emergency'] }) })).status, 401, 'body changed after signing');
+  const forged = await signed(await newUnit(), body, { path: '/v1/phone/kinds', as: 'X-FR-Phone' });
+  forged.headers.set('X-FR-Phone', phone.id);
+  assert.equal((await worker.fetch(forged, e)).status, 401, "another key, this phone's name");
+  assert.equal((await setKinds(e, phone, { kinds: [] }, { as: 'X-FR-Unit' })).status, 401, 'signed as a radar');
+  assert.equal((await setKinds(e, phone, { kinds: [] }, { method: 'GET' })).status, 404);
+  assert.deepEqual({ ...phoneRow(e, phone) }, before, 'none of it changed anything');
+
+  const real = await signed(phone, body, { path: '/v1/phone/kinds', as: 'X-FR-Phone' });
+  const again = real.clone();
+  assert.equal((await worker.fetch(real, e)).status, 200);
+  assert.notEqual((await worker.fetch(again, e)).status, 200, 'the same signed request is taken once');
+});

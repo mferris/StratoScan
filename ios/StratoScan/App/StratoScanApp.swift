@@ -35,6 +35,7 @@ struct StratoScanApp: App {
                     RadarSetupView(setup: setup)
                 }
                 // Push tokens can change; re-register whenever a radar is paired.
+                // This also sends again any alert choice the relay never took.
                 .task { if !pairing.radars.isEmpty { await push.enable() } }
                 // A paired radar that has moved on the home network is found
                 // again by Bonjour, not retyped (#76).
@@ -57,8 +58,14 @@ struct StratoScanApp: App {
                     WatchSync.shared.push()
                     // At home: pick up a rename made on the radar (2.17).
                     Task { await pairing.refreshNames() }
-                    // and its radars this phone's name, if they haven't it
-                    Task { await PushManager.shared.syncName(paired: !pairing.radars.isEmpty) }
+                    // Notifications may have been switched in iOS Settings
+                    // while the app was away, and a change the relay never
+                    // took is tried again.
+                    Task {
+                        await PushManager.shared.becameActive()
+                        // and its radars this phone's name, if they haven't it
+                        await PushManager.shared.syncName(paired: !pairing.radars.isEmpty)
+                    }
                 }
         }
     }

@@ -13,6 +13,8 @@
 // GET  /v1/phone/units           the units this phone is paired with
 // POST /v1/phone/unpair          leave a unit
 // POST /v1/phone/register        this phone's push token and which alerts it wants (2.1)
+// POST /v1/phone/kinds           which alerts it wants, with or without a push token
+// POST /v1/phone/name            what its radars call it
 // POST /v1/phone/test            send this phone a test notification
 // POST /v1/phone/activity        the token of a Live Activity the phone started (to end it later)
 // GET  /fleet          the maintainer's view of every unit (HTTP Basic auth)
@@ -237,7 +239,9 @@ async function deliverTo(env, unit, phone, ordered, deadline) {
   const seenNearby = new Set();
   const mine = ordered.filter(e => {
     if (e.kind === 'approach' || e.kind === 'approach_end') return false;
-    if (e.kind === 'test') return true;
+    // A radar's test goes to any phone that takes alerts, whatever kinds;
+    // one that asked for nothing gets nothing, a test included.
+    if (e.kind === 'test') return wants.length > 0;
     if (!wants.includes(e.kind)) return false;
     if (!NEARBY_KINDS.includes(e.kind)) return !e.phone;          // emergencies: about the aircraft
     if (e.phone ? (e.phone !== phone.id || !aboutMe) : !aboutRadar) return false;
@@ -374,7 +378,10 @@ async function phoneRegister(request, env) {
   if (error) return error;
   const token = payload.token;
   const kinds = cleanKinds(payload.kinds);
-  const la = payload.la_start_token;
+  // A countdown is started only for a phone that wants approaches: its
+  // start token is kept for nothing else, so a phone that wants none has
+  // none here, whatever it sent.
+  const la = wantsApproach(kinds) ? payload.la_start_token : null;
   // What its radars call this phone. iOS gives every app the same device
   // name, "iPhone", so a radar with two phones listed two the same; the app
   // now sends the model, or a name its owner typed, at pairing and here, so
@@ -409,6 +416,32 @@ async function phoneName(request, env) {
   const name = cleanPhoneName(payload.name);
   await db.prepare('UPDATE pairings SET name = ?1 WHERE phone = ?2 AND (name IS NULL OR name != ?1)').bind(name, auth.unit).run();
   return json(200, { ok: true, name });
+}
+
+const wantsApproach = kinds => kinds.includes('approach') || kinds.includes('approach_me');
+
+// Which alerts a paired phone wants, on its own. A phone with notifications
+// turned off in iOS has no push token, so it could never register, and
+// switching an alert off in the app changed nothing here: approach
+// countdowns, which iOS allows separately from notifications, kept coming
+// (2026-11-17). The list must be sent, and an empty one means "send this
+// phone nothing". Only an existing row's list changes: no row is made, and
+// its token and environment are left alone.
+async function phoneKinds(request, env) {
+  const db = env.DB;
+  const { auth, payload, error } = await signedJson(request, 'X-FR-Phone', env, async (p, a) => {
+    if (!Array.isArray(p.kinds) || !cleanKinds(p.kinds)) return json(400, { error: 'unknown alert kind' });
+    const paired = await db.prepare('SELECT 1 FROM pairings WHERE phone = ?').bind(a.unit).first();
+    return paired ? null : json(403, { error: 'pair with a radar first' });
+  }, phoneBudget);
+  if (error) return error;
+  const kinds = cleanKinds(payload.kinds);
+  const row = await db.prepare('UPDATE phones SET kinds = ?1, updated = ?2 WHERE id = ?3 RETURNING token')
+    .bind(JSON.stringify(kinds), nowS(), auth.unit).first();
+  if (!wantsApproach(kinds)) await db.prepare('DELETE FROM live_activity_phones WHERE phone = ?').bind(auth.unit).run();
+  // Registered means there is a token to push to: a row whose token Apple
+  // called dead is not, and the app offers no test for it.
+  return json(200, { ok: true, kinds, registered: !!(row && row.token) });
 }
 
 // The phone reports the update token of a Live Activity it just started, so
@@ -992,6 +1025,7 @@ async function route(request, env, ctx) {
   if (pathname === '/v1/phone/unpair' && m === 'POST') return phoneUnpair(request, env);
   if (pathname === '/v1/phone/register' && m === 'POST') return phoneRegister(request, env);
   if (pathname === '/v1/phone/name' && m === 'POST') return phoneName(request, env);
+  if (pathname === '/v1/phone/kinds' && m === 'POST') return phoneKinds(request, env);
   if (pathname === '/v1/phone/test' && m === 'POST') return phoneTest(request, env);
   if (pathname === '/v1/phone/activity' && m === 'POST') return phoneActivity(request, env, ctx);
   if (pathname === '/v1/unit/boxkey' && m === 'POST') return unitBoxKey(request, env);
