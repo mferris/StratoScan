@@ -689,8 +689,12 @@ fi
 # still arrives 3C before the Pi's 80C soft limit -- this case has reached
 # 84.5C on busy days, so it goes no further than that.
 CFG=/boot/firmware/config.txt
-if [ -f "$CFG" ] && ! grep -q '^dtparam=fan_temp2=' "$CFG"; then
-  printf '\n# StratoScan: steadier fan steps in the case (default 67.5C / 75C)\ndtparam=fan_temp2=70000\ndtparam=fan_temp3=77000\n' >> "$CFG"
+# has_fan_step NAME: config.txt sets it already, on a line of its own or among
+# several parameters on one line, so an owner's own steps are left alone. The
+# steps go under their own [all], whatever section the file ends in.
+has_fan_step() { grep -Eq "^[[:space:]]*dtparam=([^#]*,)?$1=" "$CFG"; }
+if [ -f "$CFG" ] && ! has_fan_step fan_temp2; then
+  printf '\n[all]\n# StratoScan: steadier fan steps in the case (default 67.5C / 75C)\ndtparam=fan_temp2=70000\ndtparam=fan_temp3=77000\n' >> "$CFG"
   echo "  fan steps set to 70C / 77C in config.txt"
 fi
 # The trip points are writable at runtime, so apply now rather than waiting
